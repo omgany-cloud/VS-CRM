@@ -207,19 +207,21 @@ async function loadDocumentsFromApi() {
 }
 
 /* ===== Conflict Approvals — backed by the real API =====
-   Digital Decision/Escalation Matrix audit trail (COI Addendum Section E).
-   No dedicated frontend page consumes this yet — it exists so a client's
-   Internal Client / Dual-Mandate decisions can be tracked across all of
-   their engagements/contracts. `conflictApprovals` is declared here since
-   no legacy frontend source ever held this data. */
+   Digital Decision/Escalation Matrix audit trail (COI Addendum Section E):
+   the "Конфликты / Одобрения" page. `conflictApprovals` is declared here
+   since no legacy frontend source ever held this data. */
 let conflictApprovals = [];
 async function loadConflictApprovalsFromApi() {
   try {
     const data = await apiFetch('/api/conflict-approvals');
     conflictApprovals.length = 0;
     conflictApprovals.push(...data.conflictApprovals);
+    const page = document.getElementById('page-conflict-approvals');
+    if (page && page.classList.contains('active') && typeof renderConflictApprovalsPage === 'function') renderConflictApprovalsPage();
+    if (typeof updateBadges === 'function') updateBadges();
   } catch (err) {
     console.error('Failed to load conflict approvals from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить конфликты/одобрения из API: ' + err.message, 'red');
   }
 }
 
@@ -234,6 +236,7 @@ async function loadConflictApprovalsFromApi() {
     if (page === 'lp-register') loadLpRegisterFromApi();
     if (page === 'lp-capital-calls') loadCapitalCallsFromApi();
     if (page === 'ob-clients' || page === 'ob-restricted' || page === 'engagements') { loadOnboardingFromApi(); loadConflictApprovalsFromApi(); }
+    if (page === 'conflict-approvals') loadConflictApprovalsFromApi();
     if (page === 'ic') loadIcMemosFromApi();
     if (page === 'documents' || page === 'vault') loadDocumentsFromApi();
   };

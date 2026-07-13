@@ -5802,6 +5802,264 @@ function saveNewEngagement() {
 }
 
 /* ═══════════════════════════════════════════════════
+   CONFLICT APPROVALS — CF Deal Committee Decision &
+   Escalation Matrix (COI Addendum Section E). Real API-
+   backed (GET/POST/PUT /api/conflict-approvals) — unlike
+   the local-only onboarding forms above, writes here go
+   straight to the server since there's no legacy
+   client-side array/behaviour to replicate.
+═══════════════════════════════════════════════════ */
+
+let conflictFilter = '';
+let conflictStatusFilter = '';
+
+function conflictRiskStyle(risk) {
+  return {
+    Low:      { c: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
+    Medium:   { c: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+    High:     { c: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+    Critical: { c: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+  }[risk] || { c: '#8a9bbf', bg: 'rgba(100,116,139,0.12)' };
+}
+
+function conflictStatusStyle(status) {
+  if (status === 'Pending') return { c: '#f59e0b', bg: 'rgba(245,158,11,0.12)' };
+  if (status === 'Rejected') return { c: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
+  if (status === 'Approved') return { c: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
+  return { c: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }; // Approved with conditions, etc.
+}
+
+function renderConflictApprovalsPage() {
+  const el = document.getElementById('conflictApprovalsContent');
+  if (!el) return;
+  const list = typeof conflictApprovals !== 'undefined' ? conflictApprovals : [];
+
+  const cntPending = list.filter(a => a.status === 'Pending').length;
+  const cntHigh    = list.filter(a => a.riskLevel === 'High' || a.riskLevel === 'Critical').length;
+  const cntDual    = list.filter(a => a.decisionType === 'Dual-Mandate').length;
+
+  const filtered = list.filter(a => {
+    if (conflictStatusFilter && a.status !== conflictStatusFilter) return false;
+    if (conflictFilter) {
+      const q = conflictFilter.toLowerCase();
+      const client = obClients.find(c => c.id === a.clientId);
+      if (!(a.dealRef || '').toLowerCase().includes(q) &&
+          !(a.decisionType || '').toLowerCase().includes(q) &&
+          !(client && client.name.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
+  el.innerHTML = `
+    <div class="kpi-row" style="margin-bottom:20px">
+      <div class="kpi-card">
+        <div class="kpi-icon orange"><i class="fas fa-gavel"></i></div>
+        <div class="kpi-body"><span class="kpi-label">Решений в реестре</span>
+          <span class="kpi-value">${list.length}</span>
+          <span class="kpi-delta">${cntPending} ожидают решения</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon red"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="kpi-body"><span class="kpi-label">Высокий / Критичный риск</span>
+          <span class="kpi-value">${cntHigh}</span>
+          <span class="kpi-delta">Требуют CF Deal Committee</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon purple"><i class="fas fa-people-arrows"></i></div>
+        <div class="kpi-body"><span class="kpi-label">Dual-Mandate</span>
+          <span class="kpi-value">${cntDual}</span>
+          <span class="kpi-delta">Advising + Arranging</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <input type="text" placeholder="🔍 Поиск по клиенту, deal ref, типу..." value="${conflictFilter}"
+        oninput="conflictFilter=this.value;renderConflictApprovalsPage()"
+        style="flex:1;min-width:180px;background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px" />
+      <select onchange="conflictStatusFilter=this.value;renderConflictApprovalsPage()"
+        style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
+        <option value="" ${conflictStatusFilter===''?'selected':''}>Все статусы</option>
+        <option value="Pending" ${conflictStatusFilter==='Pending'?'selected':''}>Pending</option>
+        <option value="Approved" ${conflictStatusFilter==='Approved'?'selected':''}>Approved</option>
+        <option value="Approved with conditions" ${conflictStatusFilter==='Approved with conditions'?'selected':''}>Approved with conditions</option>
+        <option value="Rejected" ${conflictStatusFilter==='Rejected'?'selected':''}>Rejected</option>
+      </select>
+      ${(conflictFilter||conflictStatusFilter) ? `<button onclick="conflictFilter='';conflictStatusFilter='';renderConflictApprovalsPage()"
+        style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
+      <span style="font-size:11px;color:#5a6b8a;white-space:nowrap">${filtered.length} из ${list.length}</span>
+      <button onclick="openNewConflictApprovalModal()"
+        style="background:#f97316;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-plus"></i> Завести решение</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-gavel" style="color:#f97316;margin-right:6px"></i>Decision &amp; Escalation Matrix</span>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Тип конфликта</th><th>Клиент</th><th>Deal Ref</th><th>Риск</th>
+              <th>Fee</th><th>Кто решает</th><th>Срок</th><th>Статус</th><th>Дата решения</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Решений не найдено</td></tr>` :
+            filtered.map(a => {
+              const client = obClients.find(c => c.id === a.clientId);
+              const risk   = conflictRiskStyle(a.riskLevel);
+              const stat   = conflictStatusStyle(a.status);
+              return `
+                <tr onclick="openConflictApprovalDetail(${a.id})" style="cursor:pointer">
+                  <td style="font-weight:700;color:#e2e8f0;font-size:13px">${a.decisionType}</td>
+                  <td style="font-size:12px;color:#94a3b8">${client ? client.name : '—'}</td>
+                  <td style="font-size:11px;color:#5a6b8a">${a.dealRef || '—'}</td>
+                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${risk.bg};color:${risk.c}">${a.riskLevel}</span></td>
+                  <td style="font-size:12px;color:#22c55e">${a.feeAmount ? '$' + (a.feeAmount/1000).toFixed(0) + 'K' : '—'}</td>
+                  <td style="font-size:11px;color:#94a3b8">${a.decisionMaker || '—'}</td>
+                  <td style="font-size:11px;color:#8a9bbf">${a.requiredTimeline || '—'}</td>
+                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${a.status}</span></td>
+                  <td style="font-size:11px;color:#5a6b8a">${a.decidedAt || '—'}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function openNewConflictApprovalModal() {
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  document.body.style.overflow = 'hidden';
+
+  const clientOptions = obClients.map(c => `<option value="${c.id}">${c.name} (${c.clientId})</option>`).join('');
+  const engOptions = engagements.map(e => `<option value="${e.id}">${e.clientName} — ${e.engId}${e.dealRef ? ' [' + e.dealRef + ']' : ''}</option>`).join('');
+
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>Новое решение по конфликту';
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
+        <select id="ca_clientId" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          <option value="">— Не выбран —</option>${clientOptions}
+        </select></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Договор (опционально)</label>
+        <select id="ca_engagementId" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          <option value="">— Без привязки к договору —</option>${engOptions}
+        </select></div>
+      ${obNewSelect('ca_decisionType','Тип конфликта',['Internal Client','Dual-Mandate','Routine Conflict','Other'],null)}
+      ${obNewSelect('ca_riskLevel','Уровень риска',['Low','Medium','High','Critical'],null)}
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref</label>
+        <input type="text" id="ca_dealRef" placeholder="DEAL-XXX-2026"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Fee (USD)</label>
+        <input type="number" id="ca_feeAmount" placeholder="90000"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      ${obNewSelect('ca_decisionMaker','Кто принимает решение',['Compliance Officer','CF Deal Committee','Board'],null)}
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Срок рассмотрения</label>
+        <input type="text" id="ca_requiredTimeline" placeholder="Convened within 48 hours"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Описание конфликта</label>
+        <textarea id="ca_description" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Rationale / условия одобрения</label>
+        <textarea id="ca_rationale" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveNewConflictApproval()" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Завести решение
+      </button>
+    </div>`;
+
+  modal.style.display = 'flex';
+}
+
+async function saveNewConflictApproval() {
+  const clientId = document.getElementById('ca_clientId')?.value;
+  const decisionType = document.getElementById('ca_decisionType')?.value;
+  if (!clientId) { showToast('⚠️ Выберите клиента', 'red'); return; }
+  if (!decisionType) { showToast('⚠️ Выберите тип конфликта', 'red'); return; }
+
+  const engagementId = document.getElementById('ca_engagementId')?.value || null;
+  const payload = {
+    clientId: parseInt(clientId, 10),
+    engagementId: engagementId ? parseInt(engagementId, 10) : null,
+    decisionType,
+    riskLevel: document.getElementById('ca_riskLevel')?.value || 'Low',
+    dealRef: document.getElementById('ca_dealRef')?.value || null,
+    feeAmount: parseFloat(document.getElementById('ca_feeAmount')?.value) || null,
+    decisionMaker: document.getElementById('ca_decisionMaker')?.value || null,
+    requiredTimeline: document.getElementById('ca_requiredTimeline')?.value || null,
+    description: document.getElementById('ca_description')?.value || null,
+    rationale: document.getElementById('ca_rationale')?.value || null,
+    status: 'Pending',
+  };
+
+  try {
+    await apiFetch('/api/conflict-approvals', { method: 'POST', body: JSON.stringify(payload) });
+    await loadConflictApprovalsFromApi();
+    closeObNewModal();
+    renderConflictApprovalsPage();
+    showToast('✅ Решение по конфликту заведено', 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
+}
+
+function openConflictApprovalDetail(id) {
+  const a = conflictApprovals.find(x => x.id === id);
+  if (!a) return;
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  document.body.style.overflow = 'hidden';
+  const client = obClients.find(c => c.id === a.clientId);
+  const eng = engagements.find(e => e.id === a.engagementId);
+  const risk = conflictRiskStyle(a.riskLevel);
+  const stat = conflictStatusStyle(a.status);
+
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>${a.decisionType}`;
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${risk.bg};color:${risk.c}">Риск: ${a.riskLevel}</span>
+      <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${stat.bg};color:${stat.c}">${a.status}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#94a3b8;margin-bottom:14px">
+      <div><b style="color:#8a9bbf">Клиент:</b> ${client ? client.name : '—'}</div>
+      <div><b style="color:#8a9bbf">Договор:</b> ${eng ? eng.engId : '—'}</div>
+      <div><b style="color:#8a9bbf">Deal Ref:</b> ${a.dealRef || '—'}</div>
+      <div><b style="color:#8a9bbf">Fee:</b> ${a.feeAmount ? '$' + a.feeAmount.toLocaleString() : '—'}</div>
+      <div><b style="color:#8a9bbf">Кто решает:</b> ${a.decisionMaker || '—'}</div>
+      <div><b style="color:#8a9bbf">Срок:</b> ${a.requiredTimeline || '—'}</div>
+      <div><b style="color:#8a9bbf">Дата решения:</b> ${a.decidedAt || '—'}</div>
+    </div>
+    ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${a.description}</p></div>` : ''}
+    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${a.rationale}</p></div>` : ''}
+    ${a.status === 'Pending' ? `
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button onclick="decideConflictApproval(${a.id},'Rejected')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-xmark"></i> Отклонить</button>
+      <button onclick="decideConflictApproval(${a.id},'Approved with conditions')" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-check"></i> Одобрить с условиями</button>
+      <button onclick="decideConflictApproval(${a.id},'Approved')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700"><i class="fas fa-check-double"></i> Одобрить</button>
+    </div>` : ''}`;
+
+  modal.style.display = 'flex';
+}
+
+async function decideConflictApproval(id, status) {
+  try {
+    await apiFetch(`/api/conflict-approvals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, decidedAt: today() }),
+    });
+    await loadConflictApprovalsFromApi();
+    closeObNewModal();
+    renderConflictApprovalsPage();
+    showToast(`✅ Решение обновлено: ${status}`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось обновить решение: ' + err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
    DASHBOARD WIDGETS
 ═══════════════════════════════════════════════════ */
 

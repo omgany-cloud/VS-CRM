@@ -120,6 +120,8 @@ function updateBadges() {
   set('badge-coi', coiOpen);
   const engDraft = typeof engagements !== 'undefined' ? engagements.filter(e => e.status === 'Draft').length : 0;
   set('badge-engagements', engDraft);
+  const conflictPending = typeof conflictApprovals !== 'undefined' ? conflictApprovals.filter(a => a.status === 'Pending').length : 0;
+  set('badge-conflict-approvals', conflictPending);
   // LP Register badge — active LP count
   const lpRegActive = typeof lpRegister !== 'undefined' ? lpRegister.filter(l => l.status === 'Active').length : 0;
   set('badge-lp-register', lpRegActive);
@@ -168,6 +170,7 @@ const PAGE_LABELS = {
   'ob-clients':  'Клиенты FM + CF&A — Онбординг',
   'ob-restricted': 'Restricted List / COI',
   engagements:   'Реестр договоров',
+  'conflict-approvals': 'Конфликты / Одобрения — CF Deal Committee',
   subscription:  'nav_subscription',
   'lp-register':      'LP Register — Реестр партнёров',
   'lp-capital-calls': 'Capital Calls — Журнал взносов',
@@ -197,6 +200,7 @@ function navigateTo(page) {
   if (page === 'ob-clients')       { renderOnboardingPage(); }
   if (page === 'ob-restricted')     { renderRestrictedListPage(); }
   if (page === 'engagements')       { renderEngagementsPage(); }
+  if (page === 'conflict-approvals'){ renderConflictApprovalsPage(); }
   if (page === 'lp-register')       { renderLPRegisterPage(); }
   if (page === 'lp-capital-calls')  { renderCapitalCallsPage(); }
 }
