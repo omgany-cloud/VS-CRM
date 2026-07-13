@@ -3,7 +3,7 @@
 //  Golden Leaves Ltd / Turan Capital Fund LP
 //  AFSA-compliant reports via SheetJS (xlsx)
 //  Generates: LP Register, KYC/AML, Capital Calls, Portfolio,
-//             Deals, Tasks, CF&A Clients, Trading, Full CRM dump
+//             Deals, Tasks, CF&A Clients, Full CRM dump
 // ============================================================
 
 /* ── Утилиты ── */

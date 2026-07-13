@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
@@ -11,6 +11,37 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
+
+<!-- LOGIN OVERLAY — proof-of-concept multi-tenant auth for the LP Register vertical slice.
+     Blocks the app until a valid JWT is obtained from the backend at server/index.js.
+     The rest of the app still runs on its original static demo data. -->
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#0b1220;">
+  <form id="loginForm" style="width:340px;background:#131c2e;border:1px solid #263148;border-radius:12px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <div style="width:36px;height:36px;border-radius:8px;background:#3b82f6;display:flex;align-items:center;justify-content:center;">
+        <i class="fas fa-landmark" style="color:#fff;"></i>
+      </div>
+      <div>
+        <div style="color:#fff;font-weight:700;font-size:15px;">Turan Capital CRM</div>
+        <div style="color:#8a9bbf;font-size:11px;">Вход в систему</div>
+      </div>
+    </div>
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Email</label>
+    <input id="loginEmail" type="email" autocomplete="username" value="admin@turancapital.kz"
+      style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:12px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Пароль</label>
+    <input id="loginPassword" type="password" autocomplete="current-password" value="TuranDemo2025!"
+      style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:6px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <div id="loginError" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+    <button type="submit" style="width:100%;padding:10px;border:none;border-radius:6px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer;">
+      Войти
+    </button>
+    <div style="color:#5b6b8c;font-size:11px;margin-top:14px;line-height:1.5;">
+      Demo tenant: <b>Turan Capital</b> (turan-capital)<br/>
+      Только страница «LP Register» подключена к реальному backend + БД — остальные разделы работают на прежних демо-данных.
+    </div>
+  </form>
+</div>
 
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar">
@@ -108,10 +139,6 @@
     </a>
     <a href="#" class="nav-item" data-page="documents">
       <i class="fas fa-folder-open"></i><span data-i18n="nav_documents">Документы</span>
-    </a>
-    <a href="#" class="nav-item" data-page="trading">
-      <i class="fas fa-chart-candlestick"></i><span>Trading Analytics</span>
-      <span class="nav-badge" style="background:var(--accent-teal)">NEW</span>
     </a>
     <a href="#" class="nav-item" data-page="subscription">
       <i class="fas fa-credit-card"></i><span data-i18n="nav_subscription">Подписка</span>
@@ -572,179 +599,6 @@
       <div id="vaultContent"></div>
     </section>
 
-    <!-- ===== TRADING ANALYTICS ===== -->
-
-    <!-- ===== TRADING ANALYTICS ===== -->
-    <section id="page-trading" class="page">
-      <div class="section-header">
-        <h1>Trading Analytics <span class="fund-label">Portfolio Performance</span></h1>
-        <p>Загрузите Excel-отчёт с биржевыми сделками — CRM автоматически рассчитает все метрики</p>
-      </div>
-
-      <!-- UPLOAD ZONE -->
-      <div class="trading-upload-card">
-        <div class="tuc-left">
-          <div class="tuc-icon"><i class="fas fa-file-excel"></i></div>
-          <div class="tuc-text">
-            <div class="tuc-title">Загрузить торговый отчёт</div>
-            <div class="tuc-sub">Поддерживаются: .xlsx, .xls, .csv · Любой брокер (MOEX, Фридом, Halyk, Alpari, MT4/5)</div>
-          </div>
-          <div class="tuc-actions">
-            <label class="btn-primary" style="cursor:pointer">
-              <i class="fas fa-upload"></i> Выбрать файл
-              <input type="file" accept=".xlsx,.xls,.csv" style="display:none"
-                     onchange="handleTradingFileUpload(this)" />
-            </label>
-            <button class="btn-ghost" onclick="loadDemoData()">
-              <i class="fas fa-play"></i> Демо-данные
-            </button>
-          </div>
-        </div>
-        <div class="tuc-hint">
-          <div class="tuc-hint-title"><i class="fas fa-info-circle"></i> Формат файла</div>
-          <div class="tuc-hint-list">
-            <span>• Дата сделки</span><span>• Тикер / Инструмент</span>
-            <span>• Тип (Buy/Sell)</span><span>• Количество</span>
-            <span>• Цена входа / выхода</span><span>• P&L</span>
-            <span>• Комиссия</span><span>• Статус (открыта/закрыта)</span>
-          </div>
-        </div>
-      </div>
-
-      <div id="tradingUploadStatus" class="upload-status" style="display:none"></div>
-
-      <!-- EMPTY STATE -->
-      <div id="tradingEmpty" class="trading-empty">
-        <i class="fas fa-chart-area"></i>
-        <p>Загрузите файл с торговыми данными или нажмите «Демо-данные»</p>
-      </div>
-
-      <!-- RESULTS (hidden until data loaded) -->
-      <div id="tradingResults" style="display:none">
-
-        <!-- KPI Row -->
-        <div class="kpi-grid" id="tradingKPIs" style="grid-template-columns:repeat(4,1fr)"></div>
-
-        <!-- Charts Row 1: Equity + Monthly -->
-        <div class="charts-row" style="margin-top:20px">
-          <div class="chart-card wide">
-            <div class="chart-header">
-              <span class="chart-title"><i class="fas fa-chart-line" style="color:var(--accent-blue);margin-right:6px"></i>Equity Curve (кумулятивный P&L)</span>
-            </div>
-            <div style="height:260px"><canvas id="chartEquity"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-header"><span class="chart-title">Win / Loss</span></div>
-            <div style="height:260px"><canvas id="chartWinLoss"></canvas></div>
-          </div>
-        </div>
-
-        <!-- Charts Row 2: Monthly + Tickers -->
-        <div class="charts-row" style="margin-top:16px">
-          <div class="chart-card wide">
-            <div class="chart-header"><span class="chart-title"><i class="fas fa-calendar" style="color:var(--accent-green);margin-right:6px"></i>P&L по месяцам</span></div>
-            <div style="height:240px"><canvas id="chartMonthly"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-header"><span class="chart-title">P&L по инструментам (топ-10)</span></div>
-            <div style="height:240px"><canvas id="chartTickers"></canvas></div>
-          </div>
-        </div>
-
-        <!-- Best / Worst + Monthly Table -->
-        <div class="two-col" style="margin-top:16px">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title"><i class="fas fa-medal" style="color:#eab308;margin-right:6px"></i>Лучшие сделки</span>
-              <span class="badge badge-green">Топ-5</span>
-            </div>
-            <div id="bestTradesList"></div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title"><i class="fas fa-skull" style="color:var(--accent-red);margin-right:6px"></i>Худшие сделки</span>
-              <span class="badge badge-red">Топ-5</span>
-            </div>
-            <div id="worstTradesList"></div>
-          </div>
-        </div>
-
-        <!-- Ticker Breakdown -->
-        <div class="card" style="margin-top:16px">
-          <div class="card-header">
-            <span class="card-title"><i class="fas fa-list" style="color:var(--accent-purple);margin-right:6px"></i>P&L по инструментам</span>
-          </div>
-          <div class="table-scroll">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="width:28px">#</th>
-                  <th>Инструмент</th>
-                  <th style="text-align:center">Сделок</th>
-                  <th style="text-align:center">Win%</th>
-                  <th style="text-align:right">Общий P&L</th>
-                  <th style="text-align:right">Средний P&L</th>
-                  <th style="min-width:80px">Вклад</th>
-                </tr>
-              </thead>
-              <tbody id="tickerTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Monthly Summary Table -->
-        <div class="two-col" style="margin-top:16px">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title"><i class="fas fa-calendar-alt" style="color:var(--accent-blue);margin-right:6px"></i>P&L по месяцам</span>
-            </div>
-            <div class="table-scroll">
-              <table class="data-table">
-                <thead><tr><th>Месяц</th><th style="text-align:right">P&L</th><th style="text-align:right">Накоплен.</th><th>Вклад</th></tr></thead>
-                <tbody id="monthlyTableBody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Full Trade Log -->
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title"><i class="fas fa-table" style="color:var(--accent-teal);margin-right:6px"></i>Все сделки</span>
-              <span class="badge badge-blue" id="tradeCountBadge">0 сделок</span>
-            </div>
-            <!-- filters -->
-            <div class="trade-log-filters">
-              <input type="text" placeholder="🔍 Поиск тикера..." oninput="searchTrades(this.value)" />
-              <select onchange="setTradeFilter('status',this.value)">
-                <option value="">Все статусы</option>
-                <option value="closed">Закрыта</option>
-                <option value="open">Открыта</option>
-              </select>
-              <select onchange="setTradeFilter('side',this.value)">
-                <option value="">Buy + Sell</option>
-                <option value="BUY">Buy</option>
-                <option value="SELL">Sell</option>
-              </select>
-            </div>
-            <div class="table-scroll" style="max-height:320px">
-              <table class="data-table" style="font-size:12px">
-                <thead>
-                  <tr>
-                    <th>Дата</th><th>Тикер</th><th>Тип</th><th style="text-align:right">Кол-во</th>
-                    <th style="text-align:right">Вход</th><th style="text-align:right">Выход</th>
-                    <th style="text-align:right">P&L</th><th style="text-align:right">%</th>
-                    <th style="text-align:right">Комиссия</th><th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody id="tradeTableBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /tradingResults -->
-    </section>
-
     <!-- ===== TASKS ===== -->
     <section id="page-tasks" class="page">
       <div class="section-header">
@@ -948,6 +802,16 @@
     <button class="modal-close" onclick="closeEngagementModal()"><i class="fas fa-times"></i></button>
   </div>
   <div class="modal-body" id="engagementModalContent"></div>
+</div>
+
+<!-- ===== RESTRICTED LIST: ADD ENTRY MODAL ===== -->
+<div class="task-overlay" id="restrictedAddOverlay" onclick="closeAddRestrictedModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-restricted-add" style="display:none;max-width:520px">
+  <div class="modal-header">
+    <h3><i class="fas fa-ban" style="color:#ef4444;margin-right:8px"></i>Добавить в Restricted List</h3>
+    <button class="modal-close" onclick="closeAddRestrictedModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="restrictedAddModalContent"></div>
 </div>
 
 <!-- ===== VAULT PREVIEW MODAL ===== -->
@@ -1370,12 +1234,10 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/funds.js"></script>
 <script src="js/documents.js"></script>
 <script src="js/subscription.js"></script>
-<script src="js/trading.js"></script>
 <script src="js/tasks.js"></script>
 <script src="js/clients.js"></script>
 <script src="js/export.js"></script>
@@ -1386,5 +1248,6 @@
 <script src="js/vault.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
+<script src="js/api-auth.js"></script>
 </body>
 </html>

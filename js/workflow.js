@@ -70,53 +70,75 @@ const WF_DEFINITIONS = {
    }
 ─────────────────────────────────────────────────────────── */
 let workflowInstances = [
-  // KYC workflow for existing LP — Almaty Ventures (approved)
+  // Deal IC — NomadTech Solutions (deal id 1) — closed, IC approved 2024-10-05
   {
-    id: 1, type: 'kyc_lp', entityId: 1, entityName: 'Almaty Ventures LLP', entityType: 'LP',
-    createdAt: '2024-10-01T09:00:00', createdBy: 'RM',
+    id: 1, type: 'deal_ic', entityId: 1, entityName: 'NomadTech Solutions', entityType: 'Deal',
+    createdAt: '2024-09-15T09:00:00', createdBy: 'Analyst',
     currentStep: 3, status: 'approved',
     steps: [
-      { role:'CO',   label:'CO проверка документов',    action:'review',  completedAt:'2024-10-08T11:20:00', completedBy:'CO',   decision:'approved', comment:'Полный пакет документов получен.' },
-      { role:'MLRO', label:'MLRO — AML скрининг',        action:'approve', completedAt:'2024-10-10T14:35:00', completedBy:'MLRO', decision:'approved', comment:'AML чистый, санкционные списки пройдены.' },
-      { role:'CEO',  label:'CEO — финальное одобрение',  action:'approve', completedAt:'2024-10-15T10:00:00', completedBy:'CEO',  decision:'approved', comment:'Одобрено. Добро пожаловать в фонд.' },
+      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-09-20T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Инвестиционный меморандум готов, метрики SaaS сильные.' },
+      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2024-09-28T14:00:00', completedBy:'RM',      decision:'approved', comment:'Условия сделки согласованы с фаундерами.' },
+      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2024-10-05T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC единогласно одобрил инвестицию.' },
     ]
   },
-  // KYC workflow for Silk Road — in progress at MLRO step
+  // Deal IC — VitaMed Astana (deal id 2) — closed, IC approved 2025-01-15
   {
-    id: 2, type: 'kyc_lp', entityId: 5, entityName: 'Silk Road Capital Partners', entityType: 'LP',
-    createdAt: '2026-05-20T10:00:00', createdBy: 'RM',
-    currentStep: 1, status: 'active',
+    id: 2, type: 'deal_ic', entityId: 2, entityName: 'VitaMed Astana', entityType: 'Deal',
+    createdAt: '2024-12-18T09:00:00', createdBy: 'Analyst',
+    currentStep: 3, status: 'approved',
     steps: [
-      { role:'CO',   label:'CO проверка документов',    action:'review',  completedAt:'2026-05-28T09:00:00', completedBy:'CO',   decision:'approved', comment:'Паспорт, адрес получены. Source of Funds ожидается.' },
-      { role:'MLRO', label:'MLRO — AML скрининг',        action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
-      { role:'CEO',  label:'CEO — финальное одобрение',  action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
+      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-12-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум завершён, DD по лицензиям МЗ РК пройден.' },
+      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-01-06T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и pre-money согласованы.' },
+      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-01-15T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC одобрил сделку, средства к перечислению.' },
     ]
   },
-  // Deal IC — LogiTrack at CEO step
+  // Deal IC — Dala Agro Holding (deal id 3) — closed, IC approved 2025-04-10
   {
-    id: 3, type: 'deal_ic', entityId: 6, entityName: 'LogiTrack', entityType: 'Deal',
-    createdAt: '2026-06-01T10:00:00', createdBy: 'RM',
+    id: 3, type: 'deal_ic', entityId: 3, entityName: 'Dala Agro Holding', entityType: 'Deal',
+    createdAt: '2025-03-18T09:00:00', createdBy: 'Analyst',
+    currentStep: 3, status: 'approved',
+    steps: [
+      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-03-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по земельному банку и экспортным контрактам готов.' },
+      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-04-01T15:00:00', completedBy:'RM',      decision:'approved', comment:'Условия convertible note согласованы.' },
+      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-04-10T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC одобрил сделку большинством голосов (Investment Manager воздержался/против).' },
+    ]
+  },
+  // Deal IC — Retail Hub Karaganda (deal id 7) — rejected 2025-05-28
+  {
+    id: 4, type: 'deal_ic', entityId: 7, entityName: 'Retail Hub Karaganda', entityType: 'Deal',
+    createdAt: '2025-05-05T09:00:00', createdBy: 'Analyst',
+    currentStep: 2, status: 'rejected',
+    steps: [
+      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-05-10T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум готов, узкая региональная ниша отмечена как риск.' },
+      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-05-20T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческая оценка завершена, масштабируемость под вопросом.' },
+      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-05-28T10:00:00', completedBy:'CEO',     decision:'rejected', comment:'Слишком нишевый региональный рынок, недостаточный потенциал масштабирования для мандата фонда.' },
+    ]
+  },
+  // Deal IC — Green Energy Almaty (deal id 5) — в процессе, ждёт заседания IC 20.07.2025
+  {
+    id: 5, type: 'deal_ic', entityId: 5, entityName: 'Green Energy Almaty', entityType: 'Deal',
+    createdAt: '2025-07-05T09:00:00', createdBy: 'Analyst',
     currentStep: 2, status: 'active',
     steps: [
-      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2026-06-03T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Финансовая модель готова. IRR ~22%.' },
-      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2026-06-05T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия согласованы.' },
+      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-07-08T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по солнечной электростанции готов, риски по земле отмечены.' },
+      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-07-12T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и PPA-переговоры в норме.' },
       { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
     ]
   },
-  // CF&A KYC — NovaTech at MLRO
+  // KYC LP — Байжанова Динара Сериковна — в процессе, ждёт MLRO AML-скрининга
   {
-    id: 4, type: 'kyc_cfa', entityId: 3, entityName: 'NovaTech Holdings (BVI) Ltd', entityType: 'CF&A',
-    createdAt: '2026-04-15T09:00:00', createdBy: 'CO',
+    id: 6, type: 'kyc_lp', entityId: 6, entityName: 'Байжанова Динара Сериковна', entityType: 'LP',
+    createdAt: '2025-06-10T09:00:00', createdBy: 'RM',
     currentStep: 1, status: 'active',
     steps: [
-      { role:'CO',   label:'CO проверка документов',    action:'review',  completedAt:'2026-04-22T10:00:00', completedBy:'CO',   decision:'approved', comment:'Документы BVI получены. Enhanced DD инициирован.' },
+      { role:'CO',   label:'CO проверка документов',    action:'review',  completedAt:'2025-06-18T11:20:00', completedBy:'CO',   decision:'approved', comment:'Паспорт и подтверждение адреса получены. Ожидается Source of Funds.' },
       { role:'MLRO', label:'MLRO — AML скрининг',        action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
       { role:'CEO',  label:'CEO — финальное одобрение',  action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
     ]
   },
 ];
 
-let wfIdCounter = 5;
+let wfIdCounter = 7;
 let activeWfId  = null;   // currently open modal
 
 /* ─────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 //  onboarding.js — GL-CRM-PYRUS-TZ-004
 //  Онбординг клиентов по ТЗ: 7 задач, Phase 1–5
 //  Формы 1–8 + Маршрутизация + COI + Restricted List
@@ -9,95 +9,18 @@
 ═══════════════════════════════════════════════════ */
 
 // Счётчики ID
-let obClientIdCounter = 4;   // у нас 4 sample клиента (id 1–4)
+let obClientIdCounter = 8;   // у нас 8 sample клиентов (id 1–8)
 let obTaskIdCounter   = 100;
-let obCoiIdCounter    = 1;
-let obEngIdCounter    = 1;
+let obCoiIdCounter    = 2;
 
 // ── Restricted List (Форма 5.2) ──────────────────────────
-let restrictedList = [
-  { id: 1, company: 'TechHub Almaty', sector: 'Технологии', fund: 'TCF-I', ownershipPct: 40, restrictionType: 'Full Restriction', cfaAllowed: false, requiresApproval: true, addedAt: '2024-01-15', addedBy: 'CO' },
-  { id: 2, company: 'LogiTrack',      sector: 'Промышленность', fund: 'TCF-I', ownershipPct: 35, restrictionType: 'Requires Approval', cfaAllowed: true, requiresApproval: true, addedAt: '2025-06-01', addedBy: 'CO' },
-  { id: 3, company: 'GreenFarm KZ',   sector: 'АПК', fund: 'TCF-I', ownershipPct: 51, restrictionType: 'Full Restriction', cfaAllowed: false, requiresApproval: false, addedAt: '2024-09-10', addedBy: 'MLRO' },
-];
+let restrictedList = [];  // populated at runtime by js/api-auth.js via GET /api/onboarding (see server/index.js)
 
 // ── COI Registry (Форма 5.1) ─────────────────────────────
-let coiRegistry = [
-  {
-    id: 1, coiId: 'COI-2025-001', date: '2025-03-12',
-    conflictType: 'Restricted List Match', parties: 'TechHub Almaty / Golden Leaves Ltd.',
-    severity: 'High', status: 'Resolved',
-    description: 'Клиент является портфельной компанией TCF-I. CF&A услуги ограничены.',
-    measures: 'Принята Китайская стена, RM FM не имеет доступа к CF&A клиенту.',
-    responsible: 'CO', reviewDate: '2025-06-12', resolution: 'Ограничение подтверждено.',
-    linkedClientId: null,
-  },
-];
+let coiRegistry = [];  // populated at runtime by js/api-auth.js via GET /api/onboarding (see server/index.js)
 
 // ── Clients (Карточки клиентов) ──────────────────────────
-let obClients = [
-  {
-    // CF&A Client — физлицо, услуга Advising (инвестиционное консультирование)
-    id: 1, clientId: 'CL-2026-001',
-    name: 'Asel Nurmagambetova', type: 'Individual',
-    classification: 'Professional Client',
-    serviceType: 'Advising',          // CF&A: Advising | Arranging | Both
-    direction: 'CF&A',
-    rm: 'RM (Relationship Manager)',
-    phase: 3, onboardingStatus: 'On Track', riskRating: 'Low',
-    startDate: '2026-05-01', targetDate: '2026-05-22',
-    nextAction: 'Awaiting CO approval on Classification',
-    notes: 'High-net-worth individual. Experienced investor.',
-    restrictedMatch: false, activated: false,
-  },
-  {
-    // CF&A Client — корпоративный, услуга Arranging (организация сделок/привлечение капитала)
-    id: 2, clientId: 'CL-2026-002',
-    name: 'Omega Capital LLP', type: 'Corporate',
-    classification: 'Market Counterparty',
-    serviceType: 'Arranging',         // CF&A: Advising | Arranging | Both
-    direction: 'CF&A',
-    rm: 'RM (Relationship Manager)',
-    phase: 2, onboardingStatus: 'At Risk', riskRating: 'Medium',
-    startDate: '2026-05-10', targetDate: '2026-05-31',
-    nextAction: 'Documentation pending — UBO passport required',
-    notes: 'BVI-registered holding. Multiple UBOs.',
-    restrictedMatch: false, activated: false,
-  },
-  {
-    // FM Client — Limited Partner (LP), инвестирует в фонд
-    // serviceType для FM = 'LP Investment' (не CF&A услуги!)
-    id: 3, clientId: 'CL-2026-003',
-    name: 'Bauyrzhan Seitkali', type: 'Individual',
-    classification: 'Qualified Investor',  // FM: Qualified Investor | Professional Investor
-    serviceType: 'LP Investment',          // FM: всегда LP Investment
-    lpType: 'HNWI',                        // FM: HNWI | Family Office | Institution | Corporate
-    commitment: 2000000,                   // USD
-    direction: 'FM',
-    rm: 'RM (Relationship Manager)',
-    phase: 5, onboardingStatus: 'Completed', riskRating: 'Low',
-    startDate: '2026-04-01', targetDate: '2026-04-22',
-    nextAction: '—',
-    notes: 'Fully onboarded LP. Commitment $2M.',
-    restrictedMatch: false, activated: true,
-  },
-  {
-    // FM Client — инcтитуциональный LP, в процессе онбординга
-    id: 4, clientId: 'CL-2026-004',
-    name: 'Sovereign Wealth Partners Ltd', type: 'Corporate',
-    classification: 'Qualified Investor',
-    serviceType: 'LP Investment',
-    lpType: 'Institution',
-    commitment: 5000000,
-    direction: 'FM',
-    rm: 'RM (Relationship Manager)',
-    phase: 2, onboardingStatus: 'On Track', riskRating: 'Low',
-    startDate: '2026-05-15', targetDate: '2026-06-05',
-    nextAction: 'Documentation Collection in progress',
-    notes: 'Institutional LP. Commitment $5M. KYC enhanced required.',
-    restrictedMatch: false, activated: false,
-  },
-];
+let obClients = [];  // populated at runtime by js/api-auth.js via GET /api/onboarding (see server/index.js)
 
 // ── 7 задач онбординга: шаблоны по направлению ─────────────
 // CF&A: Corporate Finance & Advisory
@@ -135,14 +58,6 @@ function getTaskTemplates(direction) {
 // Задачи онбординга (runtime)
 let obTasks = [];
 
-// Инициализация задач для тестовых клиентов
-(function initSampleTasks() {
-  obClients.forEach(c => {
-    if (!obTasks.some(t => t.clientId === c.id)) {
-      createOnboardingTasks(c);
-    }
-  });
-})();
 
 /* ═══════════════════════════════════════════════════
    CORE — создание клиента + 7 задач
@@ -2558,12 +2473,6 @@ function today() { return new Date().toISOString().slice(0,10); }
 ═══════════════════════════════════════════════════ */
 
 /** @deprecated — replaced by auto-save; kept for safety */
-function saveObTaskDraft(taskId) {
-  const task = obTasks.find(t => t.id === taskId);
-  if (!task) return;
-  obDraftSave(taskId, task.formKey);
-}
-
 function submitObTask(taskId) {
   const task   = obTasks.find(t => t.id === taskId);
   const client = obClients.find(c => c.id === task?.clientId);
@@ -5397,6 +5306,102 @@ function renderRestrictedListPage() {
     </div>`;
 }
 
+/* ── Restricted List: Add Entry Modal ──────────────── */
+function openAddRestrictedModal() {
+  const modal   = document.getElementById('modal-restricted-add');
+  const overlay = document.getElementById('restrictedAddOverlay');
+  if (!modal) return;
+  if (overlay) overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+
+  const inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
+  const labelStyle = 'font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase';
+
+  document.getElementById('restrictedAddModalContent').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="grid-column:1/-1">
+        <label style="${labelStyle}">Компания *</label>
+        <input type="text" id="ra_company" placeholder="Название компании" style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Сектор</label>
+        <input type="text" id="ra_sector" placeholder="Технологии, АПК..." style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Фонд</label>
+        <input type="text" id="ra_fund" value="TCF-I" style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Доля владения (%)</label>
+        <input type="number" id="ra_ownershipPct" min="0" max="100" placeholder="40" style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Тип ограничения</label>
+        <select id="ra_restrictionType" style="${inputStyle}">
+          <option value="Full Restriction">Full Restriction</option>
+          <option value="Requires Approval">Requires Approval</option>
+        </select>
+      </div>
+      <div>
+        <label style="${labelStyle}">CF&A разрешено</label>
+        <select id="ra_cfaAllowed" style="${inputStyle}">
+          <option value="false">Нет</option>
+          <option value="true">Да (с согласованием)</option>
+        </select>
+      </div>
+      <div>
+        <label style="${labelStyle}">Требуется согласование</label>
+        <select id="ra_requiresApproval" style="${inputStyle}">
+          <option value="true">Да</option>
+          <option value="false">Нет</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button type="button" onclick="closeAddRestrictedModal()"
+        style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
+        Отмена
+      </button>
+      <button type="button" onclick="saveNewRestrictedEntry()"
+        style="background:linear-gradient(135deg,#ef4444,#dc2626);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-plus" style="margin-right:6px"></i>Добавить
+      </button>
+    </div>`;
+
+  modal.style.display = 'flex';
+}
+
+function closeAddRestrictedModal() {
+  const modal   = document.getElementById('modal-restricted-add');
+  const overlay = document.getElementById('restrictedAddOverlay');
+  if (modal)   modal.style.display   = 'none';
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function saveNewRestrictedEntry() {
+  const company = document.getElementById('ra_company')?.value?.trim();
+  if (!company) { showToast('⚠️ Введите название компании', 'red'); return; }
+
+  const entry = {
+    id:               (Math.max(0, ...restrictedList.map(r => r.id)) + 1),
+    company,
+    sector:           document.getElementById('ra_sector')?.value?.trim() || '—',
+    fund:             document.getElementById('ra_fund')?.value?.trim() || 'TCF-I',
+    ownershipPct:     parseFloat(document.getElementById('ra_ownershipPct')?.value) || 0,
+    restrictionType:  document.getElementById('ra_restrictionType')?.value || 'Full Restriction',
+    cfaAllowed:       document.getElementById('ra_cfaAllowed')?.value === 'true',
+    requiresApproval: document.getElementById('ra_requiresApproval')?.value === 'true',
+    addedAt:          today(),
+    addedBy:          'CO',
+  };
+
+  restrictedList.push(entry);
+  closeAddRestrictedModal();
+  renderRestrictedListPage();
+  showToast(`✅ "${entry.company}" добавлена в Restricted List`, 'green');
+}
+
 /* ═══════════════════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════════════════ */
@@ -5412,12 +5417,6 @@ function obAddBizDays(date, days) {
   return d;
 }
 
-function getObBadgeCount() {
-  const today = new Date();
-  return obTasks.filter(t => t.status === 'open' && new Date(t.dueDate) < today).length
-       + obClients.filter(c => c.onboardingStatus === 'At Risk' || c.onboardingStatus === 'Delayed').length;
-}
-
 // Used by app.js updateBadges
 function getObOverdueCount() {
   const today = new Date();
@@ -5428,33 +5427,8 @@ function getObOverdueCount() {
    ENGAGEMENTS REGISTRY (5.3)
 ═══════════════════════════════════════════════════ */
 
-let engagements = [
-  {
-    id: 1, engId: 'ENG-2026-001',
-    clientId: 1, clientName: 'Asel Nurmagambetova',
-    serviceType: 'Advising', contractNum: 'GL-2026-001',
-    date: '2026-05-20', signedDate: '2026-05-20', status: 'Active',
-    feeType: 'Retainer', feeAmount: 60000, successFee: null, retainer: 5000,
-    payTerms: 'Ежемесячно',
-    invoiced: 10000, paid: 10000,
-    startDate: '2026-05-20', endDate: '2027-05-19',
-    rm: 'RM (Relationship Manager)', notes: 'M&A Advisory. Monthly retainer.',
-    direction: 'CF&A', activationDate: '2026-06-01', activatedBy: 'CO (Compliance Officer)',
-  },
-  {
-    id: 2, engId: 'ENG-2026-002',
-    clientId: 2, clientName: 'Omega Capital LLP',
-    serviceType: 'Arranging', contractNum: 'GL-2026-002',
-    date: '2026-05-25', signedDate: '', status: 'Draft',
-    feeType: 'Success Fee', feeAmount: 200000, successFee: 2, retainer: null,
-    payTerms: 'По завершении',
-    invoiced: 0, paid: 0,
-    startDate: '2026-05-25', endDate: '2027-05-24',
-    rm: 'RM (Relationship Manager)', notes: 'Capital Raising. Success fee on closing.',
-    direction: 'CF&A',
-  },
-];
-let engIdCounter = 3;
+let engagements = [];  // populated at runtime by js/api-auth.js via GET /api/onboarding (see server/index.js)
+let engIdCounter = 6;
 
 /* Runtime filter state for engagements page */
 let engFilter = '';
@@ -5538,6 +5512,8 @@ function renderEngagementsPage() {
       ${(engFilter||engStatusFilter||engDirFilter) ? `<button onclick="engFilter='';engStatusFilter='';engDirFilter='';renderEngagementsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
       <span style="font-size:11px;color:#5a6b8a;white-space:nowrap">${filtered.length} из ${engagements.length}</span>
+      <button onclick="openNewEngagementModal()"
+        style="background:#3b82f6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-plus"></i> Новый договор</button>
     </div>
 
     <!-- Table -->

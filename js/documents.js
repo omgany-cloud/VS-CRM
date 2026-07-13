@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 //  documents.js — File Upload & Comments Module
 // ============================================================
 
@@ -9,12 +9,7 @@ const DOC_CATEGORIES = {
 };
 
 // In-memory storage for uploaded files (metadata only, no actual binary storage)
-let docFiles = [
-  { id: 1, fundId: 'TCF1', name: 'KYC_Checklist_Template.pdf',        category: 'KYC/AML',        size: '328 KB', date: '2024-10-01', uploader: 'CCO', comments: [ { id:1, author:'CCO', date:'2024-10-02', text:'Шаблон утверждён для всех физических лиц.' } ] },
-  { id: 2, fundId: 'TCF1', name: 'First_Closing_Templates.pdf',        category: 'First Closing',  size: '199 KB', date: '2024-11-01', uploader: 'CEO', comments: [ { id:2, author:'CEO', date:'2024-11-02', text:'Все шаблоны готовы к использованию на Closing Day.' } ] },
-  { id: 3, fundId: 'TCF1', name: 'Investment_Harvesting_Templates.pdf',category: 'Сделки',          size: '261 KB', date: '2024-11-15', uploader: 'CFO', comments: [] },
-  { id: 4, fundId: 'TCF1', name: 'Full_Business_Process_Guide.pdf',    category: 'Прочее',          size: '444 KB', date: '2024-12-01', uploader: 'GP', comments: [ { id:3, author:'GP', date:'2024-12-02', text:'Полный регламент бизнес-процессов, версия 1.0. Обязателен к изучению.' } ] },
-];
+let docFiles = [];  // populated at runtime by js/api-auth.js via GET /api/documents (see server/index.js)
 
 let docFilterCategory = '';
 let docNextId = 100;

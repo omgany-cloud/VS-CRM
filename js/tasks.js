@@ -7,87 +7,120 @@
 let tasksData = [
   {
     id: 1,
-    title: 'Запросить обновлённые банковские выписки у Almaty Ventures LLP',
-    type: 'KYC', priority: 'high', status: 'in_progress',
+    title: 'Собрать Source of Funds — KYC-досье Байжановой Динары Сериковны',
+    type: 'KYC', priority: 'critical', status: 'in_progress',
     assignee: 'CO (Compliance Officer)', author: 'MLRO',
-    relatedClient: 'Almaty Ventures LLP', relatedModule: 'kyc',
-    deadline: '2026-06-20', created: '2026-06-01',
-    description: 'Запросить актуальные банковские выписки за последние 6 месяцев для обновления досье AML.',
+    relatedClient: 'Байжанова Динара Сериковна', relatedModule: 'kyc',
+    deadline: '2025-07-22', created: '2025-07-02',
+    description: 'KYC-досье в процессе оформления. Требуется подтверждение источника происхождения средств (Source of Funds) — банковские выписки, справка о доходах.',
     comments: [
-      { id: 1, author: 'CO', date: '2026-06-02', text: 'Письмо отправлено клиенту по email.' },
-      { id: 2, author: 'MLRO', date: '2026-06-04', text: 'Получено частичное подтверждение. Жду полный комплект.' }
+      { id: 1, author: 'CO', date: '2025-07-03', text: 'Запрос направлен клиенту, ожидаем документы.' },
+      { id: 2, author: 'MLRO', date: '2025-07-08', text: 'Получены частичные документы, нужна справка о доходах за последний год.' }
     ], attachments: []
   },
   {
     id: 2,
-    title: 'Подготовить Subscription Agreement для Central Asia Family Office',
-    type: 'Онбординг', priority: 'high', status: 'pending',
-    assignee: 'RM (Relationship Manager)', author: 'CEO',
-    relatedClient: 'Central Asia Family Office', relatedModule: 'onboarding',
-    deadline: '2026-06-25', created: '2026-06-05',
-    description: 'Подготовить и направить на подпись Subscription Agreement на сумму $5M.',
+    title: 'AML-скрининг — Байжанова Динара Сериковна',
+    type: 'AML', priority: 'high', status: 'pending',
+    assignee: 'MLRO', author: 'CO (Compliance Officer)',
+    relatedClient: 'Байжанова Динара Сериковна', relatedModule: 'kyc',
+    deadline: '2025-07-24', created: '2025-07-02',
+    description: 'Провести проверку по санкционным спискам и PEP-базам перед допуском инвестора к подписанию Subscription Agreement.',
     comments: [], attachments: []
   },
   {
     id: 3,
-    title: 'Провести AML-скрининг Silk Road Capital Partners',
-    type: 'AML', priority: 'critical', status: 'pending',
-    assignee: 'MLRO', author: 'CO',
-    relatedClient: 'Silk Road Capital Partners', relatedModule: 'kyc',
-    deadline: '2026-06-15', created: '2026-06-03',
-    description: 'Провести полный AML-скрининг. Результат — меморандум MLRO.',
+    title: 'Subscription Agreement — Eurasia Bridge Partners LLP',
+    type: 'Онбординг', priority: 'high', status: 'pending',
+    assignee: 'RM (Relationship Manager)', author: 'CEO',
+    relatedClient: 'Eurasia Bridge Partners LLP', relatedModule: 'onboarding',
+    deadline: '2025-07-28', created: '2025-07-10',
+    description: 'Подготовить и направить на подпись Subscription Agreement на сумму, согласованную в term sheet.',
     comments: [
-      { id: 1, author: 'CO', date: '2026-06-03', text: 'Клиент флагнут как PEP-смежный. Требуется Enhanced Due Diligence.' }
+      { id: 1, author: 'RM', date: '2025-07-11', text: 'Проект соглашения отправлен на юридическую проверку.' }
     ], attachments: []
   },
   {
     id: 4,
-    title: 'IC Review — TechHub Almaty Series B',
-    type: 'Сделка', priority: 'high', status: 'review',
-    assignee: 'Analyst', author: 'RM (Relationship Manager)',
-    relatedClient: 'TechHub Almaty', relatedModule: 'deals',
-    deadline: '2026-06-28', created: '2026-06-06',
-    description: 'Подготовить Investment Memorandum для IC. Финансовая модель, анализ рисков.',
+    title: 'Финансовый Due Diligence — Steppe Logistics KZ',
+    type: 'Сделка', priority: 'critical', status: 'in_progress',
+    assignee: 'Analyst', author: 'Investment Manager',
+    relatedClient: 'Steppe Logistics KZ', relatedModule: 'deals',
+    deadline: '2025-08-05', created: '2025-07-01',
+    description: 'Финансовый DD в процессе: анализ отчётности за 3 года, проверка долговой нагрузки и денежных потоков. Дедлайн — 05.08.2025.',
     comments: [
-      { id: 1, author: 'Analyst', date: '2026-06-07', text: 'Финансовая модель готова.' },
-      { id: 2, author: 'RM', date: '2026-06-08', text: 'Добавить анализ конкурентов.' }
+      { id: 1, author: 'Analyst', date: '2025-07-09', text: 'Получены аудированные отчёты за 2023–2024.' },
+      { id: 2, author: 'Investment Manager', date: '2025-07-12', text: 'Нужен доступ к management accounts за 2025 год.' }
     ], attachments: []
   },
   {
     id: 5,
-    title: 'Отправить квартальный отчёт LP — Q1 2026',
-    type: 'Отчётность', priority: 'medium', status: 'completed',
-    assignee: 'RM (Relationship Manager)', author: 'CEO',
-    relatedClient: 'Все LP', relatedModule: 'reports',
-    deadline: '2026-04-30', created: '2026-04-01',
-    description: 'Подготовить и отправить квартальный отчёт всем LP: NAV, IRR, обновление портфеля.',
+    title: 'Подготовить IC-меморандум — Green Energy Almaty',
+    type: 'Сделка', priority: 'high', status: 'review',
+    assignee: 'Analyst', author: 'CEO',
+    relatedClient: 'Green Energy Almaty', relatedModule: 'deals',
+    deadline: '2025-07-19', created: '2025-06-25',
+    description: 'Инвестиционный меморандум для Investment Committee. Заседание IC назначено на 20.07.2025.',
     comments: [
-      { id: 1, author: 'CEO', date: '2026-04-30', text: 'Согласован. Разослан всем LP.' }
+      { id: 1, author: 'Analyst', date: '2025-07-05', text: 'Черновик меморандума готов, отправлен на ревью.' },
+      { id: 2, author: 'CEO', date: '2025-07-10', text: 'Добавить сценарный анализ по возврату инвестиций.' }
     ], attachments: []
   },
   {
     id: 6,
-    title: 'Capital Call #5 — подготовка уведомлений',
-    type: 'Capital Call', priority: 'medium', status: 'pending',
-    assignee: 'CO (Compliance Officer)', author: 'CEO',
-    relatedClient: 'Все LP', relatedModule: 'capitalcalls',
-    deadline: '2026-07-01', created: '2026-06-08',
-    description: 'Подготовить Capital Call Notice для каждого LP. Срок оплаты — 10 рабочих дней.',
+    title: 'Подготовка к первому звонку — FinBridge Kazakhstan',
+    type: 'Сделка', priority: 'medium', status: 'pending',
+    assignee: 'RM (Relationship Manager)', author: 'CEO',
+    relatedClient: 'FinBridge Kazakhstan', relatedModule: 'deals',
+    deadline: '2025-07-18', created: '2025-07-11',
+    description: 'Скрининг новой сделки: подготовить вопросы к первому звонку с основателями, назначенному на 18.07.2025.',
     comments: [], attachments: []
   },
   {
     id: 7,
-    title: 'Обновить KYC досье — Astana Endowment Fund (ежегодное)',
-    type: 'KYC', priority: 'low', status: 'pending',
-    assignee: 'CO (Compliance Officer)', author: 'MLRO',
-    relatedClient: 'Astana Endowment Fund', relatedModule: 'kyc',
-    deadline: '2026-08-01', created: '2026-06-09',
-    description: 'Ежегодное обновление KYC досье согласно AFSA AML Rules.',
+    title: 'Capital Call — подготовка уведомлений для LP',
+    type: 'Capital Call', priority: 'medium', status: 'pending',
+    assignee: 'CO (Compliance Officer)', author: 'CFO',
+    relatedClient: 'Все LP', relatedModule: 'capitalcalls',
+    deadline: '2025-08-01', created: '2025-07-10',
+    description: 'Подготовить Capital Call Notice для всех LP фонда. Срок оплаты — 10 рабочих дней с даты уведомления.',
     comments: [], attachments: []
+  },
+  {
+    id: 8,
+    title: 'Продлить страховой полис — VitaMed Astana',
+    type: 'Договор', priority: 'medium', status: 'pending',
+    assignee: 'CO (Compliance Officer)', author: 'CCO',
+    relatedClient: 'VitaMed Astana', relatedModule: 'portfolio',
+    deadline: '2025-08-10', created: '2025-07-12',
+    description: 'Истекает срок действия договора страхования профессиональной ответственности портфельной компании. Требуется продление и загрузка обновлённого документа.',
+    comments: [], attachments: []
+  },
+  {
+    id: 9,
+    title: 'Плановый визит мониторинга — NomadTech Solutions',
+    type: 'Прочее', priority: 'low', status: 'pending',
+    assignee: 'RM (Relationship Manager)', author: 'CEO',
+    relatedClient: 'NomadTech Solutions', relatedModule: 'portfolio',
+    deadline: '2025-08-15', created: '2025-07-13',
+    description: 'Плановый квартальный визит для мониторинга операционных показателей портфельной компании.',
+    comments: [], attachments: []
+  },
+  {
+    id: 10,
+    title: 'Отправить квартальный отчёт LP — Q2 2025',
+    type: 'Отчётность', priority: 'medium', status: 'completed',
+    assignee: 'RM (Relationship Manager)', author: 'CEO',
+    relatedClient: 'Все LP', relatedModule: 'reports',
+    deadline: '2025-07-10', created: '2025-06-15',
+    description: 'Подготовить и разослать квартальный отчёт всем LP: NAV, IRR, статус портфеля, комментарии GP.',
+    comments: [
+      { id: 1, author: 'CEO', date: '2025-07-10', text: 'Согласован и разослан всем LP.' }
+    ], attachments: []
   },
 ];
 
-let taskIdCounter = 8;
+let taskIdCounter = 11;
 let tasksFilter   = { status: '', type: '', assignee: '' };
 let tasksView     = 'board';
 let activeTaskId  = null;
@@ -471,6 +504,30 @@ function saveNewTask() {
   renderTasksPage();
   if (typeof updateBadges === 'function') updateBadges();
   showToast('✅ Задача создана: ' + title, 'green');
+}
+
+function addTask(fields) {
+  fields = fields || {};
+  const newTask = {
+    id:            taskIdCounter++,
+    title:         fields.title || 'Задача',
+    type:          fields.type || 'Прочее',
+    priority:      fields.priority || 'medium',
+    status:        fields.status || 'pending',
+    assignee:      fields.assignee || 'CO (Compliance Officer)',
+    author:        fields.author || (typeof currentUserRole !== 'undefined' ? currentUserRole : 'CO'),
+    relatedClient: fields.relatedClient || '',
+    relatedModule: fields.relatedModule || '',
+    deadline:      fields.deadline || '',
+    created:       fields.created || today(),
+    description:   fields.description || '',
+    comments:      fields.comments || [],
+    attachments:   fields.attachments || [],
+  };
+  tasksData.unshift(newTask);
+  renderDashboardTasks();
+  if (typeof updateBadges === 'function') updateBadges();
+  return newTask;
 }
 
 function saveEditTask(id) {

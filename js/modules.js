@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 //  modules.js — 5 модулей CRM
 //  1. KYC Renewal Tracker
 //  2. Distribution Waterfall
@@ -142,15 +142,14 @@ function startKycRenewal(id, name) {
    Hurdle Rate → GP Catch-up → Carried Interest split
 ═══════════════════════════════════════════════════════════ */
 
-let distributionsList = [
-  {
-    id: 1, date: '2026-03-31', amount: 2400000,
-    source: 'Realisation — TechHub Almaty (partial)',
-    status: 'Одобрено', approvedBy: 'CEO', notes: 'Частичная реализация 30% позиции',
-    waterfall: null // computed on render
-  },
-];
-let distIdCounter = 2;
+// No distributions yet — the fund is still in its Investment Period (Year 2, 2025),
+// all three portfolio companies (NomadTech Solutions, VitaMed Astana, Dala Agro Holding)
+// are still held (Value Creation / Active), and none have been realised/exited.
+// renderDistributionPage() already handles an empty list gracefully (see the
+// "Нет записей о распределениях" empty-state branch below), so this is left empty
+// rather than inventing a fictitious interim distribution.
+let distributionsList = [];
+let distIdCounter = 1;
 
 function calcWaterfall(grossAmount) {
   const p = FUND_PARAMS;
@@ -490,43 +489,8 @@ function renderCalEvent(e, isOverdue) {
 const IC_MEMBERS = ['CEO', 'CFO', 'Investment Manager', 'External Advisor'];
 const IC_VOTES   = { approve: { label:'Одобрить', color:'#22c55e' }, reject: { label:'Отклонить', color:'#ef4444' }, abstain: { label:'Воздержаться', color:'#94a3b8' } };
 
-let icMemos = [
-  {
-    id: 1, dealId: 1, company: 'TechHub Almaty', sector: 'Технологии',
-    amount: 4, type: 'Equity', stage: 'Закрыта',
-    author: 'Investment Manager', createdAt: '2024-02-15',
-    status: 'approved', meetingDate: '2024-03-10',
-    thesis: 'SaaS платформа для МСБ. ARR $800K растёт 3x YoY. Команда опытная.',
-    risks: 'Конкуренция с мировыми аналогами. Зависимость от одного enterprise-клиента.',
-    financials: 'Выручка $2.1M (2023). EBITDA -$0.3M. Прогноз прибыли 2025.',
-    exitPlan: 'M&A 2028-2029 при оценке $15-20M.',
-    votes: [
-      { member:'CEO', vote:'approve', comment:'Соответствует стратегии фонда.' },
-      { member:'CFO', vote:'approve', comment:'Финансовые показатели в норме.' },
-      { member:'Investment Manager', vote:'approve', comment:'Автор меморандума.' },
-      { member:'External Advisor', vote:'abstain', comment:'Нет конфликта интересов, воздерживаюсь.' },
-    ],
-    resolution: 'Инвестиция одобрена. Сумма $4M Equity. Закрытие Q1 2024.',
-  },
-  {
-    id: 2, dealId: 6, company: 'LogiTrack', sector: 'Промышленность',
-    amount: 3.5, type: 'Equity', stage: 'IC Review',
-    author: 'Investment Manager', createdAt: '2026-06-01',
-    status: 'pending', meetingDate: '2026-06-20',
-    thesis: 'Логистика и трекинг для СНГ-рынка. B2B SaaS. 50+ клиентов.',
-    risks: 'Регуляторные риски в СНГ. Конкуренция с международными игроками.',
-    financials: 'Выручка $1.2M (2025). EBITDA положительная с Q3 2025.',
-    exitPlan: 'Strategic Sale 2028-2029 региональному логистическому оператору.',
-    votes: [
-      { member:'Investment Manager', vote:'approve', comment:'Рекомендую одобрение.' },
-      { member:'CEO', vote:null, comment:'' },
-      { member:'CFO', vote:null, comment:'' },
-      { member:'External Advisor', vote:null, comment:'' },
-    ],
-    resolution: '',
-  },
-];
-let icIdCounter = 3;
+let icMemos = [];  // populated at runtime by js/api-auth.js via GET /api/ic-memos (see server/index.js)
+let icIdCounter = 6;
 let activeIcId  = null;
 
 function renderICPage() {

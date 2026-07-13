@@ -158,7 +158,6 @@ const PAGE_LABELS = {
   harvesting:    'nav_harvesting',
   distributions: 'Distributions — Waterfall',
   documents:     'nav_documents',
-  trading:       'Trading Analytics',
   tasks:         'Задачи',
   export:        'Экспорт Excel',
   workflow:      'Согласования',
@@ -1888,10 +1887,121 @@ function saveDeal() {
 
 
 /* ===== PORTFOLIO ===== */
+function savePortfolio() {
+  const name        = document.getElementById('port_name').value.trim();
+  const sector      = document.getElementById('port_sector').value;
+  const stage       = document.getElementById('port_stage').value;
+  const invested    = parseFloat(document.getElementById('port_invested').value) || 0;
+  const value       = parseFloat(document.getElementById('port_value').value) || 0;
+  const date        = document.getElementById('port_date').value || today();
+  const exitStrategy= document.getElementById('port_exit').value;
+  const exitYear    = parseInt(document.getElementById('port_exit_year').value) || null;
+
+  if (!name) { alert('Введите название компании'); return; }
+
+  const newId = ++portfolioIdCounter;
+  const moic  = invested > 0 ? Math.round((value / invested) * 100) / 100 : 0;
+
+  portfolio.push({
+    id: newId, name, sector, stage,
+    bin: '', invested, value, date, exitStrategy, exitYear, moic,
+    fundShare: 0, manager: currentUserRole || 'Investment Manager', status: 'Active',
+    nextAction: '', nextActionDate: '',
+    lastUpdated: today(),
+
+    financials: {
+      quarters: [],
+      revenue:   { plan: [], actual: [] },
+      ebitda:    { plan: [], actual: [] },
+      netProfit: { plan: [], actual: [] },
+      employees: { plan: [], actual: [] },
+      avgSalary: 0, taxContrib: 0,
+      totalDebt: 0, fundDebt: 0, debtService: 0,
+      collateral: '', collateralVal: 0, collateralStatus: '',
+      covenants: [],
+      overduePayment: false, overdueAmount: 0,
+      paymentSchedule: [],
+    },
+    monitoring: {
+      lastVisitDate: '',
+      frequency: 'Ежеквартально',
+      meetings: [],
+      reportReceivedDate: '',
+      auditStatus: 'Не начат',
+      covenantViolations: '',
+      riskLevel: 'Низкий',
+      riskComment: '',
+    },
+    documents: {
+      driveUrl: '',
+      files: [],
+    },
+    compliance: {
+      programName: '', programType: '', subsidizedRate: 0, grantAmount: 0, grantConditions: '',
+      programs: [],
+      reportingDeadlines: [],
+      esg: {
+        jobsCreatedPlan: 0, jobsCreatedActual: 0, jobsPreservedPlan: 0, jobsPreservedActual: 0,
+        womenLeadership: false, womenPct: 0, regionType: '',
+        environmentalNotes: '', socialImpact: '',
+      },
+    },
+    exit: {
+      exitType: exitStrategy, plannedDate: exitYear ? `${exitYear}-Q4` : '',
+      targetValuation: 0, prepProgress: 0,
+      checklist: [
+        { item:'Финансовый аудит завершён', done:false },
+        { item:'Юридическая структура очищена', done:false },
+        { item:'Management team готова', done:false },
+        { item:'Финансовая модель подготовлена', done:false },
+        { item:'Потенциальные покупатели определены', done:false },
+      ],
+      buyers: [], notes: '',
+    },
+    history: [
+      { type:'status', date: today(), author:'System', text:'Статус изменён: Active' },
+    ],
+  });
+
+  renderPortfolio(portfolio);
+  updateBadges();
+  closeModal();
+  showToast(`✅ Компания добавлена в портфель: ${name}`);
+  ['port_name','port_invested','port_value','port_date','port_exit_year'].forEach(id => document.getElementById(id).value = '');
+}
+
 let portfolioView = 'grid';
 let _activePortTab = 'financials';
 let _portChartRevenue = null;
 let _portChartEbitda  = null;
+
+function setPortfolioView(view, btnEl) {
+  portfolioView = view;
+  if (btnEl) {
+    const group = btnEl.parentElement;
+    if (group) group.querySelectorAll('.vt-btn').forEach(b => b.classList.toggle('active', b === btnEl));
+  }
+  renderPortfolio(portfolio);
+}
+
+function filterPortfolio(search) {
+  const q = (search || '').toLowerCase();
+  const filtered = portfolio.filter(p => {
+    if (!q) return true;
+    return (p.name || '').toLowerCase().includes(q)
+      || (p.sector || '').toLowerCase().includes(q)
+      || (p.manager || '').toLowerCase().includes(q);
+  });
+  renderPortfolio(filtered);
+}
+
+function deletePortfolioItem(id) {
+  if (!confirm('Удалить компанию из портфеля?')) return;
+  portfolio = portfolio.filter(p => p.id !== id);
+  renderPortfolio(portfolio);
+  updateBadges();
+  showToast('🗑️ Компания удалена из портфеля', 'red');
+}
 
 /* ── Auto-status calculation ── */
 function portAutoStatus(p) {
@@ -2829,9 +2939,14 @@ function portChangeStatus(id, status) {
   p.history.push({ type:'status', date:today(), author:'System', text:`Статус изменён: ${portStatusLabel(old)} → ${portStatusLabel(status)}` });
   if (status === 'Problem') {
     // Auto-create urgent task
-    if (typeof todayTasks !== 'undefined') {
-      todayTasks.push({ id:Date.now(), text:`Срочно: проверка ${p.name} (статус Проблемный)`, priority:'Высокий', done:false, page:'portfolio' });
-      if (typeof renderTasks === 'function') renderTasks();
+    if (typeof addTask === 'function') {
+      addTask({
+        title: `Срочно: проверка ${p.name} (статус Проблемный)`,
+        type: 'Прочее', priority: 'high', assignee: 'CEO',
+        relatedClient: p.name, relatedModule: 'portfolio',
+        deadline: today(),
+        description: `Портфельная компания «${p.name}» переведена в статус "Проблемный". Требуется срочная проверка.`,
+      });
     }
     showToast(`⚠ ${p.name} — статус Проблемный. Создана срочная задача.`, 'red');
   } else {
@@ -2929,9 +3044,14 @@ function savePortMeeting(id) {
   // Auto-create monitoring task
   const freqDays = {'Ежемесячно':30,'Ежеквартально':90,'Раз в полгода':180}[p.monitoring.frequency||'Ежеквартально']||90;
   const nextDate = new Date(new Date(date).getTime() + freqDays*86400000).toISOString().split('T')[0];
-  if (typeof todayTasks !== 'undefined') {
-    todayTasks.push({ id:Date.now(), text:`Мониторинг ${p.name} — следующий визит до ${nextDate}`, priority:'Средний', done:false, page:'portfolio' });
-    if (typeof renderTasks === 'function') renderTasks();
+  if (typeof addTask === 'function') {
+    addTask({
+      title: `Мониторинг ${p.name} — следующий визит до ${nextDate}`,
+      type: 'Прочее', priority: 'medium', assignee: 'RM (Relationship Manager)',
+      relatedClient: p.name, relatedModule: 'portfolio',
+      deadline: nextDate,
+      description: `Плановый мониторинговый визит для портфельной компании «${p.name}».`,
+    });
   }
   showToast(`✅ Встреча сохранена. Задача «Следующий мониторинг» создана на ${nextDate}.`, 'green');
   _activePortTab = 'monitoring';
@@ -2953,10 +3073,15 @@ function addPortDoc(id) {
   p.history = p.history || [];
   p.history.push({ type:'doc', date, author:by, text:`Загружен документ: ${name} (${type})` });
   // Auto-task if expiry set
-  if (expiry && typeof todayTasks !== 'undefined') {
+  if (expiry && typeof addTask === 'function') {
     const exDate = new Date(expiry); exDate.setDate(exDate.getDate()-30);
-    todayTasks.push({ id:Date.now(), text:`Обновить документ «${type}» для ${p.name} — истекает ${expiry}`, priority:'Средний', done:false, page:'portfolio' });
-    if (typeof renderTasks === 'function') renderTasks();
+    addTask({
+      title: `Обновить документ «${type}» для ${p.name} — истекает ${expiry}`,
+      type: 'Договор', priority: 'medium', assignee: 'CO (Compliance Officer)',
+      relatedClient: p.name, relatedModule: 'portfolio',
+      deadline: exDate.toISOString().split('T')[0],
+      description: `Документ «${type}» портфельной компании «${p.name}» истекает ${expiry}. Требуется продление/обновление.`,
+    });
   }
   p.lastUpdated = today();
   showToast(`✅ Документ «${name}» добавлен`, 'green');
@@ -3113,6 +3238,7 @@ function saveCapCall() {
 /* ===== DISTRIBUTIONS ===== */
 function renderDistributions() {
   const tbody = document.getElementById('distributionsTableBody');
+  if (!tbody) return;
   if (!distributions.length) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px">Distributions ещё не проводились</td></tr>`;
     return;
