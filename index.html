@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Turan Capital CRM — Golden Leaves Ltd</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <!-- FUND SWITCHER -->
+  <div class="sidebar-logo" id="fundSwitcherBtn" onclick="toggleFundDropdown()" style="cursor:pointer">
+    <div class="logo-icon" id="fundLogoIcon"><i class="fas fa-landmark"></i></div>
+    <div class="logo-text">
+      <span class="logo-title" id="activeFundName">TCF-I</span>
+      <span class="logo-sub" id="activeFundSub">AFSA-A-LA-2024-0038</span>
+    </div>
+    <i class="fas fa-chevron-down" style="color:var(--text-muted);font-size:11px;margin-left:auto;transition:transform 0.2s" id="fundChevron"></i>
+  </div>
+  <!-- Fund Dropdown -->
+  <div class="fund-switcher-dropdown" id="fundSwitcherDropdown"></div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-group-label" data-i18n="nav_overview">Обзор</div>
+    <a href="#" class="nav-item active" data-page="dashboard">
+      <i class="fas fa-th-large"></i><span data-i18n="nav_dashboard">Дашборд</span>
+    </a>
+
+    <div class="nav-group-label">FM — Жизненный цикл LP</div>
+    <a href="#" class="nav-item" data-page="ob-clients" style="border-left:2px solid #22c55e;padding-left:14px">
+      <i class="fas fa-user-check" style="color:#22c55e"></i><span>Онбординг FM + CF&A</span>
+      <span class="nav-badge warning" id="badge-ob-clients">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="lp-register" style="border-left:2px solid #3b82f6;padding-left:14px">
+      <i class="fas fa-book" style="color:#3b82f6"></i><span>LP Register</span>
+      <span class="nav-badge" id="badge-lp-register" style="background:#3b82f6">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="lp-capital-calls" style="border-left:2px solid #f97316;padding-left:14px">
+      <i class="fas fa-coins" style="color:#f97316"></i><span>Capital Calls</span>
+      <span class="nav-badge warning" id="badge-lp-capital-calls" style="display:none">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="closing">
+      <i class="fas fa-file-signature"></i><span>First Closing</span>
+    </a>
+
+    <div class="nav-group-label" data-i18n="nav_investment">Инвестиционный цикл</div>
+    <a href="#" class="nav-item" data-page="deals">
+      <i class="fas fa-handshake"></i><span data-i18n="nav_deals">Сделки / Pipeline</span>
+      <span class="nav-badge warning" id="badge-deals">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="portfolio">
+      <i class="fas fa-briefcase"></i><span data-i18n="nav_portfolio">Портфель</span>
+    </a>
+    <a href="#" class="nav-item" data-page="harvesting">
+      <i class="fas fa-sign-out-alt"></i><span data-i18n="nav_harvesting">Harvesting / Exit</span>
+    </a>
+
+    <div class="nav-group-label">Финансы и отчёты</div>
+    <a href="#" class="nav-item" data-page="distributions">
+      <i class="fas fa-water"></i><span>Distributions</span>
+    </a>
+
+    <div class="nav-group-label">Compliance</div>
+    <a href="#" class="nav-item" data-page="workflow">
+      <i class="fas fa-stream"></i><span>Согласования</span>
+      <span class="nav-badge warning" id="badge-workflow">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="kycrenewal">
+      <i class="fas fa-sync-alt"></i><span>KYC Renewal</span>
+      <span class="nav-badge" id="badge-kycrenewal" style="display:none">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="calendar">
+      <i class="fas fa-calendar-alt"></i><span>Compliance Calendar</span>
+    </a>
+    <a href="#" class="nav-item" data-page="ic">
+      <i class="fas fa-handshake"></i><span>Investment Committee</span>
+      <span class="nav-badge" id="badge-ic" style="display:none">0</span>
+    </a>
+
+    <div class="nav-group-label">CF&A / Клиенты</div>
+    <a href="#" class="nav-item" data-page="ob-restricted">
+      <i class="fas fa-ban" style="color:#ef4444"></i><span>Restricted List / COI</span>
+      <span class="nav-badge" id="badge-coi" style="display:none;background:#ef4444">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="engagements">
+      <i class="fas fa-file-contract" style="color:#22c55e"></i><span>Реестр договоров</span>
+      <span class="nav-badge" id="badge-engagements" style="display:none;background:#22c55e">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="tasks">
+      <i class="fas fa-check-square"></i><span>Задачи</span>
+      <span class="nav-badge warning" id="badge-tasks">0</span>
+    </a>
+
+    <div class="nav-group-label">Система</div>
+    <a href="#" class="nav-item" data-page="vault">
+      <i class="fas fa-database" style="color:#a78bfa"></i><span>Хранилище файлов</span>
+      <span class="nav-badge" id="badge-vault" style="display:none;background:#8b5cf6">0</span>
+    </a>
+    <a href="#" class="nav-item" data-page="export">
+      <i class="fas fa-file-excel" style="color:#22c55e"></i><span>Экспорт Excel</span>
+      <span class="nav-badge" style="background:#22c55e">AFSA</span>
+    </a>
+    <a href="#" class="nav-item" data-page="documents">
+      <i class="fas fa-folder-open"></i><span data-i18n="nav_documents">Документы</span>
+    </a>
+    <a href="#" class="nav-item" data-page="trading">
+      <i class="fas fa-chart-candlestick"></i><span>Trading Analytics</span>
+      <span class="nav-badge" style="background:var(--accent-teal)">NEW</span>
+    </a>
+    <a href="#" class="nav-item" data-page="subscription">
+      <i class="fas fa-credit-card"></i><span data-i18n="nav_subscription">Подписка</span>
+      <span class="nav-badge" style="background:var(--accent-green)">PRO</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-avatar" id="sidebarUserAvatar" style="background:var(--accent-blue);cursor:pointer" onclick="toggleUserRoleMenu()" title="Сменить роль"><i class="fas fa-user-tie"></i></div>
+    <div class="user-info">
+      <span class="user-name" id="sidebarUserName">Golden Leaves Ltd</span>
+      <span class="user-role" id="sidebarUserRole">CEO</span>
+    </div>
+    <!-- Language Toggle -->
+    <div class="lang-toggle">
+      <button class="lang-btn active" data-lang="ru" onclick="setLang('ru')">RU</button>
+      <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main-content" id="mainContent">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+      <div class="page-breadcrumb" id="pageBreadcrumb" data-i18n="nav_dashboard">Дашборд</div>
+    </div>
+    <div class="topbar-right">
+      <div class="fund-phase-indicator" id="fundPhaseIndicator">
+        <i class="fas fa-circle-dot"></i>
+        <span id="fundPhaseText" data-i18n="phase_label">Investment Period · Year 2</span>
+      </div>
+      <div class="topbar-date"><i class="fas fa-calendar-alt"></i> <span id="currentDate"></span></div>
+
+    </div>
+  </header>
+
+  <div class="page-content">
+
+    <!-- ===== DASHBOARD ===== -->
+    <section id="page-dashboard" class="page active">
+      <div class="section-header">
+        <h1>Дашборд <span class="fund-label">Turan Capital Fund LP</span></h1>
+        <p>Сводная информация · Golden Leaves Ltd (GP) · Лицензия AFSA-A-LA-2024-0038</p>
+      </div>
+
+      <!-- LIFECYCLE PROGRESS BAR -->
+      <div class="lifecycle-bar">
+        <div class="lc-title">Жизненный цикл фонда (10 лет)</div>
+        <div class="lc-stages">
+          <div class="lc-stage completed" data-page="ob-clients">
+            <div class="lc-dot"><i class="fas fa-check"></i></div>
+            <span>Онбординг</span>
+          </div>
+          <div class="lc-connector completed"></div>
+          <div class="lc-stage completed" data-page="closing">
+            <div class="lc-dot"><i class="fas fa-check"></i></div>
+            <span>First Closing</span>
+          </div>
+          <div class="lc-connector active"></div>
+          <div class="lc-stage active" data-page="deals">
+            <div class="lc-dot"><i class="fas fa-play"></i></div>
+            <span>Инвестирование</span>
+          </div>
+          <div class="lc-connector"></div>
+          <div class="lc-stage" data-page="portfolio">
+            <div class="lc-dot">4</div>
+            <span>Создание стоимости</span>
+          </div>
+          <div class="lc-connector"></div>
+          <div class="lc-stage" data-page="harvesting">
+            <div class="lc-dot">5</div>
+            <span>Harvesting</span>
+          </div>
+          <div class="lc-connector"></div>
+          <div class="lc-stage" data-page="distributions">
+            <div class="lc-dot">6</div>
+            <span>Exit & Liquidation</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI CARDS -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon blue"><i class="fas fa-dollar-sign"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Размер фонда (AUM)</span>
+            <span class="kpi-value">$50M</span>
+            <span class="kpi-delta neutral">Целевой: $50M · Min: $5M</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon green"><i class="fas fa-percentage"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Целевой IRR</span>
+            <span class="kpi-value">20–25%</span>
+            <span class="kpi-delta up"><i class="fas fa-arrow-up"></i> Текущий: 18.7%</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon purple"><i class="fas fa-layer-group"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Целевой MOIC</span>
+            <span class="kpi-value">2.5–3.5x</span>
+            <span class="kpi-delta up">Текущий: 2.1x</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon orange"><i class="fas fa-users"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">LP (Инвесторов)</span>
+            <span class="kpi-value" id="kpiLpCount">0</span>
+            <span class="kpi-delta" id="kpiLpDelta">—</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon teal"><i class="fas fa-briefcase"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Портфельных компаний</span>
+            <span class="kpi-value" id="kpiPortCount">0</span>
+            <span class="kpi-delta neutral">Цель: 8–12 компаний</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon red"><i class="fas fa-wallet"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Management Fee</span>
+            <span class="kpi-value">2% / год</span>
+            <span class="kpi-delta neutral">Carried Interest: 20%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <span class="chart-title">J-Curve — Денежный поток фонда (прогноз)</span>
+          </div>
+          <div style="height:240px;"><canvas id="chartJCurve"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><span class="chart-title">Структура LP</span></div>
+          <div style="height:240px;"><canvas id="chartLPTypes"></canvas></div>
+        </div>
+      </div>
+
+      <!-- RECENT ACTIVITY + KYC STATUS -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-check-square" style="color:var(--accent-orange);margin-right:6px"></i>Задачи и дедлайны</span>
+            <a href="#" class="card-link" data-page="tasks">Все задачи →</a>
+          </div>
+          <div id="dashTasksList"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-shield-alt" style="color:var(--accent-blue);margin-right:6px"></i>KYC Статус LP</span>
+            <a href="#" class="card-link" data-page="kyc">Все →</a>
+          </div>
+          <div id="kycStatusList"></div>
+        </div>
+      </div>
+
+      <!-- ONBOARDING STATUS WIDGET -->
+      <div class="two-col" style="margin-top:16px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-user-check" style="color:#3b82f6;margin-right:6px"></i>Онбординг клиентов (ТЗ)</span>
+            <a href="#" class="card-link" data-page="ob-clients">Все клиенты →</a>
+          </div>
+          <div id="dashObWidget"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-exclamation-triangle" style="color:#f97316;margin-right:6px"></i>Активные конфликты (COI)</span>
+            <a href="#" class="card-link" data-page="ob-restricted">Реестр COI →</a>
+          </div>
+          <div id="dashCoiWidget"></div>
+        </div>
+      </div>
+
+      <!-- RM WORKLOAD WIDGET -->
+      <div style="margin-top:16px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">
+              <i class="fas fa-users-cog" style="color:#8b5cf6;margin-right:6px"></i>
+              Нагрузка RM — Онбординг
+            </span>
+            <a href="#" class="card-link" data-page="ob-clients">Открыть онбординг →</a>
+          </div>
+          <div id="dashRmWidget"></div>
+        </div>
+      </div>
+
+      <!-- LP REGISTER + CAPITAL CALLS WIDGET -->
+      <div style="margin-top:16px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">
+              <i class="fas fa-book" style="color:#3b82f6;margin-right:6px"></i>
+              LP Register &amp; Capital Calls
+            </span>
+            <div style="display:flex;gap:8px">
+              <a href="#" class="card-link" data-page="lp-register" onclick="navigateTo('lp-register');return false">LP Register →</a>
+              <a href="#" class="card-link" data-page="lp-capital-calls" onclick="navigateTo('lp-capital-calls');return false" style="color:#f97316">Capital Calls →</a>
+            </div>
+          </div>
+          <div id="dashLPWidget"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== LP REGISTER ===== -->
+    <section id="page-lp-register" class="page">
+      <div class="section-header">
+        <h1>LP Register <span class="fund-label">Constitution §3.8.2 · Хранение 6 лет</span></h1>
+        <p>Официальный реестр ограниченных партнёров · Unfunded Commitment · KYC статус · AFSA уведомления</p>
+      </div>
+      <div id="lpRegisterContent"></div>
+    </section>
+
+    <!-- ===== LP CAPITAL CALLS ===== -->
+    <section id="page-lp-capital-calls" class="page">
+      <div class="section-header">
+        <h1>Capital Calls <span class="fund-label">Constitution §3.9.1 · 10 рабочих дней</span></h1>
+        <p>Журнал Capital Call уведомлений · Pro-Rata расчёт · AML входящих платежей · Unfunded Commitment</p>
+      </div>
+      <div id="capitalCallsContent"></div>
+    </section>
+
+
+    <!-- ===== FIRST CLOSING ===== -->
+    <section id="page-closing" class="page">
+      <div id="closingDashboard"></div>
+    </section>
+
+    <!-- ===== СДЕЛКИ ===== -->
+    <section id="page-deals" class="page">
+      <div class="section-header">
+        <h1>Сделки <span class="fund-label">Investment Period · Years 1–5</span></h1>
+        <p>Цель: 8–12 компаний · Investment Committee approval required</p>
+      </div>
+      <div class="toolbar">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" id="searchDeals" placeholder="Поиск сделок..." oninput="filterDeals(this.value)" />
+        </div>
+        <select id="filterDealStage" onchange="filterDeals()">
+          <option value="">Все стадии</option>
+          <option value="Скрининг">Скрининг</option>
+          <option value="IC Review">IC Review</option>
+          <option value="Due Diligence">Due Diligence</option>
+          <option value="Term Sheet">Term Sheet</option>
+          <option value="Переговоры">Переговоры</option>
+          <option value="Закрыта">Закрыта</option>
+          <option value="Отклонена IC">Отклонена IC</option>
+        </select>
+        <button class="btn-primary" onclick="openModal('addDeal')"><i class="fas fa-plus"></i> Новая сделка</button>
+      </div>
+      <div class="pipeline-board" id="pipelineBoard"></div>
+    </section>
+
+    <!-- ===== ПОРТФЕЛЬ ===== -->
+    <section id="page-portfolio" class="page">
+      <div class="section-header">
+        <h1>Портфель <span class="fund-label">Years 3–5 · Value Creation</span></h1>
+        <p>Мониторинг портфельных компаний · Квартальные отчёты</p>
+      </div>
+      <div class="toolbar">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" placeholder="Поиск компаний..." oninput="filterPortfolio(this.value)" />
+        </div>
+        <div class="view-toggle">
+          <button class="vt-btn active" onclick="setPortfolioView('grid',this)"><i class="fas fa-th-large"></i></button>
+          <button class="vt-btn" onclick="setPortfolioView('list',this)"><i class="fas fa-list"></i></button>
+        </div>
+        <button class="btn-primary" onclick="openModal('addPortfolio')"><i class="fas fa-plus"></i> Добавить компанию</button>
+      </div>
+      <div id="portfolioGrid" class="portfolio-grid"></div>
+    </section>
+
+    <!-- ===== HARVESTING / EXIT ===== -->
+    <section id="page-harvesting" class="page">
+      <div class="section-header">
+        <h1>Harvesting &amp; Exit <span class="fund-label">Years 6–10</span></h1>
+        <p>Стратегии выхода · M&A, IPO, Secondary Sale, Recapitalization</p>
+      </div>
+
+      <div class="stats-row" style="margin-bottom:20px">
+        <div class="stat-mini green"><span>Реализованные выходы</span><strong id="exitRealized">0</strong></div>
+        <div class="stat-mini blue"><span>В процессе выхода</span><strong id="exitInProgress">0</strong></div>
+        <div class="stat-mini orange"><span>DPI</span><strong>0.4x</strong></div>
+        <div class="stat-mini purple"><span>RVPI</span><strong>1.7x</strong></div>
+      </div>
+
+      <div class="table-card">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Компания</th>
+              <th>Стратегия выхода</th>
+              <th>Инвестировано</th>
+              <th>Стоимость выхода</th>
+              <th>MOIC</th>
+              <th>IRR</th>
+              <th>Статус</th>
+              <th>Дата выхода</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="harvestingTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== СДЕЛКИ ===== -->
+
+    <!-- ===== EXPORT / REPORTS PANEL ===== -->
+
+    <!-- ===== EXPORT / REPORTS PANEL ===== -->
+    <section id="page-export" class="page">
+      <div class="section-header">
+        <h1>Экспорт отчётов <span class="fund-label">Excel / AFSA</span></h1>
+        <p>Выгрузка данных CRM в .xlsx для регулятора, аудита и отчётности LP</p>
+      </div>
+      <div id="exportContent"></div>
+    </section>
+
+    <!-- ===== APPROVAL WORKFLOW ===== -->
+    <section id="page-workflow" class="page">
+      <div class="section-header">
+        <h1>Согласования <span class="fund-label">Approval Workflow</span></h1>
+        <p>KYC/AML · IC · Capital Call · Subscription Agreement — многоуровневые согласования</p>
+      </div>
+      <div class="kpi-row" id="wfKPIs"></div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-stream" style="color:#3b82f6;margin-right:6px"></i>Все workflow</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="startWorkflow('kyc_lp',0,'Новый LP','LP')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> KYC LP</button>
+            <button onclick="startWorkflow('kyc_cfa',0,'Новый CF&A','CF&A')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> KYC CF&A</button>
+            <button onclick="startWorkflow('deal_ic',0,'Новая сделка','Deal')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> IC Review</button>
+            <button onclick="startWorkflow('capital_call',0,'Capital Call','Fund')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> Capital Call</button>
+          </div>
+        </div>
+        <div id="wfList"></div>
+      </div>
+    </section>
+
+    <!-- ===== KYC RENEWAL TRACKER ===== -->
+    <section id="page-kycrenewal" class="page">
+      <div class="section-header">
+        <h1>KYC Renewal <span class="fund-label">Ежегодное обновление</span></h1>
+        <p>Отслеживание дат KYC/AML — LP и CF&A клиенты · AFSA AML Rules · обновление каждые 12 месяцев</p>
+      </div>
+      <div id="kycRenewalContent"></div>
+    </section>
+
+    <!-- ===== DISTRIBUTION WATERFALL ===== -->
+    <section id="page-distributions" class="page">
+      <div class="section-header">
+        <h1>Distributions <span class="fund-label">Waterfall</span></h1>
+        <p>Расчёт распределений: Return of Capital → Hurdle Rate → GP Catch-up → Carried Interest</p>
+      </div>
+      <div id="distributionContent"></div>
+    </section>
+
+    <!-- ===== COMPLIANCE CALENDAR ===== -->
+    <section id="page-calendar" class="page">
+      <div class="section-header">
+        <h1>Compliance Calendar <span class="fund-label">Дедлайны</span></h1>
+        <p>AFSA отчётность · KYC Renewal · Capital Calls · Задачи — всё в одном месте</p>
+      </div>
+      <div id="calendarContent"></div>
+    </section>
+
+    <!-- ===== IC MODULE ===== -->
+    <section id="page-ic" class="page">
+      <div class="section-header">
+        <h1>Investment Committee <span class="fund-label">IC</span></h1>
+        <p>Меморандумы, голосование членов IC, история решений</p>
+      </div>
+      <div class="kpi-row" id="icKPIs"></div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-handshake" style="color:#f97316;margin-right:6px"></i>IC Меморандумы</span>
+          <button onclick="openNewICMemo()" class="btn-primary" style="font-size:12px"><i class="fas fa-plus"></i> Новый меморандум</button>
+        </div>
+        <div id="icList"></div>
+      </div>
+    </section>
+
+    <!-- ===== ONBOARDING (TZ) ===== -->
+    <section id="page-ob-clients" class="page">
+      <div class="section-header">
+        <h1>Клиенты FM + CF&A <span class="fund-label">GL-CRM-PYRUS-TZ-004</span></h1>
+        <p>Единый реестр онбординга: 7 задач · 5 фаз · CF&A и FM направления · AFSA Compliance</p>
+      </div>
+
+      <!-- Направление — визуальный разделитель -->
+      <div style="background:rgba(14,20,31,0.8);border:1px solid #2a3448;border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div style="font-size:12px;color:#8a9bbf;font-weight:700;flex-shrink:0">📌 Направление:</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="obDirFilter='';renderObContent()" id="obTabAll"
+            style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);color:#60a5fa;padding:5px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">
+            🌐 Все клиенты
+          </button>
+          <button onclick="obDirFilter='CF&A';renderObContent()" id="obTabCfa"
+            style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:5px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">
+            📊 CF&A — Corporate Finance &amp; Advisory
+          </button>
+          <button onclick="obDirFilter='FM';renderObContent()" id="obTabFm"
+            style="background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:5px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">
+            🏦 FM — Fund Management (LP)
+          </button>
+        </div>
+        <div style="margin-left:auto;font-size:11px;color:#4a5568;flex-shrink:0">
+          <i class="fas fa-info-circle"></i>
+          CF&A: услуги M&amp;A, Capital Raising · FM: онбординг LP, KYC фонда
+        </div>
+      </div>
+
+      <div id="obContent"></div>
+    </section>
+
+    <!-- ===== RESTRICTED LIST / COI ===== -->
+    <section id="page-ob-restricted" class="page">
+      <div class="section-header">
+        <h1>Restricted List <span class="fund-label">Конфликты интересов</span></h1>
+        <p>Портфельные компании · Реестр COI · Китайская стена</p>
+      </div>
+      <div id="restrictedListContent"></div>
+    </section>
+
+    <!-- ===== ENGAGEMENTS REGISTRY ===== -->
+    <section id="page-engagements" class="page">
+      <div class="section-header">
+        <h1>Реестр договоров <span class="fund-label">Engagements</span></h1>
+        <p>Все договоры с клиентами CF&amp;A: статус, гонорары, инвойсы, оплата</p>
+      </div>
+      <div id="engagementsContent"></div>
+    </section>
+
+    <!-- ===== GLOBAL FILE VAULT ===== -->
+    <section id="page-vault" class="page">
+      <div class="section-header">
+        <h1>Хранилище файлов <span class="fund-label">Document Vault</span></h1>
+        <p>Все загруженные файлы CRM — CF&amp;A KYC, документы фонда, вложения — в одном месте</p>
+      </div>
+      <div id="vaultContent"></div>
+    </section>
+
+    <!-- ===== TRADING ANALYTICS ===== -->
+
+    <!-- ===== TRADING ANALYTICS ===== -->
+    <section id="page-trading" class="page">
+      <div class="section-header">
+        <h1>Trading Analytics <span class="fund-label">Portfolio Performance</span></h1>
+        <p>Загрузите Excel-отчёт с биржевыми сделками — CRM автоматически рассчитает все метрики</p>
+      </div>
+
+      <!-- UPLOAD ZONE -->
+      <div class="trading-upload-card">
+        <div class="tuc-left">
+          <div class="tuc-icon"><i class="fas fa-file-excel"></i></div>
+          <div class="tuc-text">
+            <div class="tuc-title">Загрузить торговый отчёт</div>
+            <div class="tuc-sub">Поддерживаются: .xlsx, .xls, .csv · Любой брокер (MOEX, Фридом, Halyk, Alpari, MT4/5)</div>
+          </div>
+          <div class="tuc-actions">
+            <label class="btn-primary" style="cursor:pointer">
+              <i class="fas fa-upload"></i> Выбрать файл
+              <input type="file" accept=".xlsx,.xls,.csv" style="display:none"
+                     onchange="handleTradingFileUpload(this)" />
+            </label>
+            <button class="btn-ghost" onclick="loadDemoData()">
+              <i class="fas fa-play"></i> Демо-данные
+            </button>
+          </div>
+        </div>
+        <div class="tuc-hint">
+          <div class="tuc-hint-title"><i class="fas fa-info-circle"></i> Формат файла</div>
+          <div class="tuc-hint-list">
+            <span>• Дата сделки</span><span>• Тикер / Инструмент</span>
+            <span>• Тип (Buy/Sell)</span><span>• Количество</span>
+            <span>• Цена входа / выхода</span><span>• P&L</span>
+            <span>• Комиссия</span><span>• Статус (открыта/закрыта)</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="tradingUploadStatus" class="upload-status" style="display:none"></div>
+
+      <!-- EMPTY STATE -->
+      <div id="tradingEmpty" class="trading-empty">
+        <i class="fas fa-chart-area"></i>
+        <p>Загрузите файл с торговыми данными или нажмите «Демо-данные»</p>
+      </div>
+
+      <!-- RESULTS (hidden until data loaded) -->
+      <div id="tradingResults" style="display:none">
+
+        <!-- KPI Row -->
+        <div class="kpi-grid" id="tradingKPIs" style="grid-template-columns:repeat(4,1fr)"></div>
+
+        <!-- Charts Row 1: Equity + Monthly -->
+        <div class="charts-row" style="margin-top:20px">
+          <div class="chart-card wide">
+            <div class="chart-header">
+              <span class="chart-title"><i class="fas fa-chart-line" style="color:var(--accent-blue);margin-right:6px"></i>Equity Curve (кумулятивный P&L)</span>
+            </div>
+            <div style="height:260px"><canvas id="chartEquity"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><span class="chart-title">Win / Loss</span></div>
+            <div style="height:260px"><canvas id="chartWinLoss"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Charts Row 2: Monthly + Tickers -->
+        <div class="charts-row" style="margin-top:16px">
+          <div class="chart-card wide">
+            <div class="chart-header"><span class="chart-title"><i class="fas fa-calendar" style="color:var(--accent-green);margin-right:6px"></i>P&L по месяцам</span></div>
+            <div style="height:240px"><canvas id="chartMonthly"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-header"><span class="chart-title">P&L по инструментам (топ-10)</span></div>
+            <div style="height:240px"><canvas id="chartTickers"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Best / Worst + Monthly Table -->
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fas fa-medal" style="color:#eab308;margin-right:6px"></i>Лучшие сделки</span>
+              <span class="badge badge-green">Топ-5</span>
+            </div>
+            <div id="bestTradesList"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fas fa-skull" style="color:var(--accent-red);margin-right:6px"></i>Худшие сделки</span>
+              <span class="badge badge-red">Топ-5</span>
+            </div>
+            <div id="worstTradesList"></div>
+          </div>
+        </div>
+
+        <!-- Ticker Breakdown -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-list" style="color:var(--accent-purple);margin-right:6px"></i>P&L по инструментам</span>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:28px">#</th>
+                  <th>Инструмент</th>
+                  <th style="text-align:center">Сделок</th>
+                  <th style="text-align:center">Win%</th>
+                  <th style="text-align:right">Общий P&L</th>
+                  <th style="text-align:right">Средний P&L</th>
+                  <th style="min-width:80px">Вклад</th>
+                </tr>
+              </thead>
+              <tbody id="tickerTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Monthly Summary Table -->
+        <div class="two-col" style="margin-top:16px">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fas fa-calendar-alt" style="color:var(--accent-blue);margin-right:6px"></i>P&L по месяцам</span>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Месяц</th><th style="text-align:right">P&L</th><th style="text-align:right">Накоплен.</th><th>Вклад</th></tr></thead>
+                <tbody id="monthlyTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Full Trade Log -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title"><i class="fas fa-table" style="color:var(--accent-teal);margin-right:6px"></i>Все сделки</span>
+              <span class="badge badge-blue" id="tradeCountBadge">0 сделок</span>
+            </div>
+            <!-- filters -->
+            <div class="trade-log-filters">
+              <input type="text" placeholder="🔍 Поиск тикера..." oninput="searchTrades(this.value)" />
+              <select onchange="setTradeFilter('status',this.value)">
+                <option value="">Все статусы</option>
+                <option value="closed">Закрыта</option>
+                <option value="open">Открыта</option>
+              </select>
+              <select onchange="setTradeFilter('side',this.value)">
+                <option value="">Buy + Sell</option>
+                <option value="BUY">Buy</option>
+                <option value="SELL">Sell</option>
+              </select>
+            </div>
+            <div class="table-scroll" style="max-height:320px">
+              <table class="data-table" style="font-size:12px">
+                <thead>
+                  <tr>
+                    <th>Дата</th><th>Тикер</th><th>Тип</th><th style="text-align:right">Кол-во</th>
+                    <th style="text-align:right">Вход</th><th style="text-align:right">Выход</th>
+                    <th style="text-align:right">P&L</th><th style="text-align:right">%</th>
+                    <th style="text-align:right">Комиссия</th><th>Статус</th>
+                  </tr>
+                </thead>
+                <tbody id="tradeTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /tradingResults -->
+    </section>
+
+    <!-- ===== TASKS ===== -->
+    <section id="page-tasks" class="page">
+      <div class="section-header">
+        <h1>Задачи <span class="fund-label">Task Manager</span></h1>
+        <p>Управление задачами, сроками и исполнителями · AFSA Compliance Workflow</p>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid" id="tasksKPIs" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px"></div>
+
+      <!-- Toolbar -->
+      <div class="tasks-toolbar">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1">
+          <input type="text" placeholder="🔍 Поиск задач..." style="padding:7px 12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;outline:none;flex:1;min-width:160px" oninput="searchTasksQ(this.value)" />
+          <select style="font-size:12px" onchange="filterTasks('status',this.value)">
+            <option value="">Все статусы</option>
+            <option value="pending">Новые</option>
+            <option value="in_progress">В работе</option>
+            <option value="review">На проверке</option>
+            <option value="completed">Выполнены</option>
+          </select>
+          <select style="font-size:12px" onchange="filterTasks('type',this.value)">
+            <option value="">Все типы</option>
+            <option>KYC</option><option>AML</option><option>Онбординг</option>
+            <option>Сделка</option><option>Capital Call</option><option>Отчётность</option>
+          </select>
+          <select style="font-size:12px" onchange="filterTasks('assignee',this.value)">
+            <option value="">Все исполнители</option>
+            <option value="RM">RM</option>
+            <option value="CO">CO</option>
+            <option value="MLRO">MLRO</option>
+            <option value="CEO">CEO</option>
+            <option value="Analyst">Analyst</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div style="display:flex;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <button class="task-view-btn active" data-view="board" onclick="setTasksView('board')" title="Доска"><i class="fas fa-th-large"></i></button>
+            <button class="task-view-btn" data-view="list" onclick="setTasksView('list')" title="Список"><i class="fas fa-list"></i></button>
+          </div>
+          <button class="btn-primary" onclick="openTaskModal(null)"><i class="fas fa-plus"></i> Новая задача</button>
+        </div>
+      </div>
+
+      <!-- Board -->
+      <div class="tasks-board" id="tasksBoard" style="display:grid"></div>
+      <!-- List -->
+      <div id="tasksList" style="display:none"></div>
+    </section>
+
+    <!-- ===== DOCUMENTS ===== -->
+    <section id="page-documents" class="page">
+      <div class="section-header">
+        <h1 data-i18n="doc_title">Документы</h1>
+        <p data-i18n="doc_sub">Загрузка файлов, шаблонов и комментарии по процессам</p>
+      </div>
+
+      <!-- Upload bar -->
+      <div class="doc-upload-bar">
+        <div class="doc-upload-zone" onclick="document.getElementById('fileInput').click()">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <span data-i18n="doc_upload_btn">Загрузить файл</span>
+          <span class="doc-upload-hint">PDF, DOCX, XLSX, JPG — до 50 MB</span>
+          <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
+            style="display:none" onchange="handleFileUpload(this)" />
+        </div>
+        <div class="doc-upload-meta">
+          <select id="docUploadCategory" style="min-width:180px">
+            <option>KYC/AML</option>
+            <option>First Closing</option>
+            <option>Сделки</option>
+            <option>Портфель</option>
+            <option>Capital Calls</option>
+            <option>Distributions</option>
+            <option>Отчёты</option>
+            <option>Прочее</option>
+          </select>
+          <div id="docStats" class="doc-stats-row"></div>
+        </div>
+      </div>
+
+      <!-- Category filter -->
+      <div class="doc-category-bar">
+        <button class="doc-cat-btn active" data-cat="" onclick="filterDocs('')">
+          <i class="fas fa-th"></i> Все
+        </button>
+        <button class="doc-cat-btn" data-cat="KYC/AML" onclick="filterDocs('KYC/AML')">KYC/AML</button>
+        <button class="doc-cat-btn" data-cat="First Closing" onclick="filterDocs('First Closing')">First Closing</button>
+        <button class="doc-cat-btn" data-cat="Сделки" onclick="filterDocs('Сделки')">Сделки</button>
+        <button class="doc-cat-btn" data-cat="Портфель" onclick="filterDocs('Портфель')">Портфель</button>
+        <button class="doc-cat-btn" data-cat="Capital Calls" onclick="filterDocs('Capital Calls')">Capital Calls</button>
+        <button class="doc-cat-btn" data-cat="Отчёты" onclick="filterDocs('Отчёты')">Отчёты</button>
+        <button class="doc-cat-btn" data-cat="Прочее" onclick="filterDocs('Прочее')">Прочее</button>
+      </div>
+
+      <div id="docListContainer"></div>
+    </section>
+
+    <!-- ===== SUBSCRIPTION ===== -->
+    <section id="page-subscription" class="page">
+      <div class="section-header">
+        <h1 data-i18n="sub_title">Тарифные планы</h1>
+        <p data-i18n="sub_sub">Выберите план для вашей организации</p>
+      </div>
+
+      <!-- Billing Toggle -->
+      <div class="plan-toggle-wrap">
+        <div id="planToggle" class="plan-toggle"></div>
+      </div>
+
+      <!-- Plan Cards -->
+      <div id="planCards" class="plan-cards-grid"></div>
+
+      <!-- FAQ -->
+      <div class="sub-faq-section">
+        <h2 class="faq-title">FAQ</h2>
+        <div id="faqContainer" class="faq-list"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ===== TASK MODAL (fullscreen overlay) ===== -->
+<div class="task-overlay" id="taskModalOverlay" onclick="closeTaskModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-task" style="display:none">
+  <div class="modal-header">
+    <h3><i class="fas fa-check-square"></i> Задача</h3>
+    <button class="modal-close" onclick="closeTaskModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="taskModalContent"></div>
+</div>
+
+<!-- ===== CF&A CLIENT MODAL ===== -->
+<div class="task-overlay" id="cfaModalOverlay" onclick="closeCFAModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-cfa" style="display:none">
+  <div class="modal-header">
+    <h3><i class="fas fa-building"></i> Клиент CF&A</h3>
+    <button class="modal-close" onclick="closeCFAModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="cfaModalContent"></div>
+</div>
+
+<!-- ===== WORKFLOW MODAL ===== -->
+<div class="task-overlay" id="wfModalOverlay" onclick="closeWfModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-wf" style="display:none">
+  <div class="modal-header">
+    <h3><i class="fas fa-stream"></i> Workflow — Согласование</h3>
+    <button class="modal-close" onclick="closeWfModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="wfModalContent"></div>
+</div>
+
+<!-- ===== IC MODAL ===== -->
+<div class="task-overlay" id="icModalOverlay" onclick="closeICModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-ic" style="display:none">
+  <div class="modal-header">
+    <h3><i class="fas fa-handshake"></i> IC Меморандум</h3>
+    <button class="modal-close" onclick="closeICModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="icModalContent"></div>
+</div>
+
+<!-- ===== ONBOARDING: CLIENT CARD MODAL ===== -->
+<div class="task-overlay" id="obClientOverlay" onclick="closeObClientModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-ob-client" style="display:none;max-width:800px">
+  <div class="modal-header">
+    <h3><i class="fas fa-user-check" style="color:#3b82f6;margin-right:8px"></i>Карточка клиента</h3>
+    <button class="modal-close" onclick="closeObClientModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="obClientModalContent"></div>
+</div>
+
+<!-- ===== ONBOARDING: TASK FORM MODAL ===== -->
+<div class="task-overlay" id="obTaskOverlay" onclick="closeObTaskModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-ob-task" style="display:none;max-width:760px">
+  <div class="modal-header">
+    <h3><i class="fas fa-clipboard-list" style="color:#f97316;margin-right:8px"></i>Форма задачи</h3>
+    <button class="modal-close" onclick="closeObTaskModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="obTaskFormContent"></div>
+</div>
+
+<!-- ===== ONBOARDING: NEW CLIENT MODAL ===== -->
+<!-- Fullscreen wrapper: click on dark area = close; inner card = modal content -->
+<div id="modal-ob-new" onclick="closeObNewModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10200;align-items:center;justify-content:center;padding:20px;box-sizing:border-box">
+  <div onclick="event.stopPropagation()" style="position:relative;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;background:#1c2333;border:1px solid #2a3448;border-radius:14px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+    <div style="position:sticky;top:0;background:#1c2333;border-bottom:1px solid #2a3448;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;z-index:1">
+      <h3 id="obNewModalTitle" style="font-size:15px;font-weight:700;color:#f1f5f9;margin:0"><i class="fas fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>Новый клиент</h3>
+      <button onclick="closeObNewModal()" style="background:none;border:none;color:#8a9bbf;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px">✕</button>
+    </div>
+    <div id="obNewModalContent" style="padding:20px"></div>
+  </div>
+</div>
+
+<!-- ===== ENGAGEMENT MODAL ===== -->
+<div class="task-overlay" id="engagementOverlay" onclick="closeEngagementModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-engagement" style="display:none;max-width:680px">
+  <div class="modal-header">
+    <h3><i class="fas fa-file-contract" style="color:#22c55e;margin-right:8px"></i>Договор</h3>
+    <button class="modal-close" onclick="closeEngagementModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="engagementModalContent"></div>
+</div>
+
+<!-- ===== VAULT PREVIEW MODAL ===== -->
+<div class="task-overlay" id="vaultPreviewOverlay" onclick="vaultClosePreview()" style="display:none"></div>
+<div class="task-modal-wide" id="vaultPreviewModal" style="display:none;max-width:860px;max-height:90vh">
+  <div class="modal-header" style="flex-shrink:0">
+    <h3><i class="fas fa-eye" style="color:#3b82f6;margin-right:8px"></i><span id="vaultPreviewTitle">Просмотр файла</span></h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="vaultPreviewDlBtn"
+        style="background:rgba(34,197,94,0.12);border:1px solid #22c55e;color:#4ade80;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+        <i class="fas fa-download"></i> Скачать
+      </button>
+      <button class="modal-close" onclick="vaultClosePreview()"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+  <div class="modal-body" id="vaultPreviewBody" style="overflow:auto;padding:16px"></div>
+</div>
+
+<!-- ===== LP REPORT MODAL ===== -->
+<div class="task-overlay" id="lpReportOverlay" onclick="closeLPReport()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-lpreport" style="display:none;max-width:760px">
+  <div class="modal-header">
+    <h3><i class="fas fa-file-invoice-dollar"></i> Capital Account Statement</h3>
+    <button class="modal-close" onclick="closeLPReport()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="lpReportModalContent"></div>
+</div>
+
+<!-- ===== LP REGISTER MODALS ===== -->
+
+<!-- LP Detail Modal -->
+<div class="task-overlay" id="lpDetailOverlay" onclick="closeLPDetail()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-lp-detail" style="display:none;max-width:820px">
+  <div class="modal-header">
+    <h3><i class="fas fa-id-card" style="color:#3b82f6;margin-right:8px"></i>LP Detail — Capital Account</h3>
+    <button class="modal-close" onclick="closeLPDetail()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="lpDetailContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- Capital Account Statement Modal -->
+<div class="task-overlay" id="capitalStatementOverlay" onclick="closeCapitalAccountStatement()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-capital-statement" style="display:none;max-width:820px">
+  <div class="modal-header">
+    <h3><i class="fas fa-file-invoice-dollar" style="color:#22c55e;margin-right:8px"></i>Capital Account Statement</h3>
+    <button class="modal-close" onclick="closeCapitalAccountStatement()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="capitalStatementContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New LP Modal -->
+<div class="task-overlay" id="lpNewOverlay" onclick="closeNewLPModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-lp-new" style="display:none;max-width:660px">
+  <div class="modal-header">
+    <h3><i class="fas fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>Добавить LP в реестр</h3>
+    <button class="modal-close" onclick="closeNewLPModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="lpNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- Capital Call Detail Modal -->
+<div class="task-overlay" id="ccDetailOverlay" onclick="closeCCDetail()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-cc-detail" style="display:none;max-width:860px">
+  <div class="modal-header">
+    <h3><i class="fas fa-coins" style="color:#f97316;margin-right:8px"></i>Capital Call Detail</h3>
+    <button class="modal-close" onclick="closeCCDetail()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="ccDetailContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New Capital Call Modal -->
+<div class="task-overlay" id="ccNewOverlay" onclick="closeNewCCModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-cc-new" style="display:none;max-width:660px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#22c55e;margin-right:8px"></i>Новый Capital Call Notice</h3>
+    <button class="modal-close" onclick="closeNewCCModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="ccNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- ===== USER ROLE MENU ===== -->
+<div class="role-menu" id="roleMenu" style="display:none">
+  <div class="role-menu-title">Роль пользователя</div>
+  <div class="role-menu-item" onclick="setUserRole('CEO')"><i class="fas fa-crown"></i> CEO</div>
+  <div class="role-menu-item" onclick="setUserRole('RM (Relationship Manager)')"><i class="fas fa-handshake"></i> RM</div>
+  <div class="role-menu-item" onclick="setUserRole('CO (Compliance Officer)')"><i class="fas fa-shield-alt"></i> CO</div>
+  <div class="role-menu-item" onclick="setUserRole('MLRO')"><i class="fas fa-search"></i> MLRO</div>
+  <div class="role-menu-item" onclick="setUserRole('Analyst')"><i class="fas fa-chart-bar"></i> Analyst</div>
+</div>
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+
+
+
+<!-- Modal: KYC Update -->
+<div class="modal" id="modal-kycUpdate">
+  <div class="modal-header">
+    <h3><i class="fas fa-shield-alt"></i> Обновить KYC статус</h3>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <input type="hidden" id="kyc_lp_id" />
+    <div class="form-section-title">KYC Чеклист (AFSA требования)</div>
+    <div class="kyc-checklist-form" id="kycChecklistForm"></div>
+    <div class="form-grid" style="margin-top:16px">
+      <div class="form-group">
+        <label>Итоговый статус KYC</label>
+        <select id="kyc_status_select">
+          <option value="Не начат">Не начат</option>
+          <option value="В процессе">В процессе</option>
+          <option value="На проверке">На проверке</option>
+          <option value="Одобрен">Одобрен</option>
+          <option value="Отклонён">Отклонён</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Дата проверки</label>
+        <input type="date" id="kyc_date" />
+      </div>
+      <div class="form-group full">
+        <label>Комментарий CCO</label>
+        <textarea id="kyc_comment" rows="2" placeholder="Замечания, требования..."></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
+    <button class="btn-primary" onclick="saveKYC()"><i class="fas fa-shield-alt"></i> Обновить KYC</button>
+  </div>
+</div>
+
+<!-- Modal: Новая сделка -->
+<!-- Deal Detail Modal overlay -->
+<div id="dealDetailOverlay" onclick="closeDealDetailModal()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10100"></div>
+
+<!-- Deal Detail Modal -->
+<div id="modal-deal-detail"
+  style="display:none;position:fixed;inset:0;z-index:10200;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#1c2333;border-radius:16px;width:100%;max-width:900px;max-height:92vh;
+    display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.6);overflow:hidden">
+    <div id="dealDetailContent" style="overflow-y:auto;flex:1"></div>
+  </div>
+</div>
+
+<!-- Portfolio Detail Overlay -->
+<div id="portDetailOverlay" onclick="closePortfolioModal()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10300"></div>
+
+<!-- Portfolio Detail Modal -->
+<div id="modal-port-detail"
+  style="display:none;position:fixed;inset:0;z-index:10400;align-items:center;justify-content:center;padding:12px">
+  <div style="background:#1c2333;border-radius:16px;width:100%;max-width:1000px;max-height:94vh;
+    display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.7);overflow:hidden">
+    <div id="portDetailContent" style="overflow-y:auto;flex:1"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal-addDeal">
+  <div class="modal-header">
+    <h3><i class="fas fa-handshake"></i> Новая сделка</h3>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Название компании *</label>
+        <input type="text" id="deal_company" placeholder="ТОО Название" />
+      </div>
+      <div class="form-group">
+        <label>Сектор</label>
+        <select id="deal_sector">
+          <option>Технологии</option><option>Финансы</option><option>Здравоохранение</option>
+          <option>Энергетика</option><option>Недвижимость</option><option>Промышленность</option>
+          <option>АПК</option><option>Ритейл</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Стадия IC</label>
+        <select id="deal_stage">
+          <option>Скрининг</option><option>IC Review</option>
+          <option>Due Diligence</option><option>Term Sheet</option><option>Переговоры</option><option>Закрыта</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Сумма инвестиций ($M)</label>
+        <input type="number" id="deal_amount" placeholder="5" />
+      </div>
+      <div class="form-group">
+        <label>Тип сделки</label>
+        <select id="deal_type">
+          <option>Equity</option><option>Convertible Note</option>
+          <option>SAFE</option><option>Debt</option><option>Mezzanine</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Приоритет</label>
+        <select id="deal_priority">
+          <option>Высокий</option><option>Средний</option><option>Низкий</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Ответственный</label>
+        <select id="deal_manager">
+          <option>CEO</option><option>Investment Manager</option><option>CFO</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>IC Approval</label>
+        <select id="deal_ic">
+          <option>Не подано</option><option>Подано</option>
+          <option>Одобрено</option><option>Отклонено</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>Описание / Thesis</label>
+        <textarea id="deal_comment" rows="3" placeholder="Инвестиционный тезис, ключевые показатели..."></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
+    <button class="btn-primary" onclick="saveDeal()"><i class="fas fa-save"></i> Сохранить</button>
+  </div>
+</div>
+
+<!-- Modal: Добавить компанию портфеля -->
+<div class="modal" id="modal-addPortfolio">
+  <div class="modal-header">
+    <h3><i class="fas fa-briefcase"></i> Добавить в портфель</h3>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Название компании *</label>
+        <input type="text" id="port_name" placeholder="Название компании" />
+      </div>
+      <div class="form-group">
+        <label>Сектор</label>
+        <select id="port_sector">
+          <option>Технологии</option><option>Финансы</option><option>Здравоохранение</option>
+          <option>Энергетика</option><option>АПК</option><option>Промышленность</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Стадия</label>
+        <select id="port_stage">
+          <option>Активная</option><option>Value Creation</option><option>Мониторинг</option><option>На выходе</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Инвестировано ($M)</label>
+        <input type="number" id="port_invested" placeholder="5" />
+      </div>
+      <div class="form-group">
+        <label>Текущая стоимость ($M)</label>
+        <input type="number" id="port_value" placeholder="8" />
+      </div>
+      <div class="form-group">
+        <label>Дата входа</label>
+        <input type="date" id="port_date" />
+      </div>
+      <div class="form-group">
+        <label>Стратегия выхода</label>
+        <select id="port_exit">
+          <option>M&A</option><option>IPO</option>
+          <option>Secondary Sale</option><option>Recapitalization</option><option>Buyback</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Прогноз выхода (год)</label>
+        <input type="number" id="port_exit_year" placeholder="2028" />
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
+    <button class="btn-primary" onclick="savePortfolio()"><i class="fas fa-save"></i> Сохранить</button>
+  </div>
+</div>
+
+<!-- Modal: Capital Call -->
+<div class="modal" id="modal-addCapCall">
+  <div class="modal-header">
+    <h3><i class="fas fa-coins"></i> Новый Capital Call</h3>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Дата уведомления</label>
+        <input type="date" id="cc_notice_date" />
+      </div>
+      <div class="form-group">
+        <label>Сумма ($)</label>
+        <input type="number" id="cc_amount" placeholder="500000" />
+      </div>
+      <div class="form-group">
+        <label>% от commitment</label>
+        <input type="number" id="cc_pct" placeholder="10" max="100" />
+      </div>
+      <div class="form-group">
+        <label>Цель использования</label>
+        <select id="cc_purpose">
+          <option>Инвестиция в портфельную компанию</option>
+          <option>Management Fee</option>
+          <option>Операционные расходы</option>
+          <option>Follow-on инвестиция</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
+    <button class="btn-primary" onclick="saveCapCall()"><i class="fas fa-save"></i> Создать</button>
+  </div>
+</div>
+
+<!-- Modal: Distribution -->
+<div class="modal" id="modal-addDistribution">
+  <div class="modal-header">
+    <h3><i class="fas fa-hand-holding-usd"></i> Новое Distribution</h3>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Дата</label>
+        <input type="date" id="dist_date" />
+      </div>
+      <div class="form-group">
+        <label>Источник</label>
+        <input type="text" id="dist_source" placeholder="Название компании (Exit)" />
+      </div>
+      <div class="form-group">
+        <label>Общая сумма ($M)</label>
+        <input type="number" id="dist_total" placeholder="10" />
+      </div>
+      <div class="form-group">
+        <label>Return of Capital ($M)</label>
+        <input type="number" id="dist_roc" placeholder="5" />
+      </div>
+      <div class="form-group">
+        <label>Preferred Return ($M)</label>
+        <input type="number" id="dist_pref" placeholder="2" />
+      </div>
+      <div class="form-group">
+        <label>Carried Interest GP ($M)</label>
+        <input type="number" id="dist_carry" placeholder="0.6" />
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
+    <button class="btn-primary" onclick="saveDistribution()"><i class="fas fa-save"></i> Сохранить</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Modal: Новый фонд -->
+<div class="modal" id="modal-addFund">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle"></i> <span data-i18n="btn_add_fund_modal">Создать новый фонд</span></h3>
+    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-section-title" data-i18n="general_info">Основная информация</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Название фонда *</label>
+        <input type="text" id="nf_name" placeholder="Turan Capital Fund II LP" />
+      </div>
+      <div class="form-group">
+        <label>Тип фонда</label>
+        <select id="nf_type">
+          <option>Private Equity</option>
+          <option>Growth Equity</option>
+          <option>Venture Capital</option>
+          <option>Hedge Fund</option>
+          <option>Real Estate</option>
+          <option>Infrastructure</option>
+          <option>Credit / Debt</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Целевой размер ($M)</label>
+        <input type="number" id="nf_size" placeholder="100" />
+      </div>
+      <div class="form-group">
+        <label>Vintage Year</label>
+        <input type="number" id="nf_vintage" placeholder="2026" />
+      </div>
+      <div class="form-group">
+        <label>Лицензия AFSA</label>
+        <input type="text" id="nf_license" placeholder="AFSA-A-LA-2025-XXXX" />
+      </div>
+      <div class="form-group">
+        <label>Management Fee (%)</label>
+        <input type="number" id="nf_mfee" placeholder="2" value="2" />
+      </div>
+      <div class="form-group">
+        <label>Carried Interest (%)</label>
+        <input type="number" id="nf_carry" placeholder="20" value="20" />
+      </div>
+      <div class="form-group">
+        <label>Preferred Return / Hurdle (%)</label>
+        <input type="number" id="nf_pref" placeholder="8" value="8" />
+      </div>
+      <div class="form-group full">
+        <label>Описание / Инвестиционный тезис</label>
+        <textarea id="nf_desc" rows="3" placeholder="Фокус на компании среднего бизнеса в регионе ЦА..."></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-ghost" onclick="closeModal()" data-i18n="btn_cancel">Отмена</button>
+    <button class="btn-primary" onclick="saveFund()"><i class="fas fa-save"></i> <span data-i18n="btn_save">Сохранить</span></button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/funds.js"></script>
+<script src="js/documents.js"></script>
+<script src="js/subscription.js"></script>
+<script src="js/trading.js"></script>
+<script src="js/tasks.js"></script>
+<script src="js/clients.js"></script>
+<script src="js/export.js"></script>
+<script src="js/workflow.js"></script>
+<script src="js/modules.js"></script>
+<script src="js/onboarding.js"></script>
+<script src="js/lp-register.js"></script>
+<script src="js/vault.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

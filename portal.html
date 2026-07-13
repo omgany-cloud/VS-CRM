@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Портал Портфельных Компаний — Turan Capital Fund</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1321; --surface: #131d2e; --surface2: #1c2333; --border: #1e293b;
+      --text: #e2e8f0; --muted: #64748b; --accent: #3b82f6;
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444; --purple: #a78bfa;
+    }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+    /* ── HEADER ── */
+    .portal-header {
+      background:var(--surface2); border-bottom:1px solid var(--border);
+      padding:0 24px; height:64px; display:flex; align-items:center; justify-content:space-between;
+      position:sticky; top:0; z-index:100;
+    }
+    .portal-logo { display:flex; align-items:center; gap:12px; }
+    .portal-logo-mark { width:36px; height:36px; border-radius:9px;
+      background:linear-gradient(135deg,#1d4ed8,#6d28d9); display:flex;
+      align-items:center; justify-content:center; font-weight:800; font-size:14px; }
+    .portal-logo-text { font-size:14px; font-weight:700; color:var(--text); }
+    .portal-logo-sub { font-size:10px; color:var(--muted); }
+    .company-badge { background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.3);
+      border-radius:8px; padding:6px 14px; font-size:12px; font-weight:700; color:#60a5fa; }
+
+    /* ── LOGIN ── */
+    #loginScreen { display:flex; align-items:center; justify-content:center;
+      min-height:calc(100vh - 64px); padding:20px; }
+    .login-card { background:var(--surface2); border:1px solid var(--border); border-radius:16px;
+      padding:40px; width:100%; max-width:420px; }
+    .login-title { font-size:22px; font-weight:800; margin-bottom:6px; }
+    .login-sub { font-size:13px; color:var(--muted); margin-bottom:28px; }
+
+    /* ── PORTAL MAIN ── */
+    #portalMain { display:none; }
+    .portal-nav { display:flex; gap:0; border-bottom:1px solid var(--border);
+      background:var(--surface); overflow-x:auto; }
+    .pnav-btn { padding:14px 20px; border:none; background:transparent; color:var(--muted);
+      font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+      border-bottom:3px solid transparent; transition:all 0.15s; font-family:'Inter',sans-serif; }
+    .pnav-btn.active { color:var(--text); border-bottom-color:var(--accent); background:rgba(59,130,246,0.06); }
+    .pnav-btn:hover:not(.active) { color:var(--text); background:rgba(255,255,255,0.03); }
+
+    .portal-content { padding:24px; max-width:900px; margin:0 auto; }
+
+    /* ── TAB SECTIONS ── */
+    .ptab { display:none; }
+    .ptab.active { display:block; }
+
+    /* ── Forms ── */
+    .p-section { background:var(--surface2); border:1px solid var(--border); border-radius:12px;
+      padding:20px; margin-bottom:20px; }
+    .p-section-title { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
+      letter-spacing:0.05em; margin-bottom:16px; display:flex; align-items:center; gap:7px; }
+    .p-section-title i { font-size:13px; }
+    .form-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+    @media(max-width:600px) { .form-grid2,.form-grid3 { grid-template-columns:1fr; } }
+    .fg-full { grid-column:1/-1; }
+    .fgroup label { display:block; font-size:10px; font-weight:700; color:var(--muted);
+      text-transform:uppercase; margin-bottom:4px; }
+    .fgroup input, .fgroup select, .fgroup textarea {
+      width:100%; background:#0f1623; border:1px solid #2a3448; border-radius:7px;
+      padding:8px 11px; color:var(--text); font-size:12px; font-family:'Inter',sans-serif;
+      transition:border-color 0.15s; }
+    .fgroup input:focus, .fgroup select:focus, .fgroup textarea:focus {
+      outline:none; border-color:var(--accent); }
+    .fgroup textarea { resize:vertical; min-height:70px; }
+
+    /* ── Buttons ── */
+    .btn-primary { background:linear-gradient(135deg,#1d4ed8,#6d28d9); border:none;
+      color:#fff; padding:10px 22px; border-radius:8px; font-size:13px; font-weight:700;
+      cursor:pointer; font-family:'Inter',sans-serif; transition:opacity 0.15s; }
+    .btn-primary:hover { opacity:0.9; }
+    .btn-ghost { background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.25);
+      color:var(--muted); padding:8px 18px; border-radius:8px; font-size:12px; font-weight:700;
+      cursor:pointer; font-family:'Inter',sans-serif; }
+    .btn-green { background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.3);
+      color:#4ade80; padding:8px 18px; border-radius:8px; font-size:12px; font-weight:700;
+      cursor:pointer; font-family:'Inter',sans-serif; }
+
+    /* ── KPI cards ── */
+    .kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+    @media(max-width:600px) { .kpi-row { grid-template-columns:1fr; } }
+    .kpi-card { background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+      padding:14px; text-align:center; }
+    .kpi-val { font-size:22px; font-weight:800; margin-bottom:3px; }
+    .kpi-label { font-size:10px; color:var(--muted); text-transform:uppercase; }
+
+    /* ── Status badge ── */
+    .sbadge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px;
+      border-radius:5px; }
+    .sbadge.green { background:rgba(34,197,94,0.12); color:#4ade80; }
+    .sbadge.yellow { background:rgba(234,179,8,0.12); color:#fde047; }
+    .sbadge.red { background:rgba(239,68,68,0.12); color:#fca5a5; }
+
+    /* ── Table ── */
+    .p-table { width:100%; border-collapse:collapse; }
+    .p-table th { padding:8px 12px; text-align:left; font-size:10px; color:var(--muted);
+      font-weight:700; text-transform:uppercase; background:#0a1120; border-bottom:1px solid var(--border); }
+    .p-table td { padding:9px 12px; font-size:12px; border-bottom:1px solid #1a2335; }
+    .p-table tr:last-child td { border-bottom:none; }
+    .p-table tr:hover td { background:rgba(255,255,255,0.02); }
+
+    /* ── Doc upload row ── */
+    .doc-row { display:flex; align-items:center; gap:10px; padding:10px 12px;
+      background:#0f1623; border-radius:8px; margin-bottom:6px;
+      border:1px solid var(--border); }
+    .doc-row.missing { border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.04); }
+    .doc-row.ok { border-color:rgba(34,197,94,0.25); }
+    .doc-icon { width:32px; height:32px; border-radius:7px; display:flex;
+      align-items:center; justify-content:center; flex-shrink:0; }
+    .doc-info { flex:1; min-width:0; }
+    .doc-name { font-size:12px; font-weight:700; color:var(--text); }
+    .doc-meta { font-size:10px; color:var(--muted); margin-top:2px; }
+
+    /* ── Toast ── */
+    #portalToast { position:fixed; bottom:24px; right:24px; background:#1c2333;
+      border:1px solid var(--border); border-radius:10px; padding:12px 18px;
+      font-size:13px; font-weight:600; z-index:9999; display:none;
+      box-shadow:0 8px 32px rgba(0,0,0,0.4); max-width:360px; }
+
+    /* ── Progress bar ── */
+    .prog-bar { height:6px; background:#1e293b; border-radius:3px; overflow:hidden; }
+    .prog-fill { height:100%; border-radius:3px; transition:width 0.4s; }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="portal-header">
+  <div class="portal-logo">
+    <div class="portal-logo-mark">TC</div>
+    <div>
+      <div class="portal-logo-text">Turan Capital Fund</div>
+      <div class="portal-logo-sub">Портал партнёрских компаний</div>
+    </div>
+  </div>
+  <div id="headerCompany" style="display:none">
+    <span class="company-badge" id="headerCompanyName"></span>
+  </div>
+  <button id="logoutBtn" onclick="doLogout()" style="display:none"
+    class="btn-ghost"><i class="fas fa-sign-out-alt" style="margin-right:6px"></i>Выйти</button>
+</header>
+
+<!-- ══════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:56px;height:56px;background:linear-gradient(135deg,#1d4ed8,#6d28d9);
+        border-radius:14px;display:flex;align-items:center;justify-content:center;
+        margin:0 auto 12px;font-size:22px;font-weight:800">TC</div>
+      <div class="login-title">Добро пожаловать</div>
+      <div class="login-sub">Введите ваш BIN и пароль для входа в систему мониторинга</div>
+    </div>
+    <div class="fgroup" style="margin-bottom:14px">
+      <label>BIN компании</label>
+      <input type="text" id="loginBin" placeholder="180340021847" maxlength="12"/>
+    </div>
+    <div class="fgroup" style="margin-bottom:20px">
+      <label>Пароль</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <button class="btn-primary" style="width:100%;padding:12px" onclick="doLogin()">
+      <i class="fas fa-sign-in-alt" style="margin-right:8px"></i>Войти в систему
+    </button>
+    <div id="loginError" style="display:none;color:#f87171;font-size:12px;margin-top:10px;text-align:center"></div>
+    <div style="margin-top:20px;padding:12px;background:rgba(59,130,246,0.06);border-radius:8px;
+      border:1px solid rgba(59,130,246,0.2);font-size:11px;color:#64748b;text-align:center">
+      <i class="fas fa-info-circle" style="margin-right:5px;color:#60a5fa"></i>
+      Демо-доступ: BIN <b style="color:#60a5fa">180340021847</b> · Пароль <b style="color:#60a5fa">demo123</b>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PORTAL MAIN
+══════════════════════════════════════ -->
+<div id="portalMain">
+  <!-- NAV TABS -->
+  <nav class="portal-nav">
+    <button class="pnav-btn active" onclick="switchPortalTab('overview',this)">
+      <i class="fas fa-home" style="margin-right:6px"></i>Обзор
+    </button>
+    <button class="pnav-btn" onclick="switchPortalTab('financials',this)">
+      <i class="fas fa-chart-bar" style="margin-right:6px"></i>Финансовые данные
+    </button>
+    <button class="pnav-btn" onclick="switchPortalTab('documents',this)">
+      <i class="fas fa-folder" style="margin-right:6px"></i>Документы
+    </button>
+    <button class="pnav-btn" onclick="switchPortalTab('payments',this)">
+      <i class="fas fa-calendar-check" style="margin-right:6px"></i>График платежей
+    </button>
+    <button class="pnav-btn" onclick="switchPortalTab('esg',this)">
+      <i class="fas fa-leaf" style="margin-right:6px"></i>ESG / Соц. показатели
+    </button>
+  </nav>
+
+  <div class="portal-content">
+
+    <!-- ══ TAB: OVERVIEW ══ -->
+    <div id="ptab-overview" class="ptab active">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <div>
+          <h1 id="overviewCompanyName" style="font-size:22px;font-weight:800;margin-bottom:4px"></h1>
+          <div id="overviewMeta" style="font-size:12px;color:#64748b"></div>
+        </div>
+        <span id="overviewStatus" class="sbadge green"></span>
+      </div>
+
+      <div class="kpi-row" id="overviewKPIs"></div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-bolt" style="color:#eab308"></i>Следующее действие</div>
+        <div id="overviewNextAction" style="font-size:14px;font-weight:700;color:#e2e8f0;margin-bottom:4px"></div>
+        <div id="overviewNextDate" style="font-size:12px;color:#64748b"></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-shield-alt" style="color:#a78bfa"></i>Статус ковенантов</div>
+        <div id="overviewCovenants"></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-info-circle" style="color:#60a5fa"></i>Контакты фонда</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+          <div><span style="color:#64748b">Управляющий партнёр:</span><br/><b>CEO — Turan Capital Fund</b></div>
+          <div><span style="color:#64748b">Ответственный менеджер:</span><br/><b id="overviewManager"></b></div>
+          <div><span style="color:#64748b">Email:</span><br/><a href="mailto:portfolio@turancapital.kz" style="color:#60a5fa">portfolio@turancapital.kz</a></div>
+          <div><span style="color:#64748b">Телефон:</span><br/><b>+7 (727) 000-0000</b></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: FINANCIALS (FORM) ══ -->
+    <div id="ptab-financials" class="ptab">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:18px;font-weight:800">Финансовые данные</h2>
+        <span style="font-size:12px;color:#64748b">Введите данные за отчётный квартал</span>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-file-invoice" style="color:#60a5fa"></i>Квартальный отчёт</div>
+        <div class="form-grid2">
+          <div class="fgroup">
+            <label>Отчётный квартал *</label>
+            <select id="fin_quarter">
+              <option>Q1 2025</option><option>Q2 2025</option>
+              <option>Q3 2025</option><option>Q4 2025</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label>Дата подачи</label>
+            <input type="date" id="fin_date"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-chart-line" style="color:#22c55e"></i>Основные показатели ($K)</div>
+        <div class="form-grid3">
+          <div class="fgroup">
+            <label>Выручка, $K *</label>
+            <input type="number" id="fin_revenue" placeholder="1200"/>
+          </div>
+          <div class="fgroup">
+            <label>EBITDA, $K *</label>
+            <input type="number" id="fin_ebitda" placeholder="250"/>
+          </div>
+          <div class="fgroup">
+            <label>EBITDA маржа, %</label>
+            <input type="number" id="fin_ebitda_margin" placeholder="авто" readonly
+              style="color:#64748b"/>
+          </div>
+          <div class="fgroup">
+            <label>Чистая прибыль, $K</label>
+            <input type="number" id="fin_net_profit" placeholder="130"/>
+          </div>
+          <div class="fgroup">
+            <label>Сотрудники, чел.</label>
+            <input type="number" id="fin_employees" placeholder="56"/>
+          </div>
+          <div class="fgroup">
+            <label>Средняя зарплата, ₸</label>
+            <input type="number" id="fin_avg_salary" placeholder="350000"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-balance-scale" style="color:#f97316"></i>Долговые показатели</div>
+        <div class="form-grid2">
+          <div class="fgroup">
+            <label>Общий долг (все кредиторы), ₸</label>
+            <input type="number" id="fin_total_debt" placeholder="120000000"/>
+          </div>
+          <div class="fgroup">
+            <label>Долг перед фондом, ₸</label>
+            <input type="number" id="fin_fund_debt" placeholder="80000000"/>
+          </div>
+          <div class="fgroup">
+            <label>Налоговые отчисления, ₸</label>
+            <input type="number" id="fin_taxes" placeholder="28000000"/>
+          </div>
+          <div class="fgroup">
+            <label>Просрочка? (₸, 0 если нет)</label>
+            <input type="number" id="fin_overdue" placeholder="0"/>
+          </div>
+        </div>
+        <div class="fgroup" style="margin-top:8px">
+          <label>Комментарий к отчёту</label>
+          <textarea id="fin_comment" placeholder="Ключевые события квартала, отклонения от плана..."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="submitFinancialReport()">
+          <i class="fas fa-paper-plane" style="margin-right:8px"></i>Отправить отчёт
+        </button>
+        <button class="btn-ghost" onclick="clearFinancialForm()">
+          <i class="fas fa-times" style="margin-right:6px"></i>Очистить
+        </button>
+      </div>
+
+      <!-- Submitted reports log -->
+      <div class="p-section" style="margin-top:24px">
+        <div class="p-section-title"><i class="fas fa-history" style="color:#64748b"></i>История отправленных отчётов</div>
+        <div id="finReportsLog">
+          <div style="font-size:12px;color:#475569;font-style:italic">Отчётов ещё не отправлено</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: DOCUMENTS ══ -->
+    <div id="ptab-documents" class="ptab">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:6px">Документы</h2>
+        <p style="font-size:12px;color:#64748b">Загрузите обязательные документы. Красным отмечены недостающие.</p>
+      </div>
+
+      <!-- Required docs checklist (simulated) -->
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-clipboard-check" style="color:#ef4444"></i>Обязательные документы</div>
+        <div id="requiredDocsList"></div>
+      </div>
+
+      <!-- Upload form -->
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-upload" style="color:#22c55e"></i>Загрузить документ</div>
+        <div class="form-grid2">
+          <div class="fgroup">
+            <label>Тип документа *</label>
+            <select id="upl_type">
+              <option>Финансовая отчётность (квартальная)</option>
+              <option>Финансовая отчётность (годовая)</option>
+              <option>Страховой полис</option>
+              <option>Лицензия / Разрешение</option>
+              <option>Отчёт по программе поддержки</option>
+              <option>Мониторинговый отчёт</option>
+              <option>Прочее</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label>Отчётный период</label>
+            <input type="text" id="upl_period" placeholder="Q2 2025 / 2025 год"/>
+          </div>
+          <div class="fgroup">
+            <label>Название файла *</label>
+            <input type="text" id="upl_name" placeholder="FS_Q2_2025.xlsx"/>
+          </div>
+          <div class="fgroup">
+            <label>Срок действия (если есть)</label>
+            <input type="date" id="upl_expiry"/>
+          </div>
+          <div class="fgroup fg-full">
+            <label>Ссылка на файл (Google Drive / Dropbox)</label>
+            <input type="url" id="upl_url" placeholder="https://drive.google.com/..."/>
+          </div>
+          <div class="fgroup fg-full">
+            <label>Комментарий</label>
+            <input type="text" id="upl_comment" placeholder="Дополнительная информация..."/>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+          <button class="btn-green" onclick="submitDocument()">
+            <i class="fas fa-upload" style="margin-right:8px"></i>Загрузить документ
+          </button>
+        </div>
+      </div>
+
+      <!-- Uploaded docs list -->
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-folder-open" style="color:#64748b"></i>Загруженные документы</div>
+        <div id="uploadedDocsList">
+          <div style="font-size:12px;color:#475569;font-style:italic">Документов ещё не загружено</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: PAYMENTS ══ -->
+    <div id="ptab-payments" class="ptab">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:6px">График платежей</h2>
+        <p style="font-size:12px;color:#64748b">Ваш персональный график погашения задолженности перед фондом</p>
+      </div>
+
+      <!-- Summary -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px"
+           id="paymentSummary"></div>
+
+      <!-- Schedule table -->
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-calendar-alt" style="color:#f97316"></i>Ближайшие платежи</div>
+        <div style="overflow-x:auto">
+          <table class="p-table" id="paymentTable">
+            <thead>
+              <tr>
+                <th>Дата</th><th>Тип</th><th>Сумма</th><th>Статус</th><th>Действие</th>
+              </tr>
+            </thead>
+            <tbody id="paymentTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Confirm payment form -->
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-check-circle" style="color:#22c55e"></i>Подтверждение платежа</div>
+        <div class="form-grid2">
+          <div class="fgroup">
+            <label>Дата платежа</label>
+            <input type="date" id="pay_date"/>
+          </div>
+          <div class="fgroup">
+            <label>Сумма, ₸</label>
+            <input type="number" id="pay_amount" placeholder="1500000"/>
+          </div>
+          <div class="fgroup">
+            <label>Банк-отправитель</label>
+            <input type="text" id="pay_bank" placeholder="Halyk Bank / Kaspi Bank..."/>
+          </div>
+          <div class="fgroup">
+            <label>Номер платёжного поручения</label>
+            <input type="text" id="pay_ref" placeholder="PP-2025-0001"/>
+          </div>
+          <div class="fgroup fg-full">
+            <label>Ссылка на подтверждение (скан / PDF)</label>
+            <input type="url" id="pay_url" placeholder="https://drive.google.com/..."/>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn-primary" onclick="submitPaymentConfirm()">
+            <i class="fas fa-paper-plane" style="margin-right:8px"></i>Отправить подтверждение
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: ESG ══ -->
+    <div id="ptab-esg" class="ptab">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:6px">ESG / Социальные показатели</h2>
+        <p style="font-size:12px;color:#64748b">Обновление данных для квартальной ESG отчётности</p>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-users" style="color:#22c55e"></i>Занятость</div>
+        <div class="form-grid2">
+          <div class="fgroup">
+            <label>Квартал / Период</label>
+            <select id="esg_quarter">
+              <option>Q1 2025</option><option>Q2 2025</option>
+              <option>Q3 2025</option><option>Q4 2025</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label>Тип региона</label>
+            <select id="esg_region">
+              <option>Сельский</option><option>Городской</option>
+              <option>Городской центр</option><option>Региональный центр</option>
+            </select>
+          </div>
+          <div class="fgroup">
+            <label>Создано новых рабочих мест (факт)</label>
+            <input type="number" id="esg_jobs_created" placeholder="5"/>
+          </div>
+          <div class="fgroup">
+            <label>Сохранено рабочих мест (факт)</label>
+            <input type="number" id="esg_jobs_preserved" placeholder="50"/>
+          </div>
+          <div class="fgroup">
+            <label>Женщины в руководстве (%)</label>
+            <input type="number" id="esg_women_pct" placeholder="35" min="0" max="100"/>
+          </div>
+          <div class="fgroup">
+            <label>Средняя зарплата, ₸</label>
+            <input type="number" id="esg_avg_salary" placeholder="350000"/>
+          </div>
+          <div class="fgroup">
+            <label>Налоговые отчисления, ₸</label>
+            <input type="number" id="esg_taxes" placeholder="5000000"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-leaf" style="color:#4ade80"></i>Экологические показатели</div>
+        <div class="fgroup" style="margin-bottom:12px">
+          <label>Экологические меры (опционально)</label>
+          <textarea id="esg_env" placeholder="Описание экологических инициатив, сокращение выбросов, энергоэффективность..."></textarea>
+        </div>
+        <div class="fgroup">
+          <label>Социальный эффект / импакт</label>
+          <textarea id="esg_social" placeholder="Влияние деятельности компании на сообщество, регион..."></textarea>
+        </div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-hands-helping" style="color:#a78bfa"></i>Соответствие программам</div>
+        <div class="fgroup" style="margin-bottom:12px">
+          <label>Подключённые государственные программы</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="progCheckboxes">
+            ${['Damu','KazAgro','QazIndustry','Другое'].map(p=>`
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 10px;
+                border:1px solid #2a3448;border-radius:7px;font-size:12px;background:#0f1623">
+                <input type="checkbox" value="${p}" name="prog"/> ${p}
+              </label>`).join('')}
+          </div>
+        </div>
+        <div class="fgroup">
+          <label>Статус выполнения условий программ</label>
+          <textarea id="esg_compliance" placeholder="Описание выполнения обязательств по программам поддержки..."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="submitESGReport()">
+          <i class="fas fa-paper-plane" style="margin-right:8px"></i>Отправить ESG отчёт
+        </button>
+        <button class="btn-ghost" onclick="clearESGForm()">
+          <i class="fas fa-times" style="margin-right:6px"></i>Очистить
+        </button>
+      </div>
+
+      <!-- ESG Reports log -->
+      <div class="p-section" style="margin-top:24px">
+        <div class="p-section-title"><i class="fas fa-history" style="color:#64748b"></i>Отправленные ESG отчёты</div>
+        <div id="esgReportsLog">
+          <div style="font-size:12px;color:#475569;font-style:italic">Отчётов ещё не отправлено</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /portal-content -->
+</div><!-- /portalMain -->
+
+<!-- Toast -->
+<div id="portalToast"></div>
+
+<script>
+/* ══════════════════════════════════════
+   PORTAL DATA (mirrors CRM portfolio[])
+══════════════════════════════════════ */
+const COMPANIES = {
+  '180340021847': {
+    pass: 'demo123',
+    name: 'TechHub Almaty',
+    sector: 'Технологии',
+    bin: '180340021847',
+    invested: 4,
+    value: 8.2,
+    fundShare: 22.2,
+    moic: 2.05,
+    manager: 'CEO',
+    status: 'Active',
+    nextAction: 'Квартальный Board Meeting',
+    nextActionDate: '2025-07-01',
+    covenants: [
+      { name:'Debt/EBITDA ≤ 4.0x', ok:true },
+      { name:'DSCR ≥ 1.2x', ok:true },
+      { name:'Минимальный Revenue $800K', ok:true },
+      { name:'Ежеквартальная отчётность', ok:true },
+    ],
+    payments: [
+      { date:'2025-07-15', amount:1500000, type:'Основной долг', status:'Предстоит' },
+      { date:'2025-08-15', amount:900000,  type:'Проценты',      status:'Предстоит' },
+      { date:'2025-10-15', amount:1500000, type:'Основной долг', status:'Предстоит' },
+      { date:'2026-01-15', amount:1500000, type:'Основной долг', status:'Предстоит' },
+    ],
+    requiredDocs: [
+      { type:'SHA / Кредитное соглашение', status:'OK',      date:'2024-03-15' },
+      { type:'Залоговые документы',         status:'OK',      date:'2024-03-20' },
+      { type:'Финотчётность Q1 2025',       status:'OK',      date:'2025-05-10' },
+      { type:'Финотчётность Q4 2024',       status:'OK',      date:'2025-02-10' },
+      { type:'Финотчётность Q3 2024',       status:'OK',      date:'2024-11-05' },
+      { type:'Страховой полис 2025',        status:'MISSING', date:'' },
+    ],
+  },
+  '200140023451': {
+    pass: 'medpoint2025',
+    name: 'MedPoint KZ',
+    sector: 'Здравоохранение',
+    bin: '200140023451',
+    invested: 5,
+    value: 9.5,
+    fundShare: 21.7,
+    moic: 1.9,
+    manager: 'Investment Manager',
+    status: 'Active',
+    nextAction: 'Проверка лицензий МЗ РК',
+    nextActionDate: '2025-07-15',
+    covenants: [
+      { name:'Debt/EBITDA ≤ 4.0x', ok:true },
+      { name:'DSCR ≥ 1.2x', ok:true },
+      { name:'Лицензии МЗ актуальны', ok:true },
+    ],
+    payments: [
+      { date:'2025-07-20', amount:2000000, type:'Основной долг', status:'Предстоит' },
+      { date:'2025-09-20', amount:1200000, type:'Проценты',      status:'Предстоит' },
+    ],
+    requiredDocs: [
+      { type:'SHA / Кредитное соглашение', status:'OK',      date:'2024-05-20' },
+      { type:'Залоговые документы',         status:'OK',      date:'2024-05-25' },
+      { type:'Финотчётность Q1 2025',       status:'OK',      date:'2025-05-15' },
+      { type:'Финотчётность Q4 2024',       status:'MISSING', date:'' },
+      { type:'Лицензия МЗ РК',             status:'OK',      date:'2025-02-01' },
+    ],
+  },
+  '190240034562': {
+    pass: 'grain2025',
+    name: 'GrainTech Partners',
+    sector: 'АПК',
+    bin: '190240034562',
+    invested: 6,
+    value: 7.2,
+    fundShare: 21.4,
+    moic: 1.2,
+    manager: 'CEO',
+    status: 'Monitoring',
+    nextAction: 'Предоставить отчёт Q1 2025',
+    nextActionDate: '2025-06-25',
+    covenants: [
+      { name:'Debt/EBITDA ≤ 5.0x', ok:true  },
+      { name:'DSCR ≥ 1.2x',        ok:false },
+      { name:'Ежеквартальная отчётность', ok:false },
+    ],
+    payments: [
+      { date:'2025-06-01', amount:3800000, type:'Основной долг', status:'Просрочен' },
+      { date:'2025-07-01', amount:2200000, type:'Проценты',      status:'Предстоит' },
+    ],
+    requiredDocs: [
+      { type:'SHA / Кредитное соглашение', status:'OK',      date:'2024-07-10' },
+      { type:'Залоговые документы',         status:'OK',      date:'2024-07-15' },
+      { type:'Финотчётность Q1 2025',       status:'MISSING', date:'' },
+      { type:'Финотчётность Q4 2024',       status:'MISSING', date:'' },
+      { type:'Страховой полис (урожай)',    status:'OK',      date:'2025-03-01' },
+    ],
+  },
+};
+
+/* ══ State ══ */
+let currentCompany = null;
+const finReports  = [];
+const uploadedDocs= [];
+const esgReports  = [];
+const payConfirms = [];
+
+/* ══ Helpers ══ */
+function toast(msg, col='#22c55e') {
+  const el = document.getElementById('portalToast');
+  el.style.display = 'block';
+  el.style.borderColor = col;
+  el.style.color = col === '#ef4444' ? '#fca5a5' : col === '#eab308' ? '#fde047' : '#4ade80';
+  el.textContent = msg;
+  setTimeout(()=> el.style.display='none', 3500);
+}
+function fmtKZT(v) {
+  if (!v) return '₸0';
+  return v >= 1000000 ? `₸${(v/1000000).toFixed(1)}M` : `₸${(v/1000).toFixed(0)}K`;
+}
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+function statusBadge(st) {
+  const map = { Active:'green', Monitoring:'yellow', Problem:'red' };
+  const label = { Active:'Активный', Monitoring:'Под мониторингом', Problem:'Проблемный' };
+  return `<span class="sbadge ${map[st]||'green'}">${label[st]||st}</span>`;
+}
+
+/* ══ LOGIN ══ */
+function doLogin() {
+  const bin  = document.getElementById('loginBin').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl= document.getElementById('loginError');
+  const co   = COMPANIES[bin];
+  if (!co || co.pass !== pass) {
+    errEl.style.display = 'block';
+    errEl.textContent   = 'Неверный BIN или пароль. Проверьте данные.';
+    return;
+  }
+  errEl.style.display = 'none';
+  currentCompany = co;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('portalMain').style.display  = 'block';
+  document.getElementById('headerCompany').style.display = 'block';
+  document.getElementById('logoutBtn').style.display     = 'block';
+  document.getElementById('headerCompanyName').textContent = co.name;
+  initPortal();
+}
+
+function doLogout() {
+  currentCompany = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('portalMain').style.display  = 'none';
+  document.getElementById('headerCompany').style.display = 'none';
+  document.getElementById('logoutBtn').style.display     = 'none';
+  document.getElementById('loginBin').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+/* ══ INIT ══ */
+function initPortal() {
+  const c = currentCompany;
+  document.getElementById('overviewCompanyName').textContent = c.name;
+  document.getElementById('overviewMeta').textContent = `${c.sector} · BIN: ${c.bin} · Доля фонда: ${c.fundShare}%`;
+  document.getElementById('overviewStatus').outerHTML =
+    `<span id="overviewStatus">${statusBadge(c.status)}</span>`;
+  document.getElementById('overviewManager').textContent = c.manager;
+  document.getElementById('overviewNextAction').textContent = c.nextAction || '—';
+  document.getElementById('overviewNextDate').textContent = c.nextActionDate ? `Дедлайн: ${c.nextActionDate}` : '';
+
+  // KPI cards
+  const kpis = [
+    { label:'Инвестировано',   val:`$${c.invested}M`,  color:'#64748b' },
+    { label:'Текущая стоим.',  val:`$${c.value}M`,     color:'#22c55e' },
+    { label:'MOIC',            val:`${c.moic}x`,       color: c.moic>=2?'#22c55e':c.moic>=1.5?'#60a5fa':'#f97316' },
+  ];
+  document.getElementById('overviewKPIs').innerHTML = kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-val" style="color:${k.color}">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+
+  // Covenants
+  document.getElementById('overviewCovenants').innerHTML = (c.covenants||[]).map(cv=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1a2335;font-size:12px">
+      <i class="fas ${cv.ok?'fa-check-circle':'fa-times-circle'}" style="color:${cv.ok?'#22c55e':'#ef4444'};width:16px;font-size:13px"></i>
+      <span style="color:${cv.ok?'#94a3b8':'#fca5a5'}">${cv.name}</span>
+    </div>`).join('');
+
+  // Payment summary
+  const total   = (c.payments||[]).reduce((s,p)=>s+p.amount,0);
+  const overdue = (c.payments||[]).filter(p=>p.status==='Просрочен').reduce((s,p)=>s+p.amount,0);
+  const next    = (c.payments||[]).find(p=>p.status==='Предстоит');
+  document.getElementById('paymentSummary').innerHTML = [
+    { label:'Общий остаток', val:fmtKZT(total),  color:'#f97316' },
+    { label:'Просрочено',    val:fmtKZT(overdue), color: overdue>0?'#ef4444':'#22c55e' },
+    { label:'Следующий платёж', val: next ? `${fmtKZT(next.amount)}<div style="font-size:10px;color:#64748b;margin-top:2px">${next.date}</div>` : '—', color:'#60a5fa' },
+  ].map(k=>`<div class="kpi-card"><div class="kpi-val" style="color:${k.color}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
+  // Payment table
+  document.getElementById('paymentTableBody').innerHTML = (c.payments||[]).map(p=>{
+    const sc = p.status==='Оплачен'?'green':p.status==='Просрочен'?'red':'yellow';
+    return `<tr>
+      <td>${p.date}</td><td>${p.type}</td>
+      <td style="font-weight:700">${fmtKZT(p.amount)}</td>
+      <td><span class="sbadge ${sc}">${p.status}</span></td>
+      <td>${p.status==='Предстоит'||p.status==='Просрочен'
+        ? `<button class="btn-ghost" style="font-size:10px;padding:3px 9px"
+             onclick="prefillPayment(${p.amount},'${p.date}')">Оплатить</button>`:''}</td>
+    </tr>`;
+  }).join('');
+
+  // Required docs
+  renderRequiredDocs();
+
+  // Set today's date on forms
+  document.getElementById('fin_date').value  = today();
+  document.getElementById('pay_date').value  = today();
+}
+
+function renderRequiredDocs() {
+  const c = currentCompany;
+  document.getElementById('requiredDocsList').innerHTML = (c.requiredDocs||[]).map(d=>`
+    <div class="doc-row ${d.status==='OK'?'ok':'missing'}">
+      <div class="doc-icon" style="background:${d.status==='OK'?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}">
+        <i class="fas fa-file-alt" style="color:${d.status==='OK'?'#4ade80':'#f87171'}"></i>
+      </div>
+      <div class="doc-info">
+        <div class="doc-name" style="color:${d.status==='OK'?'#e2e8f0':'#fca5a5'}">${d.type}</div>
+        <div class="doc-meta">${d.status==='OK'?`Загружен: ${d.date}`:'ОТСУТСТВУЕТ — загрузите через форму ниже'}</div>
+      </div>
+      <span class="sbadge ${d.status==='OK'?'green':'red'}">${d.status==='OK'?'✓ OK':'НУЖЕН'}</span>
+    </div>`).join('');
+}
+
+function renderUploadedDocs() {
+  const el = document.getElementById('uploadedDocsList');
+  if (!uploadedDocs.length) {
+    el.innerHTML = '<div style="font-size:12px;color:#475569;font-style:italic">Документов ещё не загружено</div>';
+    return;
+  }
+  el.innerHTML = uploadedDocs.map((d,i)=>`
+    <div class="doc-row ok">
+      <div class="doc-icon" style="background:rgba(34,197,94,0.1)">
+        <i class="fas fa-file-check" style="color:#4ade80"></i>
+      </div>
+      <div class="doc-info">
+        <div class="doc-name">${d.name}</div>
+        <div class="doc-meta">${d.type} · ${d.period||'—'} · Загружен: ${d.date}</div>
+        ${d.url?`<a href="${d.url}" target="_blank" style="font-size:10px;color:#60a5fa">Открыть ↗</a>`:''}
+      </div>
+    </div>`).join('');
+}
+
+/* ══ TABS ══ */
+function switchPortalTab(tab, btn) {
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.pnav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`ptab-${tab}`).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ══ FINANCIALS ══ */
+document.getElementById('fin_revenue').addEventListener('input', function() {
+  const rev = parseFloat(this.value)||0;
+  const eb  = parseFloat(document.getElementById('fin_ebitda').value)||0;
+  document.getElementById('fin_ebitda_margin').value = rev>0 ? (eb/rev*100).toFixed(1)+'%' : '';
+});
+document.getElementById('fin_ebitda').addEventListener('input', function() {
+  const rev = parseFloat(document.getElementById('fin_revenue').value)||0;
+  const eb  = parseFloat(this.value)||0;
+  document.getElementById('fin_ebitda_margin').value = rev>0 ? (eb/rev*100).toFixed(1)+'%' : '';
+});
+
+function submitFinancialReport() {
+  const q   = document.getElementById('fin_quarter').value;
+  const rev = parseFloat(document.getElementById('fin_revenue').value)||0;
+  const eb  = parseFloat(document.getElementById('fin_ebitda').value)||0;
+  const np  = parseFloat(document.getElementById('fin_net_profit').value)||0;
+  const emp = parseInt(document.getElementById('fin_employees').value)||0;
+  const sal = parseInt(document.getElementById('fin_avg_salary').value)||0;
+  const td  = parseInt(document.getElementById('fin_total_debt').value)||0;
+  const fd  = parseInt(document.getElementById('fin_fund_debt').value)||0;
+  const tax = parseInt(document.getElementById('fin_taxes').value)||0;
+  const ov  = parseInt(document.getElementById('fin_overdue').value)||0;
+  const com = document.getElementById('fin_comment').value.trim();
+  if (!rev && !eb) { toast('⚠ Введите хотя бы Выручку или EBITDA', '#ef4444'); return; }
+
+  finReports.push({ quarter:q, date:today(), revenue:rev, ebitda:eb, netProfit:np,
+    employees:emp, avgSalary:sal, totalDebt:td, fundDebt:fd, taxes:tax,
+    overdueAmount:ov, comment:com, company:currentCompany.name });
+
+  const el = document.getElementById('finReportsLog');
+  el.innerHTML = finReports.slice().reverse().map(r=>`
+    <div style="padding:10px 12px;background:#0f1623;border-radius:8px;margin-bottom:6px;border-left:3px solid #22c55e">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:700;color:#e2e8f0">${r.quarter}</span>
+        <span style="font-size:10px;color:#64748b">${r.date}</span>
+      </div>
+      <div style="font-size:11px;color:#94a3b8">
+        Выручка: <b style="color:#22c55e">$${r.revenue}K</b> · 
+        EBITDA: <b style="color:#a78bfa">$${r.ebitda}K</b> · 
+        Сотрудники: <b style="color:#60a5fa">${r.employees}</b>
+      </div>
+      ${r.comment?`<div style="font-size:11px;color:#64748b;margin-top:4px">${r.comment}</div>`:''}
+    </div>`).join('');
+
+  toast(`✅ Финансовый отчёт ${q} отправлен в Turan Capital Fund`, '#22c55e');
+  clearFinancialForm();
+}
+
+function clearFinancialForm() {
+  ['fin_revenue','fin_ebitda','fin_ebitda_margin','fin_net_profit',
+   'fin_employees','fin_avg_salary','fin_total_debt','fin_fund_debt',
+   'fin_taxes','fin_overdue','fin_comment'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value='';
+  });
+}
+
+/* ══ DOCUMENTS ══ */
+function submitDocument() {
+  const type   = document.getElementById('upl_type').value;
+  const name   = document.getElementById('upl_name').value.trim();
+  const period = document.getElementById('upl_period').value.trim();
+  const expiry = document.getElementById('upl_expiry').value;
+  const url    = document.getElementById('upl_url').value.trim();
+  const comment= document.getElementById('upl_comment').value.trim();
+  if (!name) { toast('⚠ Введите название файла', '#ef4444'); return; }
+
+  uploadedDocs.push({ type, name, period, expiry, url, comment, date:today(), company:currentCompany.name });
+  renderUploadedDocs();
+
+  // Mark as OK in required docs if matching
+  const c = currentCompany;
+  const rd = c.requiredDocs.find(d => d.status==='MISSING' && (d.type.includes(period)||name.toLowerCase().includes(period.toLowerCase())));
+  if (rd) { rd.status='OK'; rd.date=today(); renderRequiredDocs(); }
+
+  toast(`✅ Документ «${name}» загружен`, '#22c55e');
+  ['upl_name','upl_period','upl_expiry','upl_url','upl_comment'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+}
+
+/* ══ PAYMENTS ══ */
+function prefillPayment(amount, date) {
+  document.getElementById('pay_amount').value = amount;
+  document.getElementById('pay_date').value   = date;
+  switchPortalTab('payments', document.querySelector('[onclick*="payments"]'));
+  document.getElementById('pay_bank').focus();
+}
+
+function submitPaymentConfirm() {
+  const date   = document.getElementById('pay_date').value;
+  const amount = parseInt(document.getElementById('pay_amount').value)||0;
+  const bank   = document.getElementById('pay_bank').value.trim();
+  const ref    = document.getElementById('pay_ref').value.trim();
+  const url    = document.getElementById('pay_url').value.trim();
+  if (!amount) { toast('⚠ Введите сумму платежа', '#ef4444'); return; }
+  if (!bank)   { toast('⚠ Укажите банк-отправитель', '#ef4444'); return; }
+
+  payConfirms.push({ date, amount, bank, ref, url, company:currentCompany.name });
+  toast(`✅ Подтверждение платежа ${fmtKZT(amount)} от ${date} отправлено в фонд`, '#22c55e');
+  ['pay_date','pay_amount','pay_bank','pay_ref','pay_url'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+  document.getElementById('pay_date').value = today();
+}
+
+/* ══ ESG ══ */
+function submitESGReport() {
+  const q   = document.getElementById('esg_quarter').value;
+  const jc  = parseInt(document.getElementById('esg_jobs_created').value)||0;
+  const jp  = parseInt(document.getElementById('esg_jobs_preserved').value)||0;
+  const wp  = parseInt(document.getElementById('esg_women_pct').value)||0;
+  const sal = parseInt(document.getElementById('esg_avg_salary').value)||0;
+  const tax = parseInt(document.getElementById('esg_taxes').value)||0;
+  const env = document.getElementById('esg_env').value.trim();
+  const soc = document.getElementById('esg_social').value.trim();
+  const reg = document.getElementById('esg_region').value;
+  const progs = [...document.querySelectorAll('[name="prog"]:checked')].map(c=>c.value);
+  const comp= document.getElementById('esg_compliance').value.trim();
+
+  esgReports.push({ quarter:q, date:today(), jobsCreated:jc, jobsPreserved:jp,
+    womenPct:wp, avgSalary:sal, taxes:tax, env, social:soc, region:reg,
+    programs:progs, compliance:comp, company:currentCompany.name });
+
+  const el = document.getElementById('esgReportsLog');
+  el.innerHTML = esgReports.slice().reverse().map(r=>`
+    <div style="padding:10px 12px;background:#0f1623;border-radius:8px;margin-bottom:6px;border-left:3px solid #4ade80">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:700;color:#e2e8f0">${r.quarter}</span>
+        <span style="font-size:10px;color:#64748b">${r.date}</span>
+      </div>
+      <div style="font-size:11px;color:#94a3b8">
+        Новые рабочие места: <b style="color:#22c55e">${r.jobsCreated}</b> · 
+        Сохранено: <b style="color:#60a5fa">${r.jobsPreserved}</b> · 
+        Женщины в руков.: <b style="color:#a78bfa">${r.womenPct}%</b>
+      </div>
+      ${r.programs.length?`<div style="font-size:10px;color:#64748b;margin-top:3px">Программы: ${r.programs.join(', ')}</div>`:''}
+    </div>`).join('');
+
+  toast(`✅ ESG отчёт ${q} отправлен в Turan Capital Fund`, '#22c55e');
+  clearESGForm();
+}
+
+function clearESGForm() {
+  ['esg_jobs_created','esg_jobs_preserved','esg_women_pct','esg_avg_salary',
+   'esg_taxes','esg_env','esg_social','esg_compliance'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value='';
+  });
+  document.querySelectorAll('[name="prog"]').forEach(c=>c.checked=false);
+}
+</script>
+</body>
+</html>
