@@ -474,6 +474,34 @@ CREATE INDEX IF NOT EXISTS idx_engagements_tenant ON engagements(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_engagements_client ON engagements(client_id);
 CREATE INDEX IF NOT EXISTS idx_ic_memos_tenant ON ic_memos(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_documents_tenant ON documents(tenant_id);
+
+-- Live, editable permission source of truth (replaces the old static
+-- server/roles.js / js/roles.js catalogue). is_system=1 marks the 10
+-- built-in roles seeded by server/rolesSeed.js -- their 'code' is immutable
+-- and the row is undeletable (seed data / historical audit columns
+-- reference these codes by literal string), but every permission flag
+-- stays editable, same as on any custom role.
+CREATE TABLE IF NOT EXISTS roles (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  code              TEXT NOT NULL,
+  label             TEXT NOT NULL,
+  icon              TEXT NOT NULL DEFAULT 'fa-user',
+  color             TEXT NOT NULL DEFAULT '#64748b',
+  internal          INTEGER NOT NULL DEFAULT 1,
+  manage_users      INTEGER NOT NULL DEFAULT 0,
+  manage_roles      INTEGER NOT NULL DEFAULT 0,
+  access_fm         INTEGER NOT NULL DEFAULT 1,
+  decide_conflicts  INTEGER NOT NULL DEFAULT 0,
+  author_ic_memo    INTEGER NOT NULL DEFAULT 0,
+  risk_veto         INTEGER NOT NULL DEFAULT 0,
+  ic_seat           TEXT,
+  is_system         INTEGER NOT NULL DEFAULT 0,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(tenant_id, code)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_tenant_icseat ON roles(tenant_id, ic_seat) WHERE ic_seat IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_roles_tenant ON roles(tenant_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —

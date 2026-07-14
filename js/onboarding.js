@@ -6345,33 +6345,24 @@ function renderDashboardRmWidget() {
 
 /**
  * Returns { allowed: bool, reason: string }
- * Rules:
- *  - CEO, CO (Compliance Officer), MLRO, Analyst → full access to both directions
- *  - RM (Relationship Manager) → can ONLY work with CF&A clients
- *    (FM LP onboarding uses the legacy LP page, not TZ tasks)
- *  - If wall is active: RM cannot submit/complete tasks for FM clients
+ * Rule: any role without the `accessFM` permission can only work with
+ * CF&A-direction clients (FM LP onboarding uses the legacy LP page, not
+ * these TZ tasks). Which roles have accessFM is now configurable via the
+ * Roles admin UI (js/users.js) — not a hardcoded role list.
  */
 function chineseWallCheck(client) {
   if (!client) return { allowed: false, reason: 'Клиент не найден' };
 
-  // Roles with full access (both FM and CF&A) — server enforces the same
-  // rule on GET/PUT /api/onboarding etc. (server/chineseWall.js); this is
-  // just the client-side fast-fail so the UI doesn't render blocked content.
-  const fullAccessRoles = ['CEO', 'CFO', 'CIO', 'COMPLIANCE_OFFICER', 'MLRO', 'ANALYST'];
-  if (fullAccessRoles.includes(currentUserRole())) {
-    return { allowed: true, reason: '' };
-  }
-
-  // RM can only access CF&A direction
-  if (currentUserRole() === 'RELATIONSHIP_MANAGER') {
-    if (client.direction === 'FM') {
-      return {
-        allowed: false,
-        reason: `Вы — RM. Доступ к клиентам направления FM ограничен Китайской стеной. ` +
-                `Только CO, MLRO или CEO могут работать с FM-клиентами в данном разделе. ` +
-                `(Требование AFSA: информационная изоляция FM и CF&A)`
-      };
-    }
+  // Server enforces the same rule on GET/PUT /api/onboarding etc.
+  // (server/chineseWall.js); this is just the client-side fast-fail so the
+  // UI doesn't render blocked content.
+  if (client.direction === 'FM' && !currentUserPermission('accessFM')) {
+    return {
+      allowed: false,
+      reason: `Ваша роль (${roleLabel(currentUserRole())}) не имеет доступа к направлению FM. ` +
+              `Доступ к клиентам направления FM ограничен Китайской стеной. ` +
+              `(Требование AFSA: информационная изоляция FM и CF&A)`
+    };
   }
 
   return { allowed: true, reason: '' };

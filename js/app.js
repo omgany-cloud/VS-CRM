@@ -40,7 +40,8 @@ function updateUserRoleUI(role) {
     avatarEl.innerHTML = `<i class="fas ${cfg.icon}"></i>`;
   }
   const usersNav = document.querySelector('.nav-item[data-page="users"]');
-  if (usersNav) usersNav.style.display = (role === 'CEO') ? '' : 'none';
+  const canSeeUsersPage = currentUserPermission('manageUsers') || currentUserPermission('manageRoles');
+  if (usersNav) usersNav.style.display = canSeeUsersPage ? '' : 'none';
 }
 
 // Repurposed from the old self-service role switcher: now just opens the

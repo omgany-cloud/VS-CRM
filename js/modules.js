@@ -477,23 +477,17 @@ function renderCalEvent(e, isOverdue) {
 ═══════════════════════════════════════════════════════════ */
 
 // Fixed IC voting composition per Constitution Section 7 (2 GP Reps +
-// 1 Independent Member + 1 LP Rep) — same roster used in server/seed.js
-// so seeded and newly-created memos share one consistent vote shape.
-const IC_ROLE_DEFS = [
-  { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)' },
-  { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)' },
-  { role: 'Independent Member', name: 'Мукашев Ерлан Т.' },
-  { role: 'LP Rep', name: 'Байжанова Динара Сериковна' },
-];
-// Each IC seat maps 1:1 to a real account role — mirrors
-// server/icMemoMapping.js's IC_SEAT_ROLE_CODES (server enforces this too;
-// this copy only drives which vote buttons render for the logged-in user).
-const IC_SEAT_ROLE_CODES = {
-  'GP Rep 1': 'CEO',
-  'GP Rep 2': 'CFO',
-  'Independent Member': 'IC_INDEPENDENT',
-  'LP Rep': 'IC_LP_REP',
-};
+// 1 Independent Member + 1 LP Rep — IC_SEATS in js/roles.js). Which role
+// occupies each seat is configurable via the Roles admin UI, so this is
+// derived live rather than a hardcoded 4-entry list of specific people —
+// shows the role label holding the seat, not a specific person's name
+// (the system no longer assumes a fixed 1:1 role<->person mapping).
+function icRoleDefs() {
+  return IC_SEATS.map(seat => {
+    const r = roleForIcSeat(seat);
+    return { role: seat, name: r ? r.label : '— вакантно —' };
+  });
+}
 const IC_VOTES   = { approve: { label:'Одобрить', color:'#22c55e' }, reject: { label:'Отклонить', color:'#ef4444' }, abstain: { label:'Воздержаться', color:'#94a3b8' } };
 
 let icMemos = [];  // populated at runtime by js/api-auth.js via GET /api/ic-memos (see server/index.js)
@@ -616,7 +610,7 @@ function renderICModalContent(m) {
   // Member and LP Rep have their own external accounts) — a vote button
   // only renders on the row matching the logged-in user's own role, unvoted.
   const myRole = currentUserRole();
-  const canCastVote = (v) => m.status === 'pending' && !v.vote && IC_SEAT_ROLE_CODES[v.role] === myRole;
+  const canCastVote = (v) => m.status === 'pending' && !v.vote && currentUserPermission('icSeat') === v.role;
   const anyVotableByMe = m.status === 'pending' && m.votes.some(canCastVote);
 
   const votesHtml = m.votes.map((v, i) => `
@@ -675,10 +669,10 @@ function renderICModalContent(m) {
       <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
         <i class="fas fa-shield-alt" style="margin-right:5px"></i>Заключение Risk Manager (независимое вето)
       </div>
-      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a6b8a'};font-weight:700;margin-bottom:${myRole === 'RISK_MANAGER' ? '10px' : '0'}">
+      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a6b8a'};font-weight:700;margin-bottom:${currentUserPermission('riskVeto') ? '10px' : '0'}">
         ${m.riskConclusion ? (RISK_CONCLUSIONS[m.riskConclusion]?.label || m.riskConclusion) : 'Ещё не рассмотрено'}
       </div>
-      ${myRole === 'RISK_MANAGER' ? `
+      ${currentUserPermission('riskVeto') ? `
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <select id="icRiskConclusionSelect_${m.id}" style="background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px">
             <option value="">— Выбрать заключение —</option>
@@ -916,7 +910,7 @@ function openNewICMemo() {
         <i class="fas fa-users" style="margin-right:5px"></i>Состав IC (Constitution Section 7) — проголосуют после создания
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${IC_ROLE_DEFS.map(({role,name}) => `
+        ${icRoleDefs().map(({role,name}) => `
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
             <input type="checkbox" id="icMember_${role.replace(/\s/g,'_')}" checked
               style="accent-color:#f97316;width:14px;height:14px" />
@@ -1002,7 +996,7 @@ async function saveNewICMemo() {
   // Selected IC members (fixed Constitution Section 7 roster — unchecked
   // ones are recorded as absent, same as the seeded "missing Independent
   // Member" scenario, so quorum still resolves correctly against them)
-  const selectedRoles = IC_ROLE_DEFS.filter(({role}) => {
+  const selectedRoles = icRoleDefs().filter(({role}) => {
     const cb = document.getElementById('icMember_' + role.replace(/\s/g,'_'));
     return cb ? cb.checked : true;
   });

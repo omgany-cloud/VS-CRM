@@ -9,10 +9,12 @@ const path = require('path');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db, at } = require('./db');
-const { signToken, requireAuth, requireRole, requireInternal } = require('./auth');
-const { ROLES, INTERNAL_ROLES, isValidRole } = require('./roles');
+const { signToken, requireAuth, requirePermission, requireInternal } = require('./auth');
+const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
+const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
 const { rowToUser } = require('./usersMapping');
-const { blocksRole: chineseWallBlocksRole, filterClientsForRole } = require('./chineseWall');
+const { computeUserFootprint } = require('./userFootprint');
+const { blocksPermissions: chineseWallBlocks, filterClientsForPermissions } = require('./chineseWall');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
@@ -23,7 +25,7 @@ const {
   engagementToParams, rowToEngagement, ENGAGEMENT_INSERT_SQL, ENGAGEMENT_UPDATE_SQL,
   conflictApprovalToParams, rowToConflictApproval, CONFLICT_APPROVAL_INSERT_SQL, CONFLICT_APPROVAL_UPDATE_SQL,
 } = require('./onboardingMapping');
-const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL: IC_MEMO_UPDATE_SQL, IC_SEAT_ROLE_CODES } = require('./icMemoMapping');
+const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL: IC_MEMO_UPDATE_SQL } = require('./icMemoMapping');
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
 
 const app = express();
@@ -48,24 +50,28 @@ app.post('/api/auth/login', (req, res) => {
   }
   if (!user.active) return res.status(401).json({ error: 'Account is deactivated' });
 
+  const roleRow = getRoleRowByCode(tenantRow.id, user.role);
   const token = signToken(user, tenantRow);
   res.json({
     token,
     user: { id: user.id, email: user.email, name: user.name, role: user.role },
     tenant: { id: tenantRow.id, slug: tenantRow.slug, name: tenantRow.name },
+    permissions: roleRow ? rowToPermissions(roleRow) : null,
   });
 });
 
-/* ===== User Management API — CEO-only ===== */
-app.get('/api/users', requireAuth, requireRole('CEO'), (req, res) => {
+/* ===== User Management API ===== */
+app.get('/api/users', requireAuth, requirePermission('manageUsers'), (req, res) => {
   const rows = db.prepare('SELECT * FROM users WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, users: rows.map(rowToUser) });
 });
 
-app.post('/api/users', requireAuth, requireRole('CEO'), (req, res) => {
+app.post('/api/users', requireAuth, requirePermission('manageUsers'), (req, res) => {
   const b = req.body || {};
   if (!b.email || !b.password) return res.status(400).json({ error: 'email and password are required' });
-  if (!b.role || !isValidRole(b.role)) return res.status(400).json({ error: 'role must be one of: ' + Object.keys(ROLES).join(', ') });
+  if (!b.role || !isValidRole(req.tenantId, b.role)) {
+    return res.status(400).json({ error: 'role must be one of: ' + listRoleRows(req.tenantId).map(r => r.code).join(', ') });
+  }
   if (String(b.password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
 
   let info;
@@ -89,12 +95,14 @@ app.post('/api/users', requireAuth, requireRole('CEO'), (req, res) => {
   res.status(201).json(rowToUser(row));
 });
 
-app.put('/api/users/:id', requireAuth, requireRole('CEO'), (req, res) => {
+app.put('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req, res) => {
   const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
 
   const b = req.body || {};
-  if (b.role != null && !isValidRole(b.role)) return res.status(400).json({ error: 'role must be one of: ' + Object.keys(ROLES).join(', ') });
+  if (b.role != null && !isValidRole(req.tenantId, b.role)) {
+    return res.status(400).json({ error: 'role must be one of: ' + listRoleRows(req.tenantId).map(r => r.code).join(', ') });
+  }
   if (Number(req.params.id) === req.user.id && b.active === false) {
     return res.status(400).json({ error: 'You cannot deactivate your own account' });
   }
@@ -111,7 +119,7 @@ app.put('/api/users/:id', requireAuth, requireRole('CEO'), (req, res) => {
   res.json(rowToUser(row));
 });
 
-app.put('/api/users/:id/password', requireAuth, requireRole('CEO'), (req, res) => {
+app.put('/api/users/:id/password', requireAuth, requirePermission('manageUsers'), (req, res) => {
   const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
   const { password } = req.body || {};
@@ -119,6 +127,130 @@ app.put('/api/users/:id/password', requireAuth, requireRole('CEO'), (req, res) =
   db.prepare('UPDATE users SET password_hash=@passwordHash WHERE id=@id AND tenant_id=@tenantId')
     .run(at({ passwordHash: bcrypt.hashSync(password, 10), id: existing.id, tenantId: req.tenantId }));
   res.json({ ok: true });
+});
+
+// Hybrid delete: hard-delete is only allowed for "empty" accounts (no
+// footprint in the audit trail — see server/userFootprint.js). Anyone with
+// real history must be deactivated instead (PUT .../active=false), which
+// already revokes access immediately via requireAuth's live DB check.
+app.delete('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
+  if (Number(req.params.id) === req.user.id) {
+    return res.status(400).json({ error: 'You cannot delete your own account' });
+  }
+  const footprint = computeUserFootprint(req.tenantId, existing.email, existing.name);
+  if (footprint.length) {
+    const summary = footprint.map(f => `${f.table}.${f.column} ×${f.count}`).join(', ');
+    return res.status(409).json({
+      error: `Cannot delete: user has activity in the system (${summary}). Deactivate instead.`,
+      footprint,
+    });
+  }
+  db.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
+/* ===== Roles API =====
+   GET is open to every authenticated user (everyone needs the catalogue to
+   resolve role labels/icons/colors — same as the old fully-client-shipped
+   static object). Mutations require the manageRoles permission, kept
+   separate from manageUsers: day-to-day account admin shouldn't imply the
+   power to redefine what every permission means. */
+app.get('/api/roles', requireAuth, (req, res) => {
+  const rows = listRoleRows(req.tenantId);
+  res.json({ tenant: req.tenantSlug, roles: rows.map(rowToRole) });
+});
+
+function wouldZeroOutCapability(tenantId, capabilityCol, roleId, nextValue) {
+  const remaining = db.prepare(
+    `SELECT COUNT(*) AS c FROM roles WHERE tenant_id = ? AND ${capabilityCol} = 1 AND id <> ?`
+  ).get(tenantId, roleId).c;
+  return (remaining + (nextValue ? 1 : 0)) === 0;
+}
+
+app.post('/api/roles', requireAuth, requirePermission('manageRoles'), (req, res) => {
+  const b = req.body || {};
+  if (!b.code || !/^[A-Z][A-Z0-9_]*$/.test(b.code)) {
+    return res.status(400).json({ error: 'code is required and must match /^[A-Z][A-Z0-9_]*$/' });
+  }
+  if (!b.label) return res.status(400).json({ error: 'label is required' });
+  if (b.icSeat != null && !IC_SEATS.includes(b.icSeat)) {
+    return res.status(400).json({ error: 'icSeat must be one of: ' + IC_SEATS.join(', ') });
+  }
+  const params = roleToParams({ ...b, isSystem: false });
+
+  let info;
+  try {
+    db.exec('BEGIN');
+    if (params.icSeat) {
+      db.prepare('UPDATE roles SET ic_seat = NULL WHERE tenant_id = @tenantId AND ic_seat = @icSeat')
+        .run(at({ tenantId: req.tenantId, icSeat: params.icSeat }));
+    }
+    info = db.prepare(ROLE_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'A role with this code already exists in this tenant' });
+    return res.status(500).json({ error: err.message });
+  }
+
+  const row = db.prepare('SELECT * FROM roles WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  res.status(201).json(rowToRole(row));
+});
+
+app.put('/api/roles/:id', requireAuth, requirePermission('manageRoles'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM roles WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Role not found in this tenant' });
+
+  const b = req.body || {};
+  if (b.icSeat != null && !IC_SEATS.includes(b.icSeat)) {
+    return res.status(400).json({ error: 'icSeat must be one of: ' + IC_SEATS.join(', ') });
+  }
+  const merged = { ...rowToRole(existing), ...b, code: existing.code, isSystem: !!existing.is_system };
+
+  if (wouldZeroOutCapability(req.tenantId, 'manage_users', existing.id, merged.manageUsers)) {
+    return res.status(409).json({ error: 'Cannot leave the tenant with no manageUsers-capable role' });
+  }
+  if (wouldZeroOutCapability(req.tenantId, 'manage_roles', existing.id, merged.manageRoles)) {
+    return res.status(409).json({ error: 'Cannot leave the tenant with no manageRoles-capable role' });
+  }
+
+  // ROLE_UPDATE_SQL deliberately has no @code/@isSystem placeholders (both
+  // are immutable via this route) — node:sqlite rejects bound params with
+  // no matching placeholder in the SQL, so they must be stripped before binding.
+  const { code: _unusedCode, isSystem: _unusedIsSystem, ...params } = roleToParams(merged);
+  let pendingMemosAffected = 0;
+  try {
+    db.exec('BEGIN');
+    if (params.icSeat && params.icSeat !== existing.ic_seat) {
+      db.prepare('UPDATE roles SET ic_seat = NULL WHERE tenant_id = @tenantId AND ic_seat = @icSeat AND id <> @id')
+        .run(at({ tenantId: req.tenantId, icSeat: params.icSeat, id: existing.id }));
+    }
+    db.prepare(ROLE_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  if (params.icSeat !== existing.ic_seat) {
+    pendingMemosAffected = db.prepare("SELECT COUNT(*) AS c FROM ic_memos WHERE tenant_id = ? AND status = 'pending'").get(req.tenantId).c;
+  }
+
+  const row = db.prepare('SELECT * FROM roles WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  res.json({ ...rowToRole(row), warnings: pendingMemosAffected ? { pendingMemosAffected } : undefined });
+});
+
+app.delete('/api/roles/:id', requireAuth, requirePermission('manageRoles'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM roles WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Role not found in this tenant' });
+  if (existing.is_system) return res.status(400).json({ error: 'Cannot delete a built-in system role' });
+  const usersInRole = db.prepare('SELECT COUNT(*) AS c FROM users WHERE tenant_id = ? AND role = ?').get(req.tenantId, existing.code).c;
+  if (usersInRole > 0) {
+    return res.status(409).json({ error: `Cannot delete: ${usersInRole} user(s) still hold this role. Reassign them first.`, usersInRole });
+  }
+  db.prepare('DELETE FROM roles WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
 });
 
 /* ===== LP Register API — tenant-scoped ===== */
@@ -511,13 +643,13 @@ app.get('/api/onboarding', requireAuth, requireInternal, (req, res) => {
   const allTasks = db.prepare('SELECT * FROM ob_tasks WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToObTask);
   const allEngagements = db.prepare('SELECT * FROM engagements WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToEngagement);
 
-  // Chinese Wall: RM never sees FM-direction clients, or anything scoped to them.
-  const obClients = filterClientsForRole(allClients, req.user.role);
+  // Chinese Wall: any role without accessFM never sees FM-direction clients, or anything scoped to them.
+  const obClients = filterClientsForPermissions(allClients, req.user.permissions);
   const visibleClientIds = new Set(obClients.map(c => c.id));
   const obTasks = allTasks.filter(t => visibleClientIds.has(t.clientId));
   const engagements = allEngagements.filter(e => !e.clientId || visibleClientIds.has(e.clientId));
-  // Restricted List is FM-portfolio-company-only data with no CF&A client link — RM has no legitimate use for it.
-  const restrictedList = req.user.role === 'RELATIONSHIP_MANAGER'
+  // Restricted List is FM-portfolio-company-only data with no CF&A client link — accessFM-less roles have no legitimate use for it.
+  const restrictedList = !req.user.permissions.accessFM
     ? []
     : db.prepare('SELECT * FROM restricted_list WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToRestricted);
 
@@ -527,7 +659,7 @@ app.get('/api/onboarding', requireAuth, requireInternal, (req, res) => {
 app.post('/api/ob-clients', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
-  if (chineseWallBlocksRole(req.user.role, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction clients' });
+  if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction clients' });
   const params = obClientToParams({ phase: 1, onboardingStatus: 'On Track', ...b });
   const info = db.prepare(OB_CLIENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -537,9 +669,9 @@ app.post('/api/ob-clients', requireAuth, requireInternal, (req, res) => {
 app.put('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
-  if (chineseWallBlocksRole(req.user.role, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   const merged = Object.assign(rowToObClient(existing), req.body || {});
-  if (chineseWallBlocksRole(req.user.role, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  if (chineseWallBlocks(req.user.permissions, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   const params = obClientToParams(merged);
   db.prepare(OB_CLIENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -552,10 +684,13 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Onboarding task not found in this tenant' });
   const parentClient = db.prepare('SELECT direction FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.client_id, req.tenantId);
-  if (parentClient && chineseWallBlocksRole(req.user.role, parentClient.direction)) {
+  if (parentClient && chineseWallBlocks(req.user.permissions, parentClient.direction)) {
     return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   }
   const merged = Object.assign(rowToObTask(existing), req.body || {});
+  // Deliberately a literal role-code check, not a capability — this is a
+  // narrow, single-purpose workflow-lock nothing else in the system checks,
+  // not a general permission. A custom "RM-like" role won't inherit it.
   if (existing.status === 'completed' && merged.status !== 'completed' && req.user.role === 'RELATIONSHIP_MANAGER') {
     return res.status(403).json({ error: 'Forbidden: RM cannot reopen a completed onboarding task' });
   }
@@ -565,7 +700,7 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   res.json(rowToObTask(row));
 });
 
-app.post('/api/restricted-list', requireAuth, requireRole('COMPLIANCE_OFFICER', 'MLRO', 'CEO'), (req, res) => {
+app.post('/api/restricted-list', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const params = restrictedToParams({ addedAt: new Date().toISOString().slice(0, 10), addedBy: req.user.name || req.user.email, ...b });
@@ -586,7 +721,7 @@ app.post('/api/coi-registry', requireAuth, requireInternal, (req, res) => {
 app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
-  if (chineseWallBlocksRole(req.user.role, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
+  if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
   const params = engagementToParams(b);
   const info = db.prepare(ENGAGEMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -599,9 +734,9 @@ app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
 app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Engagement not found in this tenant' });
-  if (chineseWallBlocksRole(req.user.role, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
+  if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const merged = Object.assign(rowToEngagement(existing), req.body || {});
-  if (chineseWallBlocksRole(req.user.role, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
+  if (chineseWallBlocks(req.user.permissions, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const params = engagementToParams(merged);
   db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -619,7 +754,7 @@ app.get('/api/conflict-approvals', requireAuth, requireInternal, (req, res) => {
   res.json({ tenant: req.tenantSlug, conflictApprovals: rows.map(rowToConflictApproval) });
 });
 
-app.post('/api/conflict-approvals', requireAuth, requireRole('COMPLIANCE_OFFICER', 'MLRO', 'CEO'), (req, res) => {
+app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const b = req.body || {};
   if (!b.decisionType) return res.status(400).json({ error: 'decisionType is required' });
   const params = conflictApprovalToParams({ riskLevel: 'Low', status: 'Pending', ...b });
@@ -628,7 +763,7 @@ app.post('/api/conflict-approvals', requireAuth, requireRole('COMPLIANCE_OFFICER
   res.status(201).json(rowToConflictApproval(row));
 });
 
-app.put('/api/conflict-approvals/:id', requireAuth, requireRole('COMPLIANCE_OFFICER', 'MLRO', 'CEO'), (req, res) => {
+app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const existing = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Conflict approval not found in this tenant' });
   const merged = Object.assign(rowToConflictApproval(existing), req.body || {});
@@ -644,14 +779,14 @@ app.put('/api/conflict-approvals/:id', requireAuth, requireRole('COMPLIANCE_OFFI
    roles AND those two seats, unlike the plain requireInternal gate used
    elsewhere. Authoring a memo stays internal-GP-staff-only. */
 app.get('/api/ic-memos', requireAuth, (req, res) => {
-  if (!INTERNAL_ROLES.has(req.user.role) && req.user.role !== 'IC_INDEPENDENT' && req.user.role !== 'IC_LP_REP') {
+  if (!req.user.permissions.internal && !req.user.permissions.icSeat) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   const rows = db.prepare('SELECT * FROM ic_memos WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, icMemos: rows.map(rowToIcMemo) });
 });
 
-app.post('/api/ic-memos', requireAuth, requireRole('CEO', 'CFO', 'CIO', 'ANALYST'), (req, res) => {
+app.post('/api/ic-memos', requireAuth, requirePermission('authorICMemo'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const params = icMemoToParams({ status: 'pending', ...b });
@@ -671,21 +806,21 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
   const isVoteUpdate = Object.prototype.hasOwnProperty.call(b, 'votes');
   const isRiskUpdate = Object.prototype.hasOwnProperty.call(b, 'riskVeto') || Object.prototype.hasOwnProperty.call(b, 'riskConclusion');
 
-  if (isRiskUpdate && req.user.role !== 'RISK_MANAGER') {
+  if (isRiskUpdate && !req.user.permissions.riskVeto) {
     return res.status(403).json({ error: 'Only Risk Manager can set risk veto/conclusion' });
   }
   if (isVoteUpdate) {
-    // Each IC seat maps 1:1 to a real account role (IC_SEAT_ROLE_CODES) — a
-    // vote row may only change if the caller holds that seat's role.
+    // A vote row may only change if the caller's own role currently holds
+    // that seat (req.user.permissions.icSeat — server/rolesRepo.js).
     const existingVotes = JSON.parse(existing.votes_json || '[]');
     const illegalChange = b.votes.some((v, i) => {
       const prev = existingVotes[i] || null;
       if (JSON.stringify(v) === JSON.stringify(prev)) return false;
-      return IC_SEAT_ROLE_CODES[v.role] !== req.user.role;
+      return req.user.permissions.icSeat !== v.role;
     });
     if (illegalChange) return res.status(403).json({ error: 'You may only cast your own IC vote' });
   }
-  if (!isVoteUpdate && !isRiskUpdate && !INTERNAL_ROLES.has(req.user.role)) {
+  if (!isVoteUpdate && !isRiskUpdate && !req.user.permissions.internal) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

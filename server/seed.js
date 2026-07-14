@@ -16,6 +16,8 @@ const {
 const { icMemoToParams, INSERT_SQL: IC_MEMO_INSERT_SQL } = require('./icMemoMapping');
 const { documentToParams, INSERT_SQL: DOCUMENT_INSERT_SQL } = require('./documentMapping');
 const { extractArrayLiteral } = require('./extractFrontendData');
+const { SYSTEM_ROLES } = require('./rolesSeed');
+const { roleToParams, INSERT_SQL: ROLE_INSERT_SQL } = require('./rolesMapping');
 
 const SEED_EMAIL = 'admin@turancapital.kz';
 const SEED_PASSWORD = 'TuranDemo2025!';
@@ -25,6 +27,14 @@ function upsertTenant(slug, name) {
   if (existing) return existing;
   const info = db.prepare('INSERT INTO tenants (slug, name) VALUES (?, ?)').run(slug, name);
   return db.prepare('SELECT * FROM tenants WHERE id = ?').get(info.lastInsertRowid);
+}
+
+function upsertRole(tenantId, def) {
+  const existing = db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(tenantId, def.code);
+  if (existing) return existing;
+  const params = roleToParams({ ...def, isSystem: true });
+  const info = db.prepare(ROLE_INSERT_SQL).run(at({ tenantId, ...params }));
+  return db.prepare('SELECT * FROM roles WHERE id = ?').get(info.lastInsertRowid);
 }
 
 function upsertUser(tenantId, email, password, role, name) {
@@ -1240,6 +1250,7 @@ function seedDocuments(tenantId) {
 }
 
 const tenant = upsertTenant('turan-capital', 'Turan Capital Holding Limited Partnership');
+for (const r of SYSTEM_ROLES) upsertRole(tenant.id, r);
 const user = upsertUser(tenant.id, SEED_EMAIL, SEED_PASSWORD, 'CEO', 'Omirserikov Gaini');
 
 // Real accounts for every named individual referenced elsewhere in this

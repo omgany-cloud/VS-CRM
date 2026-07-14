@@ -601,11 +601,16 @@
       <div id="vaultContent"></div>
     </section>
 
-    <!-- ===== TEAM / USERS (CEO-only) ===== -->
+    <!-- ===== TEAM / USERS / ROLES (Access Control) ===== -->
     <section id="page-users" class="page">
       <div class="section-header">
         <h1>Команда / Пользователи <span class="fund-label">Access Control</span></h1>
-        <p>Реальные аккаунты участников CRM и их роли — доступ на бэкенде выдаётся строго по роли аккаунта</p>
+        <p>Реальные аккаунты участников CRM и настраиваемые роли — доступ на бэкенде выдаётся строго по правам роли</p>
+      </div>
+      <div id="usersTabs" style="display:flex;gap:8px;margin-bottom:14px">
+        <button id="usersTabUsers" onclick="switchUsersTab('users')"
+          style="background:#3b82f6;border:none;color:#fff;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Пользователи</button>
+        <button id="usersTabRoles" onclick="switchUsersTab('roles')" style="display:none;background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Роли</button>
       </div>
       <div id="usersContent"></div>
     </section>

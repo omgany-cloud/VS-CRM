@@ -1,12 +1,33 @@
 // ============================================================
-//  Team / Users — CEO-only admin page for real login accounts.
-//  Backed by /api/users (server/index.js), loaded via
-//  loadUsersFromApi() in js/api-auth.js. Reuses the generic
-//  #modal-ob-new overlay for create/edit forms (same pattern as
-//  the Conflict Approvals page in js/onboarding.js).
+//  Team / Users / Roles — admin page for real login accounts and
+//  the role constructor. Backed by /api/users and /api/roles
+//  (server/index.js), loaded via loadUsersFromApi()/loadRolesFromApi()
+//  in js/api-auth.js. Reuses the generic #modal-ob-new overlay for
+//  create/edit forms (same pattern as the Conflict Approvals page
+//  in js/onboarding.js).
 // ============================================================
 
 let crmUsers = [];
+let usersActiveTab = 'users';
+
+const PERMISSION_DEFS = [
+  { key: 'internal', label: 'Internal', hint: 'Доступ к внутренним данным (не внешний участник IC)' },
+  { key: 'manageUsers', label: 'Управление пользователями', hint: 'Создание/деактивация/удаление аккаунтов' },
+  { key: 'manageRoles', label: 'Управление ролями', hint: 'Создание и настройка ролей' },
+  { key: 'accessFM', label: 'Доступ к FM', hint: 'Исключение из Китайской стены (FM-направление)' },
+  { key: 'decideConflicts', label: 'Решения по конфликтам', hint: 'Restricted List + Conflict Approvals' },
+  { key: 'authorICMemo', label: 'Авторство IC-меморандумов', hint: 'Создание новых меморандумов IC' },
+  { key: 'riskVeto', label: 'Risk Manager вето', hint: 'Заключение/вето по IC-меморандумам' },
+];
+
+function switchUsersTab(tab) {
+  usersActiveTab = tab;
+  const btnUsers = document.getElementById('usersTabUsers');
+  const btnRoles = document.getElementById('usersTabRoles');
+  if (btnUsers) { btnUsers.style.background = tab === 'users' ? '#3b82f6' : 'transparent'; btnUsers.style.border = tab === 'users' ? 'none' : '1px solid #2a3448'; btnUsers.style.color = tab === 'users' ? '#fff' : '#8a9bbf'; }
+  if (btnRoles) { btnRoles.style.background = tab === 'roles' ? '#3b82f6' : 'transparent'; btnRoles.style.border = tab === 'roles' ? 'none' : '1px solid #2a3448'; btnRoles.style.color = tab === 'roles' ? '#fff' : '#8a9bbf'; }
+  if (tab === 'roles') renderRolesPage(); else renderUsersPage();
+}
 
 function roleOptionsHtml(selected) {
   return ROLE_CODES.map(code =>
@@ -14,9 +35,13 @@ function roleOptionsHtml(selected) {
   ).join('');
 }
 
+/* ===== Users tab ===== */
+
 function renderUsersPage() {
   const el = document.getElementById('usersContent');
   if (!el) return;
+  const btnRoles = document.getElementById('usersTabRoles');
+  if (btnRoles) btnRoles.style.display = currentUserPermission('manageRoles') ? '' : 'none';
 
   const cntActive = crmUsers.filter(u => u.active).length;
   const cntExternal = crmUsers.filter(u => ROLES[u.role] && !ROLES[u.role].internal).length;
@@ -68,8 +93,10 @@ function renderUsersPage() {
                   <button onclick="openEditUserModal(${u.id})" title="Редактировать"
                     style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>
                   <button onclick="toggleUserActive(${u.id}, ${!u.active})" title="${u.active ? 'Деактивировать' : 'Активировать'}"
-                    style="background:transparent;border:1px solid #2a3448;color:${u.active ? '#f87171' : '#4ade80'};padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
+                    style="background:transparent;border:1px solid #2a3448;color:${u.active ? '#f87171' : '#4ade80'};padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px">
                     <i class="fas ${u.active ? 'fa-user-slash' : 'fa-user-check'}"></i></button>
+                  <button onclick="deleteUser(${u.id})" title="Удалить (только если нет истории действий)"
+                    style="background:transparent;border:1px solid #2a3448;color:#f87171;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px"><i class="fas fa-trash"></i></button>
                 </td>
               </tr>`;
             }).join('')}
@@ -182,5 +209,241 @@ async function toggleUserActive(id, nextActive) {
     showToast(nextActive ? '✅ Пользователь активирован' : '✅ Пользователь деактивирован', 'green');
   } catch (err) {
     showToast('⚠️ Не удалось изменить статус: ' + err.message, 'red');
+  }
+}
+
+// Hybrid delete: the server only allows this for "empty" accounts (no
+// footprint in the audit trail — server/userFootprint.js). Anyone with
+// real history gets a 409 telling the caller to deactivate instead.
+async function deleteUser(id) {
+  const u = crmUsers.find(x => x.id === id);
+  if (!u) return;
+  if (!confirm(`Удалить «${u.name || u.email}» без возможности восстановления? Возможно только если у пользователя нет истории действий в системе.`)) return;
+  try {
+    await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+    await loadUsersFromApi();
+    renderUsersPage();
+    showToast('✅ Пользователь удалён', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
+/* ===== Roles tab (role constructor) ===== */
+
+function renderRolesPage() {
+  const el = document.getElementById('usersContent');
+  if (!el) return;
+  const roles = Object.values(ROLES).sort((a, b) => a.id - b.id);
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <button onclick="openNewRoleModal()"
+        style="background:#3b82f6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">
+        <i class="fas fa-shield-halved"></i> Новая роль</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:6px"></i>Роли тенанта</span>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Роль</th><th>Код</th><th>Права</th><th>Место в IC</th><th></th></tr></thead>
+          <tbody>
+            ${roles.map(r => `
+              <tr>
+                <td><span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${r.color}22;color:${r.color}"><i class="fas ${r.icon}"></i> ${r.label}</span>
+                  ${r.isSystem ? '<span style="margin-left:6px;font-size:9px;color:#5a6b8a;border:1px solid #2a3448;border-radius:4px;padding:1px 5px">system</span>' : ''}</td>
+                <td style="font-family:monospace;font-size:11px;color:#8a9bbf">${r.code}</td>
+                <td>${PERMISSION_DEFS.filter(p => r[p.key]).map(p =>
+                  `<span title="${p.hint}" style="display:inline-block;margin:1px 3px 1px 0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(59,130,246,0.12);color:#60a5fa">${p.label}</span>`
+                ).join('') || '<span style="color:#4a5568;font-size:11px">—</span>'}</td>
+                <td style="font-size:11px;color:#8a9bbf">${r.icSeat || '—'}</td>
+                <td style="white-space:nowrap">
+                  <button onclick="openEditRoleModal(${r.id})" title="Редактировать"
+                    style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>
+                  <button onclick="deleteRole(${r.id})" title="${r.isSystem ? 'Системная роль — удаление недоступно' : 'Удалить'}" ${r.isSystem ? 'disabled' : ''}
+                    style="background:transparent;border:1px solid #2a3448;color:${r.isSystem ? '#3d4a63' : '#f87171'};padding:5px 9px;border-radius:6px;cursor:${r.isSystem ? 'not-allowed' : 'pointer'};font-size:11px"><i class="fas fa-trash"></i></button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function permissionCheckboxesHtml(idPrefix, role) {
+  return PERMISSION_DEFS.map(p => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+      <input type="checkbox" id="${idPrefix}_${p.key}" ${role && role[p.key] ? 'checked' : ''}
+        style="accent-color:#3b82f6;width:14px;height:14px" />
+      <span title="${p.hint}">${p.label}</span>
+    </label>`).join('');
+}
+
+function icSeatOptionsHtml(idPrefix, role) {
+  const current = role ? role.icSeat : null;
+  const options = IC_SEATS.map(seat => {
+    const holder = roleForIcSeat(seat);
+    const takenByOther = holder && (!role || holder.code !== role.code);
+    const label = takenByOther ? `${seat} (занято: ${holder.label})` : seat;
+    return `<option value="${seat}" ${current === seat ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+  return `<select id="${idPrefix}_icSeat" onchange="warnIcSeatTaken('${idPrefix}')"
+      style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+      <option value="">— нет —</option>${options}
+    </select>
+    <div id="${idPrefix}_icSeatWarning" style="font-size:11px;color:#f97316;margin-top:4px"></div>`;
+}
+
+function warnIcSeatTaken(idPrefix) {
+  const select = document.getElementById(idPrefix + '_icSeat');
+  const warning = document.getElementById(idPrefix + '_icSeatWarning');
+  if (!select || !warning) return;
+  const seat = select.value;
+  const holder = seat ? roleForIcSeat(seat) : null;
+  const codeInput = document.getElementById(idPrefix + '_code');
+  const editingCode = codeInput ? codeInput.value : null;
+  warning.textContent = (holder && holder.code !== editingCode)
+    ? `⚠ Уже занято ролью «${holder.label}» — назначение здесь заменит их`
+    : '';
+}
+
+function openNewRoleModal() {
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:8px"></i>Новая роль';
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Код *</label>
+        <input type="text" id="r_new_code" placeholder="JUNIOR_RM"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;text-transform:uppercase" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название *</label>
+        <input type="text" id="r_new_label" placeholder="Junior RM"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
+        <input type="text" id="r_new_icon" value="fa-user" placeholder="fa-user"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
+        <input type="color" id="r_new_color" value="#64748b"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
+    </div>
+    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Права</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${permissionCheckboxesHtml('r_new', null)}</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Место в Investment Committee</label>
+      ${icSeatOptionsHtml('r_new', null)}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveNewRole()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function collectPermissionFields(idPrefix) {
+  const out = {};
+  for (const p of PERMISSION_DEFS) out[p.key] = !!document.getElementById(`${idPrefix}_${p.key}`)?.checked;
+  const icSeat = document.getElementById(idPrefix + '_icSeat')?.value || null;
+  out.icSeat = icSeat || null;
+  return out;
+}
+
+async function saveNewRole() {
+  const code = document.getElementById('r_new_code')?.value?.trim().toUpperCase();
+  const label = document.getElementById('r_new_label')?.value?.trim();
+  const icon = document.getElementById('r_new_icon')?.value?.trim() || 'fa-user';
+  const color = document.getElementById('r_new_color')?.value || '#64748b';
+  if (!code || !/^[A-Z][A-Z0-9_]*$/.test(code)) { showToast('⚠️ Код обязателен: заглавные буквы/цифры/подчёркивание, начинается с буквы', 'red'); return; }
+  if (!label) { showToast('⚠️ Введите название роли', 'red'); return; }
+
+  const payload = { code, label, icon, color, ...collectPermissionFields('r_new') };
+  try {
+    await apiFetch('/api/roles', { method: 'POST', body: JSON.stringify(payload) });
+    await loadRolesFromApi();
+    closeObNewModal();
+    renderRolesPage();
+    showToast('✅ Роль создана', 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось создать: ' + err.message, 'red');
+  }
+}
+
+function openEditRoleModal(id) {
+  const r = Object.values(ROLES).find(x => x.id === id);
+  if (!r) return;
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:8px"></i>${r.label}`;
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Код${r.isSystem ? ' (системная роль — неизменяем)' : ''}</label>
+        <input type="text" id="r_edit_code" value="${r.code}" ${r.isSystem ? 'readonly' : ''}
+          style="width:100%;background:${r.isSystem ? '#0a0f18' : '#0f1623'};border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:${r.isSystem ? '#5a6b8a' : '#e2e8f0'};font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название</label>
+        <input type="text" id="r_edit_label" value="${r.label}"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
+        <input type="text" id="r_edit_icon" value="${r.icon}"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
+        <input type="color" id="r_edit_color" value="${r.color}"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
+    </div>
+    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Права</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${permissionCheckboxesHtml('r_edit', r)}</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Место в Investment Committee</label>
+      ${icSeatOptionsHtml('r_edit', r)}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveRoleEdit(${r.id})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+async function saveRoleEdit(id) {
+  const label = document.getElementById('r_edit_label')?.value?.trim();
+  const icon = document.getElementById('r_edit_icon')?.value?.trim() || 'fa-user';
+  const color = document.getElementById('r_edit_color')?.value || '#64748b';
+  if (!label) { showToast('⚠️ Введите название роли', 'red'); return; }
+
+  const payload = { label, icon, color, ...collectPermissionFields('r_edit') };
+  try {
+    const result = await apiFetch(`/api/roles/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    await loadRolesFromApi();
+    closeObNewModal();
+    renderRolesPage();
+    if (result && result.warnings && result.warnings.pendingMemosAffected) {
+      showToast(`✅ Роль обновлена. ⚠ Затронуто IC-меморандумов на голосовании: ${result.warnings.pendingMemosAffected}`, 'blue');
+    } else {
+      showToast('✅ Роль обновлена', 'green');
+    }
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
+}
+
+async function deleteRole(id) {
+  const r = Object.values(ROLES).find(x => x.id === id);
+  if (!r) return;
+  if (r.isSystem) { showToast('⚠️ Системную роль нельзя удалить', 'red'); return; }
+  if (!confirm(`Удалить роль «${r.label}»? Возможно только если ни один пользователь её не использует.`)) return;
+  try {
+    await apiFetch(`/api/roles/${id}`, { method: 'DELETE' });
+    await loadRolesFromApi();
+    renderRolesPage();
+    showToast('✅ Роль удалена', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
   }
 }

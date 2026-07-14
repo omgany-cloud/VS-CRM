@@ -32,6 +32,14 @@ function apiLogout() {
   window.location.reload();
 }
 
+// The login response inlines the caller's resolved permissions (see
+// server/index.js's /api/auth/login) so the UI can gate itself without an
+// extra round-trip.
+function currentUserPermission(key) {
+  const auth = getAuth();
+  return !!(auth && auth.permissions && auth.permissions[key]);
+}
+
 async function apiFetch(path, options = {}) {
   const auth = getAuth();
   const headers = Object.assign(
@@ -225,9 +233,10 @@ async function loadConflictApprovalsFromApi() {
 }
 
 /* ===== Users (Team / Access Control) — backed by the real API =====
-   CEO-only — the server 403s anyone else, and the nav item itself is
-   hidden client-side (see updateUserRoleUI in js/app.js). Loaded on-demand
-   like Documents/Vault, not part of loadAllApiData(). */
+   Gated by the manageUsers permission — the server 403s anyone without it,
+   and the nav item itself is hidden client-side (see updateUserRoleUI in
+   js/app.js). Loaded on-demand like Documents/Vault, not part of
+   loadAllApiData(). */
 async function loadUsersFromApi() {
   try {
     const data = await apiFetch('/api/users');
@@ -239,6 +248,26 @@ async function loadUsersFromApi() {
   } catch (err) {
     console.error('Failed to load users from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить пользователей из API: ' + err.message, 'red');
+  }
+}
+
+/* ===== Roles (Access Control constructor) — backed by the real API =====
+   GET is reachable by every authenticated user (everyone needs the
+   catalogue to resolve role labels/icons/colors — js/roles.js's ROLES
+   object is populated from here, not hardcoded). Loaded once right after
+   login, before initUserRole()/loadAllApiData() run, so the very first
+   render already has real labels instead of the pre-login fallback. */
+async function loadRolesFromApi() {
+  try {
+    const data = await apiFetch('/api/roles');
+    const next = {};
+    for (const r of data.roles) next[r.code] = r;
+    ROLES = next;
+    ROLE_CODES = Object.keys(ROLES);
+    const page = document.getElementById('page-users');
+    if (page && page.classList.contains('active') && typeof renderRolesPage === 'function' && typeof usersActiveTab !== 'undefined' && usersActiveTab === 'roles') renderRolesPage();
+  } catch (err) {
+    console.error('Falling back to built-in role catalogue:', err);
   }
 }
 
@@ -304,6 +333,7 @@ function hideLoginOverlay() {
         if (!res.ok) throw new Error(data.error || 'Login failed');
         setAuth(data);
         hideLoginOverlay();
+        await loadRolesFromApi();
         if (typeof initUserRole === 'function') initUserRole();
         loadAllApiData();
       } catch (err) {
@@ -315,7 +345,10 @@ function hideLoginOverlay() {
   const auth = getAuth();
   if (auth && auth.token) {
     hideLoginOverlay();
-    loadAllApiData();
+    loadRolesFromApi().then(() => {
+      if (typeof initUserRole === 'function') initUserRole();
+      loadAllApiData();
+    });
   } else {
     showLoginOverlay();
   }
