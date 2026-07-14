@@ -367,15 +367,6 @@ function buildCalendarEvents() {
     });
   });
 
-  // Task deadlines (only pending/in_progress)
-  tasksData.filter(t => t.deadline && t.status !== 'completed').forEach(t => {
-    events.push({
-      date: t.deadline, label: t.title,
-      category: 'task', status: TASK_STATUSES[t.status]?.label || t.status,
-      resp: t.assignee?.split(' ')[0], color: new Date(t.deadline) < today ? '#ef4444' : '#8b5cf6',
-    });
-  });
-
   return events.sort((a,b) => new Date(a.date) - new Date(b.date));
 }
 
@@ -383,7 +374,6 @@ const CAL_CATEGORIES = {
   afsa:    { label: 'AFSA Отчётность', icon: 'fa-landmark',      color: '#3b82f6'  },
   capital: { label: 'Capital Calls',   icon: 'fa-coins',          color: '#22c55e'  },
   kyc:     { label: 'KYC Renewal',     icon: 'fa-shield-alt',     color: '#8b5cf6'  },
-  task:    { label: 'Задачи',          icon: 'fa-check-square',   color: '#f97316'  },
 };
 
 function renderComplianceCalendar() {
@@ -592,30 +582,58 @@ function closeICModal() {
   activeIcId = null;
 }
 
-function renderICModalContent(m) {
-  const myRole = (currentUserRole||'CEO').split(' ')[0];
-  const myVote = m.votes.find(v => v.member === myRole || v.member === currentUserRole);
-  const canVote = m.status === 'pending' && myVote && !myVote.vote;
+const RISK_CONCLUSIONS = {
+  'No Objection':        { label: 'No Objection',        color: '#22c55e' },
+  'Conditional Approval': { label: 'Conditional Approval', color: '#3b82f6' },
+  'Veto':                 { label: 'VETO',                 color: '#ef4444' },
+};
 
-  const votesHtml = m.votes.map(v => `
+function icQuorumMet(votes) {
+  const voted = votes.filter(v => v.vote);
+  return voted.length >= 3 && voted.some(v => v.role === 'Independent Member');
+}
+
+function renderICModalContent(m) {
+  // CEO chairs the IC and acts as meeting secretary (Investment & Harvesting
+  // Package, Template 4: "Responsible: CEO (Secretary)") — records votes on
+  // behalf of all 4 formal members (GP Rep 1/2, Independent Member, LP Rep).
+  const canRecordVotes = m.status === 'pending' && currentUserRole === 'CEO';
+
+  const votesHtml = m.votes.map((v, i) => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #2a3448;font-size:12px">
       <div style="width:28px;height:28px;border-radius:8px;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:800;color:#94a3b8;font-size:10px;flex-shrink:0">
-        ${v.member.slice(0,2).toUpperCase()}
+        ${(v.name||v.role).slice(0,2).toUpperCase()}
       </div>
-      <span style="flex:1;color:#94a3b8">${v.member}</span>
+      <div style="flex:1;min-width:0">
+        <div style="color:#e2e8f0;font-weight:600">${v.role}</div>
+        <div style="color:#5a6b8a;font-size:10px">${v.name||''}</div>
+      </div>
       ${v.vote ? `
         <span style="color:${IC_VOTES[v.vote]?.color};font-weight:700">${IC_VOTES[v.vote]?.label}</span>
-        ${v.comment ? `<span style="color:#8a9bbf;font-style:italic;font-size:11px">"${v.comment}"</span>` : ''}
+        ${v.comment ? `<span style="color:#8a9bbf;font-style:italic;font-size:11px;max-width:160px">"${v.comment}"</span>` : ''}
+      ` : canRecordVotes ? `
+        <div style="display:flex;gap:4px">
+          ${Object.entries(IC_VOTES).map(([k,cfg]) => `
+            <button onclick="castICVote(${m.id},${i},'${k}')" title="${cfg.label}"
+              style="background:${cfg.color}18;border:1px solid ${cfg.color};color:${cfg.color};padding:4px 8px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">
+              ${cfg.label}
+            </button>`).join('')}
+        </div>
       ` : '<span style="color:#2a3448;font-style:italic">Ожидает...</span>'}
     </div>`).join('');
+
+  const quorum = m.status === 'pending' ? icQuorumMet(m.votes) : m.quorumMet;
 
   document.getElementById('icModalContent').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div class="kpi-icon orange" style="width:46px;height:46px;font-size:18px;border-radius:12px"><i class="fas fa-handshake"></i></div>
-      <div>
+      <div style="flex:1">
         <div style="font-size:16px;font-weight:800;color:#f1f5f9">${m.company}</div>
         <div style="font-size:12px;color:#f97316;font-weight:600">$${m.amount}M ${m.type} · ${m.sector}</div>
       </div>
+      <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;background:${quorum?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)'};color:${quorum?'#22c55e':'#ef4444'}">
+        ${quorum ? 'Кворум набран' : 'Кворум не набран'}
+      </span>
     </div>
 
     <!-- Sections -->
@@ -632,26 +650,21 @@ function renderICModalContent(m) {
         <div style="font-size:13px;color:#94a3b8;line-height:1.55">${text||'—'}</div>
       </div>`).join('')}
 
-    <!-- Votes -->
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC</div>
-      ${votesHtml}
+    <!-- Risk Manager conclusion (independent of the IC vote — Constitution Section 7.7) -->
+    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1px solid ${m.riskVeto?'rgba(239,68,68,0.4)':'#2a3448'}">
+      <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
+        <i class="fas fa-shield-alt" style="margin-right:5px"></i>Заключение Risk Manager (независимое вето)
+      </div>
+      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a6b8a'};font-weight:700">
+        ${m.riskConclusion ? (RISK_CONCLUSIONS[m.riskConclusion]?.label || m.riskConclusion) : 'Ещё не рассмотрено'}
+      </div>
     </div>
 
-    <!-- My vote -->
-    ${canVote ? `
-      <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:14px;border:1px solid ${m.status==='pending'?'rgba(249,115,22,0.3)':'transparent'}">
-        <div style="font-size:12px;font-weight:700;color:#f97316;margin-bottom:10px">Ваш голос (${myRole})</div>
-        <input id="icVoteComment" type="text" placeholder="Комментарий к решению..."
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;margin-bottom:10px" />
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${Object.entries(IC_VOTES).map(([k,v]) => `
-            <button onclick="castICVote(${m.id},'${k}')"
-              style="flex:1;background:${v.color}18;border:1px solid ${v.color};color:${v.color};padding:8px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
-              ${v.label}
-            </button>`).join('')}
-        </div>
-      </div>` : ''}
+    <!-- Votes -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC (Constitution Section 7)</div>
+      ${votesHtml}
+    </div>
 
     ${m.resolution ? `
       <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:10px;padding:12px 14px;margin-bottom:14px">
@@ -665,29 +678,42 @@ function renderICModalContent(m) {
     </div>`;
 }
 
-function castICVote(memoId, vote) {
+async function castICVote(memoId, voteIdx, vote) {
   const m = icMemos.find(x => x.id === memoId);
   if (!m) return;
-  const myRole = currentUserRole || 'CEO';
-  const myVote = m.votes.find(v => v.member === myRole || v.member === myRole.split(' ')[0]);
-  if (!myVote) { showToast('Вы не член IC', 'red'); return; }
-  const comment = document.getElementById('icVoteComment')?.value?.trim() || '';
+  const myVote = m.votes[voteIdx];
+  if (!myVote) return;
   myVote.vote    = vote;
-  myVote.comment = comment;
+  myVote.comment = myVote.comment || '';
+  m.quorumMet = icQuorumMet(m.votes);
+
   // Auto-resolve if all voted
   const allVoted  = m.votes.every(v => v.vote);
   const approveN  = m.votes.filter(v => v.vote === 'approve').length;
   const rejectN   = m.votes.filter(v => v.vote === 'reject').length;
+  let toastMsg = null, toastColor = 'blue';
   if (allVoted || approveN > m.votes.length / 2) {
     m.status     = approveN >= rejectN ? 'approved' : 'rejected';
-    m.resolution = approveN >= rejectN
+    const quorumNote = m.quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
+    m.resolution = (approveN >= rejectN
       ? `Инвестиция одобрена большинством голосов (${approveN}/${m.votes.length}). Сумма: $${m.amount}M.`
-      : `Инвестиция отклонена (${rejectN} против).`;
+      : `Инвестиция отклонена (${rejectN} против).`) + quorumNote;
     const deal = deals.find(d => d.id === m.dealId);
     if (deal) deal.ic = m.status === 'approved' ? 'Одобрено' : 'Отклонено';
-    showToast(m.status === 'approved' ? '✅ IC одобрил инвестицию!' : '❌ IC отклонил инвестицию', m.status==='approved'?'green':'red');
+    toastMsg = m.status === 'approved' ? '✅ IC одобрил инвестицию!' : '❌ IC отклонил инвестицию';
+    toastColor = m.status === 'approved' ? 'green' : 'red';
   } else {
-    showToast(`Голос "${IC_VOTES[vote].label}" зафиксирован`, 'blue');
+    toastMsg = `Голос "${IC_VOTES[vote].label}" зафиксирован (${myVote.role})`;
+  }
+
+  try {
+    await apiFetch(`/api/ic-memos/${m.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ votes: m.votes, quorumMet: m.quorumMet, status: m.status, resolution: m.resolution }),
+    });
+    showToast(toastMsg, toastColor);
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить голос: ' + err.message, 'red');
   }
   renderICModalContent(m);
   renderICPage();

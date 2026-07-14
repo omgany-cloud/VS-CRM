@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHarvesting();
   renderDocumentsPage();
   renderSubscriptionPage();
-  renderTasksPage();
 });
 
 /* ===== DATE ===== */
@@ -92,7 +91,6 @@ function setCurrentDate() {
 /* ===== BADGES ===== */
 function updateBadges() {
   const activeDeals = deals.filter(d => d.stage !== 'Закрыта' && d.stage !== 'Отклонена IC').length;
-  const tasksPending= tasksData ? tasksData.filter(t => t.status !== 'completed' && t.status !== 'cancelled').length : 0;
 
   // Badges
   const wfPending   = typeof getActiveWfCount === 'function' ? getActiveWfCount() : 0;
@@ -106,7 +104,6 @@ function updateBadges() {
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) { el.textContent = val; el.style.display = val ? '' : 'none'; } };
   set('badge-deals', activeDeals);
-  set('badge-tasks', tasksPending);
   set('badge-workflow', wfPending);
   set('badge-ic', icPending);
   set('badge-kycrenewal', kycOverdue);
@@ -160,7 +157,6 @@ const PAGE_LABELS = {
   harvesting:    'nav_harvesting',
   distributions: 'Distributions — Waterfall',
   documents:     'nav_documents',
-  tasks:         'Задачи',
   export:        'Экспорт Excel',
   workflow:      'Согласования',
   kycrenewal:    'KYC Renewal',
@@ -189,7 +185,6 @@ function navigateTo(page) {
   if (page === 'reports')      { renderReportCharts(); }
   if (page === 'documents')    { renderDocumentsPage(); }
   if (page === 'subscription') { renderSubscriptionPage(); }
-  if (page === 'tasks')        { renderTasksPage(); }
   if (page === 'export')       { renderExportPage(); }
   if (page === 'workflow')     { renderWorkflowPage(); }
   if (page === 'kycrenewal')   { renderKycRenewalPage(); }
@@ -221,8 +216,6 @@ function renderDashboard() {
   const portCountEl = document.getElementById('kpiPortCount');
   if (portCountEl) portCountEl.textContent = portfolio.length;
 
-  // Tasks widget
-  renderDashboardTasks();
   // Onboarding TZ widgets
   if (typeof renderDashboardObWidget === 'function')  renderDashboardObWidget();
   if (typeof renderDashboardCoiWidget === 'function') renderDashboardCoiWidget();

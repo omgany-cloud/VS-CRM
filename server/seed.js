@@ -1068,6 +1068,10 @@ function seedConflictApprovals(tenantId) {
 
 // NOTE: same lesson as DEALS/PORTFOLIO/onboarding above — js/modules.js's
 // `icMemos` array has since been emptied out, so it's hardcoded here.
+// IC voting composition matches Constitution Section 7: 2 GP representatives,
+// 1 Independent Member, 1 LP Representative (4 voting members; quorum = 3
+// incl. the Independent Member). The Risk Manager sits outside this vote —
+// an independent veto/conclusion per Section 7.7 (Template 3), not a vote.
 const IC_MEMOS = [
   { id: 1, dealId: 1, company: 'NomadTech Solutions', sector: 'Технологии', amount: 4.5, type: 'Equity', stage: 'Закрыта',
     author: 'Investment Manager', createdAt: '2024-09-15', status: 'approved', meetingDate: '2024-10-05',
@@ -1076,12 +1080,13 @@ const IC_MEMOS = [
     financials: 'Round size $4.5M (Equity). Выручка $70K MRR на момент сделки. Финансовый DD проведён Deloitte Kazakhstan — без замечаний.',
     exitPlan: 'M&A, целевой год выхода 2028.',
     votes: [
-      { member: 'CEO', vote: 'approve', comment: 'Соответствует стратегии фонда.' },
-      { member: 'CFO', vote: 'approve', comment: 'Финансовые показатели в норме.' },
-      { member: 'Investment Manager', vote: 'approve', comment: 'Автор меморандума.' },
-      { member: 'External Advisor', vote: 'abstain', comment: 'Нет конфликта интересов, воздерживаюсь.' },
+      { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)', vote: 'approve', comment: 'Соответствует стратегии фонда.' },
+      { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)', vote: 'approve', comment: 'Финансовые показатели в норме.' },
+      { role: 'Independent Member', name: 'Мукашев Ерлан Т.', vote: 'approve', comment: 'Объективных возражений нет.' },
+      { role: 'LP Rep', name: 'Байжанова Динара Сериковна', vote: 'approve', comment: 'Поддерживаю сделку.' },
     ],
-    resolution: 'Инвестиция одобрена единогласно. Сумма $4.5M Equity. Сделка закрыта 2024-11-20.' },
+    quorumMet: true, riskVeto: false, riskConclusion: 'No Objection',
+    resolution: 'Инвестиция одобрена единогласно (4 за). Сумма $4.5M Equity. Сделка закрыта 2024-11-20.' },
   { id: 2, dealId: 2, company: 'VitaMed Astana', sector: 'Здравоохранение', amount: 5, type: 'Equity', stage: 'Закрыта',
     author: 'Investment Manager', createdAt: '2024-12-05', status: 'approved', meetingDate: '2025-01-15',
     thesis: 'Платформа телемедицины для отдалённых регионов Казахстана. $90K MRR, партнёрства с региональными клиниками. Pre-money $18M.',
@@ -1089,12 +1094,13 @@ const IC_MEMOS = [
     financials: 'Round size $5M (Equity). Выручка $90K MRR на момент сделки. Legal & Financial DD проведён KPMG Kazakhstan — без замечаний.',
     exitPlan: 'Strategic Sale, целевой год выхода 2029.',
     votes: [
-      { member: 'CEO', vote: 'approve', comment: 'Сильная команда, растущий рынок телемедицины.' },
-      { member: 'CFO', vote: 'approve', comment: 'Юнит-экономика положительная.' },
-      { member: 'Investment Manager', vote: 'approve', comment: 'Автор меморандума.' },
-      { member: 'External Advisor', vote: 'abstain', comment: 'Нет конфликта интересов, воздерживаюсь.' },
+      { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)', vote: 'approve', comment: 'Сильная команда, растущий рынок телемедицины.' },
+      { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)', vote: 'approve', comment: 'Юнит-экономика положительная.' },
+      { role: 'Independent Member', name: 'Мукашев Ерлан Т.', vote: 'approve', comment: 'Объективных возражений нет.' },
+      { role: 'LP Rep', name: 'Байжанова Динара Сериковна', vote: 'approve', comment: 'Поддерживаю сделку.' },
     ],
-    resolution: 'Инвестиция одобрена единогласно. Сумма $5M Equity. Сделка закрыта 2025-02-28.' },
+    quorumMet: true, riskVeto: false, riskConclusion: 'No Objection',
+    resolution: 'Инвестиция одобрена единогласно (4 за). Сумма $5M Equity. Сделка закрыта 2025-02-28.' },
   { id: 3, dealId: 3, company: 'Dala Agro Holding', sector: 'АПК', amount: 6, type: 'Convertible Note', stage: 'Закрыта',
     author: 'CEO', createdAt: '2025-03-10', status: 'approved', meetingDate: '2025-04-10',
     thesis: 'Зерновой холдинг в Костанайской области. Собственный земельный банк 50K га, экспортные контракты в Центральную Азию. Pre-money $22M.',
@@ -1102,12 +1108,13 @@ const IC_MEMOS = [
     financials: 'Round size $6M (Convertible Note). Годовая выручка $3.2M. Financial DD проведён BDO Kazakhstan.',
     exitPlan: 'IPO on KASE, целевой год выхода 2030.',
     votes: [
-      { member: 'CEO', vote: 'approve', comment: 'Стратегический актив для фонда, сильный земельный банк.' },
-      { member: 'CFO', vote: 'approve', comment: 'Приемлемая долговая нагрузка при текущих ковенантах.' },
-      { member: 'Investment Manager', vote: 'reject', comment: 'Долговая нагрузка операционной компании выше комфортного уровня.' },
-      { member: 'External Advisor', vote: 'abstain', comment: 'Нет конфликта интересов, воздерживаюсь.' },
+      { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)', vote: 'approve', comment: 'Стратегический актив для фонда, сильный земельный банк.' },
+      { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)', vote: 'approve', comment: 'Приемлемая долговая нагрузка при текущих ковенантах.' },
+      { role: 'Independent Member', name: 'Мукашев Ерлан Т.', vote: 'reject', comment: 'Долговая нагрузка операционной компании выше комфортного уровня.' },
+      { role: 'LP Rep', name: 'Байжанова Динара Сериковна', vote: 'abstain', comment: 'Нет достаточной экспертизы в АПК, воздерживаюсь.' },
     ],
-    resolution: 'Инвестиция одобрена большинством (2 за, 1 против, 1 воздержался). Сумма $6M Convertible Note. Сделка закрыта 2025-05-22.' },
+    quorumMet: true, riskVeto: false, riskConclusion: 'Conditional Approval',
+    resolution: 'Инвестиция одобрена большинством (2 за, 1 против, 1 воздержался). Risk Manager: Conditional Approval — требуется мониторинг долговой нагрузки операционной компании ежеквартально. Сумма $6M Convertible Note. Сделка закрыта 2025-05-22.' },
   { id: 4, dealId: 5, company: 'Green Energy Almaty', sector: 'Энергетика', amount: 7, type: 'Equity', stage: 'IC Review',
     author: 'CFO', createdAt: '2025-07-05', status: 'pending', meetingDate: '2025-07-20',
     thesis: 'Разработчик солнечных электростанций для промышленных потребителей в Алматинской области. Pre-revenue (стадия строительства). Pre-money $25M.',
@@ -1115,8 +1122,12 @@ const IC_MEMOS = [
     financials: 'Round size $7M (Equity). Со-инвестор AIFC Green Fund в переговорах.',
     exitPlan: 'Стратегическая продажа энергетическому холдингу, срок не определён.',
     votes: [
-      { member: 'CFO', vote: 'approve', comment: 'Автор меморандума.' },
+      { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)', vote: null, comment: '' },
+      { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)', vote: 'approve', comment: 'Автор меморандума.' },
+      { role: 'Independent Member', name: 'Мукашев Ерлан Т.', vote: null, comment: '' },
+      { role: 'LP Rep', name: 'Байжанова Динара Сериковна', vote: null, comment: '' },
     ],
+    quorumMet: false, riskVeto: false, riskConclusion: null,
     resolution: '' },
   { id: 5, dealId: 7, company: 'Retail Hub Karaganda', sector: 'Ритейл', amount: 2.5, type: 'Equity', stage: 'Отклонена IC',
     author: 'Analyst', createdAt: '2025-05-10', status: 'rejected', meetingDate: '2025-05-28',
@@ -1125,11 +1136,13 @@ const IC_MEMOS = [
     financials: 'Round size $2.5M (Equity). Выручка $25K MRR.',
     exitPlan: 'Не определён.',
     votes: [
-      { member: 'CEO', vote: 'reject', comment: 'Недостаточный потенциал масштабирования для мандата фонда.' },
-      { member: 'CFO', vote: 'reject', comment: 'Низкая маржинальность сектора.' },
-      { member: 'Investment Manager', vote: 'approve', comment: 'Автор меморандума, видит потенциал в региональной экспансии.' },
+      { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)', vote: 'reject', comment: 'Недостаточный потенциал масштабирования для мандата фонда.' },
+      { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)', vote: 'reject', comment: 'Низкая маржинальность сектора.' },
+      { role: 'Independent Member', name: 'Мукашев Ерлан Т.', vote: null, comment: 'Отсутствовал на заседании.' },
+      { role: 'LP Rep', name: 'Байжанова Динара Сериковна', vote: 'approve', comment: 'Видит потенциал в региональной экспансии.' },
     ],
-    resolution: 'Инвестиция отклонена (2 против, 1 за). Возможен возврат к рассмотрению через 12 месяцев (не ранее 2026-06-01) при расширении географии.' },
+    quorumMet: false, riskVeto: false, riskConclusion: null,
+    resolution: 'Инвестиция отклонена (2 против, 1 за). Независимый член на заседании отсутствовал — формально кворум по Constitution Section 7 не набран, решение носит предварительный характер. Возможен возврат к рассмотрению через 12 месяцев (не ранее 2026-06-01) при расширении географии и повторном созыве IC с участием независимого члена.' },
 ];
 
 function seedIcMemos(tenantId) {

@@ -3,7 +3,7 @@
 //  Golden Leaves Ltd / Turan Capital Fund LP
 //  AFSA-compliant reports via SheetJS (xlsx)
 //  Generates: LP Register, KYC/AML, Capital Calls, Portfolio,
-//             Deals, Tasks, CF&A Clients, Full CRM dump
+//             Deals, CF&A Clients, Full CRM dump
 // ============================================================
 
 /* ── Утилиты ── */
@@ -270,54 +270,6 @@ function exportDeals() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   6. TASKS REPORT — Задачи (по модулю Tasks)
-═══════════════════════════════════════════════════════════ */
-function exportTasks() {
-  const header = [
-    '№', 'Заголовок', 'Тип', 'Приоритет', 'Статус',
-    'Исполнитель', 'Автор', 'Клиент', 'Дедлайн',
-    'Дата создания', 'Кол-во комментариев', 'Описание'
-  ];
-  const priorityMap = { critical: 'Критично', high: 'Высокий', medium: 'Средний', low: 'Низкий' };
-  const statusMap = { pending: 'Новая', in_progress: 'В работе', review: 'На проверке', completed: 'Выполнена', cancelled: 'Отменена' };
-
-  const rows = tasksData.map((t, i) => [
-    i + 1,
-    t.title,
-    t.type,
-    priorityMap[t.priority] || t.priority,
-    statusMap[t.status] || t.status,
-    t.assignee,
-    t.author,
-    t.relatedClient || '—',
-    fmtDate(t.deadline),
-    fmtDate(t.created),
-    t.comments?.length || 0,
-    t.description || '',
-  ]);
-
-  // Сводка по статусам
-  const summary = [
-    [], ['СВОДКА ПО СТАТУСАМ'], ['Статус', 'Кол-во'],
-    ...Object.entries(statusMap).map(([k, v]) => [v, tasksData.filter(t => t.status === k).length]),
-    [], ['Просроченных', tasksData.filter(t => t.status !== 'completed' && t.deadline && new Date(t.deadline) < new Date()).length],
-  ];
-
-  downloadExcel([
-    {
-      name: 'Tasks',
-      data: [header, ...rows],
-      colWidths: [4, 40, 14, 12, 14, 28, 16, 28, 12, 12, 12, 40],
-    },
-    {
-      name: 'Summary',
-      data: summary,
-      colWidths: [20, 10],
-    }
-  ], `Tasks_Report_${todayStr()}.xlsx`);
-}
-
-/* ═══════════════════════════════════════════════════════════
    7. CF&A CLIENTS — Клиенты Corporate Finance & Advisory
 ═══════════════════════════════════════════════════════════ */
 function exportCFAClients() {
@@ -492,8 +444,7 @@ function exportFullCRM() {
     ['4. Portfolio — портфельные компании'],
     ['5. Deals — сделки инвестиционного пайплайна'],
     ['6. CFA Clients — клиенты CF&A'],
-    ['7. Tasks — задачи CRM'],
-    ['8. AML Register — реестр AML проверок'],
+    ['7. AML Register — реестр AML проверок'],
     [''],
     ['Предназначен для регуляторной отчётности AFSA,'],
     ['внутреннего аудита и отчётности перед LP.'],
@@ -517,11 +468,6 @@ function exportFullCRM() {
   const cfaHeader = ['№','Клиент','Тип','Индустрия','Стадия','KYC','AML','Гонорар ($M)'];
   const cfaRows   = getCfaExportClients().map((c, i) => [i+1, c.name, c.type, c.industry, c.stage, c.kycStatus, c.amlStatus, c.revenue]);
 
-  const priorityMap = {critical:'Критично',high:'Высокий',medium:'Средний',low:'Низкий'};
-  const statusMap   = {pending:'Новая',in_progress:'В работе',review:'На проверке',completed:'Выполнена',cancelled:'Отменена'};
-  const taskHeader  = ['№','Задача','Тип','Приоритет','Статус','Исполнитель','Дедлайн'];
-  const taskRows    = tasksData.map((t, i) => [i+1, t.title, t.type, priorityMap[t.priority], statusMap[t.status], t.assignee, fmtDate(t.deadline)]);
-
   const amlHeader = ['№','Наименование','Тип','Страна','AML','PEP','Source of Funds','UBO'];
   const amlLP     = lpList.map((lp, i) => [i+1, lp.name, lp.type, lp.country, yesNo(lp.kyc?.amlScreening), yesNo(lp.kyc?.pepCheck), yesNo(lp.kyc?.sourceOfFunds), yesNo(lp.kyc?.uboVerified)]);
 
@@ -533,7 +479,6 @@ function exportFullCRM() {
     { name: 'Portfolio', data: [portHeader, ...portRows], colWidths: [4,28,18,16,16,10,18] },
     { name: 'Deals', data: [dealHeader, ...dealRows], colWidths: [4,24,18,18,12,18,14] },
     { name: 'CFA Clients', data: [cfaHeader, ...cfaRows], colWidths: [4,32,16,20,14,14,14,14] },
-    { name: 'Tasks', data: [taskHeader, ...taskRows], colWidths: [4,40,14,12,14,28,12] },
     { name: 'AML Register', data: [amlHeader, ...amlLP], colWidths: [4,32,18,14,10,10,14,10] },
   ], `TCF_FullExport_${todayStr()}.xlsx`);
 }
@@ -621,16 +566,6 @@ function renderExportPage() {
       desc: 'Реестр клиентов CF&A: KYC/AML статус, стадия онбординга, KYC чеклист документов, гонорары.',
       fn: 'exportCFAClients()',
       tag: 'CF&A',
-    },
-    {
-      id: 'tasks',
-      icon: 'fa-tasks',
-      color: 'orange',
-      title: 'Tasks Report',
-      subtitle: 'Все задачи CRM + статусы',
-      desc: 'Задачи по всем модулям: KYC, AML, онбординг, сделки, capital calls. Статистика выполнения.',
-      fn: 'exportTasks()',
-      tag: 'Internal',
     },
     {
       id: 'fund',

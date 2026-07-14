@@ -813,7 +813,6 @@ if (client.direction === 'FM' && typeof registerLPFromOnboarding === 'function')
 | `dashObWidget` | `renderDashboardObWidget()` | On Track/At Risk/Delayed + client timeline |
 | `dashCoiWidget` | `renderDashboardCoiWidget()` | Active COI conflicts |
 | `dashRmWidget` | `renderDashboardRmWidget()` | RM workload cards |
-| `dashTasksList` | `renderDashboardTasks()` | Compliance tasks |
 | `kycStatusList` | `renderKYCStatus()` | LP KYC status |
 
 ---
@@ -1042,7 +1041,6 @@ obClients[] ──→ createOnboardingTasks() ──→ obTasks[]
 | `js/app.js` | Navigation, dashboard render, badges, user role; Deal Pipeline modal (5 tabs); Portfolio module (6-tab modal, 20+ functions) |
 | `js/onboarding.js` | **Core**: ob clients, 7 tasks, all forms (FM+CF&A), submit routing, engagements, dashboard widgets, Chinese Wall |
 | `js/data.js` | Static data: lpList, deals (9 полных), portfolio (3 rich companies), chartData |
-| `js/tasks.js` | Kanban tasks |
 | `js/workflow.js` | Approval workflows |
 | `js/modules.js` | IC Memos, KYC Renewal, Compliance Calendar, LP Reports |
 | `js/vault.js` | File vault |
@@ -1060,7 +1058,6 @@ obClients[] ──→ createOnboardingTasks() ──→ obTasks[]
 | `dashObWidget` | `renderDashboardObWidget()` | On Track/At Risk/Delayed status bar + client timeline |
 | `dashCoiWidget` | `renderDashboardCoiWidget()` | Active COI conflicts |
 | `dashRmWidget` | `renderDashboardRmWidget()` | RM workload cards (Low/Medium/High load) |
-| `dashTasksList` | `renderDashboardTasks()` | Compliance tasks |
 | `kycStatusList` | `renderKYCStatus()` | LP KYC status |
 
 ---
@@ -1261,7 +1258,6 @@ currentUserRole = 'RM (Relationship Manager)'
 | `js/app.js` | Navigation, dashboard render, badges, user role; Deal Pipeline (5 tabs); Portfolio module |
 | `js/onboarding.js` | **Core**: ob clients, 7 tasks, forms, submit routing, engagements, dashboard widgets, Chinese Wall |
 | `js/data.js` | Static data: lpList, deals (9), portfolio (3 rich), chartData |
-| `js/tasks.js` | Kanban tasks (legacy FM) |
 | `js/workflow.js` | Approval workflows |
 | `js/modules.js` | IC Memos, KYC Renewal, Compliance Calendar, LP Reports |
 | `js/vault.js` | File vault: global file viewer |
@@ -1281,7 +1277,6 @@ currentUserRole = 'RM (Relationship Manager)'
 | `dashObWidget` | `renderDashboardObWidget()` | On Track/At Risk/Delayed status bar + client timeline rows |
 | `dashCoiWidget` | `renderDashboardCoiWidget()` | Active COI conflicts list |
 | `dashRmWidget` | `renderDashboardRmWidget()` | RM workload cards per RM |
-| `dashTasksList` | `renderDashboardTasks()` | Compliance tasks list |
 | `kycStatusList` | `renderKYCStatus()` | LP KYC status |
 
 ---
@@ -1298,7 +1293,6 @@ currentUserRole = 'RM (Relationship Manager)'
 | `page-onboarding` | Онбординг LP | `renderOnboardingTable()` |
 | `page-kyc` | KYC / AML | `renderKYCTable()` |
 | `page-workflow` | Согласования | `renderWorkflowPage()` |
-| `page-tasks` | Задачи | `renderTasksPage()` |
 | `page-vault` | Хранилище файлов | `renderVaultPage()` |
 | `page-export` | Экспорт Excel | `renderExportPage()` |
 

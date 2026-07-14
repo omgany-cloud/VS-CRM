@@ -1578,121 +1578,23 @@ select option { background: var(--bg-card); }
   color: var(--accent-orange);
 }
 
-/* ================================================================
-   TASKS MODULE
-   ================================================================ */
-
-/* ── Toolbar ── */
-.tasks-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.tasks-toolbar select {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 12px;
-  padding: 7px 10px;
-  outline: none;
-  cursor: pointer;
-  transition: border-color var(--transition);
-}
-.tasks-toolbar select:focus { border-color: var(--accent-blue); }
-
-/* ── View toggle button ── */
-.task-view-btn {
-  padding: 7px 10px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  transition: all var(--transition);
-}
-.task-view-btn.active { color: var(--accent-blue); background: rgba(59,130,246,0.12); }
-.task-view-btn:hover  { color: var(--text-primary); }
-
-/* ── Board columns ── */
-.tasks-board {
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-@media (max-width: 1200px) { .tasks-board { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 700px)  { .tasks-board { grid-template-columns: 1fr; } }
-
-.task-col {
-  background: var(--bg-secondary);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  overflow: hidden;
-}
-.task-col-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.task-col-title { font-size: 13px; font-weight: 700; }
-.task-col-count {
-  font-size: 11px; font-weight: 800;
-  padding: 2px 8px; border-radius: 10px;
-}
-.task-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
-.task-empty-col { text-align: center; font-size: 12px; color: var(--text-muted); padding: 20px 0; }
-
-/* ── Task card ── */
-.task-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-.task-card:hover { border-color: var(--border-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-.task-card.overdue { border-left: 3px solid var(--accent-red); }
-
-.task-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* ── Status/type pills reused across Engagements, KYC Renewal,
+   Conflict Approvals, IC etc. (originally introduced by the now-
+   removed Tasks module) ── */
 .task-type-badge {
   font-size: 10px; font-weight: 700;
   padding: 2px 8px; border-radius: 4px;
   background: rgba(59,130,246,0.12); color: var(--accent-blue);
 }
-.task-card-title { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.4; margin-bottom: 6px; }
-.task-card-client { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; }
-.task-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
-.task-card-assignee { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
-.task-deadline { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
-.task-deadline.overdue { color: var(--accent-red); }
-.days-left { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(34,197,94,0.12); color: var(--accent-green); }
-.days-left.warn { background: rgba(249,115,22,0.12); color: var(--accent-orange); }
-.days-left.neg  { background: rgba(239,68,68,0.12);  color: var(--accent-red); }
-.task-card-meta { font-size: 10px; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
-
-/* ── Task avatar ── */
-.task-avatar {
-  width: 26px; height: 26px; border-radius: 8px;
-  background: var(--accent-blue);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 800; color: #fff;
-  flex-shrink: 0;
-}
-
-/* ── Task status pill ── */
 .task-status-pill {
   font-size: 11px; font-weight: 700;
   padding: 3px 10px; border-radius: 20px;
   display: inline-block;
 }
 
-/* ── Task Modal & CFA Modal — INDEPENDENT from .modal system ── */
+/* ── Fullscreen-centered modals — INDEPENDENT from .modal system ── */
 /* These modals use style.display='flex'/'none' directly via JS     */
 /* They do NOT have class="modal" to avoid opacity:0 / scale(0.95) conflict */
-#modal-task,
 #modal-ob-client,
 #modal-ob-task,
 #modal-engagement,
@@ -1726,7 +1628,6 @@ select option { background: var(--bg-card); }
   opacity: 1;
   box-sizing: border-box;
 }
-#taskModalOverlay,
 #obClientOverlay,
 #obTaskOverlay,
 #engagementOverlay,
@@ -1811,23 +1712,6 @@ select option { background: var(--bg-card); }
   transition: all var(--transition);
 }
 .btn-icon-sm:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
-
-/* ── Dashboard task widget ── */
-.dash-task-item {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 10px 12px; border-bottom: 1px solid var(--border);
-  cursor: pointer; transition: background var(--transition);
-}
-.dash-task-item:last-child { border-bottom: none; }
-.dash-task-item:hover { background: var(--bg-card-hover); }
-.dash-task-prio {
-  width: 3px; border-radius: 2px; align-self: stretch; flex-shrink: 0;
-  min-height: 30px;
-}
-.dash-task-body { flex: 1; min-width: 0; }
-.dash-task-title { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
-.dash-task-meta  { font-size: 11px; }
-.dash-task-deadline { font-size: 11px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
 
 /* ================================================================
    REPORT-PICKER CARDS (js/modules.js, LP report picker — class
@@ -2063,11 +1947,7 @@ select option { background: var(--bg-card); }
 /* ================================================================
    RESPONSIVE
    ================================================================ */
-@media (max-width: 900px) {
-  .tasks-board { grid-template-columns: repeat(2,1fr) !important; }
-}
 @media (max-width: 600px) {
-  .tasks-board { grid-template-columns: 1fr !important; }
   .task-modal-wide { max-width: 100% !important; margin: 0; border-radius: 0; }
 }
 

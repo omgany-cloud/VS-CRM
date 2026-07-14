@@ -1,7 +1,7 @@
 // ============================================================
 //  vault.js — Global File Vault (Просмотр всех загруженных файлов)
-//  Aggregates: Documents module (docFiles) + Tasks attachments
-//  (future), + any file uploaded anywhere in CRM
+//  Aggregates: Documents module (docFiles) + any file uploaded
+//  anywhere in CRM
 // ============================================================
 
 /* ── File-preview modal (inline lightbox) ──────────────────── */
@@ -35,33 +35,6 @@ function vaultGetAllFiles() {
         canPreview: false,
         source:   'docs',
         sourceId: f.id,
-      });
-    });
-  }
-
-  // ── 2. Tasks attachments (future hook) ────────────────────
-  // When tasks gain file uploads, add them here
-  if (typeof tasksData !== 'undefined') {
-    tasksData.forEach(task => {
-      (task.attachments || []).forEach((a, i) => {
-        const ext = (a.name || '').split('.').pop().toLowerCase();
-        const canPreview = ['pdf','png','jpg','jpeg','gif','webp'].includes(ext);
-        all.push({
-          key:      'task_' + task.id + '_' + i,
-          module:   'Задачи',
-          moduleColor: '#22c55e',
-          moduleIcon:  'fa-check-square',
-          client:    task.title || '—',
-          name:      a.name || 'Attachment',
-          size:      a.size || '—',
-          date:      a.date || '—',
-          uploader:  '—',
-          dataUrl:   a.dataUrl || null,
-          comments:  0,
-          canPreview,
-          source:    'task',
-          sourceId:  task.id,
-        });
       });
     });
   }
@@ -363,7 +336,6 @@ function vaultDownload(key) {
 function vaultGoToModule(moduleName) {
   const MAP = {
     'Документы':  'documents',
-    'Задачи':     'tasks',
   };
   const page = MAP[moduleName];
   if (page) navigateTo(page);

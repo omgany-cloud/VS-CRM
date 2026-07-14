@@ -383,6 +383,17 @@ CREATE INDEX IF NOT EXISTS idx_ob_tasks_client ON ob_tasks(client_id);
 CREATE INDEX IF NOT EXISTS idx_conflict_approvals_tenant ON conflict_approvals(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_conflict_approvals_client ON conflict_approvals(client_id);
 CREATE INDEX IF NOT EXISTS idx_engagements_deal_ref ON engagements(deal_ref);
+-- votes_json holds an array of { role, name, vote }, where role is one of
+-- 'GP Rep 1' | 'GP Rep 2' | 'Independent Member' | 'LP Rep' and vote is
+-- 'Approve' | 'Reject' | 'Abstain' — mirrors the IC Minutes vote table
+-- (Investment & Harvesting Package, Template 4).
+--
+-- quorum_met / risk_veto / risk_conclusion capture two distinct process
+-- facts from the same package that a bare vote count can't: quorum per
+-- Constitution Section 7 requires >=3 voting members INCLUDING at least
+-- one Independent Member (not just >=3 votes present), and the Risk
+-- Manager holds an independent veto separate from the IC vote itself
+-- (Constitution Section 7.7, Template 3 "Risk Manager Conclusion").
 CREATE TABLE IF NOT EXISTS ic_memos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
@@ -401,7 +412,10 @@ CREATE TABLE IF NOT EXISTS ic_memos (
   financials    TEXT,
   exit_plan     TEXT,
   votes_json    TEXT NOT NULL DEFAULT '[]',
-  resolution    TEXT
+  resolution    TEXT,
+  quorum_met      INTEGER NOT NULL DEFAULT 0,
+  risk_veto       INTEGER NOT NULL DEFAULT 0,
+  risk_conclusion TEXT
 );
 
 -- Documents / File Vault: this table is the "merge" of what used to be

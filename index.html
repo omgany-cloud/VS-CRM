@@ -127,11 +127,6 @@
       <i class="fas fa-gavel" style="color:#f97316"></i><span>Конфликты / Одобрения</span>
       <span class="nav-badge" id="badge-conflict-approvals" style="display:none;background:#f97316">0</span>
     </a>
-    <a href="#" class="nav-item" data-page="tasks">
-      <i class="fas fa-check-square"></i><span>Задачи</span>
-      <span class="nav-badge warning" id="badge-tasks">0</span>
-    </a>
-
     <div class="nav-group-label">Система</div>
     <a href="#" class="nav-item" data-page="vault">
       <i class="fas fa-database" style="color:#a78bfa"></i><span>Хранилище файлов</span>
@@ -294,22 +289,13 @@
         </div>
       </div>
 
-      <!-- RECENT ACTIVITY + KYC STATUS -->
-      <div class="two-col">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title"><i class="fas fa-check-square" style="color:var(--accent-orange);margin-right:6px"></i>Задачи и дедлайны</span>
-            <a href="#" class="card-link" data-page="tasks">Все задачи →</a>
-          </div>
-          <div id="dashTasksList"></div>
+      <!-- KYC STATUS -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-shield-alt" style="color:var(--accent-blue);margin-right:6px"></i>KYC Статус LP</span>
+          <a href="#" class="card-link" data-page="kyc">Все →</a>
         </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title"><i class="fas fa-shield-alt" style="color:var(--accent-blue);margin-right:6px"></i>KYC Статус LP</span>
-            <a href="#" class="card-link" data-page="kyc">Все →</a>
-          </div>
-          <div id="kycStatusList"></div>
-        </div>
+        <div id="kycStatusList"></div>
       </div>
 
       <!-- ONBOARDING STATUS WIDGET -->
@@ -612,56 +598,6 @@
       <div id="vaultContent"></div>
     </section>
 
-    <!-- ===== TASKS ===== -->
-    <section id="page-tasks" class="page">
-      <div class="section-header">
-        <h1>Задачи <span class="fund-label">Task Manager</span></h1>
-        <p>Управление задачами, сроками и исполнителями · AFSA Compliance Workflow</p>
-      </div>
-
-      <!-- KPIs -->
-      <div class="kpi-grid" id="tasksKPIs" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px"></div>
-
-      <!-- Toolbar -->
-      <div class="tasks-toolbar">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1">
-          <input type="text" placeholder="🔍 Поиск задач..." style="padding:7px 12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;outline:none;flex:1;min-width:160px" oninput="searchTasksQ(this.value)" />
-          <select style="font-size:12px" onchange="filterTasks('status',this.value)">
-            <option value="">Все статусы</option>
-            <option value="pending">Новые</option>
-            <option value="in_progress">В работе</option>
-            <option value="review">На проверке</option>
-            <option value="completed">Выполнены</option>
-          </select>
-          <select style="font-size:12px" onchange="filterTasks('type',this.value)">
-            <option value="">Все типы</option>
-            <option>KYC</option><option>AML</option><option>Онбординг</option>
-            <option>Сделка</option><option>Capital Call</option><option>Отчётность</option>
-          </select>
-          <select style="font-size:12px" onchange="filterTasks('assignee',this.value)">
-            <option value="">Все исполнители</option>
-            <option value="RM">RM</option>
-            <option value="CO">CO</option>
-            <option value="MLRO">MLRO</option>
-            <option value="CEO">CEO</option>
-            <option value="Analyst">Analyst</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:8px">
-          <div style="display:flex;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;overflow:hidden">
-            <button class="task-view-btn active" data-view="board" onclick="setTasksView('board')" title="Доска"><i class="fas fa-th-large"></i></button>
-            <button class="task-view-btn" data-view="list" onclick="setTasksView('list')" title="Список"><i class="fas fa-list"></i></button>
-          </div>
-          <button class="btn-primary" onclick="openTaskModal(null)"><i class="fas fa-plus"></i> Новая задача</button>
-        </div>
-      </div>
-
-      <!-- Board -->
-      <div class="tasks-board" id="tasksBoard" style="display:grid"></div>
-      <!-- List -->
-      <div id="tasksList" style="display:none"></div>
-    </section>
-
     <!-- ===== DOCUMENTS ===== -->
     <section id="page-documents" class="page">
       <div class="section-header">
@@ -734,16 +670,6 @@
 
   </div>
 </main>
-
-<!-- ===== TASK MODAL (fullscreen overlay) ===== -->
-<div class="task-overlay" id="taskModalOverlay" onclick="closeTaskModal()" style="display:none"></div>
-<div class="task-modal-wide" id="modal-task" style="display:none">
-  <div class="modal-header">
-    <h3><i class="fas fa-check-square"></i> Задача</h3>
-    <button class="modal-close" onclick="closeTaskModal()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body" id="taskModalContent"></div>
-</div>
 
 <!-- ===== WORKFLOW MODAL ===== -->
 <div class="task-overlay" id="wfModalOverlay" onclick="closeWfModal()" style="display:none"></div>
@@ -1241,7 +1167,6 @@
 <script src="js/funds.js"></script>
 <script src="js/documents.js"></script>
 <script src="js/subscription.js"></script>
-<script src="js/tasks.js"></script>
 <script src="js/export.js"></script>
 <script src="js/workflow.js"></script>
 <script src="js/modules.js"></script>
