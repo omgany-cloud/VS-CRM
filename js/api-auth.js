@@ -224,6 +224,24 @@ async function loadConflictApprovalsFromApi() {
   }
 }
 
+/* ===== Users (Team / Access Control) — backed by the real API =====
+   CEO-only — the server 403s anyone else, and the nav item itself is
+   hidden client-side (see updateUserRoleUI in js/app.js). Loaded on-demand
+   like Documents/Vault, not part of loadAllApiData(). */
+async function loadUsersFromApi() {
+  try {
+    const data = await apiFetch('/api/users');
+    if (typeof crmUsers === 'undefined') return;
+    crmUsers.length = 0;
+    crmUsers.push(...data.users);
+    const page = document.getElementById('page-users');
+    if (page && page.classList.contains('active') && typeof renderUsersPage === 'function') renderUsersPage();
+  } catch (err) {
+    console.error('Failed to load users from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить пользователей из API: ' + err.message, 'red');
+  }
+}
+
 // Wrap the app's navigateTo so API-backed pages always pull fresh data
 // from the API right before they're shown (in addition to the
 // background refresh triggered right after login).
@@ -238,6 +256,7 @@ async function loadConflictApprovalsFromApi() {
     if (page === 'conflict-approvals') loadConflictApprovalsFromApi();
     if (page === 'ic') loadIcMemosFromApi();
     if (page === 'documents' || page === 'vault') loadDocumentsFromApi();
+    if (page === 'users') loadUsersFromApi();
   };
 })();
 
@@ -285,6 +304,7 @@ function hideLoginOverlay() {
         if (!res.ok) throw new Error(data.error || 'Login failed');
         setAuth(data);
         hideLoginOverlay();
+        if (typeof initUserRole === 'function') initUserRole();
         loadAllApiData();
       } catch (err) {
         errEl.textContent = err.message || 'Не удалось войти';

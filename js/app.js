@@ -5,43 +5,54 @@
 
 let jcChart = null, lpTypeChart = null, navChart = null, sectorChart = null;
 
-/* ===== USER ROLE ===== */
-const USER_ROLES = {
-  'CEO':                        { icon: 'fa-crown',      color: '#eab308' },
-  'RM (Relationship Manager)':  { icon: 'fa-handshake',  color: '#3b82f6' },
-  'CO (Compliance Officer)':    { icon: 'fa-shield-alt', color: '#8b5cf6' },
-  'MLRO':                       { icon: 'fa-search',     color: '#ef4444' },
-  'Analyst':                    { icon: 'fa-chart-bar',  color: '#14b8a6' },
-};
-let currentUserRole = 'CEO';
-
-function initUserRole() {
-  updateUserRoleUI('CEO');
+/* ===== CURRENT USER =====
+   Backed by the real logged-in account (js/api-auth.js's getAuth()), not a
+   self-selectable dropdown — currentUserRole is a read-only function, not a
+   mutable variable, so it can't be used to self-escalate. */
+function currentUserRole() {
+  const auth = (typeof getAuth === 'function') ? getAuth() : null;
+  return auth && auth.user ? auth.user.role : null;
 }
 
-function setUserRole(role) {
-  currentUserRole = role;
-  updateUserRoleUI(role);
-  toggleUserRoleMenu();
-  showToast('Роль: ' + role, 'blue');
+// For authorship-stamping fields (createdBy/completedBy/rm/etc.) — the real
+// identity of who did it, not their role label.
+function currentUserDisplayName() {
+  const auth = (typeof getAuth === 'function') ? getAuth() : null;
+  if (!auth || !auth.user) return 'CEO';
+  return auth.user.name || auth.user.email;
+}
+
+function initUserRole() {
+  updateUserRoleUI(currentUserRole());
 }
 
 function updateUserRoleUI(role) {
-  const cfg = USER_ROLES[role] || USER_ROLES['CEO'];
+  const cfg = (typeof ROLES !== 'undefined' && ROLES[role]) || { icon: 'fa-user', color: '#64748b' };
+  const auth = (typeof getAuth === 'function') ? getAuth() : null;
   const nameEl = document.getElementById('sidebarUserName');
   const roleEl = document.getElementById('sidebarUserRole');
   const avatarEl = document.getElementById('sidebarUserAvatar');
-  if (nameEl) nameEl.textContent = role.split(' ')[0];
-  if (roleEl) roleEl.textContent = role.includes('(') ? role.match(/\(([^)]+)\)/)?.[1] || role : role;
+  const displayName = auth && auth.user ? (auth.user.name || auth.user.email) : '—';
+  if (nameEl) nameEl.textContent = displayName;
+  if (roleEl) roleEl.textContent = (typeof roleLabel === 'function') ? roleLabel(role) : (role || '—');
   if (avatarEl) {
     avatarEl.style.background = cfg.color;
     avatarEl.innerHTML = `<i class="fas ${cfg.icon}"></i>`;
   }
+  const usersNav = document.querySelector('.nav-item[data-page="users"]');
+  if (usersNav) usersNav.style.display = (role === 'CEO') ? '' : 'none';
 }
 
+// Repurposed from the old self-service role switcher: now just opens the
+// account menu (name/role + Logout) — see the #roleMenu block in index.html.
 function toggleUserRoleMenu() {
   const menu = document.getElementById('roleMenu');
   if (!menu) return;
+  const title = document.getElementById('accountMenuTitle');
+  if (title) {
+    const auth = (typeof getAuth === 'function') ? getAuth() : null;
+    title.textContent = auth && auth.user ? (auth.user.name || auth.user.email) : 'Аккаунт';
+  }
   const isOpen = menu.style.display === 'block';
   menu.style.display = isOpen ? 'none' : 'block';
   if (!isOpen) {
@@ -170,6 +181,7 @@ const PAGE_LABELS = {
   subscription:  'nav_subscription',
   'lp-register':      'LP Register — Реестр партнёров',
   'lp-capital-calls': 'Capital Calls — Журнал взносов',
+  users:         'Команда / Пользователи',
 };
 
 function navigateTo(page) {
@@ -198,6 +210,7 @@ function navigateTo(page) {
   if (page === 'conflict-approvals'){ renderConflictApprovalsPage(); }
   if (page === 'lp-register')       { renderLPRegisterPage(); }
   if (page === 'lp-capital-calls')  { renderCapitalCallsPage(); }
+  if (page === 'users')             { renderUsersPage(); }
 }
 
 /* ===== DASHBOARD ===== */
@@ -1697,7 +1710,7 @@ function savePortfolio() {
   portfolio.push({
     id: newId, name, sector, stage,
     bin: '', invested, value, date, exitStrategy, exitYear, moic,
-    fundShare: 0, manager: currentUserRole || 'Investment Manager', status: 'Active',
+    fundShare: 0, manager: currentUserDisplayName(), status: 'Active',
     nextAction: '', nextActionDate: '',
     lastUpdated: today(),
 

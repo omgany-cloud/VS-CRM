@@ -1,5 +1,17 @@
 // Shared row <-> frontend-object mapping for `icMemos`.
 
+// Fixed IC voting roster (Constitution Section 7: 2 GP Reps + 1 Independent
+// Member + 1 LP Rep) — each seat maps 1:1 to a real account role, so vote
+// ownership can be checked by comparing the caller's role to this map
+// instead of threading a separate userId through every vote entry. Mirrors
+// IC_ROLE_DEFS in js/modules.js.
+const IC_SEAT_ROLE_CODES = {
+  'GP Rep 1': 'CEO',
+  'GP Rep 2': 'CFO',
+  'Independent Member': 'IC_INDEPENDENT',
+  'LP Rep': 'IC_LP_REP',
+};
+
 const SCALAR_FIELDS = [
   'dealId', 'company', 'sector', 'amount', 'type', 'stage', 'author',
   'createdAt', 'status', 'meetingDate', 'thesis', 'risks', 'financials',
@@ -47,4 +59,4 @@ const UPDATE_SQL = `
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
-module.exports = { icMemoToParams, rowToIcMemo, INSERT_SQL, UPDATE_SQL };
+module.exports = { icMemoToParams, rowToIcMemo, INSERT_SQL, UPDATE_SQL, IC_SEAT_ROLE_CODES };

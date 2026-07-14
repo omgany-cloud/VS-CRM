@@ -2106,7 +2106,7 @@ function saveNewCC() {
     status:       'Pending',
     managementFee: ccType === 'Management Fee',
     bankRef,
-    createdBy:    currentUserRole || 'CFO',
+    createdBy:    currentUserDisplayName(),
     notes,
     lineItems,
   };
@@ -2291,7 +2291,7 @@ function saveIndividualCC(lpId) {
     status:       'Pending',
     managementFee: ccType === 'Management Fee',
     bankRef,
-    createdBy:    currentUserRole || 'CFO',
+    createdBy:    currentUserDisplayName(),
     notes,
     lineItems,
     individualLP: true,   /* флаг: CC для одного LP */

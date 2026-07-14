@@ -9,7 +9,10 @@ const path = require('path');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { db, at } = require('./db');
-const { signToken, requireAuth } = require('./auth');
+const { signToken, requireAuth, requireRole, requireInternal } = require('./auth');
+const { ROLES, INTERNAL_ROLES, isValidRole } = require('./roles');
+const { rowToUser } = require('./usersMapping');
+const { blocksRole: chineseWallBlocksRole, filterClientsForRole } = require('./chineseWall');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
@@ -20,7 +23,7 @@ const {
   engagementToParams, rowToEngagement, ENGAGEMENT_INSERT_SQL, ENGAGEMENT_UPDATE_SQL,
   conflictApprovalToParams, rowToConflictApproval, CONFLICT_APPROVAL_INSERT_SQL, CONFLICT_APPROVAL_UPDATE_SQL,
 } = require('./onboardingMapping');
-const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL: IC_MEMO_UPDATE_SQL } = require('./icMemoMapping');
+const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL: IC_MEMO_UPDATE_SQL, IC_SEAT_ROLE_CODES } = require('./icMemoMapping');
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
 
 const app = express();
@@ -43,13 +46,79 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
+  if (!user.active) return res.status(401).json({ error: 'Account is deactivated' });
 
   const token = signToken(user, tenantRow);
   res.json({
     token,
-    user: { id: user.id, email: user.email, role: user.role },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role },
     tenant: { id: tenantRow.id, slug: tenantRow.slug, name: tenantRow.name },
   });
+});
+
+/* ===== User Management API — CEO-only ===== */
+app.get('/api/users', requireAuth, requireRole('CEO'), (req, res) => {
+  const rows = db.prepare('SELECT * FROM users WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, users: rows.map(rowToUser) });
+});
+
+app.post('/api/users', requireAuth, requireRole('CEO'), (req, res) => {
+  const b = req.body || {};
+  if (!b.email || !b.password) return res.status(400).json({ error: 'email and password are required' });
+  if (!b.role || !isValidRole(b.role)) return res.status(400).json({ error: 'role must be one of: ' + Object.keys(ROLES).join(', ') });
+  if (String(b.password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+
+  let info;
+  try {
+    info = db.prepare(`
+      INSERT INTO users (tenant_id, email, password_hash, role, name, active)
+      VALUES (@tenantId, @email, @passwordHash, @role, @name, 1)
+    `).run(at({
+      tenantId: req.tenantId,
+      email: b.email,
+      passwordHash: bcrypt.hashSync(b.password, 10),
+      role: b.role,
+      name: b.name || null,
+    }));
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'A user with this email already exists in this tenant' });
+    return res.status(500).json({ error: err.message });
+  }
+
+  const row = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  res.status(201).json(rowToUser(row));
+});
+
+app.put('/api/users/:id', requireAuth, requireRole('CEO'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
+
+  const b = req.body || {};
+  if (b.role != null && !isValidRole(b.role)) return res.status(400).json({ error: 'role must be one of: ' + Object.keys(ROLES).join(', ') });
+  if (Number(req.params.id) === req.user.id && b.active === false) {
+    return res.status(400).json({ error: 'You cannot deactivate your own account' });
+  }
+
+  const merged = {
+    name: b.name !== undefined ? b.name : existing.name,
+    role: b.role !== undefined ? b.role : existing.role,
+    active: b.active !== undefined ? (b.active ? 1 : 0) : existing.active,
+  };
+  db.prepare('UPDATE users SET name=@name, role=@role, active=@active WHERE id=@id AND tenant_id=@tenantId')
+    .run(at({ ...merged, id: existing.id, tenantId: req.tenantId }));
+
+  const row = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  res.json(rowToUser(row));
+});
+
+app.put('/api/users/:id/password', requireAuth, requireRole('CEO'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
+  const { password } = req.body || {};
+  if (!password || String(password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+  db.prepare('UPDATE users SET password_hash=@passwordHash WHERE id=@id AND tenant_id=@tenantId')
+    .run(at({ passwordHash: bcrypt.hashSync(password, 10), id: existing.id, tenantId: req.tenantId }));
+  res.json({ ok: true });
 });
 
 /* ===== LP Register API — tenant-scoped ===== */
@@ -96,12 +165,12 @@ function rowToLp(r) {
   };
 }
 
-app.get('/api/lp', requireAuth, (req, res) => {
+app.get('/api/lp', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM lp_register WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, lp: rows.map(rowToLp) });
 });
 
-app.post('/api/lp', requireAuth, (req, res) => {
+app.post('/api/lp', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
 
@@ -166,7 +235,7 @@ app.post('/api/lp', requireAuth, (req, res) => {
   res.status(201).json(rowToLp(row));
 });
 
-app.put('/api/lp/:id', requireAuth, (req, res) => {
+app.put('/api/lp/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
 
@@ -248,7 +317,7 @@ const lineItemsStmt = db.prepare(`
   ORDER BY li.id
 `);
 
-app.get('/api/capital-calls', requireAuth, (req, res) => {
+app.get('/api/capital-calls', requireAuth, requireInternal, (req, res) => {
   const calls = db.prepare('SELECT * FROM capital_calls WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   const result = calls.map(c => {
     const cc = rowToCC(c);
@@ -258,7 +327,7 @@ app.get('/api/capital-calls', requireAuth, (req, res) => {
   res.json({ tenant: req.tenantSlug, capitalCalls: result });
 });
 
-app.post('/api/capital-calls', requireAuth, (req, res) => {
+app.post('/api/capital-calls', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.purpose) return res.status(400).json({ error: 'purpose is required' });
 
@@ -321,7 +390,7 @@ app.post('/api/capital-calls', requireAuth, (req, res) => {
   }
 });
 
-app.put('/api/capital-calls/:id', requireAuth, (req, res) => {
+app.put('/api/capital-calls/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Capital call not found in this tenant' });
   const b = req.body || {};
@@ -346,7 +415,7 @@ app.put('/api/capital-calls/:id', requireAuth, (req, res) => {
 });
 
 // Record a payment against one LP's line item within a call (the common day-to-day action).
-app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, (req, res) => {
+app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal, (req, res) => {
   const call = db.prepare('SELECT * FROM capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!call) return res.status(404).json({ error: 'Capital call not found in this tenant' });
   const item = db.prepare('SELECT * FROM capital_call_line_items WHERE call_id = ? AND lp_id = ? AND tenant_id = ?')
@@ -374,12 +443,12 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, (req, res) => {
 });
 
 /* ===== Deals (Deal Pipeline) API — tenant-scoped ===== */
-app.get('/api/deals', requireAuth, (req, res) => {
+app.get('/api/deals', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM deals WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, deals: rows.map(rowToDeal) });
 });
 
-app.post('/api/deals', requireAuth, (req, res) => {
+app.post('/api/deals', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const now = new Date().toISOString().slice(0, 10);
@@ -391,7 +460,7 @@ app.post('/api/deals', requireAuth, (req, res) => {
   res.status(201).json(rowToDeal(row));
 });
 
-app.put('/api/deals/:id', requireAuth, (req, res) => {
+app.put('/api/deals/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Deal not found in this tenant' });
   const merged = Object.assign(rowToDeal(existing), req.body || {});
@@ -402,12 +471,12 @@ app.put('/api/deals/:id', requireAuth, (req, res) => {
 });
 
 /* ===== Portfolio API — tenant-scoped ===== */
-app.get('/api/portfolio', requireAuth, (req, res) => {
+app.get('/api/portfolio', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM portfolio WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, portfolio: rows.map(rowToPortfolio) });
 });
 
-app.post('/api/portfolio', requireAuth, (req, res) => {
+app.post('/api/portfolio', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   const params = portfolioToParams({ status: 'Active', ...b });
@@ -416,7 +485,7 @@ app.post('/api/portfolio', requireAuth, (req, res) => {
   res.status(201).json(rowToPortfolio(row));
 });
 
-app.put('/api/portfolio/:id', requireAuth, (req, res) => {
+app.put('/api/portfolio/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
   const merged = Object.assign(rowToPortfolio(existing), req.body || {});
@@ -436,28 +505,41 @@ app.put('/api/portfolio/:id', requireAuth, (req, res) => {
    pass — same scope decision as the other migrated modules: reads are
    fully API-backed, writes persist the given fields but don't fan out
    into other tables yet. */
-app.get('/api/onboarding', requireAuth, (req, res) => {
-  const restrictedList = db.prepare('SELECT * FROM restricted_list WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToRestricted);
+app.get('/api/onboarding', requireAuth, requireInternal, (req, res) => {
   const coiRegistry = db.prepare('SELECT * FROM coi_registry WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToCoi);
-  const obClients = db.prepare('SELECT * FROM ob_clients WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToObClient);
-  const obTasks = db.prepare('SELECT * FROM ob_tasks WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToObTask);
-  const engagements = db.prepare('SELECT * FROM engagements WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToEngagement);
+  const allClients = db.prepare('SELECT * FROM ob_clients WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToObClient);
+  const allTasks = db.prepare('SELECT * FROM ob_tasks WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToObTask);
+  const allEngagements = db.prepare('SELECT * FROM engagements WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToEngagement);
+
+  // Chinese Wall: RM never sees FM-direction clients, or anything scoped to them.
+  const obClients = filterClientsForRole(allClients, req.user.role);
+  const visibleClientIds = new Set(obClients.map(c => c.id));
+  const obTasks = allTasks.filter(t => visibleClientIds.has(t.clientId));
+  const engagements = allEngagements.filter(e => !e.clientId || visibleClientIds.has(e.clientId));
+  // Restricted List is FM-portfolio-company-only data with no CF&A client link — RM has no legitimate use for it.
+  const restrictedList = req.user.role === 'RELATIONSHIP_MANAGER'
+    ? []
+    : db.prepare('SELECT * FROM restricted_list WHERE tenant_id = ? ORDER BY id').all(req.tenantId).map(rowToRestricted);
+
   res.json({ tenant: req.tenantSlug, restrictedList, coiRegistry, obClients, obTasks, engagements });
 });
 
-app.post('/api/ob-clients', requireAuth, (req, res) => {
+app.post('/api/ob-clients', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
+  if (chineseWallBlocksRole(req.user.role, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction clients' });
   const params = obClientToParams({ phase: 1, onboardingStatus: 'On Track', ...b });
   const info = db.prepare(OB_CLIENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToObClient(row));
 });
 
-app.put('/api/ob-clients/:id', requireAuth, (req, res) => {
+app.put('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
+  if (chineseWallBlocksRole(req.user.role, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   const merged = Object.assign(rowToObClient(existing), req.body || {});
+  if (chineseWallBlocksRole(req.user.role, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   const params = obClientToParams(merged);
   db.prepare(OB_CLIENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -466,26 +548,33 @@ app.put('/api/ob-clients/:id', requireAuth, (req, res) => {
 
 // The common day-to-day write: update a task's status/formData as the
 // RM/CO works through the wizard.
-app.put('/api/ob-tasks/:id', requireAuth, (req, res) => {
+app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Onboarding task not found in this tenant' });
+  const parentClient = db.prepare('SELECT direction FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.client_id, req.tenantId);
+  if (parentClient && chineseWallBlocksRole(req.user.role, parentClient.direction)) {
+    return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
   const merged = Object.assign(rowToObTask(existing), req.body || {});
+  if (existing.status === 'completed' && merged.status !== 'completed' && req.user.role === 'RELATIONSHIP_MANAGER') {
+    return res.status(403).json({ error: 'Forbidden: RM cannot reopen a completed onboarding task' });
+  }
   const params = obTaskToParams(merged);
   db.prepare(OB_TASK_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToObTask(row));
 });
 
-app.post('/api/restricted-list', requireAuth, (req, res) => {
+app.post('/api/restricted-list', requireAuth, requireRole('COMPLIANCE_OFFICER', 'MLRO', 'CEO'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
-  const params = restrictedToParams({ addedAt: new Date().toISOString().slice(0, 10), addedBy: req.user.role || req.user.email, ...b });
+  const params = restrictedToParams({ addedAt: new Date().toISOString().slice(0, 10), addedBy: req.user.name || req.user.email, ...b });
   const info = db.prepare(RESTRICTED_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM restricted_list WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToRestricted(row));
 });
 
-app.post('/api/coi-registry', requireAuth, (req, res) => {
+app.post('/api/coi-registry', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.description) return res.status(400).json({ error: 'description is required' });
   const params = coiToParams(b);
@@ -494,9 +583,10 @@ app.post('/api/coi-registry', requireAuth, (req, res) => {
   res.status(201).json(rowToCoi(row));
 });
 
-app.post('/api/engagements', requireAuth, (req, res) => {
+app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
+  if (chineseWallBlocksRole(req.user.role, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
   const params = engagementToParams(b);
   const info = db.prepare(ENGAGEMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -506,10 +596,12 @@ app.post('/api/engagements', requireAuth, (req, res) => {
 // Lets an RM/CO update an existing engagement — e.g. flip status to
 // Completed, or set deal_ref once a matter is tied to a specific deal —
 // so a client can be tracked across all of its engagements over time.
-app.put('/api/engagements/:id', requireAuth, (req, res) => {
+app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Engagement not found in this tenant' });
+  if (chineseWallBlocksRole(req.user.role, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const merged = Object.assign(rowToEngagement(existing), req.body || {});
+  if (chineseWallBlocksRole(req.user.role, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const params = engagementToParams(merged);
   db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -522,12 +614,12 @@ app.put('/api/engagements/:id', requireAuth, (req, res) => {
    a client and/or a specific engagement via dealRef so Internal Client and
    Dual-Mandate approvals can be traced across a client's full contract
    history. ===== */
-app.get('/api/conflict-approvals', requireAuth, (req, res) => {
+app.get('/api/conflict-approvals', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM conflict_approvals WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, conflictApprovals: rows.map(rowToConflictApproval) });
 });
 
-app.post('/api/conflict-approvals', requireAuth, (req, res) => {
+app.post('/api/conflict-approvals', requireAuth, requireRole('COMPLIANCE_OFFICER', 'MLRO', 'CEO'), (req, res) => {
   const b = req.body || {};
   if (!b.decisionType) return res.status(400).json({ error: 'decisionType is required' });
   const params = conflictApprovalToParams({ riskLevel: 'Low', status: 'Pending', ...b });
@@ -536,7 +628,7 @@ app.post('/api/conflict-approvals', requireAuth, (req, res) => {
   res.status(201).json(rowToConflictApproval(row));
 });
 
-app.put('/api/conflict-approvals/:id', requireAuth, (req, res) => {
+app.put('/api/conflict-approvals/:id', requireAuth, requireRole('COMPLIANCE_OFFICER', 'MLRO', 'CEO'), (req, res) => {
   const existing = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Conflict approval not found in this tenant' });
   const merged = Object.assign(rowToConflictApproval(existing), req.body || {});
@@ -546,13 +638,20 @@ app.put('/api/conflict-approvals/:id', requireAuth, (req, res) => {
   res.json(rowToConflictApproval(row));
 });
 
-/* ===== IC Memos API — tenant-scoped ===== */
+/* ===== IC Memos API — tenant-scoped =====
+   IC minutes are meant to be seen by the whole committee, including the two
+   external seats (Independent Member, LP Rep) — so GET allows internal
+   roles AND those two seats, unlike the plain requireInternal gate used
+   elsewhere. Authoring a memo stays internal-GP-staff-only. */
 app.get('/api/ic-memos', requireAuth, (req, res) => {
+  if (!INTERNAL_ROLES.has(req.user.role) && req.user.role !== 'IC_INDEPENDENT' && req.user.role !== 'IC_LP_REP') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   const rows = db.prepare('SELECT * FROM ic_memos WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, icMemos: rows.map(rowToIcMemo) });
 });
 
-app.post('/api/ic-memos', requireAuth, (req, res) => {
+app.post('/api/ic-memos', requireAuth, requireRole('CEO', 'CFO', 'CIO', 'ANALYST'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const params = icMemoToParams({ status: 'pending', ...b });
@@ -561,10 +660,36 @@ app.post('/api/ic-memos', requireAuth, (req, res) => {
   res.status(201).json(rowToIcMemo(row));
 });
 
+// A single PUT covers three different mutations (vote casting, Risk
+// Manager's veto/conclusion, general memo edits) — branch by which fields
+// are present in the body rather than splitting into 3 routes, since every
+// existing frontend call site already targets this one URL.
 app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT * FROM ic_memos WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'IC memo not found in this tenant' });
-  const merged = Object.assign(rowToIcMemo(existing), req.body || {});
+  const b = req.body || {};
+  const isVoteUpdate = Object.prototype.hasOwnProperty.call(b, 'votes');
+  const isRiskUpdate = Object.prototype.hasOwnProperty.call(b, 'riskVeto') || Object.prototype.hasOwnProperty.call(b, 'riskConclusion');
+
+  if (isRiskUpdate && req.user.role !== 'RISK_MANAGER') {
+    return res.status(403).json({ error: 'Only Risk Manager can set risk veto/conclusion' });
+  }
+  if (isVoteUpdate) {
+    // Each IC seat maps 1:1 to a real account role (IC_SEAT_ROLE_CODES) — a
+    // vote row may only change if the caller holds that seat's role.
+    const existingVotes = JSON.parse(existing.votes_json || '[]');
+    const illegalChange = b.votes.some((v, i) => {
+      const prev = existingVotes[i] || null;
+      if (JSON.stringify(v) === JSON.stringify(prev)) return false;
+      return IC_SEAT_ROLE_CODES[v.role] !== req.user.role;
+    });
+    if (illegalChange) return res.status(403).json({ error: 'You may only cast your own IC vote' });
+  }
+  if (!isVoteUpdate && !isRiskUpdate && !INTERNAL_ROLES.has(req.user.role)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const merged = Object.assign(rowToIcMemo(existing), b);
   const params = icMemoToParams(merged);
   db.prepare(IC_MEMO_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ic_memos WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -575,12 +700,12 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
    The merged docFiles/vault entity — see the comment on the `documents`
    table in db.js for why vault.js's other source (task attachments)
    isn't part of this migration. */
-app.get('/api/documents', requireAuth, (req, res) => {
+app.get('/api/documents', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM documents WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, documents: rows.map(rowToDocument) });
 });
 
-app.post('/api/documents', requireAuth, (req, res) => {
+app.post('/api/documents', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   const params = documentToParams(b);
@@ -589,7 +714,7 @@ app.post('/api/documents', requireAuth, (req, res) => {
   res.status(201).json(rowToDocument(row));
 });
 
-app.put('/api/documents/:id', requireAuth, (req, res) => {
+app.put('/api/documents/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Document not found in this tenant' });
   const merged = Object.assign(rowToDocument(existing), req.body || {});

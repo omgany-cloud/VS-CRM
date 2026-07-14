@@ -317,7 +317,7 @@ function recordDistribution() {
   distributionsList.unshift({
     id: distIdCounter++, date: new Date().toISOString().split('T')[0],
     amount, source, status: 'Одобрено',
-    approvedBy: (currentUserRole||'CEO').split(' ')[0], waterfall: wf,
+    approvedBy: currentUserDisplayName(), waterfall: wf,
   });
   // Update LP distributions
   wf.lpBreakdown.forEach(lb => {
@@ -485,6 +485,15 @@ const IC_ROLE_DEFS = [
   { role: 'Independent Member', name: 'Мукашев Ерлан Т.' },
   { role: 'LP Rep', name: 'Байжанова Динара Сериковна' },
 ];
+// Each IC seat maps 1:1 to a real account role — mirrors
+// server/icMemoMapping.js's IC_SEAT_ROLE_CODES (server enforces this too;
+// this copy only drives which vote buttons render for the logged-in user).
+const IC_SEAT_ROLE_CODES = {
+  'GP Rep 1': 'CEO',
+  'GP Rep 2': 'CFO',
+  'Independent Member': 'IC_INDEPENDENT',
+  'LP Rep': 'IC_LP_REP',
+};
 const IC_VOTES   = { approve: { label:'Одобрить', color:'#22c55e' }, reject: { label:'Отклонить', color:'#ef4444' }, abstain: { label:'Воздержаться', color:'#94a3b8' } };
 
 let icMemos = [];  // populated at runtime by js/api-auth.js via GET /api/ic-memos (see server/index.js)
@@ -602,10 +611,13 @@ function icQuorumMet(votes) {
 }
 
 function renderICModalContent(m) {
-  // CEO chairs the IC and acts as meeting secretary (Investment & Harvesting
-  // Package, Template 4: "Responsible: CEO (Secretary)") — records votes on
-  // behalf of all 4 formal members (GP Rep 1/2, Independent Member, LP Rep).
-  const canRecordVotes = m.status === 'pending' && currentUserRole === 'CEO';
+  // Each IC seat is now cast by the real account holding that seat's role
+  // (Constitution Section 7: GP Rep 1 = CEO, GP Rep 2 = CFO, Independent
+  // Member and LP Rep have their own external accounts) — a vote button
+  // only renders on the row matching the logged-in user's own role, unvoted.
+  const myRole = currentUserRole();
+  const canCastVote = (v) => m.status === 'pending' && !v.vote && IC_SEAT_ROLE_CODES[v.role] === myRole;
+  const anyVotableByMe = m.status === 'pending' && m.votes.some(canCastVote);
 
   const votesHtml = m.votes.map((v, i) => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #2a3448;font-size:12px">
@@ -619,7 +631,7 @@ function renderICModalContent(m) {
       ${v.vote ? `
         <span style="color:${IC_VOTES[v.vote]?.color};font-weight:700">${IC_VOTES[v.vote]?.label}</span>
         ${v.comment ? `<span style="color:#8a9bbf;font-style:italic;font-size:11px;max-width:160px">"${v.comment}"</span>` : ''}
-      ` : canRecordVotes ? `
+      ` : canCastVote(v) ? `
         <div style="display:flex;gap:4px">
           ${Object.entries(IC_VOTES).map(([k,cfg]) => `
             <button onclick="castICVote(${m.id},${i},'${k}')" title="${cfg.label}"
@@ -663,9 +675,19 @@ function renderICModalContent(m) {
       <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
         <i class="fas fa-shield-alt" style="margin-right:5px"></i>Заключение Risk Manager (независимое вето)
       </div>
-      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a6b8a'};font-weight:700">
+      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a6b8a'};font-weight:700;margin-bottom:${myRole === 'RISK_MANAGER' ? '10px' : '0'}">
         ${m.riskConclusion ? (RISK_CONCLUSIONS[m.riskConclusion]?.label || m.riskConclusion) : 'Ещё не рассмотрено'}
       </div>
+      ${myRole === 'RISK_MANAGER' ? `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select id="icRiskConclusionSelect_${m.id}" style="background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px">
+            <option value="">— Выбрать заключение —</option>
+            ${Object.keys(RISK_CONCLUSIONS).map(k => `<option value="${k}" ${m.riskConclusion===k?'selected':''}>${RISK_CONCLUSIONS[k].label}</option>`).join('')}
+          </select>
+          <button onclick="saveRiskConclusion(${m.id})"
+            style="background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.4);color:#dc2626;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+            <i class="fas fa-save"></i> Сохранить заключение</button>
+        </div>` : ''}
     </div>
 
     <!-- Votes -->
@@ -674,9 +696,9 @@ function renderICModalContent(m) {
       ${m.status !== 'pending' ? `
         <div style="font-size:11px;color:#5a6b8a;font-style:italic;margin-bottom:8px">
           Голосование завершено, меморандум переведён в статус «${m.status === 'approved' ? 'Одобрено' : 'Отклонено'}» — записи ниже финальны.
-        </div>` : !canRecordVotes ? `
+        </div>` : !anyVotableByMe ? `
         <div style="font-size:11px;color:#f97316;margin-bottom:8px">
-          <i class="fas fa-info-circle" style="margin-right:4px"></i>Записывать голоса может только роль CEO (секретарь IC по Template 4). Текущая роль: ${currentUserRole}.
+          <i class="fas fa-info-circle" style="margin-right:4px"></i>Ваша роль (${roleLabel(myRole)}) не занимает ни одно из 4 мест IC в этом меморандуме, либо вы уже проголосовали.
         </div>` : ''}
       ${votesHtml}
     </div>
@@ -732,6 +754,28 @@ async function castICVote(memoId, voteIdx, vote) {
   }
   renderICModalContent(m);
   renderICPage();
+}
+
+async function saveRiskConclusion(memoId) {
+  const m = icMemos.find(x => x.id === memoId);
+  if (!m) return;
+  const select = document.getElementById('icRiskConclusionSelect_' + memoId);
+  const riskConclusion = select ? select.value : '';
+  if (!riskConclusion) { showToast('⚠️ Выберите заключение', 'red'); return; }
+  const riskVeto = riskConclusion === 'Veto';
+  try {
+    await apiFetch(`/api/ic-memos/${m.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ riskConclusion, riskVeto }),
+    });
+    m.riskConclusion = riskConclusion;
+    m.riskVeto = riskVeto;
+    showToast('✅ Заключение Risk Manager сохранено', 'green');
+    renderICModalContent(m);
+    renderICPage();
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
 }
 
 /* ─── NEW IC MEMORANDUM FORM ─────────────────────────────────────── */
@@ -971,7 +1015,7 @@ async function saveNewICMemo() {
     amount,
     type,
     stage:       'IC Review',
-    author:      currentUserRole || 'Investment Manager',
+    author:      currentUserDisplayName(),
     createdAt:   new Date().toISOString().slice(0,10),
     status:      'pending',
     meetingDate: meetDate,

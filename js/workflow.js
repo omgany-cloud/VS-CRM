@@ -15,7 +15,7 @@ const WF_DEFINITIONS = {
     icon: 'fa-shield-alt',
     color: '#8b5cf6',
     steps: [
-      { role: 'CO',   label: 'CO проверка документов',      action: 'review'  },
+      { role: 'COMPLIANCE_OFFICER',   label: 'CO проверка документов',      action: 'review'  },
       { role: 'MLRO', label: 'MLRO — AML скрининг',         action: 'approve' },
       { role: 'CEO',  label: 'CEO — финальное одобрение',   action: 'approve' },
     ]
@@ -25,7 +25,7 @@ const WF_DEFINITIONS = {
     icon: 'fa-building',
     color: '#3b82f6',
     steps: [
-      { role: 'CO',   label: 'CO проверка документов',      action: 'review'  },
+      { role: 'COMPLIANCE_OFFICER',   label: 'CO проверка документов',      action: 'review'  },
       { role: 'MLRO', label: 'MLRO — AML скрининг',         action: 'approve' },
       { role: 'CEO',  label: 'CEO — финальное одобрение',   action: 'approve' },
     ]
@@ -35,8 +35,8 @@ const WF_DEFINITIONS = {
     icon: 'fa-handshake',
     color: '#f97316',
     steps: [
-      { role: 'Analyst', label: 'Analyst — Investment Memo',   action: 'review'  },
-      { role: 'RM',      label: 'RM — коммерческая оценка',    action: 'review'  },
+      { role: 'ANALYST', label: 'Analyst — Investment Memo',   action: 'review'  },
+      { role: 'RELATIONSHIP_MANAGER',      label: 'RM — коммерческая оценка',    action: 'review'  },
       { role: 'CEO',     label: 'IC — решение комитета',       action: 'approve' },
     ]
   },
@@ -45,7 +45,7 @@ const WF_DEFINITIONS = {
     icon: 'fa-coins',
     color: '#22c55e',
     steps: [
-      { role: 'CO',  label: 'CO — подготовка Notice',      action: 'review'  },
+      { role: 'COMPLIANCE_OFFICER',  label: 'CO — подготовка Notice',      action: 'review'  },
       { role: 'CEO', label: 'CEO — подписание Notice',     action: 'sign'    },
     ]
   },
@@ -54,7 +54,7 @@ const WF_DEFINITIONS = {
     icon: 'fa-file-signature',
     color: '#14b8a6',
     steps: [
-      { role: 'CO',   label: 'CO — проверка SA',           action: 'review'  },
+      { role: 'COMPLIANCE_OFFICER',   label: 'CO — проверка SA',           action: 'review'  },
       { role: 'CEO',  label: 'CEO — подписание SA',        action: 'sign'    },
     ]
   },
@@ -76,8 +76,8 @@ let workflowInstances = [
     createdAt: '2024-09-15T09:00:00', createdBy: 'Analyst',
     currentStep: 3, status: 'approved',
     steps: [
-      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-09-20T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Инвестиционный меморандум готов, метрики SaaS сильные.' },
-      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2024-09-28T14:00:00', completedBy:'RM',      decision:'approved', comment:'Условия сделки согласованы с фаундерами.' },
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-09-20T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Инвестиционный меморандум готов, метрики SaaS сильные.' },
+      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2024-09-28T14:00:00', completedBy:'RM',      decision:'approved', comment:'Условия сделки согласованы с фаундерами.' },
       { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2024-10-05T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC единогласно одобрил инвестицию.' },
     ]
   },
@@ -87,8 +87,8 @@ let workflowInstances = [
     createdAt: '2024-12-18T09:00:00', createdBy: 'Analyst',
     currentStep: 3, status: 'approved',
     steps: [
-      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-12-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум завершён, DD по лицензиям МЗ РК пройден.' },
-      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-01-06T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и pre-money согласованы.' },
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-12-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум завершён, DD по лицензиям МЗ РК пройден.' },
+      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-01-06T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и pre-money согласованы.' },
       { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-01-15T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC одобрил сделку, средства к перечислению.' },
     ]
   },
@@ -98,8 +98,8 @@ let workflowInstances = [
     createdAt: '2025-03-18T09:00:00', createdBy: 'Analyst',
     currentStep: 3, status: 'approved',
     steps: [
-      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-03-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по земельному банку и экспортным контрактам готов.' },
-      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-04-01T15:00:00', completedBy:'RM',      decision:'approved', comment:'Условия convertible note согласованы.' },
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-03-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по земельному банку и экспортным контрактам готов.' },
+      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-04-01T15:00:00', completedBy:'RM',      decision:'approved', comment:'Условия convertible note согласованы.' },
       { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-04-10T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC одобрил сделку большинством голосов (Investment Manager воздержался/против).' },
     ]
   },
@@ -109,8 +109,8 @@ let workflowInstances = [
     createdAt: '2025-05-05T09:00:00', createdBy: 'Analyst',
     currentStep: 2, status: 'rejected',
     steps: [
-      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-05-10T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум готов, узкая региональная ниша отмечена как риск.' },
-      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-05-20T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческая оценка завершена, масштабируемость под вопросом.' },
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-05-10T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум готов, узкая региональная ниша отмечена как риск.' },
+      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-05-20T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческая оценка завершена, масштабируемость под вопросом.' },
       { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-05-28T10:00:00', completedBy:'CEO',     decision:'rejected', comment:'Слишком нишевый региональный рынок, недостаточный потенциал масштабирования для мандата фонда.' },
     ]
   },
@@ -120,8 +120,8 @@ let workflowInstances = [
     createdAt: '2025-07-05T09:00:00', createdBy: 'Analyst',
     currentStep: 2, status: 'active',
     steps: [
-      { role:'Analyst', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-07-08T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по солнечной электростанции готов, риски по земле отмечены.' },
-      { role:'RM',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-07-12T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и PPA-переговоры в норме.' },
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-07-08T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по солнечной электростанции готов, риски по земле отмечены.' },
+      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-07-12T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и PPA-переговоры в норме.' },
       { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
     ]
   },
@@ -131,7 +131,7 @@ let workflowInstances = [
     createdAt: '2025-06-10T09:00:00', createdBy: 'RM',
     currentStep: 1, status: 'active',
     steps: [
-      { role:'CO',   label:'CO проверка документов',    action:'review',  completedAt:'2025-06-18T11:20:00', completedBy:'CO',   decision:'approved', comment:'Паспорт и подтверждение адреса получены. Ожидается Source of Funds.' },
+      { role:'COMPLIANCE_OFFICER',   label:'CO проверка документов',    action:'review',  completedAt:'2025-06-18T11:20:00', completedBy:'CO',   decision:'approved', comment:'Паспорт и подтверждение адреса получены. Ожидается Source of Funds.' },
       { role:'MLRO', label:'MLRO — AML скрининг',        action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
       { role:'CEO',  label:'CEO — финальное одобрение',  action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
     ]
@@ -154,7 +154,7 @@ function renderWfKPIs() {
   if (!el) return;
   const active   = workflowInstances.filter(w => w.status === 'active').length;
   const approved = workflowInstances.filter(w => w.status === 'approved').length;
-  const myRole   = (currentUserRole || 'CEO').split(' ')[0];
+  const myRole   = currentUserRole() || 'CEO';
   const myPending = workflowInstances.filter(w => {
     if (w.status !== 'active') return false;
     const step = w.steps[w.currentStep];
@@ -200,7 +200,7 @@ function renderWfKPIs() {
 function renderWfList() {
   const el = document.getElementById('wfList');
   if (!el) return;
-  const myRole = (currentUserRole || 'CEO').split(' ')[0];
+  const myRole = currentUserRole() || 'CEO';
 
   // Sort: active first, then by creation date desc
   const sorted = [...workflowInstances].sort((a,b) => {
@@ -279,7 +279,7 @@ function closeWfModal() {
 
 function renderWfModalContent(w) {
   const def    = WF_DEFINITIONS[w.type];
-  const myRole = (currentUserRole || 'CEO').split(' ')[0];
+  const myRole = currentUserRole() || 'CEO';
   const currentStep = w.steps[w.currentStep];
   const isMyTurn = w.status === 'active' && currentStep && currentStep.role === myRole && !currentStep.completedAt;
 
@@ -390,12 +390,12 @@ function wfAction(id, decision) {
     showToast('Укажите причину отклонения в комментарии', 'red');
     return;
   }
-  const myRole = (currentUserRole || 'CEO').split(' ')[0];
+  const myRole = currentUserRole() || 'CEO';
   const step   = w.steps[w.currentStep];
   if (!step || step.role !== myRole) { showToast('Не ваш шаг', 'red'); return; }
 
   step.completedAt = new Date().toISOString();
-  step.completedBy = myRole;
+  step.completedBy = currentUserDisplayName();
   step.decision    = decision;
   step.comment     = comment;
 
@@ -471,7 +471,7 @@ function startWorkflow(type, entityId, entityName, entityType) {
     id: wfIdCounter++,
     type, entityId, entityName, entityType,
     createdAt: new Date().toISOString(),
-    createdBy: (currentUserRole || 'CEO').split(' ')[0],
+    createdBy: currentUserDisplayName(),
     currentStep: 0,
     status: 'active',
     steps: def.steps.map(s => ({ ...s, completedAt:null, completedBy:null, decision:null, comment:'' })),
@@ -484,7 +484,7 @@ function startWorkflow(type, entityId, entityName, entityType) {
 
 /* Helper: get active workflow count for badge */
 function getActiveWfCount() {
-  const myRole = (currentUserRole || 'CEO').split(' ')[0];
+  const myRole = currentUserRole() || 'CEO';
   return workflowInstances.filter(w => {
     if (w.status !== 'active') return false;
     const step = w.steps[w.currentStep];

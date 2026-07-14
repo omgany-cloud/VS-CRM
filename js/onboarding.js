@@ -81,7 +81,7 @@ function createObClient(data) {
     lpType:           data.direction==='FM' ? (data.lpType || 'HNWI') : undefined,
     commitment:       data.direction==='FM' ? (data.commitment || 0) : undefined,
     direction:        data.direction        || 'CF&A',
-    rm:               data.rm               || currentUserRole,
+    rm:               data.rm               || currentUserDisplayName(),
     phase:            1,
     onboardingStatus: 'On Track',
     riskRating:       data.riskRating       || 'Medium',
@@ -821,7 +821,7 @@ function openObTaskForm(taskId) {
       ${isCompleted
         ? ('<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
            + '<span style="background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">✅ Выполнена</span>'
-           + (currentUserRole !== 'RM (Relationship Manager)'
+           + (currentUserRole() !== 'RELATIONSHIP_MANAGER'
                ? '<button onclick="reopenObTask(' + taskId + ')" title="Открыть задачу для редактирования" style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);color:#f97316;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class=\\"fas fa-pen\\" style=\\"margin-right:4px\\"></i>Редактировать</button>'
                : '')
            + '</div>')
@@ -2429,7 +2429,7 @@ function buildTaskForm(task, client) {
 
   // Submit / comment section — show re-open banner if completed
   if (isCompleted) {
-    const canEdit = (currentUserRole !== 'RM (Relationship Manager)');
+    const canEdit = (currentUserRole() !== 'RELATIONSHIP_MANAGER');
     const editBtn = canEdit
       ? '<button onclick="reopenObTask(' + task.id + ')" style="background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.35);color:#fb923c;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0"><i class=\\"fas fa-pen\\" style=\\"margin-right:5px\\"></i>Редактировать</button>'
       : '<span style="font-size:11px;color:#4a5568">RM: редактирование недоступно</span>';
@@ -2527,7 +2527,7 @@ function submitObTask(taskId) {
   task.formData    = fd;
   task.status      = 'completed';
   task.completedAt = today();
-  task.completedBy = currentUserRole;
+  task.completedBy = currentUserDisplayName();
   // ── Clear draft from localStorage ──────────────────
   obDraftClear(task.id);
 
@@ -2643,7 +2643,7 @@ function submitObTask(taskId) {
         paid:        0,
         startDate:   fd.f_subDate    || today(),
         endDate:     fd.f_subExpiry  || '',
-        rm:          currentUserRole,
+        rm:          currentUserDisplayName(),
         notes:       `FM LP Subscription. Commitment: $${(commitment/1000000).toFixed(2)}M. Fund class: ${fd.f_fundClass||'—'}. ${fd.f_rmComment||''}`,
       };
       engagements.push(newEng);
@@ -2677,7 +2677,7 @@ function submitObTask(taskId) {
         paid:        0,
         startDate:   fd.f_engDate    || today(),
         endDate:     fd.f_engExpiry  || '',
-        rm:          currentUserRole,
+        rm:          currentUserDisplayName(),
         notes:       fd.f_rmComment  || '',
       };
       engagements.push(newEng);
@@ -2739,7 +2739,7 @@ function submitObTask(taskId) {
             invoiced:    0, paid: 0,
             startDate:   contractDate || today(),
             endDate:     contractExpiry || '',
-            rm:          currentUserRole,
+            rm:          currentUserDisplayName(),
             notes:       specialCond || '',
           };
           engagements.push(engRecord);
@@ -2805,7 +2805,7 @@ function submitObTask(taskId) {
             invoiced:    0, paid: 0,
             startDate:   contractDate || today(),
             endDate:     contractExpiry || '',
-            rm:          currentUserRole,
+            rm:          currentUserDisplayName(),
             notes:       `FM LP Subscription. Commitment: $${(cmt/1000000).toFixed(2)}M.`,
           };
           engagements.push(saRecord);
@@ -2906,7 +2906,7 @@ function submitObTask(taskId) {
 ────────────────────────────────────────────────────── */
 function reopenObTask(taskId) {
   // Role guard
-  if (currentUserRole === 'RM (Relationship Manager)') {
+  if (currentUserRole() === 'RELATIONSHIP_MANAGER') {
     showToast('⛔ RM не может редактировать завершённые задачи', 'red');
     return;
   }
@@ -5839,7 +5839,7 @@ function saveNewEngagement() {
     paid:        0,
     startDate:   document.getElementById('eng_date')?.value || today(),
     endDate:     '',
-    rm:          currentUserRole,
+    rm:          currentUserDisplayName(),
     notes:       document.getElementById('eng_notes')?.value || '',
   };
   engagements.push(eng);
@@ -6354,14 +6354,16 @@ function renderDashboardRmWidget() {
 function chineseWallCheck(client) {
   if (!client) return { allowed: false, reason: 'Клиент не найден' };
 
-  // Roles with full access (both FM and CF&A)
-  const fullAccessRoles = ['CEO', 'CO (Compliance Officer)', 'MLRO', 'Analyst'];
-  if (fullAccessRoles.includes(currentUserRole)) {
+  // Roles with full access (both FM and CF&A) — server enforces the same
+  // rule on GET/PUT /api/onboarding etc. (server/chineseWall.js); this is
+  // just the client-side fast-fail so the UI doesn't render blocked content.
+  const fullAccessRoles = ['CEO', 'CFO', 'CIO', 'COMPLIANCE_OFFICER', 'MLRO', 'ANALYST'];
+  if (fullAccessRoles.includes(currentUserRole())) {
     return { allowed: true, reason: '' };
   }
 
   // RM can only access CF&A direction
-  if (currentUserRole === 'RM (Relationship Manager)') {
+  if (currentUserRole() === 'RELATIONSHIP_MANAGER') {
     if (client.direction === 'FM') {
       return {
         allowed: false,

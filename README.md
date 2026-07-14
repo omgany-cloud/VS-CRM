@@ -1,5 +1,62 @@
 # Turan Capital Fund CRM — Golden Leaves Ltd (GP)
-**Version 6.7** · License: AFSA-A-LA-2024-0038 · Build: GL-CRM-PYRUS-TZ-009
+**Version 6.8** · License: AFSA-A-LA-2024-0038 · Build: GL-CRM-PYRUS-TZ-009
+
+---
+
+## What's New in v6.8 — Real Access Control
+
+Replaced the old self-selectable role dropdown (`currentUserRole` used to be a
+freely reassignable variable defaulting to `'CEO'`, never persisted) with real
+login accounts and server-enforced authorization.
+
+### Role catalogue (`server/roles.js` / `js/roles.js`)
+Unambiguous codes, not abbreviations — `RISK_MANAGER` is a distinct code from
+`RELATIONSHIP_MANAGER`, avoiding the RM/RM collision the old short labels had:
+`CEO, CFO, CIO, RELATIONSHIP_MANAGER, COMPLIANCE_OFFICER, MLRO, ANALYST,
+RISK_MANAGER, IC_INDEPENDENT, IC_LP_REP`. The last two are external IC voting
+seats (Independent Member, LP Rep) — real accounts with restricted access,
+not just text labels in `IC_ROLE_DEFS`.
+
+### Backend enforcement (`server/auth.js`, `server/index.js`)
+- `requireAuth` re-reads `role`/`active` from the `users` table on every
+  request (not just the JWT claim) — a role change or deactivation takes
+  effect on the user's very next request.
+- `requireRole(...codes)` / `requireInternal` gate every route: bulk data
+  routes (`/api/lp`, `/api/deals`, `/api/portfolio`, etc.) require an
+  internal role; restricted-list/conflict-approval decisions require
+  `COMPLIANCE_OFFICER`/`MLRO`/`CEO`; IC memo authorship requires
+  `CEO`/`CFO`/`CIO`/`ANALYST`.
+- IC memo voting (`PUT /api/ic-memos/:id`) is enforced per-seat: each of the
+  4 IC seats maps 1:1 to a role (`server/icMemoMapping.js`'s
+  `IC_SEAT_ROLE_CODES`) — you can only write your own seat's vote.
+  `riskVeto`/`riskConclusion` require `RISK_MANAGER`.
+- Chinese Wall (`server/chineseWall.js`) filters `GET /api/onboarding` and
+  guards the ob-clients/ob-tasks/engagements write routes server-side, not
+  just in the UI — RM never sees or can write FM-direction data via the API,
+  even with devtools.
+- Reopening a completed onboarding task is blocked for RM server-side
+  (`PUT /api/ob-tasks/:id`), not just hidden in the UI.
+
+### User management (`GET/POST/PUT /api/users`, CEO-only)
+New "Команда / Пользователи" page (`js/users.js`) — create accounts,
+change role/name, deactivate (no hard delete — this is an audit-trail
+system; `active=0` revokes access immediately via the `requireAuth` re-check
+above).
+
+### Frontend
+`currentUserRole` is now a read-only function backed by the logged-in
+account (`getAuth().user.role`), not a mutable variable — it can no longer
+be used to self-escalate. The sidebar avatar menu now shows the real
+logged-in user and a working Logout (`apiLogout()`, previously defined but
+never wired to any button).
+
+### Not in this pass
+`js/workflow.js`'s step-approval engine has no backend at all yet
+(`workflowInstances` is still a local-only array) — its role checks now use
+the real logged-in role instead of the fake dropdown, which is strictly
+better than before, but aren't enforced server-side. Giving Workflow a real
+backend (mirroring `ic_memos`/`conflict_approvals`) is a follow-up on the
+scale of the onboarding migration, not a bolt-on to this pass.
 
 ---
 
@@ -1238,12 +1295,16 @@ obClients[] ──→ createOnboardingTasks() ──→ obTasks[]
 
 ### Chinese Wall
 ```
-currentUserRole = 'RM (Relationship Manager)'
+currentUserRole() = 'RELATIONSHIP_MANAGER'
   + client.direction = 'FM'
-  → chineseWallCheck() returns { allowed: false }
+  → chineseWallCheck() returns { allowed: false }       (client-side fast-fail)
   → renderChineseWallBanner() shows red panel
   → submit buttons disabled
   → submitObTask() aborted via checkWallBeforeSubmit()
+
+  Also enforced server-side (authoritative): server/chineseWall.js filters
+  GET /api/onboarding and guards the ob-clients/ob-tasks/engagements write
+  routes the same way — see "What's New in v6.8" above.
 ```
 
 ---

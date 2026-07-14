@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS users (
   email          TEXT NOT NULL,
   password_hash  TEXT NOT NULL,
   role           TEXT NOT NULL DEFAULT 'CEO',
+  name           TEXT,
+  active         INTEGER NOT NULL DEFAULT 1,
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(tenant_id, email)
 );
@@ -473,6 +475,16 @@ CREATE INDEX IF NOT EXISTS idx_engagements_client ON engagements(client_id);
 CREATE INDEX IF NOT EXISTS idx_ic_memos_tenant ON ic_memos(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_documents_tenant ON documents(tenant_id);
 `);
+
+// `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —
+// it silently no-ops against an existing crm.sqlite that predates a column
+// addition. Any column added to an existing table after go-live needs an
+// explicit guarded ALTER TABLE here.
+function columnExists(table, col) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col);
+}
+if (!columnExists('users', 'name'))   db.exec("ALTER TABLE users ADD COLUMN name TEXT");
+if (!columnExists('users', 'active')) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

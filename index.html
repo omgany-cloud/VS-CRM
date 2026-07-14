@@ -143,10 +143,13 @@
       <i class="fas fa-credit-card"></i><span data-i18n="nav_subscription">Подписка</span>
       <span class="nav-badge" style="background:var(--accent-green)">PRO</span>
     </a>
+    <a href="#" class="nav-item" data-page="users">
+      <i class="fas fa-users-cog" style="color:#3b82f6"></i><span>Команда / Пользователи</span>
+    </a>
   </nav>
 
   <div class="sidebar-footer">
-    <div class="user-avatar" id="sidebarUserAvatar" style="background:var(--accent-blue);cursor:pointer" onclick="toggleUserRoleMenu()" title="Сменить роль"><i class="fas fa-user-tie"></i></div>
+    <div class="user-avatar" id="sidebarUserAvatar" style="background:var(--accent-blue);cursor:pointer" onclick="toggleUserRoleMenu()" title="Меню аккаунта"><i class="fas fa-user-tie"></i></div>
     <div class="user-info">
       <span class="user-name" id="sidebarUserName">Golden Leaves Ltd</span>
       <span class="user-role" id="sidebarUserRole">CEO</span>
@@ -598,6 +601,15 @@
       <div id="vaultContent"></div>
     </section>
 
+    <!-- ===== TEAM / USERS (CEO-only) ===== -->
+    <section id="page-users" class="page">
+      <div class="section-header">
+        <h1>Команда / Пользователи <span class="fund-label">Access Control</span></h1>
+        <p>Реальные аккаунты участников CRM и их роли — доступ на бэкенде выдаётся строго по роли аккаунта</p>
+      </div>
+      <div id="usersContent"></div>
+    </section>
+
     <!-- ===== DOCUMENTS ===== -->
     <section id="page-documents" class="page">
       <div class="section-header">
@@ -821,14 +833,10 @@
   <div class="modal-body" id="ccNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
 </div>
 
-<!-- ===== USER ROLE MENU ===== -->
+<!-- ===== ACCOUNT MENU ===== -->
 <div class="role-menu" id="roleMenu" style="display:none">
-  <div class="role-menu-title">Роль пользователя</div>
-  <div class="role-menu-item" onclick="setUserRole('CEO')"><i class="fas fa-crown"></i> CEO</div>
-  <div class="role-menu-item" onclick="setUserRole('RM (Relationship Manager)')"><i class="fas fa-handshake"></i> RM</div>
-  <div class="role-menu-item" onclick="setUserRole('CO (Compliance Officer)')"><i class="fas fa-shield-alt"></i> CO</div>
-  <div class="role-menu-item" onclick="setUserRole('MLRO')"><i class="fas fa-search"></i> MLRO</div>
-  <div class="role-menu-item" onclick="setUserRole('Analyst')"><i class="fas fa-chart-bar"></i> Analyst</div>
+  <div class="role-menu-title" id="accountMenuTitle">Аккаунт</div>
+  <div class="role-menu-item" onclick="apiLogout()"><i class="fas fa-right-from-bracket"></i> Выйти</div>
 </div>
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
 
@@ -1125,6 +1133,7 @@
   </div>
 </div>
 
+<script src="js/roles.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/funds.js"></script>
 <script src="js/documents.js"></script>
@@ -1135,6 +1144,7 @@
 <script src="js/onboarding.js"></script>
 <script src="js/lp-register.js"></script>
 <script src="js/vault.js"></script>
+<script src="js/users.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 <script src="js/api-auth.js"></script>

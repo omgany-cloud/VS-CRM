@@ -27,13 +27,13 @@ function upsertTenant(slug, name) {
   return db.prepare('SELECT * FROM tenants WHERE id = ?').get(info.lastInsertRowid);
 }
 
-function upsertUser(tenantId, email, password, role) {
+function upsertUser(tenantId, email, password, role, name) {
   const existing = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND email = ?').get(tenantId, email);
   if (existing) return existing;
   const hash = bcrypt.hashSync(password, 10);
   const info = db.prepare(
-    'INSERT INTO users (tenant_id, email, password_hash, role) VALUES (?, ?, ?, ?)'
-  ).run(tenantId, email, hash, role);
+    'INSERT INTO users (tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?)'
+  ).run(tenantId, email, hash, role, name || null);
   return db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
 }
 
@@ -1240,7 +1240,34 @@ function seedDocuments(tenantId) {
 }
 
 const tenant = upsertTenant('turan-capital', 'Turan Capital Holding Limited Partnership');
-const user = upsertUser(tenant.id, SEED_EMAIL, SEED_PASSWORD, 'CEO');
+const user = upsertUser(tenant.id, SEED_EMAIL, SEED_PASSWORD, 'CEO', 'Omirserikov Gaini');
+
+// Real accounts for every named individual referenced elsewhere in this
+// codebase's regulatory-alignment work (IC_ROLE_DEFS in js/modules.js,
+// GL-ONB-CF&A-001 RM assignments in OB_CLIENTS/LP_RECORDS below), plus the
+// two external IC seats (Independent Member, LP Rep — real accounts per
+// explicit product decision, not text labels) and generic placeholders for
+// the roles no specific individual was named for (Analyst, MLRO, CIO).
+// All seeded accounts share SEED_PASSWORD — fine for a demo, never do this
+// in production.
+const SEED_USERS = [
+  { email: 'z.amankulov@turancapital.kz', role: 'CFO', name: 'Amankulov Zhanibek' },
+  { email: 'n.tasbolatov@turancapital.kz', role: 'COMPLIANCE_OFFICER', name: 'Tasbolatov Nurbek' },
+  { email: 's.kezhenev@turancapital.kz', role: 'RISK_MANAGER', name: 'Kezhenev Sabit' },
+  // Reuses her existing LP contact email — she genuinely is both LP-2024-006 and the IC's LP Rep seat.
+  { email: 'd.baizhanova@gmail.com', role: 'IC_LP_REP', name: 'Байжанова Динара Сериковна' },
+  { email: 'e.mukashev@turancapital.kz', role: 'IC_INDEPENDENT', name: 'Мукашев Ерлан Т.' },
+  // Dedicated RM accounts — deliberately NOT the LP contact emails from LP_RECORDS
+  // (b.assanov@silksteppe.kz / a.zhaksybekova@otbasyfo.kz belong to the LPs' own
+  // staff, different people from this fund's RMs despite the matching names).
+  { email: 'b.assanov@turancapital.kz', role: 'RELATIONSHIP_MANAGER', name: 'Асанов Б.К.' },
+  { email: 'a.zhaksybekova@turancapital.kz', role: 'RELATIONSHIP_MANAGER', name: 'Жаксыбекова А.Н.' },
+  { email: 'analyst@turancapital.kz', role: 'ANALYST', name: 'Demo Analyst' },
+  { email: 'mlro@turancapital.kz', role: 'MLRO', name: 'Demo MLRO' },
+  { email: 'cio@turancapital.kz', role: 'CIO', name: 'Demo CIO' },
+];
+for (const u of SEED_USERS) upsertUser(tenant.id, u.email, SEED_PASSWORD, u.role, u.name);
+
 seedLpRegister(tenant.id);
 seedCapitalCalls(tenant.id);
 seedDeals(tenant.id);
@@ -1252,4 +1279,7 @@ seedDocuments(tenant.id);
 
 console.log('--- Seed complete ---');
 console.log('Tenant:', tenant.slug, '(id', tenant.id + ')');
-console.log('Login: ', SEED_EMAIL, '/', SEED_PASSWORD);
+console.log('All seeded accounts share the password:', SEED_PASSWORD);
+console.log('Logins:');
+console.log(' ', SEED_EMAIL, '(CEO)');
+for (const u of SEED_USERS) console.log(' ', u.email, '(' + u.role + ')');
