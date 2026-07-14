@@ -7,7 +7,7 @@
 // PUT /api/ic-memos/:id handler.
 
 const SCALAR_FIELDS = [
-  'dealId', 'company', 'sector', 'amount', 'type', 'stage', 'author',
+  'fundId', 'dealId', 'company', 'sector', 'amount', 'type', 'stage', 'author',
   'createdAt', 'status', 'meetingDate', 'thesis', 'risks', 'financials',
   'exitPlan', 'resolution', 'riskConclusion',
 ];
@@ -23,7 +23,7 @@ function icMemoToParams(m) {
 
 function rowToIcMemo(row) {
   return {
-    id: row.id, dealId: row.deal_id, company: row.company, sector: row.sector,
+    id: row.id, fundId: row.fund_id, dealId: row.deal_id, company: row.company, sector: row.sector,
     amount: row.amount, type: row.type, stage: row.stage, author: row.author,
     createdAt: row.memo_created_at, status: row.status, meetingDate: row.meeting_date,
     thesis: row.thesis, risks: row.risks, financials: row.financials, exitPlan: row.exit_plan,
@@ -34,18 +34,18 @@ function rowToIcMemo(row) {
 
 const INSERT_SQL = `
   INSERT INTO ic_memos
-    (tenant_id, deal_id, company, sector, amount, type, stage, author, memo_created_at,
+    (tenant_id, fund_id, deal_id, company, sector, amount, type, stage, author, memo_created_at,
      status, meeting_date, thesis, risks, financials, exit_plan, votes_json, resolution,
      quorum_met, risk_veto, risk_conclusion)
   VALUES
-    (@tenantId, @dealId, @company, @sector, @amount, @type, @stage, @author, @createdAt,
+    (@tenantId, @fundId, @dealId, @company, @sector, @amount, @type, @stage, @author, @createdAt,
      @status, @meetingDate, @thesis, @risks, @financials, @exitPlan, @votesJson, @resolution,
      @quorumMet, @riskVeto, @riskConclusion)
 `;
 
 const UPDATE_SQL = `
   UPDATE ic_memos SET
-    deal_id=@dealId, company=@company, sector=@sector, amount=@amount, type=@type, stage=@stage,
+    fund_id=@fundId, deal_id=@dealId, company=@company, sector=@sector, amount=@amount, type=@type, stage=@stage,
     author=@author, memo_created_at=@createdAt, status=@status, meeting_date=@meetingDate,
     thesis=@thesis, risks=@risks, financials=@financials, exit_plan=@exitPlan,
     votes_json=@votesJson, resolution=@resolution,

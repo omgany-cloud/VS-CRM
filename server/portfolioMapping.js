@@ -6,6 +6,9 @@
 // unless something needs to query *inside* those sections.
 
 const SCALAR_FIELDS = [
+  // NB: fundId (which fund made this investment) is distinct from the
+  // pre-existing fundShare (ownership % of the portfolio company) below.
+  'fundId',
   'name', 'sector', 'stage', 'bin', 'invested', 'value', 'date',
   'exitStrategy', 'exitYear', 'moic', 'fundShare', 'manager', 'status',
   'nextAction', 'nextActionDate', 'lastUpdated',
@@ -28,6 +31,7 @@ function portfolioToParams(p) {
 function rowToPortfolio(r) {
   return {
     id: r.id,
+    fundId: r.fund_id,
     name: r.name, sector: r.sector, stage: r.stage, bin: r.bin,
     invested: r.invested, value: r.value, date: r.date,
     exitStrategy: r.exit_strategy, exitYear: r.exit_year, moic: r.moic, fundShare: r.fund_share,
@@ -44,18 +48,18 @@ function rowToPortfolio(r) {
 
 const INSERT_SQL = `
   INSERT INTO portfolio
-    (tenant_id, name, sector, stage, bin, invested, value, date, exit_strategy, exit_year, moic, fund_share,
+    (tenant_id, fund_id, name, sector, stage, bin, invested, value, date, exit_strategy, exit_year, moic, fund_share,
      manager, status, next_action, next_action_date, last_updated,
      financials_json, monitoring_json, documents_json, compliance_json, exit_json, history_json)
   VALUES
-    (@tenantId, @name, @sector, @stage, @bin, @invested, @value, @date, @exitStrategy, @exitYear, @moic, @fundShare,
+    (@tenantId, @fundId, @name, @sector, @stage, @bin, @invested, @value, @date, @exitStrategy, @exitYear, @moic, @fundShare,
      @manager, @status, @nextAction, @nextActionDate, @lastUpdated,
      @financialsJson, @monitoringJson, @documentsJson, @complianceJson, @exitJson, @historyJson)
 `;
 
 const UPDATE_SQL = `
   UPDATE portfolio SET
-    name=@name, sector=@sector, stage=@stage, bin=@bin, invested=@invested, value=@value, date=@date,
+    fund_id=@fundId, name=@name, sector=@sector, stage=@stage, bin=@bin, invested=@invested, value=@value, date=@date,
     exit_strategy=@exitStrategy, exit_year=@exitYear, moic=@moic, fund_share=@fundShare,
     manager=@manager, status=@status, next_action=@nextAction, next_action_date=@nextActionDate,
     last_updated=@lastUpdated, financials_json=@financialsJson, monitoring_json=@monitoringJson,

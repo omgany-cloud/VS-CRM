@@ -499,18 +499,25 @@ function renderICPage() {
   renderICList();
 }
 
+function getFundScopedIcMemos() {
+  return typeof activeFundId !== 'undefined' && activeFundId != null
+    ? icMemos.filter(m => m.fundId === activeFundId)
+    : icMemos;
+}
+
 function renderICKPIs() {
   const el = document.getElementById('icKPIs');
   if (!el) return;
-  const approved = icMemos.filter(m => m.status === 'approved').length;
-  const pending  = icMemos.filter(m => m.status === 'pending').length;
-  const rejected = icMemos.filter(m => m.status === 'rejected').length;
-  const totalApproved = icMemos.filter(m=>m.status==='approved').reduce((s,m)=>s+m.amount,0);
+  const fundMemos = getFundScopedIcMemos();
+  const approved = fundMemos.filter(m => m.status === 'approved').length;
+  const pending  = fundMemos.filter(m => m.status === 'pending').length;
+  const rejected = fundMemos.filter(m => m.status === 'rejected').length;
+  const totalApproved = fundMemos.filter(m=>m.status==='approved').reduce((s,m)=>s+m.amount,0);
   el.innerHTML = `
     <div class="kpi-card">
       <div class="kpi-icon blue"><i class="fas fa-file-contract"></i></div>
       <div class="kpi-body"><span class="kpi-label">IC Меморандумов</span>
-        <span class="kpi-value">${icMemos.length}</span>
+        <span class="kpi-value">${fundMemos.length}</span>
         <span class="kpi-delta">${approved} одобрено</span></div>
     </div>
     <div class="kpi-card">
@@ -536,7 +543,7 @@ function renderICKPIs() {
 function renderICList() {
   const el = document.getElementById('icList');
   if (!el) return;
-  el.innerHTML = icMemos.map(m => {
+  el.innerHTML = getFundScopedIcMemos().map(m => {
     const votedCount = m.votes.filter(v=>v.vote).length;
     const approveCount = m.votes.filter(v=>v.vote==='approve').length;
     const statusCfg = { approved:{label:'Одобрено',color:'#22c55e',bg:'rgba(34,197,94,0.12)'},
@@ -1003,6 +1010,7 @@ async function saveNewICMemo() {
   if (!selectedRoles.length) { showToast('⚠️ Выберите хотя бы одного члена IC', 'red'); return; }
 
   const newMemo = {
+    fundId:      typeof activeFundId !== 'undefined' ? activeFundId : null,
     dealId:      isManual ? null : (parseInt(dealSel) || null),
     company,
     sector,

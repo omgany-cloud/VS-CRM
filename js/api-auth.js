@@ -68,6 +68,27 @@ async function apiFetch(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
+/* ===== Funds — backed by the real API =====
+   Loaded first, before every other loader (loadAllApiData below awaits
+   this one), so activeFundId is set to a real fund id before any
+   fund-filtered render (renderDashboard, renderPipeline, etc.) runs. */
+async function loadFundsFromApi() {
+  try {
+    const data = await apiFetch('/api/funds');
+    if (typeof funds === 'undefined') return;
+    funds.length = 0;
+    funds.push(...data.funds);
+    if (funds.length && (typeof activeFundId === 'undefined' || activeFundId == null || !funds.some(f => f.id === activeFundId))) {
+      activeFundId = funds[0].id;
+    }
+    if (typeof renderFundSwitcher === 'function') renderFundSwitcher();
+    if (funds.length && typeof updateFundBranding === 'function') updateFundBranding(getActiveFund());
+  } catch (err) {
+    console.error('Failed to load funds from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить фонды из API: ' + err.message, 'red');
+  }
+}
+
 /* ===== LP Register — backed by the real API ===== */
 async function loadLpRegisterFromApi() {
   try {
@@ -317,7 +338,8 @@ async function loadRolesFromApi() {
   };
 })();
 
-function loadAllApiData() {
+async function loadAllApiData() {
+  await loadFundsFromApi();
   loadLpRegisterFromApi();
   loadCapitalCallsFromApi();
   loadDealsFromApi();

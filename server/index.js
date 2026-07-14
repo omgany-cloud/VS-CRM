@@ -30,6 +30,7 @@ const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE
 const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
+const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -354,6 +355,7 @@ app.delete('/api/roles/:id', requireAuth, requirePermission('manageRoles'), (req
 function rowToLp(r) {
   return {
     id: r.id,
+    fundId: r.fund_id,
     registerId: r.register_id,
     name: r.name,
     type: r.type,
@@ -394,6 +396,45 @@ function rowToLp(r) {
   };
 }
 
+/* ===== Funds ===== */
+app.get('/api/funds', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = db.prepare('SELECT * FROM funds WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
+  const lpCountStmt = db.prepare("SELECT COUNT(*) AS c FROM lp_register WHERE tenant_id = ? AND fund_id = ?");
+  const deployedStmt = db.prepare("SELECT COALESCE(SUM(invested), 0) AS s FROM portfolio WHERE tenant_id = ? AND fund_id = ?");
+  const funds = rows.map(row => {
+    const f = rowToFund(row);
+    f.lpCount = lpCountStmt.get(req.tenantId, f.id).c;
+    f.deployed = deployedStmt.get(req.tenantId, f.id).s;
+    return f;
+  });
+  res.json({ tenant: req.tenantSlug, funds });
+});
+
+app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  const b = req.body || {};
+  if (!b.name) return res.status(400).json({ error: 'name is required' });
+  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams(b) }));
+  const row = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  const f = rowToFund(row);
+  f.lpCount = 0;
+  f.deployed = 0;
+  res.status(201).json(f);
+});
+
+app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Fund not found in this tenant' });
+  const merged = { ...rowToFund(existing), ...(req.body || {}) };
+  db.prepare(FUND_UPDATE_SQL).run(at({ id: existing.id, tenantId: req.tenantId, ...fundToParams(merged) }));
+  const row = db.prepare('SELECT * FROM funds WHERE id = ?').get(existing.id);
+  const f = rowToFund(row);
+  const lpCount = db.prepare('SELECT COUNT(*) AS c FROM lp_register WHERE tenant_id = ? AND fund_id = ?').get(req.tenantId, f.id).c;
+  const deployed = db.prepare("SELECT COALESCE(SUM(invested), 0) AS s FROM portfolio WHERE tenant_id = ? AND fund_id = ?").get(req.tenantId, f.id).s;
+  f.lpCount = lpCount;
+  f.deployed = deployed;
+  res.json(f);
+});
+
 app.get('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM lp_register WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, lp: rows.map(rowToLp) });
@@ -408,19 +449,20 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
 
   const info = db.prepare(`
     INSERT INTO lp_register
-      (tenant_id, register_id, name, type, lp_type, country, address, tax_id, contact, email, phone,
+      (tenant_id, fund_id, register_id, name, type, lp_type, country, address, tax_id, contact, email, phone,
        commitment, called_amount, paid_amount, distributions, fund_class, ownership_pct, professional_client,
        kyc_status, kyc_date, kyc_next_review, risk_rating, admission_date, sa_number, afsa_notified, lpac_member,
        status, exit_date, notes, ob_client_id, rm, identity_verified, proof_address_verified, sof_verified,
        tax_id_verified, pep_check_cleared, aml_screening_cleared, ubo_verified, updated_at)
     VALUES
-      (@tenantId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
+      (@tenantId, @fundId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
        @commitment, @calledAmount, @paidAmount, @distributions, @fundClass, @ownershipPct, @professionalClient,
        @kycStatus, @kycDate, @kycNextReview, @riskRating, @admissionDate, @saNumber, @afsaNotified, @lpacMember,
        @status, @exitDate, @notes, @obClientId, @rm, @identityVerified, @proofAddressVerified, @sofVerified,
        @taxIdVerified, @pepCheckCleared, @amlScreeningCleared, @uboVerified, datetime('now'))
   `).run(at({
     tenantId: req.tenantId,
+    fundId: b.fundId || null,
     registerId,
     name: b.name,
     type: b.type || 'Corporate',
@@ -473,7 +515,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
 
   db.prepare(`
     UPDATE lp_register SET
-      name=@name, type=@type, lp_type=@lpType, country=@country, address=@address, tax_id=@taxId,
+      fund_id=@fundId, name=@name, type=@type, lp_type=@lpType, country=@country, address=@address, tax_id=@taxId,
       contact=@contact, email=@email, phone=@phone, commitment=@commitment, called_amount=@calledAmount,
       paid_amount=@paidAmount, distributions=@distributions, fund_class=@fundClass, ownership_pct=@ownershipPct,
       professional_client=@professionalClient, kyc_status=@kycStatus, kyc_date=@kycDate,
@@ -485,6 +527,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
       updated_at=datetime('now')
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({
+    fundId: merged.fundId || null,
     name: merged.name, type: merged.type, lpType: merged.lpType, country: merged.country, address: merged.address,
     taxId: merged.taxId, contact: merged.contact, email: merged.email, phone: merged.phone,
     commitment: merged.commitment, calledAmount: merged.calledAmount, paidAmount: merged.paidAmount,
@@ -508,6 +551,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
 function rowToCC(r) {
   return {
     id: r.id,
+    fundId: r.fund_id,
     ccNumber: r.cc_number,
     noticeDate: r.notice_date,
     paymentDate: r.payment_date,
@@ -563,11 +607,13 @@ app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM capital_calls WHERE tenant_id = ?').get(req.tenantId);
   const ccNumber = b.ccNumber || `CC-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
 
-  // Auto-build pro-rata line items across all Active LPs if the caller didn't supply its own.
+  // Auto-build pro-rata line items across that fund's Active LPs if the caller didn't supply its own.
   const totalAmount = b.totalAmount || 0;
   let lineItems = b.lineItems;
   if (!lineItems) {
-    const activeLps = db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND status = 'Active'").all(req.tenantId);
+    const activeLps = b.fundId
+      ? db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND fund_id = ? AND status = 'Active'").all(req.tenantId, b.fundId)
+      : db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND status = 'Active'").all(req.tenantId);
     const totalCommit = activeLps.reduce((s, l) => s + l.commitment, 0);
     lineItems = activeLps.map(l => {
       const pct = totalCommit ? (totalAmount / totalCommit) * 100 : 0;
@@ -581,13 +627,13 @@ app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('
   try {
     const info = db.prepare(`
       INSERT INTO capital_calls
-        (tenant_id, cc_number, notice_date, payment_date, total_amount, pct_of_commit, purpose, purpose_type,
+        (tenant_id, fund_id, cc_number, notice_date, payment_date, total_amount, pct_of_commit, purpose, purpose_type,
          status, management_fee, bank_ref, created_by, notes)
       VALUES
-        (@tenantId, @ccNumber, @noticeDate, @paymentDate, @totalAmount, @pctOfCommit, @purpose, @purposeType,
+        (@tenantId, @fundId, @ccNumber, @noticeDate, @paymentDate, @totalAmount, @pctOfCommit, @purpose, @purposeType,
          @status, @managementFee, @bankRef, @createdBy, @notes)
     `).run(at({
-      tenantId: req.tenantId, ccNumber,
+      tenantId: req.tenantId, fundId: b.fundId || null, ccNumber,
       noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
       totalAmount, pctOfCommit, purpose: b.purpose, purposeType: b.purposeType || 'Investment',
       status: b.status || 'Pending', managementFee: b.managementFee ? 1 : 0,
@@ -626,11 +672,12 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
   const merged = Object.assign(rowToCC(existing), b);
   db.prepare(`
     UPDATE capital_calls SET
-      cc_number=@ccNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
+      fund_id=@fundId, cc_number=@ccNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
       pct_of_commit=@pctOfCommit, purpose=@purpose, purpose_type=@purposeType, status=@status,
       management_fee=@managementFee, bank_ref=@bankRef, created_by=@createdBy, notes=@notes, updated_at=datetime('now')
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({
+    fundId: merged.fundId || null,
     ccNumber: merged.ccNumber, noticeDate: merged.noticeDate, paymentDate: merged.paymentDate,
     totalAmount: merged.totalAmount, pctOfCommit: merged.pctOfCommit, purpose: merged.purpose,
     purposeType: merged.purposeType, status: merged.status, managementFee: merged.managementFee ? 1 : 0,

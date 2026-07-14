@@ -19,7 +19,7 @@ const JSON_FIELDS = [
 ];
 
 const SCALAR_FIELDS = [
-  'company', 'sector', 'stage', 'amount', 'type', 'priority', 'manager', 'ic',
+  'fundId', 'company', 'sector', 'stage', 'amount', 'type', 'priority', 'manager', 'ic',
   'nextAction', 'nextActionDate', 'updatedAt', 'country', 'companyStage', 'preMoney',
   'dealSource', 'firstContactDate', 'revenue', 'roundSize', 'checkSize', 'description',
   'pitchDeckUrl', 'icMemoUrl', 'icMinutesUrl', 'wireConfirmUrl', 'instrument', 'coInvestors',
@@ -40,6 +40,7 @@ function dealToParams(d) {
 function rowToDeal(r) {
   return {
     id: r.id,
+    fundId: r.fund_id,
     company: r.company, sector: r.sector, stage: r.stage, amount: r.amount, type: r.type,
     priority: r.priority, manager: r.manager, ic: r.ic,
     nextAction: r.next_action, nextActionDate: r.next_action_date, updatedAt: r.updated_at,
@@ -72,7 +73,7 @@ function rowToDeal(r) {
 
 const INSERT_SQL = `
   INSERT INTO deals
-    (tenant_id, company, sector, stage, amount, type, priority, manager, ic,
+    (tenant_id, fund_id, company, sector, stage, amount, type, priority, manager, ic,
      next_action, next_action_date, updated_at, country, company_stage, pre_money,
      deal_source, first_contact_date, revenue, round_size, check_size, description,
      pitch_deck_url, ic_memo_url, ic_minutes_url, wire_confirm_url, instrument, co_investors,
@@ -82,7 +83,7 @@ const INSERT_SQL = `
      ic_votes_json, ic_risks_json, dd_legal_json, dd_financial_json, dd_tech_json,
      dd_commercial_json, dd_red_flags_json, dd_consultants_json, comments_json)
   VALUES
-    (@tenantId, @company, @sector, @stage, @amount, @type, @priority, @manager, @ic,
+    (@tenantId, @fundId, @company, @sector, @stage, @amount, @type, @priority, @manager, @ic,
      @nextAction, @nextActionDate, @updatedAt, @country, @companyStage, @preMoney,
      @dealSource, @firstContactDate, @revenue, @roundSize, @checkSize, @description,
      @pitchDeckUrl, @icMemoUrl, @icMinutesUrl, @wireConfirmUrl, @instrument, @coInvestors,
@@ -95,7 +96,7 @@ const INSERT_SQL = `
 
 const UPDATE_SQL = `
   UPDATE deals SET
-    company=@company, sector=@sector, stage=@stage, amount=@amount, type=@type, priority=@priority,
+    fund_id=@fundId, company=@company, sector=@sector, stage=@stage, amount=@amount, type=@type, priority=@priority,
     manager=@manager, ic=@ic, next_action=@nextAction, next_action_date=@nextActionDate,
     updated_at=@updatedAt, country=@country, company_stage=@companyStage, pre_money=@preMoney,
     deal_source=@dealSource, first_contact_date=@firstContactDate, revenue=@revenue,

@@ -14,6 +14,7 @@ const {
 } = require('./onboardingMapping');
 const { icMemoToParams, INSERT_SQL: IC_MEMO_INSERT_SQL } = require('./icMemoMapping');
 const { documentToParams, INSERT_SQL: DOCUMENT_INSERT_SQL } = require('./documentMapping');
+const { fundToParams, INSERT_SQL: FUND_INSERT_SQL } = require('./fundMapping');
 const { extractArrayLiteral } = require('./extractFrontendData');
 const { SYSTEM_ROLES } = require('./rolesSeed');
 const { wfInstanceToParams, INSERT_SQL: WF_INSERT_SQL } = require('./workflowMapping');
@@ -21,6 +22,47 @@ const { upsertTenant, upsertRole, upsertUser } = require('./tenantProvisioning')
 
 const SEED_EMAIL = 'admin@turancapital.kz';
 const SEED_PASSWORD = 'TuranDemo2025!';
+
+const FUNDS = [
+  { name: 'Turan Capital Fund I LP', shortName: 'TCF-I', gp: 'Golden Leaves Ltd', license: 'AFSA-A-LA-2024-0038',
+    type: 'Private Equity', currency: 'USD', targetSize: 50, vintage: 2024, status: 'active',
+    phase: 'Investment Period', phaseYear: 2, fundTerm: 10, investmentPeriod: 5, managementFee: 2,
+    carriedInterest: 20, preferredReturn: 8, targetIRR: '20–25%', targetMOIC: '2.5–3.5x',
+    description: 'Первый фонд под управлением Golden Leaves Ltd. Инвестирует в компании среднего бизнеса в Казахстане и ЦА.',
+    color: '#3b82f6', icon: 'fa-landmark', nav: 48 },
+  { name: 'Turan Capital Fund II LP', shortName: 'TCF-II', gp: 'Golden Leaves Ltd', license: 'AFSA-A-LA-2025-XXXX',
+    type: 'Growth Equity', currency: 'USD', targetSize: 100, vintage: 2026, status: 'fundraising',
+    phase: 'Fundraising', phaseYear: 0, fundTerm: 10, investmentPeriod: 5, managementFee: 2,
+    carriedInterest: 20, preferredReturn: 8, targetIRR: '22–28%', targetMOIC: '3.0–4.0x',
+    description: 'Второй фонд. Фокус на Growth Equity в технологических компаниях ЦА и MENA.',
+    color: '#8b5cf6', icon: 'fa-rocket', nav: 0 },
+];
+
+// Returns { [shortName]: id } for the tenant's funds, seeding them on first run.
+function seedFunds(tenantId) {
+  const existing = db.prepare('SELECT id, short_name FROM funds WHERE tenant_id = ? ORDER BY id').all(tenantId);
+  if (existing.length > 0) {
+    console.log(`funds already has ${existing.length} rows for tenant ${tenantId}, skipping seed.`);
+    const ids = {};
+    for (const row of existing) ids[row.short_name] = row.id;
+    return ids;
+  }
+  const insert = db.prepare(FUND_INSERT_SQL);
+  const ids = {};
+  db.exec('BEGIN');
+  try {
+    for (const f of FUNDS) {
+      const info = insert.run(at({ tenantId, ...fundToParams(f) }));
+      ids[f.shortName] = info.lastInsertRowid;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  console.log(`Seeded ${FUNDS.length} funds for tenant ${tenantId}.`);
+  return ids;
+}
 
 const LP_RECORDS = [
   { registerId:'LP-2024-001', name:'Silk Steppe Capital LLP', type:'Corporate', lpType:'Institution', country:'Казахстан',
@@ -79,18 +121,18 @@ const LP_RECORDS = [
     pepCheckCleared:true, amlScreeningCleared:false, uboVerified:false },
 ];
 
-function seedLpRegister(tenantId) {
+function seedLpRegister(tenantId, fundId) {
   const count = db.prepare('SELECT COUNT(*) AS c FROM lp_register WHERE tenant_id = ?').get(tenantId).c;
   if (count > 0) { console.log(`lp_register already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
   const insert = db.prepare(`
     INSERT INTO lp_register
-      (tenant_id, register_id, name, type, lp_type, country, address, tax_id, contact, email, phone,
+      (tenant_id, fund_id, register_id, name, type, lp_type, country, address, tax_id, contact, email, phone,
        commitment, called_amount, paid_amount, distributions, fund_class, ownership_pct, professional_client,
        kyc_status, kyc_date, kyc_next_review, risk_rating, admission_date, sa_number, afsa_notified, lpac_member,
        status, exit_date, notes, ob_client_id, rm, identity_verified, proof_address_verified, sof_verified,
        tax_id_verified, pep_check_cleared, aml_screening_cleared, ubo_verified)
     VALUES
-      (@tenantId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
+      (@tenantId, @fundId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
        @commitment, @calledAmount, @paidAmount, @distributions, @fundClass, @ownershipPct, @professionalClient,
        @kycStatus, @kycDate, @kycNextReview, @riskRating, @admissionDate, @saNumber, @afsaNotified, @lpacMember,
        @status, @exitDate, @notes, @obClientId, @rm, @identityVerified, @proofAddressVerified, @sofVerified,
@@ -101,6 +143,7 @@ function seedLpRegister(tenantId) {
     for (const r of LP_RECORDS) {
       insert.run(at({
         tenantId,
+        fundId,
         ...r,
         afsaNotified: r.afsaNotified ? 1 : 0,
         lpacMember: r.lpacMember ? 1 : 0,
@@ -168,16 +211,16 @@ const CAPITAL_CALLS = [
     ] },
 ];
 
-function seedCapitalCalls(tenantId) {
+function seedCapitalCalls(tenantId, fundId) {
   const count = db.prepare('SELECT COUNT(*) AS c FROM capital_calls WHERE tenant_id = ?').get(tenantId).c;
   if (count > 0) { console.log(`capital_calls already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
 
   const insertCall = db.prepare(`
     INSERT INTO capital_calls
-      (tenant_id, cc_number, notice_date, payment_date, total_amount, pct_of_commit, purpose, purpose_type,
+      (tenant_id, fund_id, cc_number, notice_date, payment_date, total_amount, pct_of_commit, purpose, purpose_type,
        status, management_fee, bank_ref, created_by, notes)
     VALUES
-      (@tenantId, @ccNumber, @noticeDate, @paymentDate, @totalAmount, @pctOfCommit, @purpose, @purposeType,
+      (@tenantId, @fundId, @ccNumber, @noticeDate, @paymentDate, @totalAmount, @pctOfCommit, @purpose, @purposeType,
        @status, @managementFee, @bankRef, @createdBy, @notes)
   `);
   const insertItem = db.prepare(`
@@ -191,7 +234,7 @@ function seedCapitalCalls(tenantId) {
   try {
     for (const c of CAPITAL_CALLS) {
       const { lineItems, ...ccFields } = c;
-      const info = insertCall.run(at({ tenantId, ...ccFields, managementFee: c.managementFee ? 1 : 0 }));
+      const info = insertCall.run(at({ tenantId, fundId, ...ccFields, managementFee: c.managementFee ? 1 : 0 }));
       const callId = info.lastInsertRowid;
       for (const li of lineItems) {
         insertItem.run(at({
@@ -381,7 +424,7 @@ const DEALS = [
   },
 ];
 
-function seedDeals(tenantId) {
+function seedDeals(tenantId, fundId) {
   const count = db.prepare('SELECT COUNT(*) AS c FROM deals WHERE tenant_id = ?').get(tenantId).c;
   if (count > 0) { console.log(`deals already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
 
@@ -389,7 +432,7 @@ function seedDeals(tenantId) {
   db.exec('BEGIN');
   try {
     for (const d of DEALS) {
-      insert.run(at({ tenantId, ...dealToParams(d) }));
+      insert.run(at({ tenantId, ...dealToParams(d), fundId }));
     }
     db.exec('COMMIT');
   } catch (err) {
@@ -641,7 +684,7 @@ const PORTFOLIO = [
   },
 ];
 
-function seedPortfolio(tenantId) {
+function seedPortfolio(tenantId, fundId) {
   const count = db.prepare('SELECT COUNT(*) AS c FROM portfolio WHERE tenant_id = ?').get(tenantId).c;
   if (count > 0) { console.log(`portfolio already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
 
@@ -649,7 +692,7 @@ function seedPortfolio(tenantId) {
   db.exec('BEGIN');
   try {
     for (const p of PORTFOLIO) {
-      insert.run(at({ tenantId, ...portfolioToParams(p) }));
+      insert.run(at({ tenantId, ...portfolioToParams(p), fundId }));
     }
     db.exec('COMMIT');
   } catch (err) {
@@ -1171,7 +1214,7 @@ const IC_MEMOS = [
     resolution: 'Инвестиция отклонена (2 против, 1 за). Независимый член на заседании отсутствовал — формально кворум по Constitution Section 7 не набран, решение носит предварительный характер. Возможен возврат к рассмотрению через 12 месяцев (не ранее 2026-06-01) при расширении географии и повторном созыве IC с участием независимого члена.' },
 ];
 
-function seedIcMemos(tenantId) {
+function seedIcMemos(tenantId, fundId) {
   const count = db.prepare('SELECT COUNT(*) AS c FROM ic_memos WHERE tenant_id = ?').get(tenantId).c;
   if (count > 0) { console.log(`ic_memos already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
 
@@ -1180,7 +1223,7 @@ function seedIcMemos(tenantId) {
   db.exec('BEGIN');
   try {
     for (const m of icMemos) {
-      insert.run(at({ tenantId, ...icMemoToParams(m) }));
+      insert.run(at({ tenantId, ...icMemoToParams(m), fundId }));
     }
     db.exec('COMMIT');
   } catch (err) {
@@ -1321,13 +1364,17 @@ const SEED_USERS = [
 ];
 for (const u of SEED_USERS) upsertUser(tenant.id, u.email, SEED_PASSWORD, u.role, u.name);
 
-seedLpRegister(tenant.id);
-seedCapitalCalls(tenant.id);
-seedDeals(tenant.id);
-seedPortfolio(tenant.id);
+const fundIds = seedFunds(tenant.id);
+const fund1Id = fundIds['TCF-I'];
+for (const d of DOC_FILES) d.fundId = fund1Id;
+
+seedLpRegister(tenant.id, fund1Id);
+seedCapitalCalls(tenant.id, fund1Id);
+seedDeals(tenant.id, fund1Id);
+seedPortfolio(tenant.id, fund1Id);
 seedOnboarding(tenant.id);
 seedConflictApprovals(tenant.id);
-seedIcMemos(tenant.id);
+seedIcMemos(tenant.id, fund1Id);
 seedWorkflowInstances(tenant.id);
 seedDocuments(tenant.id);
 

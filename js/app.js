@@ -124,9 +124,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setCurrentDate();
   initNavigation();
   initUserRole();
-  // Init fund switcher
+  // Init fund switcher (funds[] is populated later by loadFundsFromApi()
+  // after login — nothing to brand yet on first paint).
   renderFundSwitcher();
-  updateFundBranding(getActiveFund());
+  if (getActiveFund()) updateFundBranding(getActiveFund());
   updateBadges();
   renderDashboard();
   renderClosing();
@@ -259,8 +260,10 @@ function navigateTo(page) {
 
 /* ===== DASHBOARD ===== */
 function renderDashboard() {
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
   // KPI counts — use lpRegister (new) if available, fallback to 0
-  const activeLPs = typeof lpRegister !== 'undefined' ? lpRegister.filter(l => l.status === 'Active').length : 0;
+  const scopedLps = typeof lpRegister !== 'undefined' ? (fundScoped ? lpRegister.filter(l => l.fundId === activeFundId) : lpRegister) : [];
+  const activeLPs = scopedLps.filter(l => l.status === 'Active').length;
   const obInProgress = typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'FM' && c.onboardingStatus !== 'Active').length : 0;
   const lpCountEl = document.getElementById('kpiLpCount');
   if (lpCountEl) lpCountEl.textContent = activeLPs;
@@ -270,8 +273,9 @@ function renderDashboard() {
     lpKpiDelta.className = 'kpi-delta ' + (obInProgress > 0 ? 'warning' : 'up');
   }
 
+  const scopedPortfolio = fundScoped ? portfolio.filter(p => p.fundId === activeFundId) : portfolio;
   const portCountEl = document.getElementById('kpiPortCount');
-  if (portCountEl) portCountEl.textContent = portfolio.length;
+  if (portCountEl) portCountEl.textContent = scopedPortfolio.length;
 
   // Onboarding TZ widgets
   if (typeof renderDashboardObWidget === 'function')  renderDashboardObWidget();
@@ -836,6 +840,9 @@ const STAGE_COLORS = {
 
 function renderPipeline(data) {
   const board = document.getElementById('pipelineBoard');
+  if (typeof activeFundId !== 'undefined' && activeFundId != null) {
+    data = data.filter(d => d.fundId === activeFundId);
+  }
   board.innerHTML = DEAL_STAGES.map(stage => {
     const sd = data.filter(d => d.stage === stage);
     const total = sd.reduce((s, d) => s + d.amount, 0);
@@ -1662,6 +1669,7 @@ function saveDeal() {
   const newId = typeof dealIdCounter !== 'undefined' ? ++dealIdCounter : Date.now();
 
   deals.push({
+    fundId: typeof activeFundId !== 'undefined' ? activeFundId : null,
     // ── Core (from form) ──
     id: newId, company, sector, stage, amount,
     type, priority, manager,
@@ -1752,6 +1760,7 @@ function savePortfolio() {
   const moic  = invested > 0 ? Math.round((value / invested) * 100) / 100 : 0;
 
   portfolio.push({
+    fundId: typeof activeFundId !== 'undefined' ? activeFundId : null,
     id: newId, name, sector, stage,
     bin: '', invested, value, date, exitStrategy, exitYear, moic,
     fundShare: 0, manager: currentUserDisplayName(), status: 'Active',
@@ -1895,6 +1904,9 @@ function daysSince(dateStr) {
 
 function renderPortfolio(data) {
   const container = document.getElementById('portfolioGrid');
+  if (typeof activeFundId !== 'undefined' && activeFundId != null) {
+    data = data.filter(p => p.fundId === activeFundId);
+  }
   if (portfolioView === 'grid') {
     container.className = 'portfolio-grid';
     container.innerHTML = data.map((p, idx) => {

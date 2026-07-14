@@ -132,15 +132,19 @@ function renderLPRegisterPage() {
   const el = document.getElementById('lpRegisterContent');
   if (!el) return;
 
-  // AFSA triggers
-  const activeCount  = lpRegister.filter(l => l.status === 'Active').length;
-  const totalCommit  = getTotalCommitments();
-  const totalCalled  = getTotalCalled();
-  const totalUnfund  = getTotalUnfunded();
-  const custodianTrigger = activeCount >= 20 || totalCommit >= 50000000;
-  const afsaPending  = lpRegister.filter(l => l.ownershipPct > 20 && !l.afsaNotified).length;
+  const fundLps = typeof activeFundId !== 'undefined' && activeFundId != null
+    ? lpRegister.filter(l => l.fundId === activeFundId)
+    : lpRegister;
 
-  let filtered = lpRegister.filter(l => {
+  // AFSA triggers
+  const activeCount  = fundLps.filter(l => l.status === 'Active').length;
+  const totalCommit  = fundLps.filter(l => l.status === 'Active').reduce((s, l) => s + l.commitment, 0);
+  const totalCalled  = fundLps.filter(l => l.status === 'Active').reduce((s, l) => s + l.calledAmount, 0);
+  const totalUnfund  = fundLps.filter(l => l.status === 'Active').reduce((s, l) => s + getLPUnfunded(l), 0);
+  const custodianTrigger = activeCount >= 20 || totalCommit >= 50000000;
+  const afsaPending  = fundLps.filter(l => l.ownershipPct > 20 && !l.afsaNotified).length;
+
+  let filtered = fundLps.filter(l => {
     if (lpRegStatus && l.status !== lpRegStatus) return false;
     if (lpRegFilter && !l.name.toLowerCase().includes(lpRegFilter.toLowerCase()) &&
         !l.registerId.toLowerCase().includes(lpRegFilter.toLowerCase())) return false;
@@ -169,7 +173,7 @@ function renderLPRegisterPage() {
     <!-- KPI Row -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       ${[
-        { label:'Активных LP', val: activeCount, sub:`${lpRegister.length} всего в реестре`, color:'#3b82f6', icon:'fa-users' },
+        { label:'Активных LP', val: activeCount, sub:`${fundLps.length} всего в реестре`, color:'#3b82f6', icon:'fa-users' },
         { label:'Общий Commitment', val: fmtUSD(totalCommit), sub:`Цель: ${fmtUSD(FUND_PARAMS.targetSize*1e6)}`, color:'#22c55e', icon:'fa-dollar-sign' },
         { label:'Вызвано (Called)', val: fmtUSD(totalCalled), sub:`${fmtPctLP(totalCommit?totalCalled/totalCommit*100:0)} от commitment`, color:'#f97316', icon:'fa-coins' },
         { label:'Остаток (Unfunded)', val: fmtUSD(totalUnfund), sub:`Доступно к вызову`, color:'#8b5cf6', icon:'fa-piggy-bank' },
@@ -1531,17 +1535,20 @@ function renderCapitalCallsPage() {
   const el = document.getElementById('capitalCallsContent');
   if (!el) return;
 
-  const totalCommit  = getTotalCommitments();
-  const totalCalled  = capitalCallsLog.reduce((s, cc) => s + cc.lineItems.reduce((ss, li) => ss + (li.paid||0), 0), 0);
-  const pendingCCs   = capitalCallsLog.filter(cc => cc.status === 'Pending').length;
-  const overdueCCs   = capitalCallsLog.filter(cc => {
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const fundCCs = fundScoped ? capitalCallsLog.filter(cc => cc.fundId === activeFundId) : capitalCallsLog;
+  const totalCommit  = (fundScoped ? lpRegister.filter(l => l.fundId === activeFundId) : lpRegister)
+    .filter(l => l.status === 'Active').reduce((s, l) => s + l.commitment, 0);
+  const totalCalled  = fundCCs.reduce((s, cc) => s + cc.lineItems.reduce((ss, li) => ss + (li.paid||0), 0), 0);
+  const pendingCCs   = fundCCs.filter(cc => cc.status === 'Pending').length;
+  const overdueCCs   = fundCCs.filter(cc => {
     if (cc.status !== 'Pending') return false;
     return new Date(cc.paymentDate) < new Date();
   }).length;
-  const totalMgmtFee = capitalCallsLog.filter(cc => cc.managementFee)
+  const totalMgmtFee = fundCCs.filter(cc => cc.managementFee)
     .reduce((s, cc) => s + cc.totalAmount, 0);
 
-  let filtered = capitalCallsLog.filter(cc => {
+  let filtered = fundCCs.filter(cc => {
     if (ccStatusF && cc.status !== ccStatusF) return false;
     if (ccFilter && !cc.ccNumber.toLowerCase().includes(ccFilter.toLowerCase()) &&
         !cc.purpose.toLowerCase().includes(ccFilter.toLowerCase())) return false;
@@ -1562,7 +1569,7 @@ function renderCapitalCallsPage() {
     <!-- KPI Row -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       ${[
-        { label:'Capital Calls (всего)', val: capitalCallsLog.length,    sub:`${pendingCCs} ожидают оплаты`,  color:'#3b82f6', icon:'fa-coins'           },
+        { label:'Capital Calls (всего)', val: fundCCs.length,    sub:`${pendingCCs} ожидают оплаты`,  color:'#3b82f6', icon:'fa-coins'           },
         { label:'Всего вызвано',         val: fmtUSD(totalCalled),        sub:`из ${fmtUSD(totalCommit)}`,     color:'#22c55e', icon:'fa-arrow-up'         },
         { label:'Management Fee',        val: fmtUSD(totalMgmtFee),       sub:`2% p.a. от AUM (полугодовые)`, color:'#f97316', icon:'fa-percentage'       },
         { label:'Просроченных',          val: overdueCCs,                  sub:`требуют проверки`,             color: overdueCCs>0?'#ef4444':'#22c55e', icon:'fa-clock' },
@@ -2076,7 +2083,7 @@ function saveNewCC() {
   const bankRef    = document.getElementById('cc_bankRef')?.value || '';
   const notes      = document.getElementById('cc_notes')?.value || '';
 
-  const activeLP   = lpRegister.filter(l => l.status === 'Active');
+  const activeLP   = lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId);
   const year       = new Date().getFullYear();
   const seq        = String(ccLogIdCounter).padStart(3,'0');
   const ccNumber   = `CC-${year}-${seq}`;
@@ -2096,6 +2103,7 @@ function saveNewCC() {
 
   const newCC = {
     id:           ccLogIdCounter++,
+    fundId:       typeof activeFundId !== 'undefined' ? activeFundId : null,
     ccNumber,
     noticeDate,
     paymentDate:  payDate,
@@ -2281,6 +2289,7 @@ function saveIndividualCC(lpId) {
 
   const newCC = {
     id:           ccLogIdCounter++,
+    fundId:       lp.fundId != null ? lp.fundId : null,
     ccNumber,
     noticeDate,
     paymentDate:  payDate,
@@ -2425,6 +2434,7 @@ function registerLPFromOnboarding(client, saTask, actTask) {
 
   const newLP = {
     id:              lpRegisterIdCounter++,
+    fundId:          typeof activeFundId !== 'undefined' ? activeFundId : null,
     registerId:      `LP-${year}-${seq}`,
     name:            client.name,
     type:            client.type,

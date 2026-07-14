@@ -43,9 +43,48 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE(tenant_id, email)
 );
 
+-- A management company (tenant) can run several funds. lp_register,
+-- capital_calls, deals, portfolio, and ic_memos each carry a fund_id
+-- (added further below) tying that record to one specific fund; the
+-- sidebar fund switcher filters by it client-side (same pattern
+-- documents.fund_id already used, informally, before this table existed).
+-- lp_count/deployed are deliberately NOT stored here — computed live from
+-- lp_register/capital_calls in GET /api/funds instead of risking a stale
+-- denormalized number. nav has no other source in this app and stays a
+-- manually-edited field, same as portfolio.value.
+CREATE TABLE IF NOT EXISTS funds (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id          INTEGER NOT NULL REFERENCES tenants(id),
+  name               TEXT NOT NULL,
+  short_name         TEXT,
+  gp                 TEXT,
+  license            TEXT,
+  type               TEXT,
+  currency           TEXT NOT NULL DEFAULT 'USD',
+  target_size        REAL,
+  vintage            INTEGER,
+  status             TEXT NOT NULL DEFAULT 'fundraising',
+  phase              TEXT,
+  phase_year         INTEGER,
+  fund_term          INTEGER,
+  investment_period  INTEGER,
+  management_fee     REAL,
+  carried_interest   REAL,
+  preferred_return   REAL,
+  target_irr         TEXT,
+  target_moic        TEXT,
+  description        TEXT,
+  color              TEXT NOT NULL DEFAULT '#3b82f6',
+  icon               TEXT NOT NULL DEFAULT 'fa-landmark',
+  nav                REAL NOT NULL DEFAULT 0,
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_funds_tenant ON funds(tenant_id);
+
 CREATE TABLE IF NOT EXISTS lp_register (
   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id             INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id               INTEGER REFERENCES funds(id),
   register_id           TEXT NOT NULL,
   name                  TEXT NOT NULL,
   type                  TEXT NOT NULL,
@@ -93,6 +132,7 @@ CREATE TABLE IF NOT EXISTS lp_register (
 CREATE TABLE IF NOT EXISTS capital_calls (
   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id             INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id               INTEGER REFERENCES funds(id),
   cc_number             TEXT NOT NULL,
   notice_date           TEXT,
   payment_date          TEXT,
@@ -133,6 +173,7 @@ CREATE TABLE IF NOT EXISTS capital_call_line_items (
 CREATE TABLE IF NOT EXISTS deals (
   id                    INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id             INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id               INTEGER REFERENCES funds(id),
   company               TEXT NOT NULL,
   sector                TEXT,
   stage                 TEXT NOT NULL DEFAULT 'Скрининг',
@@ -192,6 +233,7 @@ CREATE TABLE IF NOT EXISTS deals (
 CREATE TABLE IF NOT EXISTS portfolio (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id           INTEGER REFERENCES funds(id),
   name              TEXT NOT NULL,
   sector            TEXT,
   stage             TEXT,
@@ -433,6 +475,7 @@ CREATE INDEX IF NOT EXISTS idx_engagements_deal_ref ON engagements(deal_ref);
 CREATE TABLE IF NOT EXISTS ic_memos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id       INTEGER REFERENCES funds(id),
   deal_id       INTEGER REFERENCES deals(id),
   company       TEXT NOT NULL,
   sector        TEXT,
@@ -539,6 +582,9 @@ function columnExists(table, col) {
 }
 if (!columnExists('users', 'name'))   db.exec("ALTER TABLE users ADD COLUMN name TEXT");
 if (!columnExists('users', 'active')) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+for (const table of ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_memos']) {
+  if (!columnExists(table, 'fund_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN fund_id INTEGER REFERENCES funds(id)`);
+}
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
