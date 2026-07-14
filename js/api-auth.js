@@ -343,6 +343,24 @@ function hideLoginOverlay() {
   if (overlay) overlay.style.display = 'none';
 }
 
+function toggleAuthForm(which) {
+  const loginForm = document.getElementById('loginForm');
+  const signupForm = document.getElementById('signupForm');
+  if (!loginForm || !signupForm) return;
+  loginForm.style.display = which === 'signup' ? 'none' : 'block';
+  signupForm.style.display = which === 'signup' ? 'block' : 'none';
+}
+
+// Shared by both the login and signup submit handlers below — same
+// post-auth sequence either way.
+async function completeAuth(data) {
+  setAuth(data);
+  hideLoginOverlay();
+  await loadRolesFromApi();
+  if (typeof initUserRole === 'function') initUserRole();
+  loadAllApiData();
+}
+
 (function initAuthGate() {
   const form = document.getElementById('loginForm');
   if (form) {
@@ -360,13 +378,36 @@ function hideLoginOverlay() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Login failed');
-        setAuth(data);
-        hideLoginOverlay();
-        await loadRolesFromApi();
-        if (typeof initUserRole === 'function') initUserRole();
-        loadAllApiData();
+        await completeAuth(data);
       } catch (err) {
         errEl.textContent = err.message || 'Не удалось войти';
+      }
+    });
+  }
+
+  const signupForm = document.getElementById('signupForm');
+  if (signupForm) {
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const companyName = document.getElementById('signupCompanyName').value.trim();
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+      const errEl = document.getElementById('signupError');
+      errEl.textContent = '';
+      if (!companyName || !name || !email || !password) { errEl.textContent = 'Заполните все поля'; return; }
+      if (password.length < 8) { errEl.textContent = 'Пароль минимум 8 символов'; return; }
+      try {
+        const res = await fetch(API_BASE + '/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyName, name, email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Signup failed');
+        await completeAuth(data);
+      } catch (err) {
+        errEl.textContent = err.message || 'Не удалось зарегистрировать компанию';
       }
     });
   }

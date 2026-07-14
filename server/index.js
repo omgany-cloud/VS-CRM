@@ -29,6 +29,7 @@ const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL:
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
 const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
+const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -58,6 +59,55 @@ app.post('/api/auth/login', (req, res) => {
     token,
     user: { id: user.id, email: user.email, name: user.name, role: user.role },
     tenant: { id: tenantRow.id, slug: tenantRow.slug, name: tenantRow.name },
+    permissions: roleRow ? rowToPermissions(roleRow) : null,
+  });
+});
+
+function slugify(name) {
+  return String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'company';
+}
+
+// Public, self-service: any company can create its own isolated tenant.
+// The signer-upper always becomes that tenant's first CEO. New tenants get
+// only the 10 system roles — no demo LPs/deals/IC memos/documents/workflow.
+// Deliberately no invite code / email verification / rate limiting — same
+// PoC-acceptable scope as the dev-only JWT secret; revisit before this is
+// ever exposed on the open internet.
+app.post('/api/auth/signup', (req, res) => {
+  const { companyName, name, email, password } = req.body || {};
+  if (!companyName || !name || !email || !password) {
+    return res.status(400).json({ error: 'companyName, name, email and password are required' });
+  }
+  if (String(password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+
+  let slug = slugify(companyName);
+  let suffix = 1;
+  while (db.prepare('SELECT id FROM tenants WHERE slug = ?').get(slug)) {
+    suffix += 1;
+    slug = slugify(companyName) + '-' + suffix;
+  }
+
+  let tenant, user;
+  db.exec('BEGIN');
+  try {
+    tenant = upsertTenant(slug, companyName);
+    seedSystemRoles(tenant.id);
+    user = upsertUser(tenant.id, email, password, 'CEO', name);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    if (String(err.message).includes('UNIQUE')) {
+      return res.status(409).json({ error: 'A user with this email already exists' });
+    }
+    return res.status(500).json({ error: err.message });
+  }
+
+  const roleRow = getRoleRowByCode(tenant.id, user.role);
+  const token = signToken(user, tenant);
+  res.status(201).json({
+    token,
+    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name },
     permissions: roleRow ? rowToPermissions(roleRow) : null,
   });
 });

@@ -36,9 +36,43 @@
     <button type="submit" style="width:100%;padding:10px;border:none;border-radius:6px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer;">
       Войти
     </button>
+    <div style="text-align:center;margin-top:14px;">
+      <a href="#" id="showSignupLink" onclick="toggleAuthForm('signup');return false;" style="color:#60a5fa;font-size:12px;text-decoration:none;">Нет аккаунта? Зарегистрировать компанию</a>
+    </div>
     <div style="color:#5b6b8c;font-size:11px;margin-top:14px;line-height:1.5;">
       Demo tenant: <b>Turan Capital</b> (turan-capital)<br/>
-      Только страница «LP Register» подключена к реальному backend + БД — остальные разделы работают на прежних демо-данных.
+      Каждая зарегистрированная компания — изолированный тенант со своими данными.
+    </div>
+  </form>
+
+  <form id="signupForm" style="display:none;width:340px;background:#131c2e;border:1px solid #263148;border-radius:12px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <div style="width:36px;height:36px;border-radius:8px;background:#22c55e;display:flex;align-items:center;justify-content:center;">
+        <i class="fas fa-building" style="color:#fff;"></i>
+      </div>
+      <div>
+        <div style="color:#fff;font-weight:700;font-size:15px;">Новая компания</div>
+        <div style="color:#8a9bbf;font-size:11px;">Регистрация — вы станете CEO новой изолированной CRM</div>
+      </div>
+    </div>
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Название компании</label>
+    <input id="signupCompanyName" type="text" placeholder="ACME Capital LLP"
+      style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:12px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Ваше имя</label>
+    <input id="signupName" type="text" placeholder="Иванов И.И."
+      style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:12px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Email</label>
+    <input id="signupEmail" type="email" autocomplete="username"
+      style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:12px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Пароль (мин. 8 символов)</label>
+    <input id="signupPassword" type="password" autocomplete="new-password"
+      style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:6px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <div id="signupError" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+    <button type="submit" style="width:100%;padding:10px;border:none;border-radius:6px;background:#22c55e;color:#fff;font-weight:600;cursor:pointer;">
+      Зарегистрировать компанию
+    </button>
+    <div style="text-align:center;margin-top:14px;">
+      <a href="#" onclick="toggleAuthForm('login');return false;" style="color:#60a5fa;font-size:12px;text-decoration:none;">Уже есть аккаунт? Войти</a>
     </div>
   </form>
 </div>

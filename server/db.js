@@ -400,6 +400,12 @@ CREATE TABLE IF NOT EXISTS conflict_approvals (
 
 CREATE INDEX IF NOT EXISTS idx_lp_register_tenant ON lp_register(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
+-- Global, not just per-tenant: one email = one account across every
+-- company sharing this database. Without this, two different tenants
+-- could each register the same email and POST /api/auth/login's
+-- no-tenant-given fallback (SELECT tenant_id FROM users WHERE email = ?)
+-- would resolve to an arbitrary one of them.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_global ON users(email);
 CREATE INDEX IF NOT EXISTS idx_capital_calls_tenant ON capital_calls(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_cc_line_items_call ON capital_call_line_items(call_id);
 CREATE INDEX IF NOT EXISTS idx_cc_line_items_tenant ON capital_call_line_items(tenant_id);

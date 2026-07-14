@@ -1,7 +1,6 @@
 // One-time seed: tenant #1 (Turan Capital), one admin user,
 // and the 6 LP records already used as demo data in js/lp-register.js.
 const path = require('path');
-const bcrypt = require('bcryptjs');
 const { db, at } = require('./db');
 const { dealToParams, INSERT_SQL: DEAL_INSERT_SQL } = require('./dealMapping');
 const { portfolioToParams, INSERT_SQL: PORTFOLIO_INSERT_SQL } = require('./portfolioMapping');
@@ -17,36 +16,11 @@ const { icMemoToParams, INSERT_SQL: IC_MEMO_INSERT_SQL } = require('./icMemoMapp
 const { documentToParams, INSERT_SQL: DOCUMENT_INSERT_SQL } = require('./documentMapping');
 const { extractArrayLiteral } = require('./extractFrontendData');
 const { SYSTEM_ROLES } = require('./rolesSeed');
-const { roleToParams, INSERT_SQL: ROLE_INSERT_SQL } = require('./rolesMapping');
 const { wfInstanceToParams, INSERT_SQL: WF_INSERT_SQL } = require('./workflowMapping');
+const { upsertTenant, upsertRole, upsertUser } = require('./tenantProvisioning');
 
 const SEED_EMAIL = 'admin@turancapital.kz';
 const SEED_PASSWORD = 'TuranDemo2025!';
-
-function upsertTenant(slug, name) {
-  const existing = db.prepare('SELECT * FROM tenants WHERE slug = ?').get(slug);
-  if (existing) return existing;
-  const info = db.prepare('INSERT INTO tenants (slug, name) VALUES (?, ?)').run(slug, name);
-  return db.prepare('SELECT * FROM tenants WHERE id = ?').get(info.lastInsertRowid);
-}
-
-function upsertRole(tenantId, def) {
-  const existing = db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(tenantId, def.code);
-  if (existing) return existing;
-  const params = roleToParams({ ...def, isSystem: true });
-  const info = db.prepare(ROLE_INSERT_SQL).run(at({ tenantId, ...params }));
-  return db.prepare('SELECT * FROM roles WHERE id = ?').get(info.lastInsertRowid);
-}
-
-function upsertUser(tenantId, email, password, role, name) {
-  const existing = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND email = ?').get(tenantId, email);
-  if (existing) return existing;
-  const hash = bcrypt.hashSync(password, 10);
-  const info = db.prepare(
-    'INSERT INTO users (tenant_id, email, password_hash, role, name) VALUES (?, ?, ?, ?, ?)'
-  ).run(tenantId, email, hash, role, name || null);
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-}
 
 const LP_RECORDS = [
   { registerId:'LP-2024-001', name:'Silk Steppe Capital LLP', type:'Corporate', lpType:'Institution', country:'Казахстан',
