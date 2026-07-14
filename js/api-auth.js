@@ -197,6 +197,25 @@ async function loadIcMemosFromApi() {
   }
 }
 
+/* ===== Workflow (approval chains) — backed by the real API =====
+   Loaded eagerly (loadAllApiData) as well as on navigate, same reason IC
+   memos are: the sidebar workflow badge (getActiveWfCount(), js/app.js)
+   needs correct data right after login, not just when the page is open. */
+async function loadWorkflowFromApi() {
+  try {
+    const data = await apiFetch('/api/workflow');
+    if (typeof workflowInstances === 'undefined') return;
+    workflowInstances.length = 0;
+    workflowInstances.push(...data.workflowInstances);
+    const page = document.getElementById('page-workflow');
+    if (page && page.classList.contains('active') && typeof renderWorkflowPage === 'function') renderWorkflowPage();
+    if (typeof updateBadges === 'function') updateBadges();
+  } catch (err) {
+    console.error('Failed to load workflow instances from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить workflow из API: ' + err.message, 'red');
+  }
+}
+
 /* ===== Documents / Vault — backed by the real API =====
    docFiles is the merged docs/vault entity (see server/db.js's
    `documents` table comment for why task-attachments stay
@@ -292,6 +311,7 @@ async function loadRolesFromApi() {
     if (page === 'ob-clients' || page === 'ob-restricted' || page === 'engagements') { loadOnboardingFromApi(); loadConflictApprovalsFromApi(); }
     if (page === 'conflict-approvals') loadConflictApprovalsFromApi();
     if (page === 'ic') loadIcMemosFromApi();
+    if (page === 'workflow') loadWorkflowFromApi();
     if (page === 'documents' || page === 'vault') loadDocumentsFromApi();
     if (page === 'users') loadUsersFromApi();
   };
@@ -305,6 +325,7 @@ function loadAllApiData() {
   loadOnboardingFromApi();
   loadConflictApprovalsFromApi();
   loadIcMemosFromApi();
+  loadWorkflowFromApi();
   loadDocumentsFromApi();
 }
 

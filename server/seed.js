@@ -18,6 +18,7 @@ const { documentToParams, INSERT_SQL: DOCUMENT_INSERT_SQL } = require('./documen
 const { extractArrayLiteral } = require('./extractFrontendData');
 const { SYSTEM_ROLES } = require('./rolesSeed');
 const { roleToParams, INSERT_SQL: ROLE_INSERT_SQL } = require('./rolesMapping');
+const { wfInstanceToParams, INSERT_SQL: WF_INSERT_SQL } = require('./workflowMapping');
 
 const SEED_EMAIL = 'admin@turancapital.kz';
 const SEED_PASSWORD = 'TuranDemo2025!';
@@ -1215,6 +1216,73 @@ function seedIcMemos(tenantId) {
   console.log(`Seeded ${icMemos.length} IC memos for tenant ${tenantId}.`);
 }
 
+// NOTE: same lesson as DEALS/PORTFOLIO/IC_MEMOS above — js/workflow.js's
+// `workflowInstances` array has since been emptied out (populated at
+// runtime from the API), so it's hardcoded here from the last-known
+// extraction.
+const WORKFLOW_INSTANCES = [
+  { type: 'deal_ic', entityId: 1, entityName: 'NomadTech Solutions', entityType: 'Deal',
+    createdAt: '2024-09-15T09:00:00', createdBy: 'Analyst', currentStep: 3, status: 'approved',
+    steps: [
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-09-20T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Инвестиционный меморандум готов, метрики SaaS сильные.' },
+      { role:'RELATIONSHIP_MANAGER', label:'RM — коммерческая оценка', action:'review',  completedAt:'2024-09-28T14:00:00', completedBy:'RM', decision:'approved', comment:'Условия сделки согласованы с фаундерами.' },
+      { role:'CEO', label:'IC — решение комитета', action:'approve', completedAt:'2024-10-05T10:00:00', completedBy:'CEO', decision:'approved', comment:'IC единогласно одобрил инвестицию.' },
+    ] },
+  { type: 'deal_ic', entityId: 2, entityName: 'VitaMed Astana', entityType: 'Deal',
+    createdAt: '2024-12-18T09:00:00', createdBy: 'Analyst', currentStep: 3, status: 'approved',
+    steps: [
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-12-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум завершён, DD по лицензиям МЗ РК пройден.' },
+      { role:'RELATIONSHIP_MANAGER', label:'RM — коммерческая оценка', action:'review',  completedAt:'2025-01-06T15:00:00', completedBy:'RM', decision:'approved', comment:'Коммерческие условия и pre-money согласованы.' },
+      { role:'CEO', label:'IC — решение комитета', action:'approve', completedAt:'2025-01-15T10:00:00', completedBy:'CEO', decision:'approved', comment:'IC одобрил сделку, средства к перечислению.' },
+    ] },
+  { type: 'deal_ic', entityId: 3, entityName: 'Dala Agro Holding', entityType: 'Deal',
+    createdAt: '2025-03-18T09:00:00', createdBy: 'Analyst', currentStep: 3, status: 'approved',
+    steps: [
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-03-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по земельному банку и экспортным контрактам готов.' },
+      { role:'RELATIONSHIP_MANAGER', label:'RM — коммерческая оценка', action:'review',  completedAt:'2025-04-01T15:00:00', completedBy:'RM', decision:'approved', comment:'Условия convertible note согласованы.' },
+      { role:'CEO', label:'IC — решение комитета', action:'approve', completedAt:'2025-04-10T10:00:00', completedBy:'CEO', decision:'approved', comment:'IC одобрил сделку большинством голосов (Investment Manager воздержался/против).' },
+    ] },
+  { type: 'deal_ic', entityId: 7, entityName: 'Retail Hub Karaganda', entityType: 'Deal',
+    createdAt: '2025-05-05T09:00:00', createdBy: 'Analyst', currentStep: 2, status: 'rejected',
+    steps: [
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-05-10T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум готов, узкая региональная ниша отмечена как риск.' },
+      { role:'RELATIONSHIP_MANAGER', label:'RM — коммерческая оценка', action:'review',  completedAt:'2025-05-20T15:00:00', completedBy:'RM', decision:'approved', comment:'Коммерческая оценка завершена, масштабируемость под вопросом.' },
+      { role:'CEO', label:'IC — решение комитета', action:'approve', completedAt:'2025-05-28T10:00:00', completedBy:'CEO', decision:'rejected', comment:'Слишком нишевый региональный рынок, недостаточный потенциал масштабирования для мандата фонда.' },
+    ] },
+  { type: 'deal_ic', entityId: 5, entityName: 'Green Energy Almaty', entityType: 'Deal',
+    createdAt: '2025-07-05T09:00:00', createdBy: 'Analyst', currentStep: 2, status: 'active',
+    steps: [
+      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-07-08T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по солнечной электростанции готов, риски по земле отмечены.' },
+      { role:'RELATIONSHIP_MANAGER', label:'RM — коммерческая оценка', action:'review',  completedAt:'2025-07-12T15:00:00', completedBy:'RM', decision:'approved', comment:'Коммерческие условия и PPA-переговоры в норме.' },
+      { role:'CEO', label:'IC — решение комитета', action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
+    ] },
+  { type: 'kyc_lp', entityId: 6, entityName: 'Байжанова Динара Сериковна', entityType: 'LP',
+    createdAt: '2025-06-10T09:00:00', createdBy: 'RM', currentStep: 1, status: 'active',
+    steps: [
+      { role:'COMPLIANCE_OFFICER', label:'CO проверка документов', action:'review',  completedAt:'2025-06-18T11:20:00', completedBy:'CO', decision:'approved', comment:'Паспорт и подтверждение адреса получены. Ожидается Source of Funds.' },
+      { role:'MLRO', label:'MLRO — AML скрининг', action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
+      { role:'CEO', label:'CEO — финальное одобрение', action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
+    ] },
+];
+
+function seedWorkflowInstances(tenantId) {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM workflow_instances WHERE tenant_id = ?').get(tenantId).c;
+  if (count > 0) { console.log(`workflow_instances already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
+
+  const insert = db.prepare(WF_INSERT_SQL);
+  db.exec('BEGIN');
+  try {
+    for (const w of WORKFLOW_INSTANCES) {
+      insert.run(at({ tenantId, ...wfInstanceToParams(w) }));
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  console.log(`Seeded ${WORKFLOW_INSTANCES.length} workflow instances for tenant ${tenantId}.`);
+}
+
 // NOTE: same lesson as DEALS/PORTFOLIO/IC_MEMOS above — js/documents.js's
 // `docFiles` array has since been emptied out (it's now populated at
 // runtime from the API), so it's hardcoded here from the last-known
@@ -1286,6 +1354,7 @@ seedPortfolio(tenant.id);
 seedOnboarding(tenant.id);
 seedConflictApprovals(tenant.id);
 seedIcMemos(tenant.id);
+seedWorkflowInstances(tenant.id);
 seedDocuments(tenant.id);
 
 console.log('--- Seed complete ---');

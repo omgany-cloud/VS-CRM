@@ -502,6 +502,26 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_tenant_icseat ON roles(tenant_id, ic_seat) WHERE ic_seat IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_roles_tenant ON roles(tenant_id);
+
+-- Approval workflow engine (KYC CO->MLRO->CEO, IC deal review, Capital Call
+-- and Subscription Agreement sign-off). steps_json holds the full ordered
+-- step array (role/label/action/completedAt/completedBy/decision/comment)
+-- as one blob, same tradeoff as ic_memos.votes_json -- steps are always
+-- read/written as a whole, never queried individually across instances.
+CREATE TABLE IF NOT EXISTS workflow_instances (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+  type          TEXT NOT NULL,
+  entity_id     INTEGER,
+  entity_name   TEXT NOT NULL,
+  entity_type   TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  created_by    TEXT,
+  current_step  INTEGER NOT NULL DEFAULT 0,
+  status        TEXT NOT NULL DEFAULT 'active',
+  steps_json    TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_instances_tenant ON workflow_instances(tenant_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —

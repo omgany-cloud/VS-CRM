@@ -27,6 +27,8 @@ const {
 } = require('./onboardingMapping');
 const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL: IC_MEMO_UPDATE_SQL } = require('./icMemoMapping');
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
+const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
+const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -944,6 +946,104 @@ app.put('/api/documents/:id', requireAuth, requireInternal, (req, res) => {
   db.prepare(DOCUMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToDocument(row));
+});
+
+/* ===== Workflow (approval chains) API — tenant-scoped, internal-staff only.
+   No external IC seat has a role in any of these approval chains. */
+app.get('/api/workflow', requireAuth, requireInternal, (req, res) => {
+  const rows = db.prepare('SELECT * FROM workflow_instances WHERE tenant_id = ? ORDER BY id DESC').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, workflowInstances: rows.map(rowToWfInstance) });
+});
+
+app.post('/api/workflow', requireAuth, requireInternal, (req, res) => {
+  const b = req.body || {};
+  if (!b.type || !WF_DEFINITIONS[b.type]) {
+    return res.status(400).json({ error: 'type must be one of: ' + Object.keys(WF_DEFINITIONS).join(', ') });
+  }
+  // Dedup: an active instance for the same type+entity already exists — hand it back instead of creating a duplicate.
+  const existing = db.prepare(`
+    SELECT * FROM workflow_instances WHERE tenant_id = ? AND type = ? AND entity_id = ? AND status = 'active'
+  `).get(req.tenantId, b.type, b.entityId != null ? b.entityId : null);
+  if (existing) return res.status(200).json(rowToWfInstance(existing));
+
+  // steps are ALWAYS derived from the server-side template, never from the
+  // request body — a caller must not be able to hand itself every step's
+  // role by supplying its own steps array.
+  const steps = freshSteps(b.type);
+  const info = db.prepare(WF_INSERT_SQL).run(at({
+    tenantId: req.tenantId,
+    type: b.type,
+    entityId: b.entityId != null ? b.entityId : null,
+    entityName: b.entityName || '',
+    entityType: b.entityType || '',
+    createdAt: new Date().toISOString(),
+    createdBy: req.user.name || req.user.email,
+    currentStep: 0,
+    status: 'active',
+    stepsJson: JSON.stringify(steps),
+  }));
+  const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  res.status(201).json(rowToWfInstance(row));
+});
+
+// The security-critical one: approve/reject the CURRENT step. Every
+// derived field (completedBy/completedAt/currentStep/status) is computed
+// server-side from the single `decision` input — none of it is trusted
+// from the client, same lesson as PUT /api/ic-memos/:id.
+app.put('/api/workflow/:id', requireAuth, requireInternal, (req, res) => {
+  const existing = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
+  if (existing.status !== 'active') return res.status(409).json({ error: 'This workflow is already resolved' });
+
+  const b = req.body || {};
+  const decision = b.decision;
+  if (decision !== 'approved' && decision !== 'rejected') {
+    return res.status(400).json({ error: "decision must be 'approved' or 'rejected'" });
+  }
+  const comment = (b.comment || '').trim();
+  if (decision === 'rejected' && !comment) {
+    return res.status(400).json({ error: 'comment is required when rejecting' });
+  }
+
+  const steps = JSON.parse(existing.steps_json || '[]');
+  const step = steps[existing.current_step];
+  if (!step) return res.status(500).json({ error: 'Workflow instance has no current step' });
+  // Deliberately a literal role-code check, not a capability — workflow
+  // step gating is "this specific org-chart role signs off here," the
+  // same reasoning as the PUT /api/ob-tasks/:id reopen-guard.
+  if (req.user.role !== step.role) {
+    return res.status(403).json({ error: 'Не ваш шаг' });
+  }
+
+  step.completedAt = new Date().toISOString();
+  step.completedBy = req.user.name || req.user.email;
+  step.decision = decision;
+  step.comment = comment;
+
+  let currentStep = existing.current_step;
+  let status = existing.status;
+  if (decision === 'rejected') {
+    status = 'rejected';
+  } else {
+    currentStep += 1;
+    status = currentStep >= steps.length ? 'approved' : 'active';
+  }
+
+  db.prepare(WF_UPDATE_SQL).run(at({
+    currentStep, status, stepsJson: JSON.stringify(steps),
+    id: existing.id, tenantId: req.tenantId,
+  }));
+  const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  res.json(rowToWfInstance(row));
+});
+
+app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) => {
+  const existing = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
+  if (existing.status !== 'active') return res.status(409).json({ error: 'This workflow is already resolved' });
+  db.prepare("UPDATE workflow_instances SET status='withdrawn' WHERE id=? AND tenant_id=?").run(existing.id, req.tenantId);
+  const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  res.json(rowToWfInstance(row));
 });
 
 /* ===== Static frontend ===== */

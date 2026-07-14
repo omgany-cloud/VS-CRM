@@ -68,77 +68,12 @@ const WF_DEFINITIONS = {
      status: 'active'|'approved'|'rejected'|'withdrawn',
      steps: [ { ...def, completedAt, completedBy, decision, comment } ]
    }
-─────────────────────────────────────────────────────────── */
-let workflowInstances = [
-  // Deal IC — NomadTech Solutions (deal id 1) — closed, IC approved 2024-10-05
-  {
-    id: 1, type: 'deal_ic', entityId: 1, entityName: 'NomadTech Solutions', entityType: 'Deal',
-    createdAt: '2024-09-15T09:00:00', createdBy: 'Analyst',
-    currentStep: 3, status: 'approved',
-    steps: [
-      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-09-20T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Инвестиционный меморандум готов, метрики SaaS сильные.' },
-      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2024-09-28T14:00:00', completedBy:'RM',      decision:'approved', comment:'Условия сделки согласованы с фаундерами.' },
-      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2024-10-05T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC единогласно одобрил инвестицию.' },
-    ]
-  },
-  // Deal IC — VitaMed Astana (deal id 2) — closed, IC approved 2025-01-15
-  {
-    id: 2, type: 'deal_ic', entityId: 2, entityName: 'VitaMed Astana', entityType: 'Deal',
-    createdAt: '2024-12-18T09:00:00', createdBy: 'Analyst',
-    currentStep: 3, status: 'approved',
-    steps: [
-      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2024-12-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум завершён, DD по лицензиям МЗ РК пройден.' },
-      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-01-06T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и pre-money согласованы.' },
-      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-01-15T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC одобрил сделку, средства к перечислению.' },
-    ]
-  },
-  // Deal IC — Dala Agro Holding (deal id 3) — closed, IC approved 2025-04-10
-  {
-    id: 3, type: 'deal_ic', entityId: 3, entityName: 'Dala Agro Holding', entityType: 'Deal',
-    createdAt: '2025-03-18T09:00:00', createdBy: 'Analyst',
-    currentStep: 3, status: 'approved',
-    steps: [
-      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-03-22T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по земельному банку и экспортным контрактам готов.' },
-      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-04-01T15:00:00', completedBy:'RM',      decision:'approved', comment:'Условия convertible note согласованы.' },
-      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-04-10T10:00:00', completedBy:'CEO',     decision:'approved', comment:'IC одобрил сделку большинством голосов (Investment Manager воздержался/против).' },
-    ]
-  },
-  // Deal IC — Retail Hub Karaganda (deal id 7) — rejected 2025-05-28
-  {
-    id: 4, type: 'deal_ic', entityId: 7, entityName: 'Retail Hub Karaganda', entityType: 'Deal',
-    createdAt: '2025-05-05T09:00:00', createdBy: 'Analyst',
-    currentStep: 2, status: 'rejected',
-    steps: [
-      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-05-10T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум готов, узкая региональная ниша отмечена как риск.' },
-      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-05-20T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческая оценка завершена, масштабируемость под вопросом.' },
-      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:'2025-05-28T10:00:00', completedBy:'CEO',     decision:'rejected', comment:'Слишком нишевый региональный рынок, недостаточный потенциал масштабирования для мандата фонда.' },
-    ]
-  },
-  // Deal IC — Green Energy Almaty (deal id 5) — в процессе, ждёт заседания IC 20.07.2025
-  {
-    id: 5, type: 'deal_ic', entityId: 5, entityName: 'Green Energy Almaty', entityType: 'Deal',
-    createdAt: '2025-07-05T09:00:00', createdBy: 'Analyst',
-    currentStep: 2, status: 'active',
-    steps: [
-      { role:'ANALYST', label:'Analyst — Investment Memo',  action:'review',  completedAt:'2025-07-08T11:00:00', completedBy:'Analyst', decision:'approved', comment:'Меморандум по солнечной электростанции готов, риски по земле отмечены.' },
-      { role:'RELATIONSHIP_MANAGER',      label:'RM — коммерческая оценка',   action:'review',  completedAt:'2025-07-12T15:00:00', completedBy:'RM',      decision:'approved', comment:'Коммерческие условия и PPA-переговоры в норме.' },
-      { role:'CEO',     label:'IC — решение комитета',      action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
-    ]
-  },
-  // KYC LP — Байжанова Динара Сериковна — в процессе, ждёт MLRO AML-скрининга
-  {
-    id: 6, type: 'kyc_lp', entityId: 6, entityName: 'Байжанова Динара Сериковна', entityType: 'LP',
-    createdAt: '2025-06-10T09:00:00', createdBy: 'RM',
-    currentStep: 1, status: 'active',
-    steps: [
-      { role:'COMPLIANCE_OFFICER',   label:'CO проверка документов',    action:'review',  completedAt:'2025-06-18T11:20:00', completedBy:'CO',   decision:'approved', comment:'Паспорт и подтверждение адреса получены. Ожидается Source of Funds.' },
-      { role:'MLRO', label:'MLRO — AML скрининг',        action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
-      { role:'CEO',  label:'CEO — финальное одобрение',  action:'approve', completedAt:null, completedBy:null, decision:null, comment:'' },
-    ]
-  },
-];
+   Populated at runtime by js/api-auth.js via GET /api/workflow (see
+   server/index.js) — server/wfDefinitions.js derives new instances'
+   steps and server-enforces every step-approval action; this file no
+   longer trusts its own writes as authoritative. */
+let workflowInstances = [];
 
-let wfIdCounter = 7;
 let activeWfId  = null;   // currently open modal
 
 /* ─────────────────────────────────────────────────────────
@@ -382,7 +317,7 @@ function renderWfModalContent(w) {
 /* ─────────────────────────────────────────────────────────
    ACTIONS
 ───────────────────────────────────────────────────────── */
-function wfAction(id, decision) {
+async function wfAction(id, decision) {
   const w = workflowInstances.find(x => x.id === id);
   if (!w || w.status !== 'active') return;
   const comment = (document.getElementById('wfComment')?.value || '').trim();
@@ -390,44 +325,52 @@ function wfAction(id, decision) {
     showToast('Укажите причину отклонения в комментарии', 'red');
     return;
   }
+  // Fast client-side check — the server (PUT /api/workflow/:id) is the
+  // real enforcement, this just avoids a round-trip for the common
+  // wrong-role mis-click.
   const myRole = currentUserRole() || 'CEO';
   const step   = w.steps[w.currentStep];
   if (!step || step.role !== myRole) { showToast('Не ваш шаг', 'red'); return; }
 
-  step.completedAt = new Date().toISOString();
-  step.completedBy = currentUserDisplayName();
-  step.decision    = decision;
-  step.comment     = comment;
+  try {
+    const updated = await apiFetch(`/api/workflow/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ decision, comment }),
+    });
+    const idx = workflowInstances.findIndex(x => x.id === id);
+    if (idx !== -1) workflowInstances[idx] = updated;
 
-  if (decision === 'rejected') {
-    w.status = 'rejected';
-    showToast(`❌ Workflow отклонён: ${w.entityName}`, 'red');
-    // Sync back to entity
-    syncWfToEntity(w, 'rejected');
-  } else {
-    w.currentStep++;
-    if (w.currentStep >= w.steps.length) {
-      w.status = 'approved';
+    if (updated.status === 'rejected') {
+      showToast(`❌ Workflow отклонён: ${w.entityName}`, 'red');
+      syncWfToEntity(updated, 'rejected');
+    } else if (updated.status === 'approved') {
       showToast(`✅ Workflow завершён: ${w.entityName}`, 'green');
-      syncWfToEntity(w, 'approved');
+      syncWfToEntity(updated, 'approved');
     } else {
-      const nextStep = w.steps[w.currentStep];
+      const nextStep = updated.steps[updated.currentStep];
       showToast(`✅ Шаг одобрен → ожидает ${nextStep.role}`, 'blue');
     }
-  }
 
-  renderWfModalContent(w);
-  renderWorkflowPage();
-  if (typeof updateBadges === 'function') updateBadges();
+    renderWfModalContent(updated);
+    renderWorkflowPage();
+    if (typeof updateBadges === 'function') updateBadges();
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить решение: ' + err.message, 'red');
+  }
 }
 
-function withdrawWf(id) {
+async function withdrawWf(id) {
   if (!confirm('Отозвать этот workflow?')) return;
-  const w = workflowInstances.find(x => x.id === id);
-  if (w) { w.status = 'withdrawn'; }
-  closeWfModal();
-  renderWorkflowPage();
-  showToast('Workflow отозван', 'red');
+  try {
+    const updated = await apiFetch(`/api/workflow/${id}/withdraw`, { method: 'POST' });
+    const idx = workflowInstances.findIndex(x => x.id === id);
+    if (idx !== -1) workflowInstances[idx] = updated;
+    closeWfModal();
+    renderWorkflowPage();
+    showToast('Workflow отозван', 'red');
+  } catch (err) {
+    showToast('⚠️ Не удалось отозвать: ' + err.message, 'red');
+  }
 }
 
 /* Sync workflow result back to entity data */
@@ -455,10 +398,12 @@ function syncWfToEntity(w, result) {
 /* ─────────────────────────────────────────────────────────
    CREATE NEW WORKFLOW
 ───────────────────────────────────────────────────────── */
-function startWorkflow(type, entityId, entityName, entityType) {
+async function startWorkflow(type, entityId, entityName, entityType) {
   const def = WF_DEFINITIONS[type];
   if (!def) return;
-  // Check for existing active workflow for this entity+type
+  // Fast client-side check — the server (POST /api/workflow) does the real
+  // dedup and derives steps from its own copy of the template regardless
+  // of anything sent here.
   const existing = workflowInstances.find(w =>
     w.type === type && w.entityId === entityId && w.status === 'active'
   );
@@ -467,19 +412,19 @@ function startWorkflow(type, entityId, entityName, entityType) {
     openWfModal(existing.id);
     return;
   }
-  const instance = {
-    id: wfIdCounter++,
-    type, entityId, entityName, entityType,
-    createdAt: new Date().toISOString(),
-    createdBy: currentUserDisplayName(),
-    currentStep: 0,
-    status: 'active',
-    steps: def.steps.map(s => ({ ...s, completedAt:null, completedBy:null, decision:null, comment:'' })),
-  };
-  workflowInstances.unshift(instance);
-  showToast(`🚀 Workflow запущен: ${entityName}`, 'blue');
-  if (typeof updateBadges === 'function') updateBadges();
-  openWfModal(instance.id);
+  try {
+    const instance = await apiFetch('/api/workflow', {
+      method: 'POST',
+      body: JSON.stringify({ type, entityId, entityName, entityType }),
+    });
+    const idx = workflowInstances.findIndex(w => w.id === instance.id);
+    if (idx !== -1) workflowInstances[idx] = instance; else workflowInstances.unshift(instance);
+    showToast(`🚀 Workflow запущен: ${entityName}`, 'blue');
+    if (typeof updateBadges === 'function') updateBadges();
+    openWfModal(instance.id);
+  } catch (err) {
+    showToast('⚠️ Не удалось запустить workflow: ' + err.message, 'red');
+  }
 }
 
 /* Helper: get active workflow count for badge */
