@@ -25,7 +25,6 @@ let lpRegisterIdCounter = 7;
  * Each CC has line items per LP (pro-rata)
  */
 let capitalCallsLog = [];  // populated at runtime by js/api-auth.js via GET /api/capital-calls (see server/index.js)
-let ccLogIdCounter = 5;
 
 /* ── Utility ─────────────────────────────────────────── */
 function fmtUSD(n) {
@@ -1651,7 +1650,7 @@ function renderCapitalCallsPage() {
                     <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cc.managementFee?'rgba(234,179,8,0.12)':'rgba(59,130,246,0.12)'};color:${cc.managementFee?'#eab308':'#3b82f6'}">
                       ${cc.managementFee ? 'Mgmt Fee' : 'Investment'}
                     </span>
-                    ${cc.individualLP ? `<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;background:rgba(249,115,22,0.15);color:#fb923c;margin-left:4px">IND</span>` : ''}
+                    ${cc.lineItems.length === 1 ? `<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;background:rgba(249,115,22,0.15);color:#fb923c;margin-left:4px">IND</span>` : ''}
                   </td>
                   <td style="font-size:12px;font-weight:700;color:${received===expected?'#22c55e':'#f97316'}">${fmtUSD(received)}</td>
                   <td style="font-size:12px;font-weight:700;color:${unpaid>0?'#ef4444':'#22c55e'}">${unpaid>0?fmtUSD(unpaid):'✓'}</td>
@@ -1797,7 +1796,7 @@ function openCCDetail(ccId) {
           <span style="font-size:17px;font-weight:800;color:#f1f5f9">${cc.ccNumber}</span>
           ${ccStatusBadge(isOverdue?'Overdue':cc.status)}
           ${cc.managementFee ? '<span style="font-size:11px;background:rgba(234,179,8,0.12);color:#eab308;border:1px solid rgba(234,179,8,0.3);border-radius:6px;padding:2px 8px;font-weight:700">Management Fee</span>' : ''}
-          ${cc.individualLP  ? '<span style="font-size:11px;background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.35);border-radius:6px;padding:2px 8px;font-weight:700"><i class="fas fa-user" style="margin-right:3px"></i>Individual LP</span>' : ''}
+          ${cc.lineItems.length === 1 ? '<span style="font-size:11px;background:rgba(249,115,22,0.15);color:#fb923c;border:1px solid rgba(249,115,22,0.35);border-radius:6px;padding:2px 8px;font-weight:700"><i class="fas fa-user" style="margin-right:3px"></i>Individual LP</span>' : ''}
         </div>
         <div style="font-size:12px;color:#94a3b8;margin-top:3px">${cc.purpose}</div>
       </div>
@@ -1905,7 +1904,7 @@ function closeCCDetail() {
   document.body.style.overflow = '';
 }
 
-function markLPPayment(ccId, lpId) {
+async function markLPPayment(ccId, lpId) {
   const cc = capitalCallsLog.find(c => c.id === ccId);
   if (!cc) return;
   const li = cc.lineItems.find(l => l.lpId === lpId);
@@ -1913,31 +1912,42 @@ function markLPPayment(ccId, lpId) {
 
   if (!confirm(`Подтвердить получение платежа от ${li.lpName} на сумму ${fmtUSD(li.called)}?`)) return;
 
-  li.paid        = li.called;
-  li.status      = 'Paid';
-  li.paymentDate = today();
   // NB: AML clearance is a separate, deliberate check — see markLpAmlOk() —
   // not implied by payment receipt. A wire arriving doesn't mean AML/SoF was
   // actually verified for it.
+  const lpName = li.lpName, called = li.called;
+  try {
+    const updatedCC = await apiFetch(`/api/capital-calls/${ccId}/line-items/${lpId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ paid: called, status: 'Paid', paymentDate: today() }),
+    });
+    Object.assign(cc, updatedCC);
 
-  // Update LP Register calledAmount + paidAmount
-  const lp = lpRegister.find(l => l.id === lpId);
-  if (lp) {
-    // Recalculate total paid from all CCs
-    const totalPaidForLP = capitalCallsLog.flatMap(c => c.lineItems.filter(x => x.lpId === lpId && x.status === 'Paid')).reduce((s, x) => s + x.paid, 0);
-    lp.calledAmount = totalPaidForLP;
-    lp.paidAmount   = totalPaidForLP;
-  }
+    // Update LP Register calledAmount + paidAmount — best-effort, doesn't
+    // block the payment's own success if this second call fails.
+    const lp = lpRegister.find(l => l.id === lpId);
+    if (lp) {
+      const totalPaidForLP = capitalCallsLog.flatMap(c => c.lineItems.filter(x => x.lpId === lpId && x.status === 'Paid')).reduce((s, x) => s + x.paid, 0);
+      lp.calledAmount = totalPaidForLP;
+      lp.paidAmount   = totalPaidForLP;
+      apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: totalPaidForLP, paidAmount: totalPaidForLP }) })
+        .catch(err => showToast('⚠️ Платёж сохранён, но не обновлён итог LP: ' + err.message, 'orange'));
+    }
 
-  // Авто-закрытие CC если все LP оплатили
-  const allPaid = cc.lineItems.every(l => l.status === 'Paid');
-  if (allPaid) {
-    cc.status = 'Completed';
-    showToast(`✅ Платёж от ${li.lpName} · ${fmtUSD(li.paid)} · CC ${cc.ccNumber} закрыт — все LP оплатили`, 'green');
-  } else {
-    const stillPending = cc.lineItems.filter(l => l.status === 'Paid').length;
-    const total        = cc.lineItems.length;
-    showToast(`✅ Платёж получен от ${li.lpName} · ${fmtUSD(li.paid)} · ${stillPending}/${total} LP оплатили`, 'green');
+    // Авто-закрытие CC если все LP оплатили
+    const allPaid = cc.lineItems.every(l => l.status === 'Paid');
+    if (allPaid) {
+      const closedCC = await apiFetch(`/api/capital-calls/${ccId}`, { method: 'PUT', body: JSON.stringify({ status: 'Completed' }) });
+      Object.assign(cc, closedCC);
+      showToast(`✅ Платёж от ${lpName} · ${fmtUSD(called)} · CC ${cc.ccNumber} закрыт — все LP оплатили`, 'green');
+    } else {
+      const stillPending = cc.lineItems.filter(l => l.status === 'Paid').length;
+      const total        = cc.lineItems.length;
+      showToast(`✅ Платёж получен от ${lpName} · ${fmtUSD(called)} · ${stillPending}/${total} LP оплатили`, 'green');
+    }
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить платёж: ' + err.message, 'red');
+    return;
   }
   openCCDetail(ccId);
   renderCapitalCallsPage();
@@ -1945,7 +1955,7 @@ function markLPPayment(ccId, lpId) {
 
 // AML clearance for one LP's capital-call line item — a separate, deliberate
 // action from payment receipt (see markLPPayment's comment above).
-function markLpAmlOk(ccId, lpId) {
+async function markLpAmlOk(ccId, lpId) {
   const cc = capitalCallsLog.find(c => c.id === ccId);
   if (!cc) return;
   const li = cc.lineItems.find(l => l.lpId === lpId);
@@ -1954,8 +1964,17 @@ function markLpAmlOk(ccId, lpId) {
 
   if (!confirm(`Подтвердить, что AML/Source-of-Funds проверка для ${li.lpName} по этому Capital Call пройдена?`)) return;
 
-  li.amlOk = true;
-  showToast(`✅ AML подтверждён для ${li.lpName}`, 'green');
+  const lpName = li.lpName;
+  try {
+    const updatedCC = await apiFetch(`/api/capital-calls/${ccId}/line-items/${lpId}`, {
+      method: 'PUT', body: JSON.stringify({ amlOk: true }),
+    });
+    Object.assign(cc, updatedCC);
+    showToast(`✅ AML подтверждён для ${lpName}`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить AML-подтверждение: ' + err.message, 'red');
+    return;
+  }
   openCCDetail(ccId);
   renderCapitalCallsPage();
 }
@@ -2092,7 +2111,7 @@ function closeNewCCModal() {
   document.body.style.overflow = '';
 }
 
-function saveNewCC() {
+async function saveNewCC() {
   const pct     = parseFloat(document.getElementById('cc_pct')?.value);
   const purpose = document.getElementById('cc_purpose')?.value?.trim();
   if (!purpose)           { showToast('⚠ Укажите цель Capital Call', 'red'); return; }
@@ -2105,9 +2124,6 @@ function saveNewCC() {
   const notes      = document.getElementById('cc_notes')?.value || '';
 
   const activeLP   = lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId);
-  const year       = new Date().getFullYear();
-  const seq        = String(ccLogIdCounter).padStart(3,'0');
-  const ccNumber   = `CC-${year}-${seq}`;
   const lineItems  = activeLP.map(lp => ({
     lpId:        lp.id,
     lpName:      lp.name,
@@ -2123,9 +2139,7 @@ function saveNewCC() {
   const totalAmount = lineItems.reduce((s, li) => s + li.called, 0);
 
   const newCC = {
-    id:           ccLogIdCounter++,
     fundId:       typeof activeFundId !== 'undefined' ? activeFundId : null,
-    ccNumber,
     noticeDate,
     paymentDate:  payDate,
     totalAmount,
@@ -2140,16 +2154,26 @@ function saveNewCC() {
     lineItems,
   };
 
-  // Update LP Register calledAmount
-  lineItems.forEach(li => {
-    const lp = lpRegister.find(l => l.id === li.lpId);
-    if (lp) lp.calledAmount += li.called;
-  });
+  try {
+    const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
+    capitalCallsLog.push(created);
 
-  capitalCallsLog.push(newCC);
-  closeNewCCModal();
-  showToast(`✅ Capital Call ${ccNumber} создан · ${fmtUSD(totalAmount)} · 10 р.д. уведомление`, 'green');
-  renderCapitalCallsPage();
+    // Sync each LP's calledAmount — best-effort, doesn't block the CC's own
+    // success (the call is already safely saved either way).
+    created.lineItems.forEach(li => {
+      const lp = lpRegister.find(l => l.id === li.lpId);
+      if (!lp) return;
+      lp.calledAmount = (lp.calledAmount || 0) + li.called;
+      apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: lp.calledAmount }) })
+        .catch(err => showToast(`⚠️ CC сохранён, но не обновлён итог LP ${lp.name}: ` + err.message, 'orange'));
+    });
+
+    closeNewCCModal();
+    showToast(`✅ Capital Call ${created.ccNumber} создан · ${fmtUSD(created.totalAmount)} · 10 р.д. уведомление`, 'green');
+    renderCapitalCallsPage();
+  } catch (err) {
+    showToast('⚠️ Не удалось создать Capital Call: ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2274,7 +2298,7 @@ function updateICCPctPreview(commitment) {
   }
 }
 
-function saveIndividualCC(lpId) {
+async function saveIndividualCC(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
 
@@ -2290,11 +2314,11 @@ function saveIndividualCC(lpId) {
   const bankRef    = document.getElementById('icc_bankRef')?.value    || '';
   const notes      = document.getElementById('icc_notes')?.value      || '';
 
-  const year     = new Date().getFullYear();
-  const seq      = String(ccLogIdCounter).padStart(3, '0');
-  const ccNumber = `CC-${year}-${seq}-IND`;     /* суффикс IND = Individual */
-  const pct      = lp.commitment ? +(amount / lp.commitment * 100).toFixed(4) : 0;
+  const pct = lp.commitment ? +(amount / lp.commitment * 100).toFixed(4) : 0;
 
+  // "Individual" nature is now derived from lineItems.length === 1 at render
+  // time (js/lp-register.js badge sites) rather than a stored flag — no
+  // ccNumber suffix needed either, the server auto-numbers uniformly.
   const lineItems = [{
     lpId:        lp.id,
     lpName:      lp.name,
@@ -2309,9 +2333,7 @@ function saveIndividualCC(lpId) {
   }];
 
   const newCC = {
-    id:           ccLogIdCounter++,
     fundId:       lp.fundId != null ? lp.fundId : null,
-    ccNumber,
     noticeDate,
     paymentDate:  payDate,
     totalAmount:  amount,
@@ -2324,16 +2346,22 @@ function saveIndividualCC(lpId) {
     createdBy:    currentUserDisplayName(),
     notes,
     lineItems,
-    individualLP: true,   /* флаг: CC для одного LP */
   };
 
-  /* Обновляем calledAmount LP */
-  lp.calledAmount = (lp.calledAmount || 0) + amount;
+  try {
+    const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
+    capitalCallsLog.push(created);
 
-  capitalCallsLog.push(newCC);
-  closeNewCCModal();
-  showToast(`✅ Individual CC ${ccNumber} создан для ${lp.name} · ${fmtUSD(amount)}`, 'green');
-  renderCapitalCallsPage();
+    lp.calledAmount = (lp.calledAmount || 0) + amount;
+    apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: lp.calledAmount }) })
+      .catch(err => showToast('⚠️ CC сохранён, но не обновлён итог LP: ' + err.message, 'orange'));
+
+    closeNewCCModal();
+    showToast(`✅ Individual CC ${created.ccNumber} создан для ${lp.name} · ${fmtUSD(amount)}`, 'green');
+    renderCapitalCallsPage();
+  } catch (err) {
+    showToast('⚠️ Не удалось создать Individual CC: ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
