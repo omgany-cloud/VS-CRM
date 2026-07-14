@@ -752,14 +752,9 @@ function generateLPWelcomeLetter(lpId) {
   const dt  = today();
   const letterNum = 'GL-' + new Date().getFullYear() + '-LP-' + String(lp.id).padStart(3,'0');
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>LP Admission Letter — ${lp.name}</title>
-<style>
+  const docStyle = `
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; color: #111; background:#fff; padding: 40px 60px; }
+  body { font-family: 'Times New Roman', serif; font-size: 11pt; color: #111; padding: 40px 60px; }
   .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #1a365d; padding-bottom:14px; margin-bottom:28px; }
   .logo-block { }
   .logo-name { font-size:16pt; font-weight:700; color:#1a365d; letter-spacing:0.5px; }
@@ -781,10 +776,10 @@ function generateLPWelcomeLetter(lpId) {
   .sig-col { width:45%; }
   .sig-line { border-top:1px solid #333; margin-top:48px; padding-top:5px; font-size:10pt; }
   .footer { margin-top:36px; padding-top:10px; border-top:1px solid #cbd5e0; font-size:8.5pt; color:#718096; text-align:center; }
-  @media print { body { padding:20px 40px; } button { display:none !important; } }
-</style>
-</head>
-<body>
+  @media print { body { padding:20px 40px; } }
+  `;
+
+  const body = `
   <div class="header">
     <div class="logo-block">
       <div class="logo-name">${fp.gp}</div>
@@ -875,21 +870,14 @@ function generateLPWelcomeLetter(lpId) {
     CONFIDENTIAL — For authorised recipient only. Retention: 6 years (Constitution §8.5)
   </div>
 
-  <div style="text-align:center;margin-top:20px">
-    <button onclick="window.print()"
-      style="background:#1a365d;color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:Arial,sans-serif">
-      🖨️ Сохранить / Напечатать PDF
-    </button>
-  </div>
-</body>
-</html>`;
+  `;
 
-  const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { showToast('⚠ Разрешите всплывающие окна в браузере', 'orange'); return; }
-  win.document.write(html);
-  win.document.close();
-  setTimeout(() => win.print(), 600);
-  showToast(`📧 Welcome Letter для ${lp.name} сформирован`, 'green');
+  const win = openPrintableDocument(body, {
+    title: `LP Admission Letter — ${lp.name}`,
+    features: 'width=900,height=700',
+    extraStyle: docStyle,
+  });
+  if (win) showToast(`📧 Welcome Letter для ${lp.name} сформирован`, 'green');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -905,14 +893,9 @@ function generateCCNotice(ccId, lpId) {
   const noticeNum = cc.ccNumber + '-' + String(lpId).padStart(3,'0');
   const payDue    = cc.paymentDate || '—';
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Capital Call Notice — ${cc.ccNumber} — ${li.lpName}</title>
-<style>
+  const docStyle = `
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'Times New Roman', serif; font-size:11pt; color:#111; background:#fff; padding:40px 60px; }
+  body { font-family: 'Times New Roman', serif; font-size:11pt; color:#111; padding:40px 60px; }
   .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #92400e; padding-bottom:14px; margin-bottom:28px; }
   .logo-name { font-size:15pt; font-weight:700; color:#92400e; }
   .logo-sub  { font-size:9pt; color:#4a5568; margin-top:2px; }
@@ -937,10 +920,9 @@ function generateCCNotice(ccId, lpId) {
   .sig-col { width:45%; }
   .sig-line { border-top:1px solid #333; margin-top:44px; padding-top:5px; font-size:10pt; }
   .footer { margin-top:32px; padding-top:10px; border-top:1px solid #cbd5e0; font-size:8.5pt; color:#718096; text-align:center; }
-  @media print { button { display:none !important; } }
-</style>
-</head>
-<body>
+  `;
+
+  const body = `
   <div class="header">
     <div>
       <div class="logo-name">${fp.gp}</div>
@@ -1030,31 +1012,14 @@ function generateCCNotice(ccId, lpId) {
     STRICTLY CONFIDENTIAL — For authorised recipient only. Retention: 6 years (Constitution §8.5)
   </div>
 
-  <div style="text-align:center;margin-top:20px">
-    <button onclick="window.print()"
-      style="background:#92400e;color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:Arial,sans-serif">
-      🖨️ Сохранить / Напечатать PDF
-    </button>
-  </div>
-</body>
-</html>`;
+  `;
 
-  const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { showToast('⚠ Разрешите всплывающие окна в браузере', 'orange'); return; }
-  win.document.write(html);
-  win.document.close();
-  setTimeout(() => win.print(), 600);
-  showToast(`📨 Capital Call Notice ${cc.ccNumber} для ${li.lpName} сформирован`, 'green');
-}
-
-/* helper — generate CC notices for ALL LP in one batch */
-function generateCCNoticeAll(ccId) {
-  const cc = capitalCallsLog.find(c => c.id === ccId);
-  if (!cc) return;
-  if (!confirm(`Сформировать Capital Call Notice для всех ${cc.lineItems.length} LP по ${cc.ccNumber}?`)) return;
-  cc.lineItems.forEach((li, idx) => {
-    setTimeout(() => generateCCNotice(ccId, li.lpId), idx * 400);
+  const win = openPrintableDocument(body, {
+    title: `Capital Call Notice — ${cc.ccNumber} — ${li.lpName}`,
+    features: 'width=900,height=700',
+    extraStyle: docStyle,
   });
+  if (win) showToast(`📨 Capital Call Notice ${cc.ccNumber} для ${li.lpName} сформирован`, 'green');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1120,14 +1085,9 @@ function printCapitalAccountStatement(lpId) {
         <td style="text-align:center;font-size:9pt;font-weight:600;color:${li.status === 'Paid' ? '#276749' : '#c05621'}">${liStatusLabel(li.status)}</td>
       </tr>`).join('');
 
-  const html = `<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>Capital Account Statement — ${lp.name}</title>
-<style>
+  const docStyle = `
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size:10pt; color:#111; background:#fff; padding:32px 48px; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size:10pt; color:#111; padding:32px 48px; }
 
   /* ── Header ── */
   .hdr { display:flex; justify-content:space-between; align-items:flex-start;
@@ -1209,14 +1169,11 @@ function printCapitalAccountStatement(lpId) {
                 font-size:7.5pt; color:#a0aec0; text-align:center; line-height:1.6; }
 
   @media print {
-    button { display:none !important; }
     body   { padding:14px 28px; }
-    .pagebreak { page-break-before:always; }
   }
-</style>
-</head>
-<body>
+  `;
 
+  const body = `
   <!-- ══════════════════ HEADER ══════════════════ -->
   <div class="hdr">
     <div class="hdr-left">
@@ -1342,7 +1299,7 @@ function printCapitalAccountStatement(lpId) {
   </div>
 
   <!-- ══════════════════ 4. TRANSACTION LOG ══════════════════ -->
-  <div class="sec-title pagebreak">4. Транзакционный журнал Capital Calls</div>
+  <div class="sec-title page-break">4. Транзакционный журнал Capital Calls</div>
   <table class="tx-table">
     <thead>
       <tr>
@@ -1404,23 +1361,14 @@ function printCapitalAccountStatement(lpId) {
     AFSA License: ${fp.license} · Документ сформирован автоматически CRM-системой · ${dt}
   </div>
 
-  <div style="text-align:center;margin-top:22px">
-    <button onclick="window.print()"
-      style="background:#1a365d;color:#fff;border:none;padding:10px 32px;border-radius:8px;
-             cursor:pointer;font-size:13px;font-weight:700;font-family:Arial,sans-serif">
-      🖨️ Сохранить / Напечатать PDF
-    </button>
-  </div>
+  `;
 
-</body>
-</html>`;
-
-  const win = window.open('', '_blank', 'width=1020,height=820');
-  if (!win) { showToast('⚠ Разрешите всплывающие окна в браузере', 'orange'); return; }
-  win.document.write(html);
-  win.document.close();
-  setTimeout(() => win.print(), 600);
-  showToast(`📊 Capital Account Statement для ${lp.name} открыт`, 'green');
+  const win = openPrintableDocument(body, {
+    title: `Capital Account Statement — ${lp.name}`,
+    features: 'width=1020,height=820',
+    extraStyle: docStyle,
+  });
+  if (win) showToast(`📊 Capital Account Statement для ${lp.name} открыт`, 'green');
 }
 
 /* ═══════════════════════════════════════════════════════════

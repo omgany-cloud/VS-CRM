@@ -3310,345 +3310,6 @@ function obViewLpaFromTask(taskId) {
   _obOpenPreviewModal(previewUrl, url);
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   WORD DOCUMENT GENERATORS — Task 4.1
-   obGenerateEngagementLetter(taskId)      — CF&A Engagement Letter
-   obGenerateSubscriptionAgreement(taskId) — FM Subscription Agreement
-
-   Approach: HTML-blob with MIME type application/msword
-   Word opens it natively; no external libraries required.
-══════════════════════════════════════════════════════════════════ */
-
-/* ── shared Word-HTML builder ────────────────────────────────── */
-function _wdSave(htmlContent, filename) {
-  var html = '<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office"' +
-    ' xmlns:w="urn:schemas-microsoft-com:office:word"' +
-    ' xmlns="http://www.w3.org/TR/REC-html40">' +
-    '<head><meta charset="utf-8">' +
-    '<title>' + filename + '</title>' +
-    '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View>' +
-    '<w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->' +
-    '<style>' +
-    'body{font-family:Calibri,sans-serif;font-size:11pt;margin:2cm 2.5cm;color:#1a1a1a}' +
-    'h1{font-size:16pt;font-weight:700;color:#1e3a5f;border-bottom:2px solid #1e3a5f;padding-bottom:4pt;margin-top:18pt;margin-bottom:8pt}' +
-    'h2{font-size:13pt;font-weight:700;color:#1e3a5f;margin-top:14pt;margin-bottom:6pt}' +
-    'h3{font-size:11pt;font-weight:700;color:#374151;margin-top:10pt;margin-bottom:4pt}' +
-    'p{margin:4pt 0;line-height:1.4}' +
-    'table{width:100%;border-collapse:collapse;margin:8pt 0}' +
-    'td,th{border:1px solid #cbd5e1;padding:5pt 8pt;font-size:10pt;vertical-align:top}' +
-    'td.lbl{background:#f1f5f9;font-weight:700;width:38%;color:#374151}' +
-    'td.val{color:#1a1a1a}' +
-    '.section-title{font-size:10pt;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5pt;margin-top:12pt;margin-bottom:4pt}' +
-    '.sig-block{margin-top:20pt;border-top:1px solid #e5e7eb;padding-top:12pt}' +
-    '.sig-line{margin:8pt 0;font-size:10pt}' +
-    '.sig-line b{display:inline-block;min-width:160pt}' +
-    '.divider{border:none;border-top:1px solid #cbd5e1;margin:14pt 0}' +
-    '.appx-header{background:#1e3a5f;color:#fff;padding:10pt 14pt;margin-top:20pt;margin-bottom:10pt}' +
-    '.appx-header h1{color:#fff;border-bottom:none;margin:0;padding:0;font-size:14pt}' +
-    '.appx-header p{color:#93c5fd;margin:2pt 0 0;font-size:10pt}' +
-    '.highlight{background:#eff6ff;border-left:3pt solid #3b82f6;padding:6pt 10pt;margin:8pt 0;font-size:10pt}' +
-    '@page{margin:2cm 2.5cm;size:A4}' +
-    '</style></head><body>' +
-    htmlContent +
-    '</body></html>';
-
-  var blob = new Blob(['\ufeff', html], { type: 'application/msword' });
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function() { URL.revokeObjectURL(url); }, 3000);
-}
-
-function _wdTable(rows) {
-  // rows: array of [label, value]
-  var html = '<table>';
-  rows.forEach(function(r) {
-    html += '<tr><td class="lbl">' + (r[0]||'') + '</td><td class="val">' + (r[1]||'—') + '</td></tr>';
-  });
-  return html + '</table>';
-}
-
-function _wdSigBlock(role, name) {
-  return '<div class="sig-block">' +
-    '<p class="sig-line"><b>' + role + ':</b> ' + (name || '______________________________') + '</p>' +
-    '<p class="sig-line"><b>Signature:</b> ______________________________</p>' +
-    '<p class="sig-line"><b>Date:</b> ______________________________</p>' +
-    '</div>';
-}
-
-function _wdH1(text)  { return '<h1>' + text + '</h1>'; }
-function _wdH2(text)  { return '<h2>' + text + '</h2>'; }
-function _wdH3(text)  { return '<h3>' + text + '</h3>'; }
-function _wdP(text)   { return '<p>' + (text||'&nbsp;') + '</p>'; }
-function _wdHr()      { return '<hr class="divider">'; }
-function _wdPageBreak(){ return '<br style="page-break-before:always;display:block">&nbsp;'; }
-function _wdAppxHeader(num, title, sub) {
-  return '<div class="appx-header"><h1>APPENDIX ' + num + ' — ' + title + '</h1>' +
-    (sub ? '<p>' + sub + '</p>' : '') + '</div>';
-}
-
-/* ════════════════════════════════════════════════════════════════
-   obGenerateEngagementLetter(taskId)
-   CF&A 4.1 — Engagement Letter + Appendix 1 (Classification 3.1)
-                                  + Appendix 2 (Suitability 3.2)
-════════════════════════════════════════════════════════════════ */
-function obGenerateEngagementLetter(taskId) {
-  var task = obTasks.find(function(t){ return t.id === taskId; });
-  if (!task) { showToast('Задача не найдена', 'red'); return; }
-  var client = obClients.find(function(c){ return c.id === task.clientId; });
-  if (!client) { showToast('Клиент не найден', 'red'); return; }
-  var fd = task.formData || {};
-
-  var t31 = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '3.1'; });
-  var t32 = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '3.2'; });
-  var fd31 = (t31 && t31.formData) || {};
-  var fd32 = (t32 && t32.formData) || {};
-
-  var today_str = new Date().toLocaleDateString('en-GB');
-  var engNum    = fd.engNum || ('ENG-' + new Date().getFullYear() + '-XXX');
-  var isAdvising = client.serviceType === 'Advising' || client.serviceType === 'Both';
-
-  // ── MAIN BODY ──────────────────────────────────────────────────
-  var body = '';
-  body += _wdH1('ENGAGEMENT LETTER');
-  body += _wdTable([
-    ['Reference No.', engNum],
-    ['Date', fd.engDate || today_str],
-  ]);
-
-  body += _wdH2('PARTIES');
-  body += _wdTable([
-    ['Client', client.name + (client.bin ? ' &nbsp;|&nbsp; BIN/IIN: ' + client.bin : '')],
-    ['Address', client.address || '—'],
-    ['Email',   client.email   || '—'],
-    ['Phone',   client.phone   || '—'],
-    ['Service Provider', 'Golden Leaves Ltd'],
-    ['License',  FUND_PARAMS.license],
-    ['GP Address','AIFC, Astana, Republic of Kazakhstan'],
-  ]);
-
-  body += _wdH2('1. SCOPE OF SERVICES');
-  body += _wdTable([
-    ['Service Type', isAdvising
-      ? 'Advising on Investments (full Suitability Assessment — Section 3.2)'
-      : 'Arranging Deals in Investments (Appropriateness Assessment — Section 3.3)'],
-    ['Description of Engagement', fd.recProduct || fd32.recProduct || '—'],
-    ['Client Classification',     fd31.proposedClass || fd31.f_proposedClass || client.classification || '—'],
-  ]);
-
-  body += _wdH2('2. TERM');
-  body += _wdTable([
-    ['Commencement Date', fd.engDate   || today_str],
-    ['Expiry Date',       fd.engExpiry || '—'],
-  ]);
-
-  body += _wdH2('3. REMUNERATION');
-  body += _wdTable([
-    ['Fee Type',        fd.feeType   || '—'],
-    ['Fee Amount (USD)', fd.feeAmount ? '$' + Number(fd.feeAmount).toLocaleString('en-US') : '—'],
-    ['Success Fee',     fd.successFee ? fd.successFee + '%' : '—'],
-    ['Retainer',        fd.retainer  ? '$' + Number(fd.retainer).toLocaleString('en-US') + ' / month' : '—'],
-    ['Payment Terms',   fd.payTerms  || '—'],
-  ]);
-
-  body += _wdH2('4. CLIENT REPRESENTATIONS');
-  body += _wdP('The Client represents and warrants that:');
-  body += _wdP('(a) All information provided during the onboarding and assessment process is accurate and complete;');
-  body += _wdP('(b) The Client has read and understood the Suitability / Appropriateness Assessment (Appendix 2);');
-  body += _wdP('(c) The Client has been notified of its Client Classification as set out in Appendix 1;');
-  body += _wdP('(d) The Client will promptly notify the Company of any material change in its financial circumstances, investment objectives, or risk tolerance.');
-
-  body += _wdH2('5. CONFIDENTIALITY');
-  body += _wdP('Each party agrees to keep confidential all non-public information received from the other party in connection with this Engagement Letter.');
-
-  body += _wdH2('6. GOVERNING LAW');
-  body += _wdP('This Engagement Letter shall be governed by and construed in accordance with the laws of the Astana International Financial Centre (AIFC).');
-
-  body += _wdH2('7. ENTIRE AGREEMENT');
-  body += _wdP('This Engagement Letter, together with Appendix 1 (Client Classification Summary) and Appendix 2 (' +
-    (isAdvising ? 'Suitability' : 'Appropriateness') + ' Assessment), constitutes the entire agreement between the parties.');
-
-  body += _wdHr();
-  body += _wdH2('SIGNATURES');
-  body += _wdP('IN WITNESS WHEREOF, the parties have executed this Engagement Letter as of the date first written above.');
-  body += _wdSigBlock('For and on behalf of Golden Leaves Ltd — Authorised Signatory', '');
-  body += _wdSigBlock('For and on behalf of the Client — ' + client.name, '');
-  body += '<p style="margin-top:10pt"><b>Client Acknowledgment of Assessment Copy:</b> ' + (fd32.clientAck || '—') + '</p>';
-  body += '<p><b>Acknowledgment Date:</b> ' + (fd32.clientAckDate || '—') + '</p>';
-
-  // ── APPENDIX 1: Classification (3.1) ───────────────────────────
-  body += _wdPageBreak();
-  body += _wdAppxHeader('1', 'CLIENT CLASSIFICATION SUMMARY', 'Source: Task 3.1 — Client Classification');
-  body += _wdTable([
-    ['Classification Date',     fd31.classDate || fd31.f_classDate || '—'],
-    ['Client Type',             client.type],
-    ['Proposed Classification', fd31.proposedClass || fd31.f_proposedClass || '—'],
-    ['CO Decision',             fd31.coDecision || fd31.f_coDecision || '—'],
-  ]);
-
-  var isIndiv31 = client.type === 'Individual';
-  body += _wdH3(isIndiv31 ? 'Individual — Professional Client Criteria (any 1 of 3)' : 'Corporate — Professional Client Criteria (any 1 of 4)');
-  if (isIndiv31) {
-    body += _wdTable([
-      ['① Net Assets ≥ $1,000,000 (excl. residence & pension)', fd31.indAssets1m    || '—'],
-      ['② Annual Income ≥ $100,000 each of last 2 years',       fd31.indIncome100k  || '—'],
-      ['③ Professional Qualification ≥ 3 yrs (CFA/CPA/FRM/senior mgmt)', fd31.indExperience3y || '—'],
-    ]);
-  } else {
-    body += _wdTable([
-      ['① Annual Turnover ≥ $2,000,000',          fd31.corpTurnover2m    || '—'],
-      ['② Balance Sheet Total ≥ $1,000,000',       fd31.corpBalance1m     || '—'],
-      ['③ Regulated Financial Institution',        fd31.corpRegulated     || '—'],
-      ['④ Large Corp — Turnover ≥ $2M (sub-IV)',   fd31.corpLargeTurnover || '—'],
-      ['④ Large Corp — Balance ≥ $1M (sub-IV)',    fd31.corpLargeBalance  || '—'],
-      ['④ Large Corp — Staff ≥ 50 (sub-IV)',       fd31.corpEmployees50   || '—'],
-    ]);
-  }
-
-  body += _wdH3('Market Counterparty Criteria');
-  body += _wdTable([
-    ['Licensed Financial Institution',  fd31.mcpLicensed     || '—'],
-    ['Government Entity',              fd31.mcpGovEntity     || '—'],
-    ['Supranational Organisation',     fd31.mcpSupranational || '—'],
-  ]);
-
-  body += _wdH3('Opt-Up / Opt-Down');
-  body += _wdTable([
-    ['Opt-Up Request',  fd31.optUpRequest   || '—'],
-    ['Opt-Down Request',fd31.optDownRequest || '—'],
-  ]);
-
-  body += _wdH3('Client Notification of Classification');
-  body += _wdTable([
-    ['Notified', fd31.clientNotified || '—'],
-    ['Date',     fd31.notifyDate     || '—'],
-  ]);
-
-  body += _wdHr();
-  body += _wdSigBlock('Compliance Officer (CO)', fd31.coName || '');
-
-  // ── APPENDIX 2: Suitability / Appropriateness (3.2) ───────────
-  body += _wdPageBreak();
-  body += _wdAppxHeader('2',
-    isAdvising ? 'SUITABILITY ASSESSMENT' : 'APPROPRIATENESS ASSESSMENT',
-    'Source: Task 3.2 — ' + (isAdvising ? 'Advising on Investments (Section 3.2)' : 'Arranging Deals in Investments (Section 3.3)'));
-
-  if (isAdvising) {
-    // Block A
-    body += _wdH3('A. Client Profile Assessment');
-    body += _wdTable([
-      ['Assessment Date', fd32.suitDate || '—'],
-      ['Investment Objectives', [
-        (fd32.objPreservation === true || fd32.objPreservation === 'true') ? '✓ Capital Preservation' : '',
-        (fd32.objIncome       === true || fd32.objIncome       === 'true') ? '✓ Income Generation'    : '',
-        (fd32.objGrowth       === true || fd32.objGrowth       === 'true') ? '✓ Capital Growth'       : '',
-        (fd32.objSpeculation  === true || fd32.objSpeculation  === 'true') ? '✓ Speculation'          : '',
-      ].filter(Boolean).join(' | ') || '—'],
-      ['Additional Objectives Notes', fd32.investGoals    || '—'],
-      ['Risk Tolerance',              fd32.riskTolerance  || '—'],
-      ['Investment Horizon',          fd32.horizon        || '—'],
-      ['Liquidity Requirements',      fd32.liquidityNeeds || '—'],
-    ]);
-
-    // Block B
-    body += _wdH3('B. Financial Situation Analysis');
-    body += _wdH3('Net Worth Assessment');
-    body += _wdTable([
-      ['Total Assets (excl. primary residence)', fd32.totalAssets     || '—'],
-      ['Total Liabilities',                      fd32.totalLiab       || '—'],
-      ['Net Liquid Assets for Investment',       fd32.netLiquidAssets || '—'],
-      ['Proposed Investment as % of Total Wealth', fd32.dealPctWealth || '—'],
-    ]);
-    body += _wdH3('Income Analysis');
-    body += _wdTable([
-      ['Annual Income (all sources)',      fd32.annualIncome    || '—'],
-      ['Income Stability',                 fd32.incomeStability || '—'],
-      ['Expected Future Income Changes',   fd32.futureIncome    || '—'],
-      ['Ability to Sustain Potential Losses', fd32.lossCapacity || '—'],
-    ]);
-
-    // Block C
-    body += _wdH3('C. Knowledge and Experience Evaluation');
-    body += _wdH3('C.1 Investment Experience');
-    body += _wdTable([
-      ['Equity (public / private)',              fd32.expEquity || '—'],
-      ['Bond / Debt Instruments',                fd32.expBonds  || '—'],
-      ['Alternative Investments (PE / HF etc.)', fd32.expAlts   || '—'],
-      ['M&A Transactions',                       fd32.expMA     || '—'],
-      ['International Investment Experience',    fd32.expIntl   || '—'],
-    ]);
-    body += _wdH3('C.2 Professional Background');
-    body += _wdTable([
-      ['Finance / Investment Education',           fd32.bgEducation    || '—'],
-      ['Professional Experience in Finance',       fd32.bgProfExp      || '—'],
-      ['Board / Advisory Roles',                   fd32.bgBoardRole    || '—'],
-      ['Understanding of Complex Instruments',     fd32.bgComplexInstr || '—'],
-    ]);
-  } else {
-    // Appropriateness
-    body += _wdH3('Block 1 — Knowledge of Relevant Instruments');
-    body += _wdTable([
-      ['Assessment Date',                      fd32.suitDate        || '—'],
-      ['Instrument Type',                      fd32.instrType       || '—'],
-      ['Instrument Experience',                fd32.instrExp        || '—'],
-      ['Private Placement Experience',         fd32.privatePlaceExp || '—'],
-      ['Client Understands Instrument Risks',  fd32.understandRisk  || '—'],
-      ['Risk Warning Issued',                  fd32.riskWarning     || '—'],
-    ]);
-    body += _wdH3('Block 2 — Transaction Experience');
-    body += _wdTable([
-      ['Prior Comparable Transactions',        fd32.txnPriorExp     || '—'],
-      ['Due Diligence Process Knowledge',      fd32.txnDDUnderstand || '—'],
-      ['Legal Documentation Familiarity',      fd32.txnLegalDocs    || '—'],
-    ]);
-    body += _wdH3('Block 3 — Financial Capacity');
-    body += _wdTable([
-      ['Ability to Evaluate Independently',    fd32.fcEvalCapacity  || '—'],
-      ['Access to Professional Advisers',      fd32.fcProfAdvice    || '—'],
-      ['Commitment & Outcomes Understanding',  fd32.fcCommitUnder   || '—'],
-    ]);
-  }
-
-  body += _wdH3('D. Description of Recommended Investment / Mandate');
-  body += _wdP(fd32.recProduct || '—');
-  if (isAdvising) {
-    body += _wdP('<b>Key Risks / Characteristics:</b> ' + (fd32.recRisks || '—'));
-  }
-
-  body += _wdH3('E. ' + (isAdvising ? 'Suitability' : 'Appropriateness') + ' Conclusion');
-  body += _wdTable([
-    [(isAdvising ? 'Suitability' : 'Appropriateness') + ' Conclusion', fd32.suitMatch     || '—'],
-    ['Overall Result',                                                  fd32.overallResult || '—'],
-    ['Justification',                                                   fd32.suitJustify   || '—'],
-  ]);
-
-  body += _wdH3('F. Four-Eyes Review (Section 3.4)');
-  body += _wdTable([
-    ['Level 1 — Investment Adviser / RM', fd32.adviserName   || '—'],
-    ['Assessment Prepared Date',          fd32.adviserDate   || '—'],
-    ['RM Comments',                       fd32.rmComment     || '—'],
-    ['Level 2 — Compliance Officer',      fd32.coName        || '—'],
-    ['CO Review Date',                    fd32.coReviewDate  || '—'],
-    ['CO Decision',                       fd32.coDecision    || '—'],
-    ['CO Comments',                       fd32.coComment     || '—'],
-    ['Client Acknowledgment',             fd32.clientAck     || '—'],
-    ['Client Acknowledgment Date',        fd32.clientAckDate || '—'],
-  ]);
-
-  body += _wdHr();
-  body += _wdSigBlock('Level 1 — Investment Adviser / RM', fd32.adviserName || '');
-  body += _wdSigBlock('Level 2 — Compliance Officer', fd32.coName || '');
-  body += _wdSigBlock('Client Acknowledgment — ' + client.name, '');
-
-  // ── Save ──────────────────────────────────────────────────────
-  _wdSave(body, engNum + '_' + client.name.replace(/\s+/g, '_') + '.doc');
-  showToast('✅ Engagement Letter скачан: ' + engNum, 'green');
-}
-
 /* ════════════════════════════════════════════════════════════════
    obGenerateSubscriptionAgreement(taskId)
    FM 4.1 — Subscription Agreement PDF (window.print)
@@ -3707,12 +3368,8 @@ function obGenerateSubscriptionAgreement(taskId) {
     return '<table class="data-table">' + rows.map(function(r){ return dataRow(r[0],r[1]); }).join('') + '</table>';
   }
 
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-    '<title>' + subNum + ' — Subscription Agreement</title>' +
-    '<style>' +
-    'body{font-family:"Times New Roman",serif;font-size:10pt;margin:0;color:#000;background:#fff}' +
+  var docStyle =
     '@page{margin:2cm 2.5cm;size:A4}' +
-    '@media print{.no-print{display:none}.page-break{page-break-before:always}}' +
     '.cover{text-align:center;padding:40pt 0 20pt}' +
     '.cover h1{font-size:14pt;font-weight:bold;text-transform:uppercase;border-bottom:2px solid #000;padding-bottom:8pt;margin-bottom:12pt}' +
     '.cover .meta{font-size:10pt;line-height:1.8}' +
@@ -3738,15 +3395,10 @@ function obGenerateSubscriptionAgreement(taskId) {
     'h2{font-size:11pt;font-weight:bold;margin:10pt 0 4pt;color:#1e3a5f}' +
     'h3{font-size:10pt;font-weight:bold;margin:8pt 0 3pt;color:#374151}' +
     'p{margin:3pt 0;line-height:1.4;font-size:9.5pt}' +
-    'hr{border:none;border-top:1px solid #aaa;margin:10pt 0}' +
-    '.no-print{margin:16px;padding:10px 20px;background:#1e3a5f;color:#fff;border:none;cursor:pointer;font-size:13px;border-radius:6px}' +
-    '</style></head><body>' +
+    'hr{border:none;border-top:1px solid #aaa;margin:10pt 0}';
 
-    // Print button
-    '<div class="no-print" style="display:flex;gap:10px;align-items:center;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">' +
-    '<button onclick="window.print()" class="no-print" style="background:#1e3a5f">🖨️ Печать / Сохранить PDF</button>' +
-    '<span style="font-size:12px;color:#374151">Subscription Agreement · ' + subNum + ' · ' + saDate + '</span>' +
-    '</div>' +
+  var body =
+    '<div style="font-size:12px;color:#374151;text-align:center;padding:8px 0;font-family:Arial,sans-serif">Subscription Agreement · ' + subNum + ' · ' + saDate + '</div>' +
 
     // COVER
     '<div class="cover">' +
@@ -4001,16 +3653,14 @@ function obGenerateSubscriptionAgreement(taskId) {
     '<table class="sig-table" style="margin-top:14pt"><tr>' +
     '<td><div class="sig-label">Compliance Officer / RM</div><div class="sig-line">Signature: _______________________ &nbsp; Date: _________</div></td>' +
     '<td><div class="sig-label">LP Acknowledgment — ' + lpName + '</div><div class="sig-line">Signature: _______________________ &nbsp; Date: _________</div></td>' +
-    '</tr></table>' +
+    '</tr></table>';
 
-    '</body></html>';
-
-  var w = window.open('', '_blank', 'width=960,height=800');
-  if (!w) { showToast('⚠️ Разрешите всплывающие окна и повторите', 'orange'); return; }
-  w.document.write(html);
-  w.document.close();
-  setTimeout(function(){ w.print(); }, 700);
-  showToast('✅ Subscription Agreement готов к печати/PDF: ' + subNum, 'green');
+  var w = openPrintableDocument(body, {
+    title: subNum + ' — Subscription Agreement',
+    features: 'width=960,height=800',
+    extraStyle: docStyle,
+  });
+  if (w) showToast('✅ Subscription Agreement готов к печати/PDF: ' + subNum, 'green');
 }
 
 
@@ -4468,13 +4118,10 @@ function obGenerateTermSheet(taskId) {
   ].filter(Boolean);
   var objStr = objList.length ? objList.join(' · ') : (fd32.investGoals || '—');
 
-  var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' +
-  '<title>Term Sheet — ' + esc(client.name) + ' — ' + tsNum + '</title>' +
-  '<style>' +
+  var docStyle =
   '*{box-sizing:border-box;margin:0;padding:0}' +
-  'body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:10pt;color:#1a1a2e;background:#fff}' +
+  'body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:10pt;color:#1a1a2e}' +
   '@page{size:A4;margin:15mm 18mm 18mm 18mm}' +
-  '@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.no-print{display:none}}' +
 
   /* Header bar */
   '.doc-header{background:#0f172a;color:#fff;padding:16pt 20pt;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}' +
@@ -4531,9 +4178,9 @@ function obGenerateTermSheet(taskId) {
   '.sig-table{width:100%;border-collapse:collapse;margin-top:8pt}' +
 
   /* Footer */
-  '.doc-footer{margin-top:14pt;padding-top:8pt;border-top:1pt solid #e2e8f0;display:flex;justify-content:space-between;font-size:7.5pt;color:#94a3b8}' +
-  '</style></head><body>' +
+  '.doc-footer{margin-top:14pt;padding-top:8pt;border-top:1pt solid #e2e8f0;display:flex;justify-content:space-between;font-size:7.5pt;color:#94a3b8}';
 
+  var body =
   // ── HEADER ──────────────────────────────────────────────────
   '<div class="doc-header">' +
     '<div><div class="co-name">Golden Leaves Ltd</div>' +
@@ -4677,24 +4324,14 @@ function obGenerateTermSheet(taskId) {
     '<span>Page 1 of 1 · ' + FUND_PARAMS.license + '</span>' +
   '</div>' +
 
-  '</div>' + // body-wrap
+  '</div>'; // body-wrap
 
-  // print button
-  '<div class="no-print" style="position:fixed;bottom:20px;right:20px;display:flex;gap:10px">' +
-    '<button onclick="window.print()" style="background:#f97316;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(249,115,22,.4)">🖨 Печать / Сохранить PDF</button>' +
-    '<button onclick="window.close()" style="background:#374151;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer">✕ Закрыть</button>' +
-  '</div>' +
-
-  '<script>setTimeout(function(){window.print();},600);<\/script>' +
-  '</body></html>';
-
-  var w = window.open('','_blank','width=900,height=700');
-  if (w) {
-    w.document.write(html);
-    w.document.close();
-  } else {
-    showToast('⚠ Разрешите всплывающие окна в браузере', 'red');
-  }
+  var w = openPrintableDocument(body, {
+    title: 'Term Sheet — ' + esc(client.name) + ' — ' + tsNum,
+    features: 'width=900,height=700',
+    extraStyle: docStyle,
+  });
+  if (w) showToast('✅ Term Sheet готов к печати/PDF: ' + tsNum, 'green');
 }
 
 /**
@@ -4820,46 +4457,18 @@ function obGenerateDDReport(taskId) {
   const verifySourceVal = v('f_verifySource','Kompra.kz');
   const sanctionToolVal = v('f_sanctionTool','Dow Jones / ComplyAdvantage');
 
-  // ── Full HTML document ───────────────────────────────────
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>DD Report — ${client.name} — ${docRef}</title>
-  <style>
+  // ── Document-specific style + body (shared print/PDF shell wraps this — see js/print-utils.js) ──
+  const docStyle = `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Inter', Arial, sans-serif;
-      background: #fff;
-      color: #1e293b;
-      font-size: 13px;
-      line-height: 1.5;
-    }
+    body { font-family: 'Inter', Arial, sans-serif; font-size: 13px; line-height: 1.5; }
     .page { max-width: 760px; margin: 0 auto; padding: 40px 48px; }
     h2 { font-size: 15px; font-weight: 700; }
     h3 { font-size: 13px; }
     table { width: 100%; border-collapse: collapse; }
-    @media print {
-      html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .page { padding: 20px 24px; }
-      .no-print { display: none !important; }
-      @page { size: A4; margin: 18mm 14mm; }
-    }
-  </style>
-</head>
-<body>
+    @media print { .page { padding: 20px 24px; } }
+  `;
+  const body = `
 <div class="page">
-
-  <!-- ══ PRINT BUTTON (hidden on print) ══ -->
-  <div class="no-print" style="text-align:right;margin-bottom:20px">
-    <button onclick="window.print()"
-      style="background:#1d4ed8;color:#fff;border:none;padding:9px 22px;border-radius:7px;
-             cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">
-      🖨️ Print / Save as PDF
-    </button>
-  </div>
 
   <!-- ══ DOCUMENT HEADER ══ -->
   <div style="border-bottom:3px solid #1d4ed8;padding-bottom:18px;margin-bottom:24px">
@@ -5065,26 +4674,17 @@ function obGenerateDDReport(taskId) {
     </div>
   </div>
 
-</div>
-<script>
-  window.addEventListener('load', function() {
-    // Auto-trigger print after a brief delay so fonts load
-    setTimeout(function() { window.print(); }, 600);
-  });
-<\/script>
-</body>
-</html>`;
+</div>`;
 
-  // ── Open in new window ───────────────────────────────────
+  // ── Open in new window (shared helper — no auto-print timer, one
+  //    consistent toolbar/button across every document generator) ──
   try {
-    const win = window.open('', '_blank', 'width=900,height=750,scrollbars=yes,menubar=yes,toolbar=yes');
-    if (!win) {
-      showToast('⛔ Браузер заблокировал всплывающее окно. Разрешите pop-up для этого сайта и повторите.', 'red');
-      return;
-    }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
+    const win = openPrintableDocument(body, {
+      title: 'DD Report — ' + client.name + ' — ' + docRef,
+      features: 'width=900,height=750,scrollbars=yes,menubar=yes,toolbar=yes',
+      extraStyle: docStyle,
+    });
+    if (win) showToast('✅ DD Report готов к печати/PDF: ' + docRef, 'green');
   } catch(e) {
     showToast('Ошибка генерации PDF: ' + e.message, 'red');
   }
