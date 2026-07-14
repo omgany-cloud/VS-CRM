@@ -44,42 +44,54 @@ const LP_RECORDS = [
     distributions:0, fundClass:'A', ownershipPct:24.46, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-10-20', kycNextReview:'2026-10-20', riskRating:'Low', admissionDate:'2024-11-05', saNumber:'SA-2024-001',
     afsaNotified:true, lpacMember:true, status:'Active', exitDate:null,
-    notes:'Полный пакет KYC получен и проверен. AML — чисто. Ownership >20% — AFSA уведомлён.', obClientId:null },
+    notes:'Полный пакет KYC получен и проверен. AML — чисто. Ownership >20% — AFSA уведомлён.', obClientId:null,
+    rm:'Асанов Б.К. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
+    pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-002', name:'Отбасы Family Office', type:'Corporate', lpType:'Family Office', country:'Казахстан',
     address:'ул. Сатпаева 30, Алматы, 050040', taxId:'241040023456', contact:'Жаксыбекова А.Н.',
     email:'a.zhaksybekova@otbasyfo.kz', phone:'+7 701 222 10 02', commitment:6000000, calledAmount:3211008, paidAmount:2844036,
     distributions:0, fundClass:'A', ownershipPct:18.35, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-10-25', kycNextReview:'2025-10-25', riskRating:'Medium', admissionDate:'2024-11-12', saNumber:'SA-2024-002',
     afsaNotified:false, lpacMember:true, status:'Active', exitDate:null,
-    notes:'KYC подтверждён комплаенс-офицером. Family Office структура — стандартная due diligence.', obClientId:null },
+    notes:'KYC подтверждён комплаенс-офицером. Family Office структура — стандартная due diligence.', obClientId:null,
+    rm:'Жаксыбекова А.Н. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
+    pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-003', name:'АО «Каспий Инвест»', type:'Corporate', lpType:'Institution', country:'Казахстан',
     address:'пр. Азаттық 79, Атырау, 060011', taxId:'020840034567', contact:'Молдабеков Т.С.',
     email:'t.moldabekov@kaspiinvest.kz', phone:'+7 701 222 10 03', commitment:10000000, calledAmount:5351683, paidAmount:4740062,
     distributions:0, fundClass:'A', ownershipPct:30.58, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-10-18', kycNextReview:'2026-10-18', riskRating:'Low', admissionDate:'2024-11-01', saNumber:'SA-2024-003',
     afsaNotified:true, lpacMember:true, status:'Active', exitDate:null,
-    notes:'Крупнейший LP фонда, институциональный инвестор. Ownership >20% — AFSA уведомлён.', obClientId:null },
+    notes:'Крупнейший LP фонда, институциональный инвестор. Ownership >20% — AFSA уведомлён.', obClientId:null,
+    rm:'Асанов Б.К. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
+    pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-004', name:'Eurasia Bridge Partners LLP', type:'Corporate', lpType:'Institution', country:'Казахстан',
     address:'пр. Мәңгілік Ел 55/22, Астана, 010000', taxId:'241140045678', contact:'Ким Виктория Олеговна',
     email:'v.kim@eurasiabridge.kz', phone:'+7 701 222 10 04', commitment:7500000, calledAmount:4013762, paidAmount:3555046,
     distributions:0, fundClass:'A', ownershipPct:22.94, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-11-20', kycNextReview:'2026-11-20', riskRating:'Low', admissionDate:'2024-12-01', saNumber:'SA-2024-004',
     afsaNotified:false, lpacMember:true, status:'Active', exitDate:null,
-    notes:'KYC пройден без замечаний. Ownership >20% — уведомление AFSA ожидается (10 р.д.).', obClientId:null },
+    notes:'KYC пройден без замечаний. Ownership >20% — уведомление AFSA ожидается (10 р.д.).', obClientId:null,
+    rm:'Жаксыбекова А.Н. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
+    pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-005', name:'Нурланов Ерлан Тимурович', type:'Individual', lpType:'HNWI', country:'Казахстан',
     address:'мкр. Самал-2, д. 111, Алматы', taxId:'870614300521', contact:'Нурланов Е.Т.',
     email:'e.nurlanov@gmail.com', phone:'+7 701 333 20 05', commitment:1200000, calledAmount:642201, paidAmount:568807,
     distributions:0, fundClass:'B', ownershipPct:3.67, professionalClient:'Assessed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-12-05', kycNextReview:'2025-12-05', riskRating:'Medium', admissionDate:'2024-12-10', saNumber:'SA-2024-005',
     afsaNotified:false, lpacMember:false, status:'Active', exitDate:null,
-    notes:'Индивидуальный квалифицированный инвестор. Собственные средства подтверждены.', obClientId:null },
+    notes:'Индивидуальный квалифицированный инвестор. Собственные средства подтверждены.', obClientId:null,
+    rm:'Асанов Б.К. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
+    pepCheckCleared:true, amlScreeningCleared:true, uboVerified:false },
   { registerId:'LP-2024-006', name:'Байжанова Динара Сериковна', type:'Individual', lpType:'HNWI', country:'Казахстан',
     address:'ул. Кенесары 40, Астана', taxId:'901215400987', contact:'Байжанова Д.С.',
     email:'d.baizhanova@gmail.com', phone:'+7 701 333 20 06', commitment:750000, calledAmount:0, paidAmount:0,
     distributions:0, fundClass:'B', ownershipPct:0, professionalClient:'Assessed Professional Client', kycStatus:'В процессе',
     kycDate:null, kycNextReview:null, riskRating:'High', admissionDate:null, saNumber:null,
     afsaNotified:false, lpacMember:false, status:'Onboarding', exitDate:null,
-    notes:'KYC в процессе — ожидается Source of Funds и AML screening.', obClientId:null },
+    notes:'KYC в процессе — ожидается Source of Funds и AML screening.', obClientId:null,
+    rm:'Жаксыбекова А.Н. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:false, taxIdVerified:true,
+    pepCheckCleared:true, amlScreeningCleared:false, uboVerified:false },
 ];
 
 function seedLpRegister(tenantId) {
@@ -90,12 +102,14 @@ function seedLpRegister(tenantId) {
       (tenant_id, register_id, name, type, lp_type, country, address, tax_id, contact, email, phone,
        commitment, called_amount, paid_amount, distributions, fund_class, ownership_pct, professional_client,
        kyc_status, kyc_date, kyc_next_review, risk_rating, admission_date, sa_number, afsa_notified, lpac_member,
-       status, exit_date, notes, ob_client_id)
+       status, exit_date, notes, ob_client_id, rm, identity_verified, proof_address_verified, sof_verified,
+       tax_id_verified, pep_check_cleared, aml_screening_cleared, ubo_verified)
     VALUES
       (@tenantId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
        @commitment, @calledAmount, @paidAmount, @distributions, @fundClass, @ownershipPct, @professionalClient,
        @kycStatus, @kycDate, @kycNextReview, @riskRating, @admissionDate, @saNumber, @afsaNotified, @lpacMember,
-       @status, @exitDate, @notes, @obClientId)
+       @status, @exitDate, @notes, @obClientId, @rm, @identityVerified, @proofAddressVerified, @sofVerified,
+       @taxIdVerified, @pepCheckCleared, @amlScreeningCleared, @uboVerified)
   `);
   db.exec('BEGIN');
   try {
@@ -105,6 +119,13 @@ function seedLpRegister(tenantId) {
         ...r,
         afsaNotified: r.afsaNotified ? 1 : 0,
         lpacMember: r.lpacMember ? 1 : 0,
+        identityVerified: r.identityVerified ? 1 : 0,
+        proofAddressVerified: r.proofAddressVerified ? 1 : 0,
+        sofVerified: r.sofVerified ? 1 : 0,
+        taxIdVerified: r.taxIdVerified ? 1 : 0,
+        pepCheckCleared: r.pepCheckCleared ? 1 : 0,
+        amlScreeningCleared: r.amlScreeningCleared ? 1 : 0,
+        uboVerified: r.uboVerified ? 1 : 0,
       }));
     }
     db.exec('COMMIT');
@@ -912,7 +933,7 @@ const OB_CLIENTS = [
 ];
 
 // Одна Subscription Agreement на каждого завершённого FM LP — feeAmount =
-// commitment, invoiced/paid зеркалят capitalCalled из lpList (js/data.js).
+// commitment, invoiced/paid зеркалят calledAmount/paidAmount из LP_RECORDS выше.
 const ENGAGEMENTS = [
   { id: 1, engId: 'ENG-2024-001', clientId: 3, clientName: 'Silk Steppe Capital LLP',
     serviceType: 'LP Investment (FM)', contractNum: 'SA-2024-001', date: '2024-11-05', signedDate: '2024-11-05', status: 'Active',

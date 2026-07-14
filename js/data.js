@@ -82,51 +82,6 @@ const FUND_PARAMS = {
   arbLanguage:'English',
 };
 
-/* ===== LP / INVESTORS ===== */
-let lpList = [
-  {
-    id: 1, name: 'Silk Steppe Capital LLP', type: 'Юридическое лицо', country: 'Казахстан',
-    commit: 8, invested: 8, status: 'Активный LP', manager: 'Асанов Б.К. (RM)',
-    contact: 'Асанов Б.К.', email: 'b.assanov@silksteppe.kz', phone: '+7 701 222 10 01', qualified: 'Да',
-    kyc: { status:'Одобрен', passport:true, proofAddress:true, sourceOfFunds:true, taxId:true, pepCheck:true, amlScreening:true, uboVerified:true, date:'2024-10-20', comment:'Полный пакет KYC получен и проверен.' },
-    subAgreement: true, subDate: '2024-11-05', capitalCalled: 3.6, distributions: 0,
-  },
-  {
-    id: 2, name: 'Отбасы Family Office', type: 'Юридическое лицо', country: 'Казахстан',
-    commit: 6, invested: 6, status: 'Активный LP', manager: 'Жаксыбекова А.Н. (RM)',
-    contact: 'Жаксыбекова А.Н.', email: 'a.zhaksybekova@otbasyfo.kz', phone: '+7 701 222 10 02', qualified: 'Да',
-    kyc: { status:'Одобрен', passport:true, proofAddress:true, sourceOfFunds:true, taxId:true, pepCheck:true, amlScreening:true, uboVerified:true, date:'2024-10-25', comment:'KYC подтверждён комплаенс-офицером.' },
-    subAgreement: true, subDate: '2024-11-12', capitalCalled: 2.7, distributions: 0,
-  },
-  {
-    id: 3, name: 'АО «Каспий Инвест»', type: 'Юридическое лицо', country: 'Казахстан',
-    commit: 10, invested: 10, status: 'Активный LP', manager: 'Асанов Б.К. (RM)',
-    contact: 'Молдабеков Т.С.', email: 't.moldabekov@kaspiinvest.kz', phone: '+7 701 222 10 03', qualified: 'Да',
-    kyc: { status:'Одобрен', passport:true, proofAddress:true, sourceOfFunds:true, taxId:true, pepCheck:true, amlScreening:true, uboVerified:true, date:'2024-10-18', comment:'Крупнейший LP фонда, институциональный инвестор.' },
-    subAgreement: true, subDate: '2024-11-01', capitalCalled: 4.5, distributions: 0,
-  },
-  {
-    id: 4, name: 'Eurasia Bridge Partners LLP', type: 'Юридическое лицо', country: 'Казахстан',
-    commit: 7.5, invested: 7.5, status: 'Активный LP', manager: 'Жаксыбекова А.Н. (RM)',
-    contact: 'Ким Виктория Олеговна', email: 'v.kim@eurasiabridge.kz', phone: '+7 701 222 10 04', qualified: 'Да',
-    kyc: { status:'Одобрен', passport:true, proofAddress:true, sourceOfFunds:true, taxId:true, pepCheck:true, amlScreening:true, uboVerified:true, date:'2024-11-20', comment:'KYC пройден без замечаний.' },
-    subAgreement: true, subDate: '2024-12-01', capitalCalled: 3.4, distributions: 0,
-  },
-  {
-    id: 5, name: 'Нурланов Ерлан Тимурович', type: 'Физическое лицо', country: 'Казахстан',
-    commit: 1.2, invested: 1.2, status: 'Активный LP', manager: 'Асанов Б.К. (RM)',
-    contact: 'Нурланов Е.Т.', email: 'e.nurlanov@gmail.com', phone: '+7 701 333 20 05', qualified: 'Да',
-    kyc: { status:'Одобрен', passport:true, proofAddress:true, sourceOfFunds:true, taxId:true, pepCheck:true, amlScreening:true, uboVerified:false, date:'2024-12-05', comment:'Индивидуальный квалифицированный инвестор.' },
-    subAgreement: true, subDate: '2024-12-10', capitalCalled: 0.54, distributions: 0,
-  },
-  {
-    id: 6, name: 'Байжанова Динара Сериковна', type: 'Физическое лицо', country: 'Казахстан',
-    commit: 0.75, invested: 0, status: 'KYC в процессе', manager: 'Жаксыбекова А.Н. (RM)',
-    contact: 'Байжанова Д.С.', email: 'd.baizhanova@gmail.com', phone: '+7 701 333 20 06', qualified: 'Ожидается',
-    kyc: { status:'В процессе', passport:true, proofAddress:true, sourceOfFunds:false, taxId:true, pepCheck:true, amlScreening:false, uboVerified:false, date:null, comment:'Ожидается Source of Funds и AML screening.' },
-    subAgreement: false, subDate: null, capitalCalled: 0, distributions: 0,
-  },
-];
 
 /* ===== DEALS / PIPELINE ===== */
 let deals = [];  // populated at runtime by js/api-auth.js via GET /api/deals (see server/index.js)
@@ -215,25 +170,6 @@ let todayTasks = [
   { id: 3, text: 'Подготовить Capital Call Notice №4 к рассылке LP',                   priority: 'Высокий',  done: false, page: 'lp' },
 ];
 
-/* ===== KYC FIELDS ===== */
-const KYC_FIELDS_INDIVIDUAL = [
-  { key: 'passport',       label: 'Паспорт / ИД (заверенная копия)' },
-  { key: 'proofAddress',   label: 'Proof of Address (< 3 месяцев)' },
-  { key: 'sourceOfFunds',  label: 'Source of Funds (документальное подтверждение)' },
-  { key: 'taxId',          label: 'Tax ID / ИИН' },
-  { key: 'pepCheck',       label: 'PEP Check (политически значимое лицо)' },
-  { key: 'amlScreening',   label: 'AML Screening (санкционные списки)' },
-];
-
-const KYC_FIELDS_ENTITY = [
-  { key: 'passport',       label: 'Устав / Certificate of Incorporation' },
-  { key: 'proofAddress',   label: 'Proof of Registered Address' },
-  { key: 'sourceOfFunds',  label: 'Source of Funds + Financial Statements' },
-  { key: 'taxId',          label: 'Tax ID / BIN организации' },
-  { key: 'pepCheck',       label: 'PEP Check директоров/бенефициаров' },
-  { key: 'amlScreening',   label: 'AML Screening организации' },
-  { key: 'uboVerified',    label: 'UBO (Ultimate Beneficial Owner) верификация' },
-];
 
 /* ===== CHART DATA ===== */
 const chartData = {

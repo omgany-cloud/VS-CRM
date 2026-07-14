@@ -433,10 +433,10 @@ function withdrawWf(id) {
 /* Sync workflow result back to entity data */
 function syncWfToEntity(w, result) {
   if (w.entityType === 'LP') {
-    const lp = lpList.find(l => l.id === w.entityId);
-    if (lp && lp.kyc) {
-      lp.kyc.status = result === 'approved' ? 'Одобрен' : 'Отклонён';
-      if (result === 'approved') { lp.kyc.date = new Date().toISOString().split('T')[0]; lp.status = 'Активный LP'; }
+    const lp = lpRegister.find(l => l.id === w.entityId);
+    if (lp) {
+      lp.kycStatus = result === 'approved' ? 'Одобрен' : 'Отклонён';
+      if (result === 'approved') { lp.kycDate = new Date().toISOString().split('T')[0]; lp.status = 'Active'; }
     }
   }
   if (w.entityType === 'CF&A') {

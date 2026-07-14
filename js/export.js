@@ -85,30 +85,30 @@ function exportLPRegister() {
     'Distributions ($M)', 'Квалифицирован', 'Sub. Agreement',
     'Дата Sub. Agreement', 'Контакт', 'Email', 'Телефон', 'RM'
   ];
-  const rows = lpList.map((lp, i) => [
+  const rows = lpRegister.map((lp, i) => [
     i + 1,
     lp.name,
     lp.type,
     lp.country,
     lp.status,
-    lp.commit,
-    lp.invested,
-    lp.capitalCalled,
-    lp.distributions,
-    lp.qualified,
-    yesNo(lp.subAgreement),
-    fmtDate(lp.subDate),
+    lp.commitment / 1e6,
+    lp.commitment / 1e6,
+    lp.calledAmount / 1e6,
+    (lp.distributions || 0) / 1e6,
+    lp.professionalClient,
+    yesNo(lp.saNumber),
+    fmtDate(lp.admissionDate),
     lp.contact,
     lp.email,
     lp.phone,
-    lp.manager,
+    lp.rm,
   ]);
 
   // Итоги
-  const totalCommit    = lpList.reduce((s, lp) => s + (lp.commit || 0), 0);
-  const totalInvested  = lpList.reduce((s, lp) => s + (lp.invested || 0), 0);
-  const totalCalled    = lpList.reduce((s, lp) => s + (lp.capitalCalled || 0), 0);
-  const totalDistrib   = lpList.reduce((s, lp) => s + (lp.distributions || 0), 0);
+  const totalCommit    = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
+  const totalInvested  = totalCommit;
+  const totalCalled    = lpRegister.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
+  const totalDistrib   = lpRegister.reduce((s, lp) => s + (lp.distributions || 0), 0) / 1e6;
 
   rows.push([]);
   rows.push(['', 'ИТОГО', '', '', '',
@@ -134,21 +134,21 @@ function exportKYCAML() {
     'PEP Check', 'AML Screening', 'UBO Верификация',
     'Дата KYC', 'Комментарий'
   ];
-  const rows = lpList.map((lp, i) => [
+  const rows = lpRegister.map((lp, i) => [
     i + 1,
     lp.name,
     lp.type,
     lp.country,
-    lp.kyc?.status || '—',
-    yesNo(lp.kyc?.passport),
-    yesNo(lp.kyc?.proofAddress),
-    yesNo(lp.kyc?.sourceOfFunds),
-    yesNo(lp.kyc?.taxId),
-    yesNo(lp.kyc?.pepCheck),
-    yesNo(lp.kyc?.amlScreening),
-    yesNo(lp.kyc?.uboVerified),
-    fmtDate(lp.kyc?.date),
-    lp.kyc?.comment || '',
+    lp.kycStatus || '—',
+    yesNo(lp.identityVerified),
+    yesNo(lp.proofAddressVerified),
+    yesNo(lp.sofVerified),
+    yesNo(lp.taxIdVerified),
+    yesNo(lp.pepCheckCleared),
+    yesNo(lp.amlScreeningCleared),
+    yesNo(lp.uboVerified),
+    fmtDate(lp.kycDate),
+    lp.notes || '',
   ]);
 
   downloadExcel([{
@@ -186,10 +186,10 @@ function exportCapitalCalls() {
   const lpBreakdownHeader = [
     'LP', 'Commitment ($M)', ...capitalCalls.map((cc, i) => `CC#${i + 1} (${fmtDate(cc.noticeDate)})`), 'Итого Paid'
   ];
-  const lpRows = lpList.map(lp => {
+  const lpRows = lpRegister.map(lp => {
     const pct = capitalCalls.map(cc => cc.status === 'Завершён'
-      ? `$${((lp.commit / lpList.reduce((s, l) => s + l.commit, 0)) * cc.amount / 1e6).toFixed(3)}M` : '—');
-    return [lp.name, lp.commit, ...pct, `$${lp.capitalCalled}M`];
+      ? `$${((lp.commitment / lpRegister.reduce((s, l) => s + l.commitment, 0)) * cc.amount / 1e6).toFixed(3)}M` : '—');
+    return [lp.name, lp.commitment / 1e6, ...pct, `$${(lp.calledAmount/1e6).toFixed(2)}M`];
   });
 
   downloadExcel([
@@ -319,8 +319,8 @@ function exportCFAClients() {
 ═══════════════════════════════════════════════════════════ */
 function exportFundOverview() {
   const p = FUND_PARAMS;
-  const totalCommit  = lpList.reduce((s, lp) => s + (lp.commit || 0), 0);
-  const totalCalled  = lpList.reduce((s, lp) => s + (lp.capitalCalled || 0), 0);
+  const totalCommit  = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
+  const totalCalled  = lpRegister.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
   const totalPortVal = portfolio.reduce((s, p) => s + (p.value || 0), 0);
   const totalInvest  = portfolio.reduce((s, p) => s + (p.invested || 0), 0);
 
@@ -343,7 +343,7 @@ function exportFundOverview() {
     ['Целевой MOIC',             `${p.targetMOIC_min}–${p.targetMOIC_max}x`],
     [],
     ['ТЕКУЩЕЕ СОСТОЯНИЕ'],
-    ['Инвесторов (LP)',          lpList.length],
+    ['Инвесторов (LP)',          lpRegister.length],
     ['Всего Commitments',        fmtMoney(totalCommit)],
     ['Capital Called',           fmtMoney(totalCalled)],
     ['Uncalled Capital',         fmtMoney(totalCommit - totalCalled)],
@@ -379,15 +379,15 @@ function exportAMLRegister() {
     '№', 'Наименование', 'Тип', 'Страна', 'AML Статус',
     'PEP Check', 'Санкционный скрининг', 'Source of Funds', 'UBO', 'Дата проверки', 'Комментарий'
   ];
-  const lpRows = lpList.map((lp, i) => [
+  const lpRows = lpRegister.map((lp, i) => [
     i + 1, lp.name, lp.type, lp.country,
-    lp.kyc?.status || '—',
-    yesNo(lp.kyc?.pepCheck),
-    yesNo(lp.kyc?.amlScreening),
-    yesNo(lp.kyc?.sourceOfFunds),
-    yesNo(lp.kyc?.uboVerified),
-    fmtDate(lp.kyc?.date),
-    lp.kyc?.comment || '',
+    lp.kycStatus || '—',
+    yesNo(lp.pepCheckCleared),
+    yesNo(lp.amlScreeningCleared),
+    yesNo(lp.sofVerified),
+    yesNo(lp.uboVerified),
+    fmtDate(lp.kycDate),
+    lp.notes || '',
   ]);
 
   // CF&A клиенты
@@ -408,8 +408,8 @@ function exportAMLRegister() {
     ['Дата отчёта', new Date().toLocaleDateString('ru-RU')],
     ['Лицензия AFSA', FUND_PARAMS.license],
     [],
-    ['LP — AML прошли', lpList.filter(lp => lp.kyc?.amlScreening).length],
-    ['LP — AML ожидает', lpList.filter(lp => !lp.kyc?.amlScreening).length],
+    ['LP — AML прошли', lpRegister.filter(lp => lp.amlScreeningCleared).length],
+    ['LP — AML ожидает', lpRegister.filter(lp => !lp.amlScreeningCleared).length],
     ['CF&A — AML пройден', passedAML.length],
     ['CF&A — Enhanced DD', enhancedDD.length],
     ['CF&A — Ожидает AML', pendingAML.length],
@@ -451,10 +451,10 @@ function exportFullCRM() {
   ];
 
   const lpHeader  = ['№','Наименование','Тип','Страна','Статус','Commitment ($M)','Capital Called ($M)','KYC Статус','Sub.Agreement'];
-  const lpRows    = lpList.map((lp, i) => [i+1, lp.name, lp.type, lp.country, lp.status, lp.commit, lp.capitalCalled, lp.kyc?.status, yesNo(lp.subAgreement)]);
+  const lpRows    = lpRegister.map((lp, i) => [i+1, lp.name, lp.type, lp.country, lp.status, lp.commitment/1e6, lp.calledAmount/1e6, lp.kycStatus, yesNo(lp.saNumber)]);
 
   const kycHeader = ['№','LP','Тип','AML','PEP','Source of Funds','UBO','Дата'];
-  const kycRows   = lpList.map((lp, i) => [i+1, lp.name, lp.type, yesNo(lp.kyc?.amlScreening), yesNo(lp.kyc?.pepCheck), yesNo(lp.kyc?.sourceOfFunds), yesNo(lp.kyc?.uboVerified), fmtDate(lp.kyc?.date)]);
+  const kycRows   = lpRegister.map((lp, i) => [i+1, lp.name, lp.type, yesNo(lp.amlScreeningCleared), yesNo(lp.pepCheckCleared), yesNo(lp.sofVerified), yesNo(lp.uboVerified), fmtDate(lp.kycDate)]);
 
   const ccHeader  = ['№','Дата','Сумма ($)','%','Назначение','Статус'];
   const ccRows    = capitalCalls.map((cc, i) => [i+1, fmtDate(cc.noticeDate), cc.amount, fmtPct(cc.pct), cc.purpose, cc.status]);
@@ -469,7 +469,7 @@ function exportFullCRM() {
   const cfaRows   = getCfaExportClients().map((c, i) => [i+1, c.name, c.type, c.industry, c.stage, c.kycStatus, c.amlStatus, c.revenue]);
 
   const amlHeader = ['№','Наименование','Тип','Страна','AML','PEP','Source of Funds','UBO'];
-  const amlLP     = lpList.map((lp, i) => [i+1, lp.name, lp.type, lp.country, yesNo(lp.kyc?.amlScreening), yesNo(lp.kyc?.pepCheck), yesNo(lp.kyc?.sourceOfFunds), yesNo(lp.kyc?.uboVerified)]);
+  const amlLP     = lpRegister.map((lp, i) => [i+1, lp.name, lp.type, lp.country, yesNo(lp.amlScreeningCleared), yesNo(lp.pepCheckCleared), yesNo(lp.sofVerified), yesNo(lp.uboVerified)]);
 
   downloadExcel([
     { name: 'Cover', data: coverData, colWidths: [50, 40] },

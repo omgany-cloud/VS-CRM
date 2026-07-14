@@ -1040,7 +1040,7 @@ obClients[] ──→ createOnboardingTasks() ──→ obTasks[]
 | `css/style.css` | Styles: modal centering, overlays, KPI cards |
 | `js/app.js` | Navigation, dashboard render, badges, user role; Deal Pipeline modal (5 tabs); Portfolio module (6-tab modal, 20+ functions) |
 | `js/onboarding.js` | **Core**: ob clients, 7 tasks, all forms (FM+CF&A), submit routing, engagements, dashboard widgets, Chinese Wall |
-| `js/data.js` | Static data: lpList, deals (9 полных), portfolio (3 rich companies), chartData |
+| `js/data.js` | Static data: deals (9 полных), portfolio (3 rich companies), chartData |
 | `js/workflow.js` | Approval workflows |
 | `js/modules.js` | IC Memos, KYC Renewal, Compliance Calendar, LP Reports |
 | `js/vault.js` | File vault |
@@ -1257,7 +1257,7 @@ currentUserRole = 'RM (Relationship Manager)'
 | `css/style.css` | Styles: modal centering, overlays, KPI cards |
 | `js/app.js` | Navigation, dashboard render, badges, user role; Deal Pipeline (5 tabs); Portfolio module |
 | `js/onboarding.js` | **Core**: ob clients, 7 tasks, forms, submit routing, engagements, dashboard widgets, Chinese Wall |
-| `js/data.js` | Static data: lpList, deals (9), portfolio (3 rich), chartData |
+| `js/data.js` | Static data: deals (9), portfolio (3 rich), chartData |
 | `js/workflow.js` | Approval workflows |
 | `js/modules.js` | IC Memos, KYC Renewal, Compliance Calendar, LP Reports |
 | `js/vault.js` | File vault: global file viewer |
@@ -1290,8 +1290,6 @@ currentUserRole = 'RM (Relationship Manager)'
 | `page-ob-restricted` | Restricted List / COI | `renderRestrictedListPage()` |
 | `page-engagements` | Реестр договоров | `renderEngagementsPage()` |
 | `page-conflict-approvals` | Конфликты / Одобрения — CF Deal Committee | `renderConflictApprovalsPage()` |
-| `page-onboarding` | Онбординг LP | `renderOnboardingTable()` |
-| `page-kyc` | KYC / AML | `renderKYCTable()` |
 | `page-workflow` | Согласования | `renderWorkflowPage()` |
 | `page-vault` | Хранилище файлов | `renderVaultPage()` |
 | `page-export` | Экспорт Excel | `renderExportPage()` |

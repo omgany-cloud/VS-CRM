@@ -293,7 +293,7 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title"><i class="fas fa-shield-alt" style="color:var(--accent-blue);margin-right:6px"></i>KYC Статус LP</span>
-          <a href="#" class="card-link" data-page="kyc">Все →</a>
+          <a href="#" class="card-link" data-page="lp-register">Все →</a>
         </div>
         <div id="kycStatusList"></div>
       </div>
@@ -832,44 +832,6 @@
 </div>
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
 
-
-
-<!-- Modal: KYC Update -->
-<div class="modal" id="modal-kycUpdate">
-  <div class="modal-header">
-    <h3><i class="fas fa-shield-alt"></i> Обновить KYC статус</h3>
-    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body">
-    <input type="hidden" id="kyc_lp_id" />
-    <div class="form-section-title">KYC Чеклист (AFSA требования)</div>
-    <div class="kyc-checklist-form" id="kycChecklistForm"></div>
-    <div class="form-grid" style="margin-top:16px">
-      <div class="form-group">
-        <label>Итоговый статус KYC</label>
-        <select id="kyc_status_select">
-          <option value="Не начат">Не начат</option>
-          <option value="В процессе">В процессе</option>
-          <option value="На проверке">На проверке</option>
-          <option value="Одобрен">Одобрен</option>
-          <option value="Отклонён">Отклонён</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Дата проверки</label>
-        <input type="date" id="kyc_date" />
-      </div>
-      <div class="form-group full">
-        <label>Комментарий CCO</label>
-        <textarea id="kyc_comment" rows="2" placeholder="Замечания, требования..."></textarea>
-      </div>
-    </div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
-    <button class="btn-primary" onclick="saveKYC()"><i class="fas fa-shield-alt"></i> Обновить KYC</button>
-  </div>
-</div>
 
 <!-- Modal: Новая сделка -->
 <!-- Deal Detail Modal overlay -->

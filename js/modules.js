@@ -32,10 +32,10 @@ function renderKycRenewalPage() {
   if (!el) return;
 
   // Combine LP + CF&A clients
-  const lpItems = lpList.map(lp => ({
+  const lpItems = lpRegister.map(lp => ({
     id: 'lp_' + lp.id, name: lp.name, type: lp.type,
-    category: 'LP', kycDate: lp.kyc?.date || null,
-    kycStatus: lp.kyc?.status || '—', rm: lp.manager,
+    category: 'LP', kycDate: lp.kycDate || null,
+    kycStatus: lp.kycStatus || '—', rm: lp.rm,
     rawId: lp.id,
   }));
   const cfaItems = (typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'CF&A') : []).map(c => ({
@@ -153,7 +153,7 @@ let distIdCounter = 1;
 
 function calcWaterfall(grossAmount) {
   const p = FUND_PARAMS;
-  const totalCommit = lpList.reduce((s, lp) => s + (lp.commit || 0), 0) * 1e6;
+  const totalCommit = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0);
   // Step 1: Return of Capital (100% LP)
   const totalInvested = portfolio.reduce((s, p) => s + (p.invested || 0), 0) * 1e6;
   const returnOfCap   = Math.min(grossAmount, totalInvested);
@@ -171,9 +171,9 @@ function calcWaterfall(grossAmount) {
   const totalGP   = gpCatchup  + gpCarried;
 
   // Per-LP breakdown (proportional to commitment)
-  const lpBreakdown = lpList.map(lp => {
-    const share = (lp.commit * 1e6) / totalCommit;
-    return { name: lp.name, commit: lp.commit, share: (share*100).toFixed(1), amount: (totalLP * share) };
+  const lpBreakdown = lpRegister.map(lp => {
+    const share = lp.commitment / totalCommit;
+    return { name: lp.name, commit: lp.commitment / 1e6, share: (share*100).toFixed(1), amount: (totalLP * share) };
   });
 
   return { grossAmount, returnOfCap, prefReturn, gpCatchup, gpCarried, lpCarried, totalLP, totalGP, lpBreakdown };
@@ -321,8 +321,8 @@ function recordDistribution() {
   });
   // Update LP distributions
   wf.lpBreakdown.forEach(lb => {
-    const lp = lpList.find(l => l.name === lb.name);
-    if (lp) lp.distributions = (lp.distributions||0) + lb.amount/1e6;
+    const lp = lpRegister.find(l => l.name === lb.name);
+    if (lp) lp.distributions = (lp.distributions||0) + lb.amount;
   });
   renderDistributionPage();
   showToast(`✅ Распределение записано: $${(amount/1e6).toFixed(3)}M`, 'green');
@@ -357,8 +357,8 @@ function buildCalendarEvents() {
   });
 
   // KYC Renewals due
-  lpList.forEach(lp => {
-    const r = getKycRenewalStatus(lp.kyc?.date);
+  lpRegister.forEach(lp => {
+    const r = getKycRenewalStatus(lp.kycDate);
     if (r.renewDue) events.push({
       date: r.renewDue.toISOString().split('T')[0],
       label: `KYC Renewal: ${lp.name}`,
@@ -1021,7 +1021,7 @@ function renderLPReportsPage() {
   if (!el) return;
 
   const totalNAV    = portfolio.reduce((s,p) => s+p.value,0);
-  const totalCommit = lpList.reduce((s,l) => s+l.commit,0);
+  const totalCommit = lpRegister.reduce((s,l) => s+l.commitment,0);
 
   el.innerHTML = `
     <div class="card" style="margin-bottom:16px">
@@ -1030,11 +1030,12 @@ function renderLPReportsPage() {
         <span style="font-size:11px;color:#8a9bbf">NAV Statement · Capital Account · Distributions</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:16px">
-        ${lpList.map(lp => {
-          const share    = lp.commit / totalCommit;
+        ${lpRegister.map(lp => {
+          const share    = lp.commitment / totalCommit;
           const navShare = (totalNAV * share).toFixed(3);
-          const moic     = lp.capitalCalled > 0 ? (totalNAV * share / lp.capitalCalled).toFixed(2) : '—';
-          const kycColor = lp.kyc?.status==='Одобрен' ? '#22c55e' : '#f97316';
+          const calledM  = lp.calledAmount / 1e6;
+          const moic     = calledM > 0 ? (totalNAV * share / calledM).toFixed(2) : '—';
+          const kycColor = lp.kycStatus==='Одобрен' ? '#22c55e' : '#f97316';
           return `
             <div class="cfa-client-card" onclick="openLPReport(${lp.id})" style="cursor:pointer">
               <div class="cfa-card-top">
@@ -1046,12 +1047,12 @@ function renderLPReportsPage() {
                 <span class="task-status-pill" style="background:rgba(34,197,94,0.1);color:#22c55e;white-space:nowrap">${lp.status}</span>
               </div>
               <div class="cfa-card-metrics" style="margin-top:10px">
-                <div class="cfa-metric"><span class="cfa-metric-val">$${lp.commit}M</span><span class="cfa-metric-label">Commitment</span></div>
+                <div class="cfa-metric"><span class="cfa-metric-val">$${(lp.commitment/1e6).toFixed(1)}M</span><span class="cfa-metric-label">Commitment</span></div>
                 <div class="cfa-metric"><span class="cfa-metric-val" style="color:#3b82f6">$${navShare}M</span><span class="cfa-metric-label">NAV Share</span></div>
                 <div class="cfa-metric"><span class="cfa-metric-val" style="color:#f97316">${moic}x</span><span class="cfa-metric-label">MOIC</span></div>
               </div>
               <div class="cfa-card-footer" style="margin-top:8px">
-                <div style="font-size:11px;color:${kycColor}">KYC: ${lp.kyc?.status||'—'}</div>
+                <div style="font-size:11px;color:${kycColor}">KYC: ${lp.kycStatus||'—'}</div>
                 <div style="font-size:11px;color:#3b82f6;font-weight:700"><i class="fas fa-file-alt"></i> Открыть отчёт</div>
               </div>
             </div>`;
@@ -1062,7 +1063,7 @@ function renderLPReportsPage() {
 
 function openLPReport(lpId) {
   activeLpReportId = lpId;
-  const lp    = lpList.find(l => l.id === lpId);
+  const lp    = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
   const modal   = document.getElementById('modal-lpreport');
   const overlay = document.getElementById('lpReportOverlay');
@@ -1083,19 +1084,24 @@ function closeLPReport() {
 }
 
 function renderLPReportContent(lp) {
-  const totalCommit = lpList.reduce((s,l) => s+l.commit, 0);
+  // Convert to $M once, locally — lpRegister stores full dollars, but this
+  // report displays everything in millions (matches Fact Sheet conventions).
+  const commitM     = lp.commitment / 1e6;
+  const calledM     = lp.calledAmount / 1e6;
+  const distribM    = (lp.distributions || 0) / 1e6;
+  const totalCommit = lpRegister.reduce((s,l) => s+l.commitment, 0) / 1e6;
   const totalNAV    = portfolio.reduce((s,p) => s+p.value, 0);
-  const share       = lp.commit / totalCommit;
+  const share       = commitM / totalCommit;
   const navShare    = totalNAV * share;
-  const unrealized  = navShare - (lp.capitalCalled || 0);
-  const moic        = lp.capitalCalled > 0 ? (navShare / lp.capitalCalled).toFixed(2) : '—';
-  const dpi         = lp.capitalCalled > 0 ? ((lp.distributions||0) / lp.capitalCalled).toFixed(2) : '0.00';
-  const rvpi        = lp.capitalCalled > 0 ? (navShare / lp.capitalCalled).toFixed(2) : '—';
+  const unrealized  = navShare - calledM;
+  const moic        = calledM > 0 ? (navShare / calledM).toFixed(2) : '—';
+  const dpi         = calledM > 0 ? (distribM / calledM).toFixed(2) : '0.00';
+  const rvpi        = calledM > 0 ? (navShare / calledM).toFixed(2) : '—';
   const today       = new Date().toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'});
   const p           = FUND_PARAMS;
   const ccHistory   = capitalCalls.map((cc,i) => ({
     num: i+1, date: cc.noticeDate, payDate: cc.payDate,
-    lpAmount: ((lp.commit*1e6 / (totalCommit*1e6)) * cc.amount),
+    lpAmount: (lp.commitment / (totalCommit*1e6)) * cc.amount,
     status: cc.status,
   }));
 
@@ -1124,8 +1130,8 @@ function renderLPReportContent(lp) {
           ['Тип', lp.type],
           ['Страна', lp.country],
           ['Контакт', lp.contact],
-          ['KYC Статус', lp.kyc?.status||'—'],
-          ['RM', lp.manager],
+          ['KYC Статус', lp.kycStatus||'—'],
+          ['RM', lp.rm],
         ].map(([k,v]) => `
           <div style="font-size:12px">
             <span style="color:#8a9bbf">${k}: </span>
@@ -1138,10 +1144,10 @@ function renderLPReportContent(lp) {
     <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Capital Account Summary</div>
     <div style="background:#1c2333;border-radius:10px;overflow:hidden;margin-bottom:14px">
       ${[
-        ['Commitment', `$${lp.commit.toFixed(3)}M`, '#e2e8f0'],
-        ['Capital Called (Funded)', `$${(lp.capitalCalled||0).toFixed(3)}M`, '#3b82f6'],
-        ['Unfunded Commitment', `$${(lp.commit-(lp.capitalCalled||0)).toFixed(3)}M`, '#8a9bbf'],
-        ['Distributions Received', `$${(lp.distributions||0).toFixed(3)}M`, '#22c55e'],
+        ['Commitment', `$${commitM.toFixed(3)}M`, '#e2e8f0'],
+        ['Capital Called (Funded)', `$${calledM.toFixed(3)}M`, '#3b82f6'],
+        ['Unfunded Commitment', `$${(commitM-calledM).toFixed(3)}M`, '#8a9bbf'],
+        ['Distributions Received', `$${distribM.toFixed(3)}M`, '#22c55e'],
         ['NAV (Current Value)', `$${navShare.toFixed(3)}M`, '#3b82f6'],
         ['Unrealized Gain / (Loss)', `$${unrealized.toFixed(3)}M`, unrealized>=0?'#22c55e':'#ef4444'],
         ['MOIC (Total Value / Paid-In)', `${moic}x`, '#f97316'],
@@ -1170,7 +1176,7 @@ function renderLPReportContent(lp) {
             </tr>`).join('')}
           <tr style="font-weight:800">
             <td colspan="3" style="color:#e2e8f0">ИТОГО</td>
-            <td style="color:#3b82f6">$${(lp.capitalCalled||0).toFixed(3)}M</td>
+            <td style="color:#3b82f6">$${calledM.toFixed(3)}M</td>
             <td></td>
           </tr>
         </tbody>
@@ -1197,11 +1203,14 @@ function renderLPReportContent(lp) {
 }
 
 function exportLPStatementExcel(lpId) {
-  const lp = lpList.find(l => l.id === lpId);
+  const lp = lpRegister.find(l => l.id === lpId);
   if (!lp || typeof XLSX === 'undefined') return;
-  const totalCommit = lpList.reduce((s,l) => s+l.commit, 0);
+  const commitM     = lp.commitment / 1e6;
+  const calledM     = lp.calledAmount / 1e6;
+  const distribM    = (lp.distributions || 0) / 1e6;
+  const totalCommit = lpRegister.reduce((s,l) => s+l.commitment, 0) / 1e6;
   const totalNAV    = portfolio.reduce((s,p) => s+p.value, 0);
-  const share       = lp.commit / totalCommit;
+  const share       = commitM / totalCommit;
   const navShare    = totalNAV * share;
   const today       = new Date().toLocaleDateString('ru-RU');
 
@@ -1216,18 +1225,18 @@ function exportLPStatementExcel(lpId) {
     [],
     ['CAPITAL ACCOUNT SUMMARY'],
     ['Показатель', 'Значение'],
-    ['Commitment', `$${lp.commit.toFixed(3)}M`],
-    ['Capital Called', `$${(lp.capitalCalled||0).toFixed(3)}M`],
-    ['Unfunded Commitment', `$${(lp.commit-(lp.capitalCalled||0)).toFixed(3)}M`],
-    ['Distributions', `$${(lp.distributions||0).toFixed(3)}M`],
+    ['Commitment', `$${commitM.toFixed(3)}M`],
+    ['Capital Called', `$${calledM.toFixed(3)}M`],
+    ['Unfunded Commitment', `$${(commitM-calledM).toFixed(3)}M`],
+    ['Distributions', `$${distribM.toFixed(3)}M`],
     ['NAV (Current)', `$${navShare.toFixed(3)}M`],
-    ['MOIC', lp.capitalCalled > 0 ? `${(navShare/lp.capitalCalled).toFixed(2)}x` : '—'],
+    ['MOIC', calledM > 0 ? `${(navShare/calledM).toFixed(2)}x` : '—'],
     [],
     ['CAPITAL CALL HISTORY'],
     ['#', 'Дата', 'Сумма LP ($M)', 'Статус'],
     ...capitalCalls.map((cc,i) => [
       `CC#${i+1}`, new Date(cc.noticeDate).toLocaleDateString('ru-RU'),
-      ((lp.commit / totalCommit) * cc.amount / 1e6).toFixed(4),
+      (share * cc.amount / 1e6).toFixed(4),
       cc.status,
     ]),
   ];

@@ -85,6 +85,14 @@ function rowToLp(r) {
     exitDate: r.exit_date,
     notes: r.notes,
     obClientId: r.ob_client_id,
+    rm: r.rm,
+    identityVerified: !!r.identity_verified,
+    proofAddressVerified: !!r.proof_address_verified,
+    sofVerified: !!r.sof_verified,
+    taxIdVerified: !!r.tax_id_verified,
+    pepCheckCleared: !!r.pep_check_cleared,
+    amlScreeningCleared: !!r.aml_screening_cleared,
+    uboVerified: !!r.ubo_verified,
   };
 }
 
@@ -105,12 +113,14 @@ app.post('/api/lp', requireAuth, (req, res) => {
       (tenant_id, register_id, name, type, lp_type, country, address, tax_id, contact, email, phone,
        commitment, called_amount, paid_amount, distributions, fund_class, ownership_pct, professional_client,
        kyc_status, kyc_date, kyc_next_review, risk_rating, admission_date, sa_number, afsa_notified, lpac_member,
-       status, exit_date, notes, ob_client_id, updated_at)
+       status, exit_date, notes, ob_client_id, rm, identity_verified, proof_address_verified, sof_verified,
+       tax_id_verified, pep_check_cleared, aml_screening_cleared, ubo_verified, updated_at)
     VALUES
       (@tenantId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
        @commitment, @calledAmount, @paidAmount, @distributions, @fundClass, @ownershipPct, @professionalClient,
        @kycStatus, @kycDate, @kycNextReview, @riskRating, @admissionDate, @saNumber, @afsaNotified, @lpacMember,
-       @status, @exitDate, @notes, @obClientId, datetime('now'))
+       @status, @exitDate, @notes, @obClientId, @rm, @identityVerified, @proofAddressVerified, @sofVerified,
+       @taxIdVerified, @pepCheckCleared, @amlScreeningCleared, @uboVerified, datetime('now'))
   `).run(at({
     tenantId: req.tenantId,
     registerId,
@@ -142,6 +152,14 @@ app.post('/api/lp', requireAuth, (req, res) => {
     exitDate: b.exitDate || null,
     notes: b.notes || '',
     obClientId: b.obClientId || null,
+    rm: b.rm || null,
+    identityVerified: b.identityVerified ? 1 : 0,
+    proofAddressVerified: b.proofAddressVerified ? 1 : 0,
+    sofVerified: b.sofVerified ? 1 : 0,
+    taxIdVerified: b.taxIdVerified ? 1 : 0,
+    pepCheckCleared: b.pepCheckCleared ? 1 : 0,
+    amlScreeningCleared: b.amlScreeningCleared ? 1 : 0,
+    uboVerified: b.uboVerified ? 1 : 0,
   }));
 
   const row = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -163,7 +181,10 @@ app.put('/api/lp/:id', requireAuth, (req, res) => {
       professional_client=@professionalClient, kyc_status=@kycStatus, kyc_date=@kycDate,
       kyc_next_review=@kycNextReview, risk_rating=@riskRating, admission_date=@admissionDate, sa_number=@saNumber,
       afsa_notified=@afsaNotified, lpac_member=@lpacMember, status=@status, exit_date=@exitDate, notes=@notes,
-      ob_client_id=@obClientId, updated_at=datetime('now')
+      ob_client_id=@obClientId, rm=@rm, identity_verified=@identityVerified,
+      proof_address_verified=@proofAddressVerified, sof_verified=@sofVerified, tax_id_verified=@taxIdVerified,
+      pep_check_cleared=@pepCheckCleared, aml_screening_cleared=@amlScreeningCleared, ubo_verified=@uboVerified,
+      updated_at=datetime('now')
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({
     name: merged.name, type: merged.type, lpType: merged.lpType, country: merged.country, address: merged.address,
@@ -174,6 +195,10 @@ app.put('/api/lp/:id', requireAuth, (req, res) => {
     kycNextReview: merged.kycNextReview, riskRating: merged.riskRating, admissionDate: merged.admissionDate,
     saNumber: merged.saNumber, afsaNotified: merged.afsaNotified ? 1 : 0, lpacMember: merged.lpacMember ? 1 : 0,
     status: merged.status, exitDate: merged.exitDate, notes: merged.notes, obClientId: merged.obClientId,
+    rm: merged.rm, identityVerified: merged.identityVerified ? 1 : 0,
+    proofAddressVerified: merged.proofAddressVerified ? 1 : 0, sofVerified: merged.sofVerified ? 1 : 0,
+    taxIdVerified: merged.taxIdVerified ? 1 : 0, pepCheckCleared: merged.pepCheckCleared ? 1 : 0,
+    amlScreeningCleared: merged.amlScreeningCleared ? 1 : 0, uboVerified: merged.uboVerified ? 1 : 0,
     id: existing.id, tenantId: req.tenantId,
   }));
 

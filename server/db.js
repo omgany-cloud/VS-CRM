@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS lp_register (
   exit_date             TEXT,
   notes                 TEXT,
   ob_client_id          INTEGER,
+  rm                    TEXT,
+  -- Granular KYC checklist (Onboarding Templates package, Template 1/2)
+  -- — same rationale as ob_clients' identity_verified/sof_verified/etc:
+  -- kyc_status alone can't answer "which check is still open", these can.
+  identity_verified     INTEGER NOT NULL DEFAULT 0,
+  proof_address_verified INTEGER NOT NULL DEFAULT 0,
+  sof_verified          INTEGER NOT NULL DEFAULT 0,
+  tax_id_verified       INTEGER NOT NULL DEFAULT 0,
+  pep_check_cleared     INTEGER NOT NULL DEFAULT 0,
+  aml_screening_cleared INTEGER NOT NULL DEFAULT 0,
+  ubo_verified          INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
