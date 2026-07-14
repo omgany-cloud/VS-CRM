@@ -581,6 +581,21 @@ function closeObClientModal() {
   activeObClientId = null;
 }
 
+function kycChecklistItems(c) {
+  const items = [
+    { label: 'Identity Verification', done: !!c.identityVerified },
+    { label: 'Sanctions Screening', done: !!c.sanctionsCleared, extra: c.sanctionsCheckedAt || '' },
+    { label: 'PEP Screening', done: !!c.pepStatus, extra: c.pepStatus || 'Не проверено' },
+  ];
+  if (c.direction === 'FM') {
+    items.push({ label: 'Source of Funds', done: !!c.sofVerified });
+    items.push({ label: 'Source of Wealth', done: !!c.sowVerified });
+  }
+  items.push({ label: 'Professional Client Status', done: !!c.professionalClientVerified });
+  items.push({ label: 'CRS Self-Certification', done: !!c.crsCompleted, extra: c.crsCompleted ? '' : 'форма не реализована' });
+  return items;
+}
+
 function renderObClientModal(clientId) {
   const c = obClients.find(x => x.id === clientId);
   if (!c) return;
@@ -656,6 +671,22 @@ function renderObClientModal(clientId) {
 
     <!-- Notes -->
     ${c.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6">${c.notes}</div>` : ''}
+
+    <!-- KYC Checklist (Onboarding Templates package: Identity/SOF/SOW/PEP/
+         Sanctions/Professional Client/CRS) — summary projected from the
+         2.2 (dd_outcome) and 3.1 (classification) task forms below; full
+         detail (which list, which tool, notes) lives in each task's data. -->
+    <div style="font-size:12px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:12px">
+      <i class="fas fa-shield-alt" style="margin-right:6px;color:#3b82f6"></i>KYC чек-лист
+    </div>
+    <div style="background:#1c2333;border-radius:10px;padding:0 14px;margin-bottom:20px">
+      ${kycChecklistItems(c).map((item, i, arr) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;${i<arr.length-1?'border-bottom:1px solid #2a3448;':''}font-size:12px">
+          <i class="fas ${item.done?'fa-check-circle':'fa-times-circle'}" style="color:${item.done?'#22c55e':'#5a6b8a'};width:16px;flex-shrink:0;text-align:center"></i>
+          <span style="flex:1;color:#e2e8f0">${item.label}</span>
+          <span style="color:#8a9bbf;font-size:11px">${item.extra||''}</span>
+        </div>`).join('')}
+    </div>
 
     <!-- 7 Tasks timeline -->
     <div style="font-size:12px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:12px">
@@ -2526,6 +2557,19 @@ function submitObTask(taskId) {
     } else if (conclusion.includes('EDD')) {
       showToast('🟡 Назначена расширенная проверка (EDD)', 'orange');
     }
+    // ── KYC checklist summary (Onboarding Templates 1/2/6/8) — propagate
+    // from this task's granular fields onto the client record so the
+    // checklist is queryable without parsing every task's form_data_json.
+    // Runs regardless of the conclusion: these reflect what was actually
+    // checked, not whether the client was approved. ──
+    client.identityVerified   = fd.f_corpVerified === 'Да';
+    client.pepStatus          = fd.f_pepClient || client.pepStatus;
+    client.sanctionsCleared   = fd.f_sanctionTotal === 'Чисто';
+    client.sanctionsCheckedAt = fd.f_ddDate || today();
+    if (client.direction === 'FM') {
+      client.sofVerified = fd.f_sofVerified === 'Да';
+      client.sowVerified = fd.f_sowVerified === 'Да';
+    }
   }
 
   if (task.formKey === 'suitability') {
@@ -2544,6 +2588,10 @@ function submitObTask(taskId) {
       client.classification = newClass;
       showToast(`📋 Классификация обновлена: ${newClass}`, 'blue');
     }
+    // Professional Client status check (Onboarding Templates, Template 5)
+    // was completed and scored — mark it verified regardless of whether
+    // the resulting tier changed.
+    if (newClass) client.professionalClientVerified = true;
   }
 
   // ── LP Qualification: update client.classification ────
