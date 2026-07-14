@@ -35,6 +35,12 @@ const SYSTEM_ROLES = [
   { code: 'IC_LP_REP', label: 'LP Representative (IC)', icon: 'fa-user-tie', color: '#64748b',
     internal: false, manageUsers: false, manageRoles: false, accessFM: false,
     decideConflicts: false, authorICMemo: false, riskVeto: false, icSeat: 'LP Rep' },
+  // View-everything, change-nothing: internal + accessFM + manageUsers/manageRoles
+  // cover every GET route this app has (see server/auth.js's readOnly enforcement,
+  // which blocks every mutating request regardless of these flags).
+  { code: 'AUDITOR', label: 'Внутренний аудитор', icon: 'fa-clipboard-check', color: '#06b6d4',
+    internal: true, manageUsers: true, manageRoles: true, accessFM: true,
+    decideConflicts: false, authorICMemo: false, riskVeto: false, icSeat: null, readOnly: true },
 ];
 
 module.exports = { SYSTEM_ROLES };

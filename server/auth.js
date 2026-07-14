@@ -15,10 +15,17 @@ function signToken(user, tenant) {
   );
 }
 
+// Any request whose role has the readOnly permission is blocked here,
+// regardless of which other permission flags it holds or which per-route
+// check (permission flag or literal role-code match) would otherwise have
+// allowed it through — see requireAuth below.
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 // Express middleware: verifies the Bearer token and attaches
 // req.tenantId / req.user — every tenant-scoped route reads
 // req.tenantId from here, never from a client-supplied param.
-// This is the enforcement point for tenant isolation.
+// This is the enforcement point for tenant isolation (and, via
+// MUTATING_METHODS above, for read-only roles).
 //
 // req.user.role/active/name are re-read from the DB on every request rather
 // than trusted from the JWT claim, so a role change or deactivation takes
@@ -45,6 +52,9 @@ function requireAuth(req, res, next) {
     };
     req.tenantId = payload.tenantId;
     req.tenantSlug = payload.tenantSlug;
+    if (req.user.permissions.readOnly && MUTATING_METHODS.has(req.method)) {
+      return res.status(403).json({ error: 'Forbidden: read-only role cannot modify data' });
+    }
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });

@@ -34,7 +34,10 @@ function updateUserRoleUI(role) {
   const avatarEl = document.getElementById('sidebarUserAvatar');
   const displayName = auth && auth.user ? (auth.user.name || auth.user.email) : '—';
   if (nameEl) nameEl.textContent = displayName;
-  if (roleEl) roleEl.textContent = (typeof roleLabel === 'function') ? roleLabel(role) : (role || '—');
+  if (roleEl) {
+    const label = (typeof roleLabel === 'function') ? roleLabel(role) : (role || '—');
+    roleEl.textContent = currentUserPermission('readOnly') ? `${label} · Только просмотр` : label;
+  }
   if (avatarEl) {
     avatarEl.style.background = cfg.color;
     avatarEl.innerHTML = `<i class="fas ${cfg.icon}"></i>`;

@@ -1361,6 +1361,7 @@ const SEED_USERS = [
   { email: 'analyst@turancapital.kz', role: 'ANALYST', name: 'Demo Analyst' },
   { email: 'mlro@turancapital.kz', role: 'MLRO', name: 'Demo MLRO' },
   { email: 'cio@turancapital.kz', role: 'CIO', name: 'Demo CIO' },
+  { email: 'auditor@turancapital.kz', role: 'AUDITOR', name: 'Demo Auditor' },
 ];
 for (const u of SEED_USERS) upsertUser(tenant.id, u.email, SEED_PASSWORD, u.role, u.name);
 

@@ -544,6 +544,7 @@ CREATE TABLE IF NOT EXISTS roles (
   decide_conflicts  INTEGER NOT NULL DEFAULT 0,
   author_ic_memo    INTEGER NOT NULL DEFAULT 0,
   risk_veto         INTEGER NOT NULL DEFAULT 0,
+  read_only         INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -585,6 +586,7 @@ if (!columnExists('users', 'active')) db.exec("ALTER TABLE users ADD COLUMN acti
 for (const table of ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_memos']) {
   if (!columnExists(table, 'fund_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN fund_id INTEGER REFERENCES funds(id)`);
 }
+if (!columnExists('roles', 'read_only')) db.exec("ALTER TABLE roles ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
