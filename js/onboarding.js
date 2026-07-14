@@ -9,8 +9,6 @@
 ═══════════════════════════════════════════════════ */
 
 // Счётчики ID
-let obClientIdCounter = 8;   // у нас 8 sample клиентов (id 1–8)
-let obTaskIdCounter   = 100;
 let obCoiIdCounter    = 2;
 
 // ── Restricted List (Форма 5.2) ──────────────────────────
@@ -63,17 +61,12 @@ let obTasks = [];
    CORE — создание клиента + 7 задач
 ═══════════════════════════════════════════════════ */
 
-function createObClient(data) {
-  const id = ++obClientIdCounter;
-  const seq = String(id).padStart(3, '0');
-  const clientId = `CL-${new Date().getFullYear()}-${seq}`;
-
+async function createObClient(data) {
   // Calculate target date = startDate + 15 business days (~21 calendar)
   const start = new Date(data.startDate || Date.now());
   const target = obAddBizDays(start, 15);
 
-  const client = {
-    id, clientId,
+  const clientPayload = {
     name:             data.name,
     type:             data.type             || 'Corporate',
     classification:   data.classification   || (data.direction==='FM' ? 'Qualified Investor' : 'Professional Client'),
@@ -82,8 +75,6 @@ function createObClient(data) {
     commitment:       data.direction==='FM' ? (data.commitment || 0) : undefined,
     direction:        data.direction        || 'CF&A',
     rm:               data.rm               || currentUserDisplayName(),
-    phase:            1,
-    onboardingStatus: 'On Track',
     riskRating:       data.riskRating       || 'Medium',
     startDate:        start.toISOString().slice(0, 10),
     targetDate:       target.toISOString().slice(0, 10),
@@ -95,21 +86,44 @@ function createObClient(data) {
     activated:        false,
   };
 
+  let client;
+  try {
+    client = await apiFetch('/api/ob-clients', { method: 'POST', body: JSON.stringify(clientPayload) });
+  } catch (err) {
+    showToast('⚠️ Не удалось создать клиента: ' + err.message, 'red');
+    return null;
+  }
   obClients.push(client);
-  createOnboardingTasks(client);
-  checkRestrictedList(client);     // auto-check
+
+  const taskDrafts = buildOnboardingTaskDrafts(client);
+  try {
+    const createdTasks = await apiFetch('/api/ob-tasks', {
+      method: 'POST',
+      body: JSON.stringify({ clientId: client.id, tasks: taskDrafts }),
+    });
+    obTasks.push(...createdTasks.obTasks);
+  } catch (err) {
+    showToast('⚠️ Клиент создан, но задачи не удалось сохранить: ' + err.message, 'red');
+  }
+
+  if (checkRestrictedList(client)) {     // auto-check
+    apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify({ restrictedMatch: true }) })
+      .catch(err => showToast('⚠️ Не удалось сохранить признак Restricted List: ' + err.message, 'orange'));
+  }
   updateBadges();
   return client;
 }
 
-function createOnboardingTasks(client) {
+// Builds the 7-task checklist for a client (draft objects, no ids — the
+// server assigns those via POST /api/ob-tasks).
+function buildOnboardingTaskDrafts(client) {
   const start = new Date(client.startDate);
   // Определяем какие задачи должны быть открыты исходя из фазы клиента
   // Правило: все задачи с phase < client.phase считаются completed (демо-данные)
   //          задачи с phase === client.phase → open
   //          задачи с phase > client.phase  → locked
   const clientPhase = client.phase || 1;
-  getTaskTemplates(client.direction).forEach(tpl => {
+  return getTaskTemplates(client.direction).map(tpl => {
     const dueDate = obAddBizDays(start, tpl.dayEnd);
     let status;
     if (client.activated) {
@@ -121,9 +135,7 @@ function createOnboardingTasks(client) {
     } else {
       status = 'locked';
     }
-    obTasks.push({
-      id:           ++obTaskIdCounter,
-      clientId:     client.id,
+    return {
       taskNum:      tpl.num,
       title:        tpl.title,
       phase:        tpl.phase,
@@ -134,8 +146,7 @@ function createOnboardingTasks(client) {
       formData:     {},
       completedAt:  client.activated ? client.startDate : (tpl.phase < clientPhase ? client.startDate : null),
       completedBy:  client.activated ? 'CEO' : (tpl.phase < clientPhase ? 'RM (Relationship Manager)' : null),
-      comments:     [],
-    });
+    };
   });
 }
 
@@ -2505,7 +2516,7 @@ function today() { return new Date().toISOString().slice(0,10); }
 ═══════════════════════════════════════════════════ */
 
 /** @deprecated — replaced by auto-save; kept for safety */
-function submitObTask(taskId) {
+async function submitObTask(taskId) {
   const task   = obTasks.find(t => t.id === taskId);
   const client = obClients.find(c => c.id === task?.clientId);
   if (!task || !client) return;
@@ -2897,6 +2908,26 @@ function submitObTask(taskId) {
     unlockNextTask(client.id, task.taskNum);
   }
 
+  // Persist everything that may have changed: this task, any sibling tasks
+  // unlockNextTask() just opened, and the client (phase/onboardingStatus/KYC
+  // fields/etc. — too many conditional branches above touch it to track
+  // precisely, so the whole object is sent; PUT /api/ob-clients/:id already
+  // does a safe partial merge). Best-effort: the local UI above has already
+  // committed these changes and this function's branching is too entangled
+  // to safely unwind on a failed save, so a failure here is a warning, not
+  // a rollback.
+  const clientTasks = obTasks.filter(t => t.clientId === client.id);
+  const persistResults = await Promise.allSettled([
+    ...clientTasks.map(t => apiFetch(`/api/ob-tasks/${t.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: t.status, formData: t.formData, completedAt: t.completedAt, completedBy: t.completedBy }),
+    })),
+    apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify(client) }),
+  ]);
+  if (persistResults.some(r => r.status === 'rejected')) {
+    showToast('⚠️ Часть изменений не удалось сохранить на сервере — обновите страницу и проверьте', 'orange');
+  }
+
   updateBadges();
 
   // Вернуться к карточке клиента (форма показывалась инлайн)
@@ -2909,7 +2940,7 @@ function submitObTask(taskId) {
    Saves current formData snapshot as previousFormData,
    resets status → 'open', re-renders the form in editable mode.
 ────────────────────────────────────────────────────── */
-function reopenObTask(taskId) {
+async function reopenObTask(taskId) {
   // Role guard
   if (currentUserRole() === 'RELATIONSHIP_MANAGER') {
     showToast('⛔ RM не может редактировать завершённые задачи', 'red');
@@ -2923,7 +2954,17 @@ function reopenObTask(taskId) {
     return;
   }
 
-  // Snapshot
+  try {
+    await apiFetch(`/api/ob-tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'open', completedAt: null, completedBy: null }),
+    });
+  } catch (err) {
+    showToast('⚠️ Не удалось открыть задачу для редактирования: ' + err.message, 'red');
+    return;
+  }
+
+  // Snapshot (local-only convenience for the in-form "what changed" view — no DB column)
   task.previousFormData  = JSON.parse(JSON.stringify(task.formData || {}));
   task.previousCompletedAt = task.completedAt;
   task.previousCompletedBy = task.completedBy;
@@ -5219,7 +5260,7 @@ function closeObNewModal() {
   document.body.style.overflow = '';
 }
 
-function saveNewObClient() {
+async function saveNewObClient() {
   const name = document.getElementById('ob_name')?.value?.trim();
   if (!name) { showToast('⚠️ Введите название клиента', 'red'); return; }
   const direction = document.getElementById('ob_direction')?.value || 'CF&A';
@@ -5233,7 +5274,7 @@ function saveNewObClient() {
   const classEl = isFM
     ? document.getElementById('ob_classificationFM')
     : document.getElementById('ob_classificationCFA');
-  const client = createObClient({
+  const client = await createObClient({
     name,
     type:           document.getElementById('ob_type')?.value,
     classification: classEl?.value,
@@ -5246,6 +5287,7 @@ function saveNewObClient() {
     startDate:      document.getElementById('ob_startDate')?.value,
     notes:          document.getElementById('ob_notes')?.value,
   });
+  if (!client) return; // error toast already shown inside createObClient
   closeObNewModal();
   renderObContent();
   showToast('✅ Клиент "' + client.name + '" создан (' + direction + '). 7 задач сгенерированы.', 'green');

@@ -804,7 +804,9 @@ app.post('/api/ob-clients', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction clients' });
-  const params = obClientToParams({ phase: 1, onboardingStatus: 'On Track', ...b });
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM ob_clients WHERE tenant_id = ?').get(req.tenantId);
+  const clientId = b.clientId || `CL-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
+  const params = obClientToParams({ phase: 1, onboardingStatus: 'On Track', ...b, clientId });
   const info = db.prepare(OB_CLIENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToObClient(row));
@@ -838,10 +840,47 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   if (existing.status === 'completed' && merged.status !== 'completed' && req.user.role === 'RELATIONSHIP_MANAGER') {
     return res.status(403).json({ error: 'Forbidden: RM cannot reopen a completed onboarding task' });
   }
-  const params = obTaskToParams(merged);
+  // clientId/taskNum are immutable after creation — OB_TASK_UPDATE_SQL has
+  // no @clientId/@taskNum placeholders, so both must be dropped before
+  // binding (node:sqlite throws "Unknown named parameter" on any extra key
+  // with no matching @ in the SQL text).
+  const { clientId: _unusedClientId, taskNum: _unusedTaskNum, ...params } = obTaskToParams(merged);
   db.prepare(OB_TASK_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToObTask(row));
+});
+
+// Bulk-creates the onboarding task checklist (7 tasks) for one client in a
+// single transaction — mirrors POST /api/capital-calls' call+line-items
+// pattern (create the parent's children atomically, one round trip).
+app.post('/api/ob-tasks', requireAuth, requireInternal, (req, res) => {
+  const b = req.body || {};
+  const clientId = b.clientId;
+  const tasks = b.tasks;
+  if (!clientId || !Array.isArray(tasks) || !tasks.length) {
+    return res.status(400).json({ error: 'clientId and a non-empty tasks[] are required' });
+  }
+  const client = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(clientId, req.tenantId);
+  if (!client) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
+  if (chineseWallBlocks(req.user.permissions, client.direction)) {
+    return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
+
+  db.exec('BEGIN');
+  try {
+    const insert = db.prepare(OB_TASK_INSERT_SQL);
+    const created = [];
+    for (const t of tasks) {
+      const params = obTaskToParams({ ...t, clientId });
+      const info = insert.run(at({ tenantId: req.tenantId, ...params }));
+      created.push(rowToObTask(db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId)));
+    }
+    db.exec('COMMIT');
+    res.status(201).json({ obTasks: created });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/restricted-list', requireAuth, requirePermission('decideConflicts'), requirePermission('accessFM'), (req, res) => {

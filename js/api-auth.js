@@ -181,8 +181,6 @@ async function loadOnboardingFromApi() {
     if (typeof obTasks !== 'undefined') { obTasks.length = 0; obTasks.push(...data.obTasks); }
     if (typeof engagements !== 'undefined') { engagements.length = 0; engagements.push(...data.engagements); }
 
-    if (typeof obClientIdCounter !== 'undefined' && obClients.length) obClientIdCounter = Math.max(...obClients.map(c => c.id)) + 1;
-    if (typeof obTaskIdCounter !== 'undefined' && obTasks.length) obTaskIdCounter = Math.max(...obTasks.map(t => t.id)) + 1;
     if (typeof obCoiIdCounter !== 'undefined' && coiRegistry.length) obCoiIdCounter = Math.max(...coiRegistry.map(c => c.id)) + 1;
     if (typeof engIdCounter !== 'undefined' && engagements.length) engIdCounter = Math.max(...engagements.map(e => e.id)) + 1;
 
