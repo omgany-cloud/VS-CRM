@@ -476,7 +476,15 @@ function renderCalEvent(e, isOverdue) {
    Меморандумы, голосование, история решений
 ═══════════════════════════════════════════════════════════ */
 
-const IC_MEMBERS = ['CEO', 'CFO', 'Investment Manager', 'External Advisor'];
+// Fixed IC voting composition per Constitution Section 7 (2 GP Reps +
+// 1 Independent Member + 1 LP Rep) — same roster used in server/seed.js
+// so seeded and newly-created memos share one consistent vote shape.
+const IC_ROLE_DEFS = [
+  { role: 'GP Rep 1', name: 'Omirserikov Gaini (CEO)' },
+  { role: 'GP Rep 2', name: 'Amankulov Zhanibek (CFO)' },
+  { role: 'Independent Member', name: 'Мукашев Ерлан Т.' },
+  { role: 'LP Rep', name: 'Байжанова Динара Сериковна' },
+];
 const IC_VOTES   = { approve: { label:'Одобрить', color:'#22c55e' }, reject: { label:'Отклонить', color:'#ef4444' }, abstain: { label:'Воздержаться', color:'#94a3b8' } };
 
 let icMemos = [];  // populated at runtime by js/api-auth.js via GET /api/ic-memos (see server/index.js)
@@ -861,14 +869,14 @@ function openNewICMemo() {
     <!-- IC Members panel -->
     <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">
-        <i class="fas fa-users" style="margin-right:5px"></i>Члены IC (проголосуют после создания)
+        <i class="fas fa-users" style="margin-right:5px"></i>Состав IC (Constitution Section 7) — проголосуют после создания
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${IC_MEMBERS.map(m => `
+        ${IC_ROLE_DEFS.map(({role,name}) => `
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
-            <input type="checkbox" id="icMember_${m.replace(/\s/g,'_')}" checked
+            <input type="checkbox" id="icMember_${role.replace(/\s/g,'_')}" checked
               style="accent-color:#f97316;width:14px;height:14px" />
-            <span>${m}</span>
+            <span>${role} <span style="color:#5a6b8a">(${name})</span></span>
           </label>`).join('')}
       </div>
     </div>
@@ -923,7 +931,7 @@ function icFormSyncDeal() {
 }
 
 /* save new memo */
-function saveNewICMemo() {
+async function saveNewICMemo() {
   const dealSel   = document.getElementById('icNewDealId')?.value;
   const isManual  = dealSel === 'manual' || dealSel === '';
   const company   = isManual
@@ -947,15 +955,16 @@ function saveNewICMemo() {
   if (!thesis) { showToast('⚠️ Заполните инвестиционный тезис', 'red'); return; }
   if (!risks)  { showToast('⚠️ Заполните раздел рисков', 'red'); return; }
 
-  // Selected IC members
-  const selectedMembers = IC_MEMBERS.filter(m => {
-    const cb = document.getElementById('icMember_' + m.replace(/\s/g,'_'));
+  // Selected IC members (fixed Constitution Section 7 roster — unchecked
+  // ones are recorded as absent, same as the seeded "missing Independent
+  // Member" scenario, so quorum still resolves correctly against them)
+  const selectedRoles = IC_ROLE_DEFS.filter(({role}) => {
+    const cb = document.getElementById('icMember_' + role.replace(/\s/g,'_'));
     return cb ? cb.checked : true;
   });
-  if (!selectedMembers.length) { showToast('⚠️ Выберите хотя бы одного члена IC', 'red'); return; }
+  if (!selectedRoles.length) { showToast('⚠️ Выберите хотя бы одного члена IC', 'red'); return; }
 
   const newMemo = {
-    id:          icIdCounter++,
     dealId:      isManual ? null : (parseInt(dealSel) || null),
     company,
     sector,
@@ -970,25 +979,33 @@ function saveNewICMemo() {
     risks,
     financials,
     exitPlan,
-    votes:       selectedMembers.map(member => ({ member, vote: null, comment: '' })),
+    votes:       selectedRoles.map(({role,name}) => ({ role, name, vote: null, comment: '' })),
     resolution:  '',
+    quorumMet:   false,
+    riskVeto:    false,
+    riskConclusion: null,
   };
 
-  icMemos.unshift(newMemo);   // add to top of list
+  try {
+    const created = await apiFetch('/api/ic-memos', { method: 'POST', body: JSON.stringify(newMemo) });
 
-  // If deal exists — update its IC stage
-  if (newMemo.dealId && typeof deals !== 'undefined') {
-    const deal = deals.find(d => d.id === newMemo.dealId);
-    if (deal) deal.stage = 'IC Review';
+    // If deal exists — update its IC stage (local-only; deals[] isn't API-backed)
+    if (created.dealId && typeof deals !== 'undefined') {
+      const deal = deals.find(d => d.id === created.dealId);
+      if (deal) deal.stage = 'IC Review';
+    }
+
+    await loadIcMemosFromApi();
+    closeICModal();
+    renderICPage();
+    updateBadges();
+    showToast(`✅ Меморандум "${company}" создан. Голосование открыто!`, 'green');
+
+    // Auto-open the new memo card after a short delay
+    setTimeout(() => openICModal(created.id), 200);
+  } catch (err) {
+    showToast('⚠️ Не удалось создать меморандум: ' + err.message, 'red');
   }
-
-  closeICModal();
-  renderICPage();
-  updateBadges();
-  showToast(`✅ Меморандум "${company}" создан. Голосование открыто!`, 'green');
-
-  // Auto-open the new memo card after a short delay
-  setTimeout(() => openICModal(newMemo.id), 200);
 }
 
 
