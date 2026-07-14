@@ -1510,6 +1510,19 @@ function dealField(id, field, value) {
 function dealMoveStage(id, stage) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
+
+  // Closing a deal means capital gets deployed — never let that happen
+  // without IC approval on record, regardless of which stage the deal is
+  // currently sitting in. icDecision/ic are kept in sync by the manual
+  // dropdown (js/app.js:1171-1172) but the real IC vote flow
+  // (castICVote, js/modules.js) only ever sets `ic` — check both.
+  if (stage === 'Закрыта' && d.ic !== 'Одобрено' && d.icDecision !== 'Одобрено') {
+    showToast(`⛔ Нельзя закрыть сделку без одобрения IC (текущее решение IC: ${d.ic || d.icDecision || 'Не подано'})`, 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
   d.stage = stage;
   d.updatedAt = today();
   showToast(`✅ ${d.company} → ${stage}`, 'green');

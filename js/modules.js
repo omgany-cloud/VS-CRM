@@ -725,12 +725,16 @@ async function castICVote(memoId, voteIdx, vote) {
   myVote.comment = myVote.comment || '';
   m.quorumMet = icQuorumMet(m.votes);
 
-  // Auto-resolve if all voted
+  // Auto-resolve once everyone has voted, OR once quorum is met (Constitution
+  // Section 7 requires the Independent Member's actual vote for quorum) AND
+  // the outcome is a decisive majority — never on majority alone, otherwise
+  // 3 quick votes from the non-Independent-Member seats can finalize the
+  // memo before the Independent Member ever gets a chance to vote.
   const allVoted  = m.votes.every(v => v.vote);
   const approveN  = m.votes.filter(v => v.vote === 'approve').length;
   const rejectN   = m.votes.filter(v => v.vote === 'reject').length;
   let toastMsg = null, toastColor = 'blue';
-  if (allVoted || approveN > m.votes.length / 2) {
+  if (allVoted || (m.quorumMet && approveN > m.votes.length / 2)) {
     m.status     = approveN >= rejectN ? 'approved' : 'rejected';
     const quorumNote = m.quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
     m.resolution = (approveN >= rejectN

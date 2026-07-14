@@ -953,7 +953,12 @@ function deriveIcResolution(memo, votes) {
   const allVoted = votes.every(v => v.vote);
   const approveN = votes.filter(v => v.vote === 'approve').length;
   const rejectN = votes.filter(v => v.vote === 'reject').length;
-  if (!(allVoted || approveN > votes.length / 2)) {
+  // Majority alone must never resolve early — only once everyone has voted,
+  // or once quorum (which requires the Independent Member's actual vote per
+  // Constitution Section 7) is met, does a decisive majority finalize the
+  // memo. Otherwise 3 non-Independent-Member votes could lock the memo
+  // before that mandatory seat ever gets to vote.
+  if (!(allVoted || (quorumMet && approveN > votes.length / 2))) {
     return { quorumMet, status: 'pending', resolution: memo.resolution };
   }
   const status = approveN >= rejectN ? 'approved' : 'rejected';
