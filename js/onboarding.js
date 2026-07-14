@@ -846,6 +846,7 @@ function openObTaskForm(taskId) {
                <i class="fas fa-clock" style="margin-right:4px"></i>Срок: ${task.dueDate}
              </span>
            </div>`}
+      ${obTaskPdfButtonHtml(task, client)}
     </div>
 
     <!-- Скроллируемый контейнер формы -->
@@ -906,6 +907,26 @@ function closeObTaskForm() {
 /** Stub для обратной совместимости (modal-ob-task больше не используется) */
 function closeObTaskModal() {
   closeObTaskForm();
+}
+
+// PDF/document preview-and-print button for a task — available regardless
+// of whether the task is finished, not just after completion, so the user
+// can preview/print while still filling in the form (reads whatever is in
+// task.formData so far, same as the completed view reads the final
+// submitted data). Shared by openObTaskForm's header (top, always visible
+// without scrolling) and buildTaskForm's footer (bottom, next to Submit).
+function obTaskPdfButtonHtml(task, client) {
+  return task.formKey === 'dd_outcome'
+    ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
+    : (task.formKey === 'engagement_letter')
+    ? '<button onclick="obGenerateTermSheet(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Term Sheet PDF</button>'
+    : (task.formKey === 'subscription_agreement')
+    ? '<button onclick="obGenerateSubscriptionAgreement(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>SA PDF</button>'
+    : (task.formKey === 'activation' && client.direction === 'FM' && (task.formData?.f_lpaUrl || task.formData?.lpaUrl || client.lpaUrl))
+    ? '<button onclick="obViewLpaFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Открыть LPA</button>'
+    : (task.formKey === 'activation' && (task.formData?.f_contractUrl || task.formData?.contractUrl || client.contractUrl))
+    ? '<button onclick="obViewContractFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Открыть договор</button>'
+    : '';
 }
 
 /* ── Build form HTML by formKey ───────────────────── */
@@ -2440,21 +2461,7 @@ function buildTaskForm(task, client) {
       html += `<div style="padding:40px;text-align:center;color:#8a9bbf">Форма: ${task.formKey}</div>`;
   }
 
-  // PDF/document preview button — available regardless of whether the task
-  // is finished, not just after completion, so the user can preview/print
-  // while still filling in the form (reads whatever is in task.formData so
-  // far, same as the completed view reads the final submitted data).
-  const pdfBtn = task.formKey === 'dd_outcome'
-    ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
-    : (task.formKey === 'engagement_letter')
-    ? '<button onclick="obGenerateTermSheet(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Term Sheet PDF</button>'
-    : (task.formKey === 'subscription_agreement')
-    ? '<button onclick="obGenerateSubscriptionAgreement(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>SA PDF</button>'
-    : (task.formKey === 'activation' && client.direction === 'FM' && (task.formData?.f_lpaUrl || task.formData?.lpaUrl || client.lpaUrl))
-    ? '<button onclick="obViewLpaFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Открыть LPA</button>'
-    : (task.formKey === 'activation' && (task.formData?.f_contractUrl || task.formData?.contractUrl || client.contractUrl))
-    ? '<button onclick="obViewContractFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Открыть договор</button>'
-    : '';
+  const pdfBtn = obTaskPdfButtonHtml(task, client);
 
   // Submit / comment section — show re-open banner if completed
   if (isCompleted) {
