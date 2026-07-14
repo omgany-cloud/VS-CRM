@@ -2440,23 +2440,28 @@ function buildTaskForm(task, client) {
       html += `<div style="padding:40px;text-align:center;color:#8a9bbf">Форма: ${task.formKey}</div>`;
   }
 
+  // PDF/document preview button — available regardless of whether the task
+  // is finished, not just after completion, so the user can preview/print
+  // while still filling in the form (reads whatever is in task.formData so
+  // far, same as the completed view reads the final submitted data).
+  const pdfBtn = task.formKey === 'dd_outcome'
+    ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
+    : (task.formKey === 'engagement_letter')
+    ? '<button onclick="obGenerateTermSheet(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Term Sheet PDF</button>'
+    : (task.formKey === 'subscription_agreement')
+    ? '<button onclick="obGenerateSubscriptionAgreement(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>SA PDF</button>'
+    : (task.formKey === 'activation' && client.direction === 'FM' && (task.formData?.f_lpaUrl || task.formData?.lpaUrl || client.lpaUrl))
+    ? '<button onclick="obViewLpaFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Открыть LPA</button>'
+    : (task.formKey === 'activation' && (task.formData?.f_contractUrl || task.formData?.contractUrl || client.contractUrl))
+    ? '<button onclick="obViewContractFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Открыть договор</button>'
+    : '';
+
   // Submit / comment section — show re-open banner if completed
   if (isCompleted) {
     const canEdit = (currentUserRole() !== 'RELATIONSHIP_MANAGER');
     const editBtn = canEdit
       ? '<button onclick="reopenObTask(' + task.id + ')" style="background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.35);color:#fb923c;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0"><i class=\\"fas fa-pen\\" style=\\"margin-right:5px\\"></i>Редактировать</button>'
       : '<span style="font-size:11px;color:#4a5568">RM: редактирование недоступно</span>';
-    const pdfBtn = task.formKey === 'dd_outcome'
-      ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
-      : (task.formKey === 'engagement_letter')
-      ? '<button onclick="obGenerateEngagementLetter(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>EL PDF</button>'
-      : (task.formKey === 'subscription_agreement')
-      ? '<button onclick="obGenerateSubscriptionAgreement(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>SA PDF</button>'
-      : (task.formKey === 'activation' && client.direction === 'FM' && (task.formData?.f_lpaUrl || task.formData?.lpaUrl || client.lpaUrl))
-      ? '<button onclick="obViewLpaFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Открыть LPA</button>'
-      : (task.formKey === 'activation' && (task.formData?.f_contractUrl || task.formData?.contractUrl || client.contractUrl))
-      ? '<button onclick="obViewContractFromTask(' + task.id + ')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Открыть договор</button>'
-      : '';
     html += `
       <div style="margin-top:14px;padding:10px 14px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <i class="fas fa-check-circle" style="color:#22c55e;font-size:16px;flex-shrink:0"></i>
@@ -2486,6 +2491,7 @@ function buildTaskForm(task, client) {
         ${isDocForm ? `<span id="obSubmitDocHint" style="font-size:11px;color:#eab308;flex:1;display:none">
           <i class="fas fa-exclamation-triangle" style="margin-right:4px"></i>Получите все обязательные документы
         </span>` : ''}
+        ${pdfBtn}
         <button id="obSubmitTaskBtn" onclick="submitObTask(${task.id})" ${submitDisabled} ${submitTitle}
           style="background:${submitBg};border:none;color:${submitColor};padding:8px 20px;border-radius:8px;cursor:${submitCursor};font-size:13px;font-weight:700;transition:all .2s">
           <i class="fas fa-${submitIcon}" style="margin-right:5px"></i>${submitLabel}
