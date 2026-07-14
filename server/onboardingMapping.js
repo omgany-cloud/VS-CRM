@@ -69,7 +69,6 @@ function obClientToParams(c) {
   out.sowVerified = c.sowVerified ? 1 : 0;
   out.sanctionsCleared = c.sanctionsCleared ? 1 : 0;
   out.professionalClientVerified = c.professionalClientVerified ? 1 : 0;
-  out.crsCompleted = c.crsCompleted ? 1 : 0;
   return out;
 }
 function rowToObClient(row) {
@@ -86,7 +85,7 @@ function rowToObClient(row) {
     identityVerified: !!row.identity_verified, sofVerified: !!row.sof_verified,
     sowVerified: !!row.sow_verified, pepStatus: row.pep_status,
     sanctionsCleared: !!row.sanctions_cleared, sanctionsCheckedAt: row.sanctions_checked_at,
-    professionalClientVerified: !!row.professional_client_verified, crsCompleted: !!row.crs_completed,
+    professionalClientVerified: !!row.professional_client_verified,
   };
 }
 const OB_CLIENT_INSERT_SQL = `
@@ -95,13 +94,13 @@ const OB_CLIENT_INSERT_SQL = `
      phase, onboarding_status, risk_rating, start_date, target_date, next_action, notes,
      restricted_match, activated, contract_url, activated_by, lpa_url, aml_review_date, re_class_date,
      is_internal_client, internal_portfolio_id, identity_verified, sof_verified, sow_verified,
-     pep_status, sanctions_cleared, sanctions_checked_at, professional_client_verified, crs_completed)
+     pep_status, sanctions_cleared, sanctions_checked_at, professional_client_verified)
   VALUES
     (@tenantId, @clientId, @name, @type, @classification, @serviceType, @lpType, @commitment, @direction, @rm,
      @phase, @onboardingStatus, @riskRating, @startDate, @targetDate, @nextAction, @notes,
      @restrictedMatch, @activated, @contractUrl, @activatedBy, @lpaUrl, @amlReviewDate, @reClassDate,
      @isInternalClient, @internalPortfolioId, @identityVerified, @sofVerified, @sowVerified,
-     @pepStatus, @sanctionsCleared, @sanctionsCheckedAt, @professionalClientVerified, @crsCompleted)
+     @pepStatus, @sanctionsCleared, @sanctionsCheckedAt, @professionalClientVerified)
 `;
 const OB_CLIENT_UPDATE_SQL = `
   UPDATE ob_clients SET
@@ -113,7 +112,7 @@ const OB_CLIENT_UPDATE_SQL = `
     re_class_date=@reClassDate, is_internal_client=@isInternalClient, internal_portfolio_id=@internalPortfolioId,
     identity_verified=@identityVerified, sof_verified=@sofVerified, sow_verified=@sowVerified,
     pep_status=@pepStatus, sanctions_cleared=@sanctionsCleared, sanctions_checked_at=@sanctionsCheckedAt,
-    professional_client_verified=@professionalClientVerified, crs_completed=@crsCompleted
+    professional_client_verified=@professionalClientVerified
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

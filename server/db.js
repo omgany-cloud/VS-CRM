@@ -285,15 +285,15 @@ CREATE TABLE IF NOT EXISTS ob_clients (
   is_internal_client   INTEGER NOT NULL DEFAULT 0,
   internal_portfolio_id INTEGER REFERENCES portfolio(id),
   -- Client-level KYC checklist summary (Onboarding Templates package,
-  -- Templates 1/2/3/4/5/6/8/9). A queryable projection, not the source of
+  -- Templates 1/2/3/4/5/6/8). A queryable projection, not the source of
   -- truth — the full per-field detail (which sanctions list, which tool,
   -- adverse media notes, etc.) still lives in ob_tasks.form_data_json for
   -- the 2.2 (dd_outcome) and 3.1 (classification) tasks; these columns are
   -- set from that data when the task is completed (see submitObTask() in
   -- js/onboarding.js), replacing the old single free-text risk_rating as
-  -- the only KYC signal on the client record. crs_completed has no source
-  -- form yet (CRS Self-Certification isn't implemented anywhere in the
-  -- app — same gap noted in README's Future Work) so it stays manual-only.
+  -- the only KYC signal on the client record. (No CRS Self-Certification
+  -- column — that form isn't implemented anywhere in the app; see
+  -- README's Future Work rather than adding a field nothing can set.)
   identity_verified            INTEGER NOT NULL DEFAULT 0,
   sof_verified                 INTEGER NOT NULL DEFAULT 0,
   sow_verified                 INTEGER NOT NULL DEFAULT 0,
@@ -301,7 +301,6 @@ CREATE TABLE IF NOT EXISTS ob_clients (
   sanctions_cleared            INTEGER NOT NULL DEFAULT 0,
   sanctions_checked_at         TEXT,
   professional_client_verified INTEGER NOT NULL DEFAULT 0,
-  crs_completed                INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -773,7 +773,7 @@ const OB_CLIENTS = [
     notes: 'HNWI-инвестор. Консультационные услуги по сделке M&A.',
     restrictedMatch: false, activated: false,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2026-07-03',
-    professionalClientVerified: false, crsCompleted: false,
+    professionalClientVerified: false,
   },
   {
     id: 2, clientId: 'CL-2026-002',
@@ -788,7 +788,7 @@ const OB_CLIENTS = [
     notes: 'BVI-зарегистрированная холдинговая структура. Несколько UBO.',
     restrictedMatch: false, activated: false,
     identityVerified: false, pepStatus: null, sanctionsCleared: false, sanctionsCheckedAt: null,
-    professionalClientVerified: false, crsCompleted: false,
+    professionalClientVerified: false,
   },
   {
     id: 3, clientId: 'CL-2024-001',
@@ -805,7 +805,7 @@ const OB_CLIENTS = [
     notes: 'Полный пакет KYC получен и проверен. Commitment $8M.',
     restrictedMatch: false, activated: true,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2024-10-18',
-    sofVerified: true, sowVerified: true, professionalClientVerified: true, crsCompleted: false,
+    sofVerified: true, sowVerified: true, professionalClientVerified: true,
   },
   {
     id: 4, clientId: 'CL-2024-002',
@@ -822,7 +822,7 @@ const OB_CLIENTS = [
     notes: 'KYC подтверждён комплаенс-офицером. Commitment $6M.',
     restrictedMatch: false, activated: true,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2024-10-25',
-    sofVerified: true, sowVerified: true, professionalClientVerified: true, crsCompleted: false,
+    sofVerified: true, sowVerified: true, professionalClientVerified: true,
   },
   {
     id: 5, clientId: 'CL-2024-003',
@@ -839,7 +839,7 @@ const OB_CLIENTS = [
     notes: 'Крупнейший LP фонда, институциональный инвестор. Commitment $10M.',
     restrictedMatch: false, activated: true,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2024-10-14',
-    sofVerified: true, sowVerified: true, professionalClientVerified: true, crsCompleted: false,
+    sofVerified: true, sowVerified: true, professionalClientVerified: true,
   },
   {
     id: 6, clientId: 'CL-2024-004',
@@ -856,7 +856,7 @@ const OB_CLIENTS = [
     notes: 'KYC пройден без замечаний. Commitment $7.5M.',
     restrictedMatch: false, activated: true,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2024-11-14',
-    sofVerified: true, sowVerified: true, professionalClientVerified: true, crsCompleted: false,
+    sofVerified: true, sowVerified: true, professionalClientVerified: true,
   },
   {
     id: 7, clientId: 'CL-2024-005',
@@ -873,7 +873,7 @@ const OB_CLIENTS = [
     notes: 'Индивидуальный квалифицированный инвестор. Commitment $1.2M.',
     restrictedMatch: false, activated: true,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2024-11-22',
-    sofVerified: true, sowVerified: true, professionalClientVerified: true, crsCompleted: false,
+    sofVerified: true, sowVerified: true, professionalClientVerified: true,
   },
   {
     id: 8, clientId: 'CL-2026-003',
@@ -890,7 +890,7 @@ const OB_CLIENTS = [
     notes: 'Индивидуальный инвестор. Commitment $0.75M. Паспорт и подтверждение адреса получены, PEP check пройден, Source of Funds и AML screening в процессе.',
     restrictedMatch: false, activated: false,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: false, sanctionsCheckedAt: null,
-    sofVerified: false, sowVerified: false, professionalClientVerified: false, crsCompleted: false,
+    sofVerified: false, sowVerified: false, professionalClientVerified: false,
   },
   // -- "Internal Client" demo (COI Addendum Section C): the CF&A client IS
   // itself a portfolio company of a fund managed by this GP — self-dealing
@@ -910,7 +910,7 @@ const OB_CLIENTS = [
     restrictedMatch: false, activated: true,
     isInternalClient: true, internalPortfolioId: 1,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2026-05-10',
-    professionalClientVerified: true, crsCompleted: false,
+    professionalClientVerified: true,
   },
   // -- Repeat client with multiple, unrelated engagements over time PLUS a
   // Dual-Mandate scenario (COI Addendum Section D: Advising + Arranging on
@@ -928,7 +928,7 @@ const OB_CLIENTS = [
     notes: 'Повторный клиент CF&A: первый мандат (business valuation, 2025) завершён; второй мандат (2026) — параллельные Advising + Arranging на одной сделке (Dual-Mandate), одобрено CF Deal Committee единогласно с сегрегацией команд.',
     restrictedMatch: false, activated: true,
     identityVerified: true, pepStatus: 'Не PEP', sanctionsCleared: true, sanctionsCheckedAt: '2025-08-15',
-    professionalClientVerified: true, crsCompleted: false,
+    professionalClientVerified: true,
   },
 ];
 

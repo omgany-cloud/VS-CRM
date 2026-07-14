@@ -592,7 +592,6 @@ function kycChecklistItems(c) {
     items.push({ label: 'Source of Wealth', done: !!c.sowVerified });
   }
   items.push({ label: 'Professional Client Status', done: !!c.professionalClientVerified });
-  items.push({ label: 'CRS Self-Certification', done: !!c.crsCompleted, extra: c.crsCompleted ? '' : 'форма не реализована' });
   return items;
 }
 
