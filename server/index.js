@@ -413,7 +413,13 @@ app.get('/api/funds', requireAuth, requireInternal, requirePermission('accessFM'
 app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
-  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams(b) }));
+  // nav has NOT NULL DEFAULT 0 at the schema level, but fundToParams() binds
+  // an explicit NULL for any field the caller omits — which overrides a
+  // column's SQL-level DEFAULT (SQLite/node:sqlite only applies DEFAULT when
+  // the column is left out of the statement entirely, not when NULL is
+  // explicitly bound). The fund-creation form never sends nav, so default it
+  // here first, same pattern already used by POST /api/deals and /api/portfolio.
+  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, ...b }) }));
   const row = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   const f = rowToFund(row);
   f.lpCount = 0;
