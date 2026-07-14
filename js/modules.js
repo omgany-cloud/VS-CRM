@@ -38,10 +38,10 @@ function renderKycRenewalPage() {
     kycStatus: lp.kyc?.status || '—', rm: lp.manager,
     rawId: lp.id,
   }));
-  const cfaItems = cfaClients.map(c => ({
+  const cfaItems = (typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'CF&A') : []).map(c => ({
     id: 'cfa_' + c.id, name: c.name, type: c.type,
-    category: 'CF&A', kycDate: c.created || null,
-    kycStatus: c.kycStatus, rm: c.rmOwner,
+    category: 'CF&A', kycDate: c.startDate || null,
+    kycStatus: c.activated ? 'Одобрен' : 'На проверке', rm: c.rm,
     rawId: c.id,
   }));
   const all = [...lpItems, ...cfaItems].map(item => ({

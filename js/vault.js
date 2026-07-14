@@ -1,7 +1,7 @@
 // ============================================================
 //  vault.js — Global File Vault (Просмотр всех загруженных файлов)
-//  Aggregates: CF&A KYC docs (cfaDocFiles), Documents module (docFiles)
-//  + Tasks attachments (future), + any file uploaded anywhere in CRM
+//  Aggregates: Documents module (docFiles) + Tasks attachments
+//  (future), + any file uploaded anywhere in CRM
 // ============================================================
 
 /* ── File-preview modal (inline lightbox) ──────────────────── */
@@ -39,49 +39,7 @@ function vaultGetAllFiles() {
     });
   }
 
-  // ── 2. CF&A KYC documents (cfaDocFiles{}) ─────────────────
-  if (typeof cfaDocFiles !== 'undefined') {
-    Object.entries(cfaDocFiles).forEach(([key, f]) => {
-      // key format: "clientId_docName"
-      const parts    = key.split('_');
-      const clientId = parts[0];
-      const docName  = parts.slice(1).join('_') || key;
-
-      // Try to find client name
-      let clientName = docName;
-      if (typeof cfaClients !== 'undefined') {
-        const c = cfaClients.find(x => String(x.id) === String(clientId));
-        if (c) clientName = c.name;
-      }
-
-      const ext = (f.name || '').split('.').pop().toLowerCase();
-      const canPreview = ['pdf','png','jpg','jpeg','gif','webp','svg'].includes(ext);
-
-      // human-readable size
-      const sizeStr = f.size
-        ? (f.size > 1048576 ? (f.size/1048576).toFixed(1)+' MB' : Math.round(f.size/1024)+' KB')
-        : '—';
-
-      all.push({
-        key:      'cfa_' + key,
-        module:   'CF&A / KYC',
-        moduleColor: '#8b5cf6',
-        moduleIcon:  'fa-building',
-        client:    clientName,
-        name:      f.name || docName,
-        size:      sizeStr,
-        date:      f.uploadedAt || '—',
-        uploader:  '—',
-        dataUrl:   f.dataUrl || null,
-        comments:  0,
-        canPreview,
-        source:    'cfa',
-        sourceKey: key,
-      });
-    });
-  }
-
-  // ── 3. Tasks attachments (future hook) ────────────────────
+  // ── 2. Tasks attachments (future hook) ────────────────────
   // When tasks gain file uploads, add them here
   if (typeof tasksData !== 'undefined') {
     tasksData.forEach(task => {
@@ -123,7 +81,6 @@ function renderVaultPage() {
 
   // KPIs
   const totalCount = allFiles.length;
-  const cfaCount   = allFiles.filter(f => f.source === 'cfa').length;
   const docCount   = allFiles.filter(f => f.source === 'docs').length;
   const previewable= allFiles.filter(f => f.canPreview).length;
 
@@ -136,14 +93,6 @@ function renderVaultPage() {
           <span class="kpi-label">Всего файлов</span>
           <span class="kpi-value">${totalCount}</span>
           <span class="kpi-delta up">в CRM</span>
-        </div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon purple"><i class="fas fa-building"></i></div>
-        <div class="kpi-body">
-          <span class="kpi-label">CF&A KYC Docs</span>
-          <span class="kpi-value">${cfaCount}</span>
-          <span class="kpi-delta">загружено</span>
         </div>
       </div>
       <div class="kpi-card">
@@ -253,7 +202,7 @@ function renderVaultTable() {
       <div style="padding:50px;text-align:center;color:#4a5568">
         <i class="fas fa-folder-open" style="font-size:40px;margin-bottom:12px;display:block;opacity:.4"></i>
         <div style="font-size:14px;margin-bottom:6px">Файлы не найдены</div>
-        <div style="font-size:12px">Загрузите файлы в CF&A клиентах или разделе Документы</div>
+        <div style="font-size:12px">Загрузите файлы в разделе Документы</div>
       </div>`;
     return;
   }
@@ -414,7 +363,6 @@ function vaultDownload(key) {
 function vaultGoToModule(moduleName) {
   const MAP = {
     'Документы':  'documents',
-    'CF&A / KYC': 'clients',
     'Задачи':     'tasks',
   };
   const page = MAP[moduleName];

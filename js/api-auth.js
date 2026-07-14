@@ -182,11 +182,10 @@ async function loadIcMemosFromApi() {
 }
 
 /* ===== Documents / Vault — backed by the real API =====
-   docFiles is the merged docs/vault entity (see js/api-auth.js's
-   loadDocumentsFromApi comment and server/db.js's `documents` table
-   comment for why cfaDocFiles/task-attachments stay client-side). Both
-   the Documents page AND the Vault page (which aggregates docFiles +
-   two other still-client-side sources) need this refreshed. */
+   docFiles is the merged docs/vault entity (see server/db.js's
+   `documents` table comment for why task-attachments stay
+   client-side). Both the Documents page AND the Vault page (which
+   aggregates docFiles + task attachments) need this refreshed. */
 async function loadDocumentsFromApi() {
   try {
     const data = await apiFetch('/api/documents');

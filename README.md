@@ -801,7 +801,7 @@ if (client.direction === 'FM' && typeof registerLPFromOnboarding === 'function')
 | `page-ob-clients` | Клиенты (FM + CF&A) | `renderOnboardingPage()` |
 | `page-ob-restricted` | Restricted List / COI | `renderRestrictedListPage()` |
 | `page-engagements` | Реестр договоров | `renderEngagementsPage()` |
-| `page-clients` | CF&A Pipeline (архив) | `renderCFAPage()` |
+| `page-conflict-approvals` | Конфликты / Одобрения — CF Deal Committee | `renderConflictApprovalsPage()` |
 
 ---
 
@@ -1028,7 +1028,6 @@ obClients[] ──→ createOnboardingTasks() ──→ obTasks[]
 | Key Doc 3.2 | Suitability/Appropriateness (formKey: `suitability`) | Investment Profile & Suitability (formKey: `lp_investment_profile`) |
 | Key Doc 4.1 | Engagement Letter → `ENG-YYYY-NNN` | Subscription Agreement → `SA-YYYY-NNN` |
 | Activation | Client Activation | LP Activation |
-| obClientToCfa() | Maps to CF&A Pipeline | Not applicable |
 | Financial fields | feeAmount (advisory), successFee (%), retainer | commitment ($), Management Fee + 20% carry |
 
 ---
@@ -1042,7 +1041,6 @@ obClients[] ──→ createOnboardingTasks() ──→ obTasks[]
 | `css/style.css` | Styles: modal centering, overlays, KPI cards |
 | `js/app.js` | Navigation, dashboard render, badges, user role; Deal Pipeline modal (5 tabs); Portfolio module (6-tab modal, 20+ functions) |
 | `js/onboarding.js` | **Core**: ob clients, 7 tasks, all forms (FM+CF&A), submit routing, engagements, dashboard widgets, Chinese Wall |
-| `js/clients.js` | CF&A Pipeline: `obClientToCfa()` bridge (CF&A only), `getUnifiedCFAClients()` |
 | `js/data.js` | Static data: lpList, deals (9 полных), portfolio (3 rich companies), chartData |
 | `js/tasks.js` | Kanban tasks |
 | `js/workflow.js` | Approval workflows |
@@ -1262,7 +1260,6 @@ currentUserRole = 'RM (Relationship Manager)'
 | `css/style.css` | Styles: modal centering, overlays, KPI cards |
 | `js/app.js` | Navigation, dashboard render, badges, user role; Deal Pipeline (5 tabs); Portfolio module |
 | `js/onboarding.js` | **Core**: ob clients, 7 tasks, forms, submit routing, engagements, dashboard widgets, Chinese Wall |
-| `js/clients.js` | CF&A Pipeline: unified bridge `getUnifiedCFAClients()` |
 | `js/data.js` | Static data: lpList, deals (9), portfolio (3 rich), chartData |
 | `js/tasks.js` | Kanban tasks (legacy FM) |
 | `js/workflow.js` | Approval workflows |
@@ -1297,7 +1294,7 @@ currentUserRole = 'RM (Relationship Manager)'
 | `page-ob-clients` | Клиенты (FM + CF&A) | `renderOnboardingPage()` |
 | `page-ob-restricted` | Restricted List / COI | `renderRestrictedListPage()` |
 | `page-engagements` | Реестр договоров | `renderEngagementsPage()` |
-| `page-clients` | CF&A Pipeline (архив) | `renderCFAPage()` |
+| `page-conflict-approvals` | Конфликты / Одобрения — CF Deal Committee | `renderConflictApprovalsPage()` |
 | `page-onboarding` | Онбординг LP | `renderOnboardingTable()` |
 | `page-kyc` | KYC / AML | `renderKYCTable()` |
 | `page-workflow` | Согласования | `renderWorkflowPage()` |

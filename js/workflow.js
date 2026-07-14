@@ -440,11 +440,11 @@ function syncWfToEntity(w, result) {
     }
   }
   if (w.entityType === 'CF&A') {
-    const c = cfaClients.find(x => x.id === w.entityId);
-    if (c) {
-      c.kycStatus = result === 'approved' ? 'Одобрен' : 'Отклонён';
-      if (result === 'approved') { c.amlStatus = 'Пройден'; c.stage = 'Active'; }
-    }
+    // CF&A clients are obClients (direction === 'CF&A') now — unlike the
+    // old standalone cfaClients demo array, obClients has no separate
+    // kycStatus/amlStatus/stage fields to sync a renewal result onto
+    // (its `activated` flag is owned by the onboarding task flow, not
+    // by ad-hoc KYC renewal workflows), so there's nothing further to do.
   }
   if (w.entityType === 'Deal') {
     const d = deals.find(x => x.id === w.entityId);

@@ -22,6 +22,40 @@ function yesNo(v) {
   return v ? 'Да' : 'Нет';
 }
 
+/* CF&A client exports used to read from the standalone (now-removed)
+   CF&A Clients page's own demo array. The real CF&A clients live in
+   obClients (direction === 'CF&A', migrated to the backend) — this
+   reshapes them to the columns the reports below expect, rolling up
+   fee totals from engagements since obClients itself carries no
+   revenue field. */
+function getCfaExportClients() {
+  if (typeof obClients === 'undefined') return [];
+  return obClients.filter(c => c.direction === 'CF&A').map(c => {
+    const fee = (typeof engagements !== 'undefined')
+      ? engagements.filter(e => e.clientId === c.id).reduce((s, e) => s + (e.feeAmount || 0), 0) / 1e6
+      : 0;
+    return {
+      name: c.name,
+      type: c.type,
+      industry: '—',
+      country: '—',
+      stage: c.activated ? 'Active' : (c.onboardingStatus || 'In Progress'),
+      kycStatus: c.activated ? 'Одобрен' : 'На проверке',
+      amlStatus: c.activated ? 'Пройден' : (c.riskRating === 'High' ? 'Enhanced DD' : 'В процессе'),
+      pepStatus: c.riskRating === 'High' ? 'Требует проверки' : 'Нет',
+      revenue: fee,
+      rmOwner: c.rm,
+      contact: { name: '—', email: '—', phone: '—' },
+      services: [c.serviceType].filter(Boolean),
+      engagementDate: c.startDate,
+      notes: c.notes || '',
+      documents: [],
+      ubo: [],
+      created: c.startDate,
+    };
+  });
+}
+
 /* ── Создать и скачать Excel-файл из массива листов ── */
 function downloadExcel(sheets, filename) {
   if (typeof XLSX === 'undefined') {
@@ -293,7 +327,7 @@ function exportCFAClients() {
     'RM', 'Контакт', 'Email', 'Телефон',
     'Услуги', 'С клиентом с', 'Заметки'
   ];
-  const rows = cfaClients.map((c, i) => [
+  const rows = getCfaExportClients().map((c, i) => [
     i + 1, c.name, c.type, c.industry, c.country, c.stage,
     c.kycStatus, c.amlStatus, c.pepStatus, c.revenue,
     c.rmOwner, c.contact?.name, c.contact?.email, c.contact?.phone,
@@ -306,7 +340,7 @@ function exportCFAClients() {
   const kycHeader = [
     'Клиент', 'Тип', 'KYC Статус', 'Загружено документов', 'Список документов', 'UBO', 'Дата создания'
   ];
-  const kycRows = cfaClients.map(c => [
+  const kycRows = getCfaExportClients().map(c => [
     c.name, c.type, c.kycStatus,
     c.documents?.length || 0,
     c.documents?.join('; ') || '—',
@@ -405,15 +439,17 @@ function exportAMLRegister() {
   ]);
 
   // CF&A клиенты
+  const cfaExportClients = getCfaExportClients();
   const cfaHeader = [
     '№', 'Клиент CF&A', 'Тип', 'Страна', 'AML Статус', 'KYC Статус', 'PEP', 'Стадия', 'RM'
   ];
-  const cfaRows = cfaClients.map((c, i) => [
+  const cfaRows = cfaExportClients.map((c, i) => [
     i + 1, c.name, c.type, c.country, c.amlStatus, c.kycStatus, c.pepStatus, c.stage, c.rmOwner,
   ]);
 
-  const pendingAML = cfaClients.filter(c => c.amlStatus !== 'Пройден');
-  const enhancedDD = cfaClients.filter(c => c.amlStatus === 'Enhanced DD');
+  const pendingAML = cfaExportClients.filter(c => c.amlStatus !== 'Пройден');
+  const enhancedDD = cfaExportClients.filter(c => c.amlStatus === 'Enhanced DD');
+  const passedAML  = cfaExportClients.filter(c => c.amlStatus === 'Пройден');
 
   const summaryData = [
     ['AML REGISTER — СВОДКА'],
@@ -422,7 +458,7 @@ function exportAMLRegister() {
     [],
     ['LP — AML прошли', lpList.filter(lp => lp.kyc?.amlScreening).length],
     ['LP — AML ожидает', lpList.filter(lp => !lp.kyc?.amlScreening).length],
-    ['CF&A — AML пройден', cfaClients.filter(c => c.amlStatus === 'Пройден').length],
+    ['CF&A — AML пройден', passedAML.length],
     ['CF&A — Enhanced DD', enhancedDD.length],
     ['CF&A — Ожидает AML', pendingAML.length],
   ];
@@ -479,7 +515,7 @@ function exportFullCRM() {
   const dealRows   = deals.map((d, i) => [i+1, d.company, d.sector, d.stage, d.amount, d.type, d.ic]);
 
   const cfaHeader = ['№','Клиент','Тип','Индустрия','Стадия','KYC','AML','Гонорар ($M)'];
-  const cfaRows   = cfaClients.map((c, i) => [i+1, c.name, c.type, c.industry, c.stage, c.kycStatus, c.amlStatus, c.revenue]);
+  const cfaRows   = getCfaExportClients().map((c, i) => [i+1, c.name, c.type, c.industry, c.stage, c.kycStatus, c.amlStatus, c.revenue]);
 
   const priorityMap = {critical:'Критично',high:'Высокий',medium:'Средний',low:'Низкий'};
   const statusMap   = {pending:'Новая',in_progress:'В работе',review:'На проверке',completed:'Выполнена',cancelled:'Отменена'};

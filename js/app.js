@@ -110,8 +110,8 @@ function updateBadges() {
   set('badge-workflow', wfPending);
   set('badge-ic', icPending);
   set('badge-kycrenewal', kycOverdue);
-  // Vault: total uploaded CFA files
-  const vaultCount = typeof cfaDocFiles !== 'undefined' ? Object.keys(cfaDocFiles).length : 0;
+  // Vault: total files across all aggregated sources
+  const vaultCount = typeof vaultGetAllFiles === 'function' ? vaultGetAllFiles().length : 0;
   set('badge-vault', vaultCount);
   // Onboarding (TZ)
   const obOverdue = typeof getObOverdueCount === 'function' ? getObOverdueCount() : 0;

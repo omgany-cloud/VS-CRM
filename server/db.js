@@ -407,12 +407,12 @@ CREATE TABLE IF NOT EXISTS ic_memos (
 -- Documents / File Vault: this table is the "merge" of what used to be
 -- two separate frontend concepts — js/documents.js's docFiles[] (metadata-
 -- only demo records) and js/vault.js's "aggregator" (which was never its
--- own data store, just a read-only view combining docFiles + a live but
--- empty cfaDocFiles{} + empty task attachments). docFiles is the only one
--- of those three that actually holds seeded data, so it becomes the one
--- real backend-tracked entity; vault.js keeps merging it with the other
--- two (still-empty, still client-side-only, real binary upload storage
--- is out of scope for this pass) at render time — same behavior as today.
+-- own data store, just a read-only view combining docFiles + empty task
+-- attachments). docFiles is the one that actually holds seeded data, so
+-- it becomes the one real backend-tracked entity; vault.js keeps merging
+-- it with task attachments (still-empty, still client-side-only, real
+-- binary upload storage is out of scope for this pass) at render time —
+-- same behavior as today.
 CREATE TABLE IF NOT EXISTS documents (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id      INTEGER NOT NULL REFERENCES tenants(id),

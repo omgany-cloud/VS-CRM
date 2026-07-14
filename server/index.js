@@ -548,8 +548,8 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
 
 /* ===== Documents API — tenant-scoped =====
    The merged docFiles/vault entity — see the comment on the `documents`
-   table in db.js for why the other two vault.js sources (cfaDocFiles,
-   task attachments) aren't part of this migration. */
+   table in db.js for why vault.js's other source (task attachments)
+   isn't part of this migration. */
 app.get('/api/documents', requireAuth, (req, res) => {
   const rows = db.prepare('SELECT * FROM documents WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, documents: rows.map(rowToDocument) });
