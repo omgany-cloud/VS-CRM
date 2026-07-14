@@ -2850,42 +2850,43 @@ function submitObTask(taskId) {
       showToast(`✅ Клиент "${client.name}" активирован! Статус: Active`, 'green');
 
       // ── Auto-register FM LP into LP Register ──────────────
+      // registerLPFromOnboarding is now async (POSTs to /api/lp) — the
+      // navigate+highlight follow-up must wait for the real saved LP
+      // (with its server-assigned id) instead of racing ahead of it.
       if (client.direction === 'FM' && typeof registerLPFromOnboarding === 'function') {
         const saTask  = obTasks.find(t => t.clientId === client.id && t.formKey === 'subscription_agreement');
         const actTask = task; // activation task 5.1: has f_lpaUrl, f_contractNum, f_commitmentConfirmed
-        registerLPFromOnboarding(client, saTask, actTask);
+        registerLPFromOnboarding(client, saTask, actTask).then(function(savedLP) {
+          if (!savedLP) return; // duplicate, or save failed — error/info toast already shown
 
-        // Get the newly created LP id right after registration
-        var newLPObj = (typeof lpRegister !== 'undefined')
-          ? lpRegister.find(function(l){ return l.obClientId === client.id; })
-          : null;
-        var newLPId = newLPObj ? newLPObj.id : null;
+          var newLPId = savedLP.id;
 
-        setTimeout(function() {
-          if (typeof navigateTo === 'function') {
-            // Закрыть модал клиента перед переходом (иначе перекрывает LP Register)
-            closeObClientModal();
-            navigateTo('lp-register');
-            // Wait for renderLPRegisterPage() to finish writing DOM
-            setTimeout(function() {
-              var selector = newLPId !== null
-                ? '#lpRegisterContent tr[data-lp-id="' + newLPId + '"]'
-                : '#lpRegisterContent tr[data-lp-id]';
-              var targetRow = document.querySelector(selector);
-              if (!targetRow) {
-                // fallback: last row
-                var allRows = document.querySelectorAll('#lpRegisterContent tr[data-lp-id]');
-                targetRow = allRows.length ? allRows[allRows.length - 1] : null;
-              }
-              if (targetRow) {
-                targetRow.style.transition = 'background 0.6s';
-                targetRow.style.background = 'rgba(34,197,94,0.25)';
-                targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                setTimeout(function(){ targetRow.style.background = ''; }, 3000);
-              }
-            }, 600);
-          }
-        }, 900);
+          setTimeout(function() {
+            if (typeof navigateTo === 'function') {
+              // Закрыть модал клиента перед переходом (иначе перекрывает LP Register)
+              closeObClientModal();
+              navigateTo('lp-register');
+              // Wait for renderLPRegisterPage() to finish writing DOM
+              setTimeout(function() {
+                var selector = newLPId !== null
+                  ? '#lpRegisterContent tr[data-lp-id="' + newLPId + '"]'
+                  : '#lpRegisterContent tr[data-lp-id]';
+                var targetRow = document.querySelector(selector);
+                if (!targetRow) {
+                  // fallback: last row
+                  var allRows = document.querySelectorAll('#lpRegisterContent tr[data-lp-id]');
+                  targetRow = allRows.length ? allRows[allRows.length - 1] : null;
+                }
+                if (targetRow) {
+                  targetRow.style.transition = 'background 0.6s';
+                  targetRow.style.background = 'rgba(34,197,94,0.25)';
+                  targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  setTimeout(function(){ targetRow.style.background = ''; }, 3000);
+                }
+              }, 600);
+            }
+          }, 900);
+        });
       }
     }
   }
@@ -5430,12 +5431,19 @@ function closeAddRestrictedModal() {
   document.body.style.overflow = '';
 }
 
-function saveNewRestrictedEntry() {
+async function saveNewRestrictedEntry() {
   const company = document.getElementById('ra_company')?.value?.trim();
   if (!company) { showToast('⚠️ Введите название компании', 'red'); return; }
 
+  // POST /api/restricted-list requires both decideConflicts AND accessFM
+  // (server/index.js) — check here too for an immediate, specific message
+  // instead of a generic API-error toast on 403.
+  if (!currentUserPermission('decideConflicts') || !currentUserPermission('accessFM')) {
+    showToast('⛔ Недостаточно прав для добавления в Restricted List', 'red');
+    return;
+  }
+
   const entry = {
-    id:               (Math.max(0, ...restrictedList.map(r => r.id)) + 1),
     company,
     sector:           document.getElementById('ra_sector')?.value?.trim() || '—',
     fund:             document.getElementById('ra_fund')?.value?.trim() || 'TCF-I',
@@ -5443,14 +5451,17 @@ function saveNewRestrictedEntry() {
     restrictionType:  document.getElementById('ra_restrictionType')?.value || 'Full Restriction',
     cfaAllowed:       document.getElementById('ra_cfaAllowed')?.value === 'true',
     requiresApproval: document.getElementById('ra_requiresApproval')?.value === 'true',
-    addedAt:          today(),
-    addedBy:          'CO',
   };
 
-  restrictedList.push(entry);
-  closeAddRestrictedModal();
-  renderRestrictedListPage();
-  showToast(`✅ "${entry.company}" добавлена в Restricted List`, 'green');
+  try {
+    const created = await apiFetch('/api/restricted-list', { method: 'POST', body: JSON.stringify(entry) });
+    restrictedList.push(created);
+    closeAddRestrictedModal();
+    renderRestrictedListPage();
+    showToast(`✅ "${created.company}" добавлена в Restricted List`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════

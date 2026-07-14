@@ -1669,7 +1669,7 @@ function filterDeals(search) {
   renderPipeline(filtered);
 }
 
-function saveDeal() {
+async function saveDeal() {
   const company  = document.getElementById('deal_company').value.trim();
   const sector   = document.getElementById('deal_sector').value;
   const stage    = document.getElementById('deal_stage').value;
@@ -1682,12 +1682,10 @@ function saveDeal() {
 
   if (!company) { alert('Введите название компании'); return; }
 
-  const newId = typeof dealIdCounter !== 'undefined' ? ++dealIdCounter : Date.now();
-
-  deals.push({
+  const newDeal = {
     fundId: typeof activeFundId !== 'undefined' ? activeFundId : null,
     // ── Core (from form) ──
-    id: newId, company, sector, stage, amount,
+    company, sector, stage, amount,
     type, priority, manager,
     ic: ic || 'Не подано',
 
@@ -1749,18 +1747,24 @@ function saveDeal() {
 
     // ── Comments / history ──
     comments: [],
-  });
+  };
 
-  renderPipeline(deals);
-  updateBadges();
-  closeModal();
-  showToast('✅ Сделка добавлена в pipeline');
-  ['deal_company','deal_amount','deal_comment'].forEach(id => document.getElementById(id).value = '');
+  try {
+    const created = await apiFetch('/api/deals', { method: 'POST', body: JSON.stringify(newDeal) });
+    deals.push({ ...newDeal, ...created });
+    renderPipeline(deals);
+    updateBadges();
+    closeModal();
+    showToast('✅ Сделка добавлена в pipeline');
+    ['deal_company','deal_amount','deal_comment'].forEach(id => document.getElementById(id).value = '');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить сделку: ' + err.message, 'red');
+  }
 }
 
 
 /* ===== PORTFOLIO ===== */
-function savePortfolio() {
+async function savePortfolio() {
   const name        = document.getElementById('port_name').value.trim();
   const sector      = document.getElementById('port_sector').value;
   const stage       = document.getElementById('port_stage').value;
@@ -1772,12 +1776,11 @@ function savePortfolio() {
 
   if (!name) { alert('Введите название компании'); return; }
 
-  const newId = ++portfolioIdCounter;
   const moic  = invested > 0 ? Math.round((value / invested) * 100) / 100 : 0;
 
-  portfolio.push({
+  const newPortco = {
     fundId: typeof activeFundId !== 'undefined' ? activeFundId : null,
-    id: newId, name, sector, stage,
+    name, sector, stage,
     bin: '', invested, value, date, exitStrategy, exitYear, moic,
     fundShare: 0, manager: currentUserDisplayName(), status: 'Active',
     nextAction: '', nextActionDate: '',
@@ -1835,13 +1838,19 @@ function savePortfolio() {
     history: [
       { type:'status', date: today(), author:'System', text:'Статус изменён: Active' },
     ],
-  });
+  };
 
-  renderPortfolio(portfolio);
-  updateBadges();
-  closeModal();
-  showToast(`✅ Компания добавлена в портфель: ${name}`);
-  ['port_name','port_invested','port_value','port_date','port_exit_year'].forEach(id => document.getElementById(id).value = '');
+  try {
+    const created = await apiFetch('/api/portfolio', { method: 'POST', body: JSON.stringify(newPortco) });
+    portfolio.push({ ...newPortco, ...created });
+    renderPortfolio(portfolio);
+    updateBadges();
+    closeModal();
+    showToast(`✅ Компания добавлена в портфель: ${name}`);
+    ['port_name','port_invested','port_value','port_date','port_exit_year'].forEach(id => document.getElementById(id).value = '');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить компанию: ' + err.message, 'red');
+  }
 }
 
 let portfolioView = 'grid';

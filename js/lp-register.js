@@ -2428,11 +2428,11 @@ function renderDashboardLPWidget() {
    and client.direction === 'FM'
 ═══════════════════════════════════════════════════════════ */
 
-function registerLPFromOnboarding(client, saTask, actTask) {
+async function registerLPFromOnboarding(client, saTask, actTask) {
   // Avoid duplicates
   if (lpRegister.some(l => l.obClientId === client.id)) {
     showToast(`ℹ LP ${client.name} уже есть в реестре`, 'blue');
-    return;
+    return null;
   }
 
   const saFormData = saTask?.formData || {};
@@ -2450,13 +2450,10 @@ function registerLPFromOnboarding(client, saTask, actTask) {
   const commitment = client.commitment || parseFloat(saFormData.f_subCommitment) || 0;
   const ownershipPct = (totalC + commitment) > 0 ? commitment / (totalC + commitment) * 100 : 0;
 
-  const seq   = String(lpRegisterIdCounter).padStart(3,'0');
   const year  = new Date().getFullYear();
 
   const newLP = {
-    id:              lpRegisterIdCounter++,
     fundId:          typeof activeFundId !== 'undefined' ? activeFundId : null,
-    registerId:      `LP-${year}-${seq}`,
     name:            client.name,
     type:            client.type,
     lpType:          client.lpType || 'HNWI',
@@ -2478,7 +2475,7 @@ function registerLPFromOnboarding(client, saTask, actTask) {
     kycNextReview:   kycNext.toISOString().slice(0,10),
     riskRating,
     admissionDate:   today(),
-    saNumber:        saFormData.f_subNum || `SA-${year}-${seq}`,
+    saNumber:        saFormData.f_subNum || `SA-${year}-${String(client.id).padStart(3,'0')}`,
     afsaNotified:    false,
     lpacMember:      commitment >= 3000000,
     status:          'Active',
@@ -2489,15 +2486,25 @@ function registerLPFromOnboarding(client, saTask, actTask) {
     contractNum:     (actTask?.formData?.f_contractNum) || '',
   };
 
-  lpRegister.push(newLP);
+  let created;
+  try {
+    created = await apiFetch('/api/lp', { method: 'POST', body: JSON.stringify(newLP) });
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить LP в реестре: ' + err.message, 'red');
+    return null;
+  }
+
+  const savedLP = { ...newLP, ...created };
+  lpRegister.push(savedLP);
   recalcOwnershipPcts();
 
-  showToast(`📋 LP ${newLP.registerId} (${client.name}) добавлен в Реестр LP`, 'green');
+  showToast(`📋 LP ${savedLP.registerId} (${client.name}) добавлен в Реестр LP`, 'green');
 
-  if (newLP.ownershipPct > 20) {
+  if (savedLP.ownershipPct > 20) {
     showToast(`⚠ ${client.name} — доля >20%. Требуется уведомление AFSA (10 р.д.)`, 'yellow');
   }
-  if (newLP.lpacMember) {
+  if (savedLP.lpacMember) {
     showToast(`★ ${client.name} — Commitment ≥$3M. Предложить участие в LPAC`, 'blue');
   }
+  return savedLP;
 }
