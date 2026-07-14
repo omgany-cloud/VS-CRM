@@ -663,6 +663,13 @@ function renderICModalContent(m) {
     <!-- Votes -->
     <div style="margin-bottom:14px">
       <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC (Constitution Section 7)</div>
+      ${m.status !== 'pending' ? `
+        <div style="font-size:11px;color:#5a6b8a;font-style:italic;margin-bottom:8px">
+          Голосование завершено, меморандум переведён в статус «${m.status === 'approved' ? 'Одобрено' : 'Отклонено'}» — записи ниже финальны.
+        </div>` : !canRecordVotes ? `
+        <div style="font-size:11px;color:#f97316;margin-bottom:8px">
+          <i class="fas fa-info-circle" style="margin-right:4px"></i>Записывать голоса может только роль CEO (секретарь IC по Template 4). Текущая роль: ${currentUserRole}.
+        </div>` : ''}
       ${votesHtml}
     </div>
 
