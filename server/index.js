@@ -109,6 +109,23 @@ app.put('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req, r
   if (Number(req.params.id) === req.user.id && b.active === false) {
     return res.status(400).json({ error: 'You cannot deactivate your own account' });
   }
+  // If this user currently holds a manageUsers-capable role and the change
+  // would take it away (role reassignment, self or otherwise — deactivating
+  // someone else never removes the acting admin's own access), refuse
+  // unless another active user in the tenant would still have it.
+  if (b.role !== undefined && b.role !== existing.role) {
+    const oldRoleRow = getRoleRowByCode(req.tenantId, existing.role);
+    const newRoleRow = getRoleRowByCode(req.tenantId, b.role);
+    if (oldRoleRow && oldRoleRow.manage_users && !(newRoleRow && newRoleRow.manage_users)) {
+      const remaining = db.prepare(`
+        SELECT COUNT(*) AS c FROM users u JOIN roles r ON r.tenant_id = u.tenant_id AND r.code = u.role
+        WHERE u.tenant_id = @tenantId AND u.active = 1 AND r.manage_users = 1 AND u.id <> @id
+      `).get(at({ tenantId: req.tenantId, id: existing.id })).c;
+      if (remaining === 0) {
+        return res.status(409).json({ error: 'Cannot reassign: this would leave the tenant with no active user able to manage users' });
+      }
+    }
+  }
 
   const merged = {
     email: b.email !== undefined ? String(b.email).trim() : existing.email,
@@ -306,12 +323,12 @@ function rowToLp(r) {
   };
 }
 
-app.get('/api/lp', requireAuth, requireInternal, (req, res) => {
+app.get('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM lp_register WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, lp: rows.map(rowToLp) });
 });
 
-app.post('/api/lp', requireAuth, requireInternal, (req, res) => {
+app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
 
@@ -376,7 +393,7 @@ app.post('/api/lp', requireAuth, requireInternal, (req, res) => {
   res.status(201).json(rowToLp(row));
 });
 
-app.put('/api/lp/:id', requireAuth, requireInternal, (req, res) => {
+app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
 
@@ -458,7 +475,7 @@ const lineItemsStmt = db.prepare(`
   ORDER BY li.id
 `);
 
-app.get('/api/capital-calls', requireAuth, requireInternal, (req, res) => {
+app.get('/api/capital-calls', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const calls = db.prepare('SELECT * FROM capital_calls WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   const result = calls.map(c => {
     const cc = rowToCC(c);
@@ -468,7 +485,7 @@ app.get('/api/capital-calls', requireAuth, requireInternal, (req, res) => {
   res.json({ tenant: req.tenantSlug, capitalCalls: result });
 });
 
-app.post('/api/capital-calls', requireAuth, requireInternal, (req, res) => {
+app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.purpose) return res.status(400).json({ error: 'purpose is required' });
 
@@ -531,7 +548,7 @@ app.post('/api/capital-calls', requireAuth, requireInternal, (req, res) => {
   }
 });
 
-app.put('/api/capital-calls/:id', requireAuth, requireInternal, (req, res) => {
+app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Capital call not found in this tenant' });
   const b = req.body || {};
@@ -556,7 +573,7 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, (req, res) => {
 });
 
 // Record a payment against one LP's line item within a call (the common day-to-day action).
-app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal, (req, res) => {
+app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const call = db.prepare('SELECT * FROM capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!call) return res.status(404).json({ error: 'Capital call not found in this tenant' });
   const item = db.prepare('SELECT * FROM capital_call_line_items WHERE call_id = ? AND lp_id = ? AND tenant_id = ?')
@@ -584,12 +601,12 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
 });
 
 /* ===== Deals (Deal Pipeline) API — tenant-scoped ===== */
-app.get('/api/deals', requireAuth, requireInternal, (req, res) => {
+app.get('/api/deals', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM deals WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, deals: rows.map(rowToDeal) });
 });
 
-app.post('/api/deals', requireAuth, requireInternal, (req, res) => {
+app.post('/api/deals', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const now = new Date().toISOString().slice(0, 10);
@@ -601,7 +618,7 @@ app.post('/api/deals', requireAuth, requireInternal, (req, res) => {
   res.status(201).json(rowToDeal(row));
 });
 
-app.put('/api/deals/:id', requireAuth, requireInternal, (req, res) => {
+app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Deal not found in this tenant' });
   const merged = Object.assign(rowToDeal(existing), req.body || {});
@@ -612,12 +629,12 @@ app.put('/api/deals/:id', requireAuth, requireInternal, (req, res) => {
 });
 
 /* ===== Portfolio API — tenant-scoped ===== */
-app.get('/api/portfolio', requireAuth, requireInternal, (req, res) => {
+app.get('/api/portfolio', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM portfolio WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ tenant: req.tenantSlug, portfolio: rows.map(rowToPortfolio) });
 });
 
-app.post('/api/portfolio', requireAuth, requireInternal, (req, res) => {
+app.post('/api/portfolio', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   const params = portfolioToParams({ status: 'Active', ...b });
@@ -626,7 +643,7 @@ app.post('/api/portfolio', requireAuth, requireInternal, (req, res) => {
   res.status(201).json(rowToPortfolio(row));
 });
 
-app.put('/api/portfolio/:id', requireAuth, requireInternal, (req, res) => {
+app.put('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
   const merged = Object.assign(rowToPortfolio(existing), req.body || {});
@@ -709,7 +726,7 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   res.json(rowToObTask(row));
 });
 
-app.post('/api/restricted-list', requireAuth, requirePermission('decideConflicts'), (req, res) => {
+app.post('/api/restricted-list', requireAuth, requirePermission('decideConflicts'), requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const params = restrictedToParams({ addedAt: new Date().toISOString().slice(0, 10), addedBy: req.user.name || req.user.email, ...b });
@@ -784,11 +801,15 @@ app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideCon
 
 /* ===== IC Memos API — tenant-scoped =====
    IC minutes are meant to be seen by the whole committee, including the two
-   external seats (Independent Member, LP Rep) — so GET allows internal
-   roles AND those two seats, unlike the plain requireInternal gate used
-   elsewhere. Authoring a memo stays internal-GP-staff-only. */
+   external seats (Independent Member, LP Rep) — so GET allows internal+FM
+   roles AND external IC-seat holders, unlike the plain requireInternal gate
+   used elsewhere. IC memos are deal/investment (FM-side) material, so an
+   internal role also needs accessFM — an RM (accessFM=false) shouldn't see
+   these any more than they should see the deal pipeline. Authoring a memo
+   stays internal-GP-staff-only. */
 app.get('/api/ic-memos', requireAuth, (req, res) => {
-  if (!req.user.permissions.internal && !req.user.permissions.icSeat) {
+  const canView = (req.user.permissions.internal && req.user.permissions.accessFM) || req.user.permissions.icSeat;
+  if (!canView) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   const rows = db.prepare('SELECT * FROM ic_memos WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
@@ -803,6 +824,27 @@ app.post('/api/ic-memos', requireAuth, requirePermission('authorICMemo'), (req, 
   const row = db.prepare('SELECT * FROM ic_memos WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToIcMemo(row));
 });
+
+// Server-side mirror of js/modules.js's castICVote() auto-resolve logic —
+// quorumMet/status/resolution must be DERIVED from the votes array, never
+// trusted from the request body, or a single voter (including a low-trust
+// external IC seat) could cast one legitimate vote and simultaneously
+// declare the memo "approved" regardless of actual quorum/majority.
+function deriveIcResolution(memo, votes) {
+  const quorumMet = votes.filter(v => v.vote).length >= 3 && votes.some(v => v.role === 'Independent Member' && v.vote);
+  const allVoted = votes.every(v => v.vote);
+  const approveN = votes.filter(v => v.vote === 'approve').length;
+  const rejectN = votes.filter(v => v.vote === 'reject').length;
+  if (!(allVoted || approveN > votes.length / 2)) {
+    return { quorumMet, status: 'pending', resolution: memo.resolution };
+  }
+  const status = approveN >= rejectN ? 'approved' : 'rejected';
+  const quorumNote = quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
+  const resolution = (approveN >= rejectN
+    ? `Инвестиция одобрена большинством голосов (${approveN}/${votes.length}). Сумма: $${memo.amount}M.`
+    : `Инвестиция отклонена (${rejectN} против).`) + quorumNote;
+  return { quorumMet, status, resolution };
+}
 
 // A single PUT covers three different mutations (vote casting, Risk
 // Manager's veto/conclusion, general memo edits) — branch by which fields
@@ -819,12 +861,28 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Only Risk Manager can set risk veto/conclusion' });
   }
   if (isVoteUpdate) {
+    if (existing.status !== 'pending') {
+      return res.status(409).json({ error: 'This memo is already resolved — votes are final' });
+    }
+    const existingVotes = JSON.parse(existing.votes_json || '[]');
+    // Reject a resized array outright — the per-row diff below can't see
+    // truncated trailing entries, and a shorter array would silently wipe
+    // other members' votes on write.
+    if (!Array.isArray(b.votes) || b.votes.length !== existingVotes.length) {
+      return res.status(400).json({ error: 'votes array must match the existing vote roster' });
+    }
     // A vote row may only change if the caller's own role currently holds
     // that seat (req.user.permissions.icSeat — server/rolesRepo.js).
-    const existingVotes = JSON.parse(existing.votes_json || '[]');
+    // Compare by field value, not JSON.stringify(v) === JSON.stringify(prev)
+    // — that broke on any client that round-trips the JSON with different
+    // key ordering (confirmed: PowerShell's ConvertTo-Json alone flipped
+    // key order enough to make a legitimate, unmodified vote row register
+    // as "changed" and get rejected).
     const illegalChange = b.votes.some((v, i) => {
-      const prev = existingVotes[i] || null;
-      if (JSON.stringify(v) === JSON.stringify(prev)) return false;
+      const prev = existingVotes[i] || {};
+      const unchanged = v.role === prev.role && v.name === prev.name
+        && v.vote === prev.vote && (v.comment || '') === (prev.comment || '');
+      if (unchanged) return false;
       return req.user.permissions.icSeat !== v.role;
     });
     if (illegalChange) return res.status(403).json({ error: 'You may only cast your own IC vote' });
@@ -833,7 +891,27 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const merged = Object.assign(rowToIcMemo(existing), b);
+  // Each mutation kind may only touch its own fields — merging the whole
+  // request body here would let a vote-caster (including an external IC
+  // seat with no other permission) smuggle arbitrary field overwrites
+  // (status, resolution, amount, thesis...) through the vote-legality check.
+  let merged = rowToIcMemo(existing);
+  if (isVoteUpdate) {
+    const derived = deriveIcResolution(merged, b.votes);
+    merged = { ...merged, votes: b.votes, ...derived };
+  }
+  if (isRiskUpdate) {
+    merged = {
+      ...merged,
+      riskVeto: b.riskVeto !== undefined ? b.riskVeto : merged.riskVeto,
+      riskConclusion: b.riskConclusion !== undefined ? b.riskConclusion : merged.riskConclusion,
+    };
+  }
+  if (!isVoteUpdate && !isRiskUpdate) {
+    // Only reached by requireInternal-equivalent callers (checked above) — a full edit.
+    merged = { ...merged, ...b };
+  }
+
   const params = icMemoToParams(merged);
   db.prepare(IC_MEMO_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ic_memos WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);

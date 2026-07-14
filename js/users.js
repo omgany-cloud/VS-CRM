@@ -10,6 +10,19 @@
 let crmUsers = [];
 let usersActiveTab = 'users';
 
+// Every value rendered on this page can originate from an admin-entered
+// form (user name/email, custom role code/label/icon) — none of it is
+// sanitized server-side, so every interpolation into innerHTML here must
+// go through this first.
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const PERMISSION_DEFS = [
   { key: 'internal', label: 'Internal', hint: 'Доступ к внутренним данным (не внешний участник IC)' },
   { key: 'manageUsers', label: 'Управление пользователями', hint: 'Создание/деактивация/удаление аккаунтов' },
@@ -31,7 +44,7 @@ function switchUsersTab(tab) {
 
 function roleOptionsHtml(selected) {
   return ROLE_CODES.map(code =>
-    `<option value="${code}" ${code === selected ? 'selected' : ''}>${roleLabel(code)}</option>`
+    `<option value="${escapeHtml(code)}" ${code === selected ? 'selected' : ''}>${escapeHtml(roleLabel(code))}</option>`
   ).join('');
 }
 
@@ -81,9 +94,9 @@ function renderUsersPage() {
               const cfg = ROLES[u.role] || { color: '#64748b', icon: 'fa-user' };
               return `
               <tr>
-                <td>${u.name || '<span style="color:#4a5568">—</span>'}</td>
-                <td>${u.email}</td>
-                <td><span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${cfg.color}22;color:${cfg.color}"><i class="fas ${cfg.icon}"></i> ${roleLabel(u.role)}</span></td>
+                <td>${u.name ? escapeHtml(u.name) : '<span style="color:#4a5568">—</span>'}</td>
+                <td>${escapeHtml(u.email)}</td>
+                <td><span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${escapeHtml(cfg.color)}22;color:${escapeHtml(cfg.color)}"><i class="fas ${escapeHtml(cfg.icon)}"></i> ${escapeHtml(roleLabel(u.role))}</span></td>
                 <td>${u.active
                   ? `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(34,197,94,0.12);color:#4ade80">Активен</span>`
                   : `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(239,68,68,0.12);color:#f87171">Отключён</span>`}
@@ -160,14 +173,14 @@ function openEditUserModal(id) {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-user-edit" style="color:#3b82f6;margin-right:8px"></i>${u.email}`;
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-user-edit" style="color:#3b82f6;margin-right:8px"></i>${escapeHtml(u.email)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
-        <input type="text" id="u_editName" value="${u.name || ''}"
+        <input type="text" id="u_editName" value="${escapeHtml(u.name || '')}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Email</label>
-        <input type="email" id="u_editEmail" value="${u.email}"
+        <input type="email" id="u_editEmail" value="${escapeHtml(u.email)}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Роль</label>
         <select id="u_editRole" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
@@ -257,9 +270,9 @@ function renderRolesPage() {
           <tbody>
             ${roles.map(r => `
               <tr>
-                <td><span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${r.color}22;color:${r.color}"><i class="fas ${r.icon}"></i> ${r.label}</span>
+                <td><span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${escapeHtml(r.color)}22;color:${escapeHtml(r.color)}"><i class="fas ${escapeHtml(r.icon)}"></i> ${escapeHtml(r.label)}</span>
                   ${r.isSystem ? '<span style="margin-left:6px;font-size:9px;color:#5a6b8a;border:1px solid #2a3448;border-radius:4px;padding:1px 5px">system</span>' : ''}</td>
-                <td style="font-family:monospace;font-size:11px;color:#8a9bbf">${r.code}</td>
+                <td style="font-family:monospace;font-size:11px;color:#8a9bbf">${escapeHtml(r.code)}</td>
                 <td>${PERMISSION_DEFS.filter(p => r[p.key]).map(p =>
                   `<span title="${p.hint}" style="display:inline-block;margin:1px 3px 1px 0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(59,130,246,0.12);color:#60a5fa">${p.label}</span>`
                 ).join('') || '<span style="color:#4a5568;font-size:11px">—</span>'}</td>
@@ -291,7 +304,7 @@ function icSeatOptionsHtml(idPrefix, role) {
   const options = IC_SEATS.map(seat => {
     const holder = roleForIcSeat(seat);
     const takenByOther = holder && (!role || holder.code !== role.code);
-    const label = takenByOther ? `${seat} (занято: ${holder.label})` : seat;
+    const label = takenByOther ? `${seat} (занято: ${escapeHtml(holder.label)})` : seat;
     return `<option value="${seat}" ${current === seat ? 'selected' : ''}>${label}</option>`;
   }).join('');
   return `<select id="${idPrefix}_icSeat" onchange="warnIcSeatTaken('${idPrefix}')"
@@ -384,20 +397,20 @@ function openEditRoleModal(id) {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:8px"></i>${r.label}`;
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:8px"></i>${escapeHtml(r.label)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Код${r.isSystem ? ' (системная роль — неизменяем)' : ''}</label>
-        <input type="text" id="r_edit_code" value="${r.code}" ${r.isSystem ? 'readonly' : ''}
-          style="width:100%;background:${r.isSystem ? '#0a0f18' : '#0f1623'};border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:${r.isSystem ? '#5a6b8a' : '#e2e8f0'};font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Код (неизменяем после создания)</label>
+        <input type="text" id="r_edit_code" value="${escapeHtml(r.code)}" readonly
+          style="width:100%;background:#0a0f18;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#5a6b8a;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название</label>
-        <input type="text" id="r_edit_label" value="${r.label}"
+        <input type="text" id="r_edit_label" value="${escapeHtml(r.label)}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
-        <input type="text" id="r_edit_icon" value="${r.icon}"
+        <input type="text" id="r_edit_icon" value="${escapeHtml(r.icon)}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
-        <input type="color" id="r_edit_color" value="${r.color}"
+        <input type="color" id="r_edit_color" value="${escapeHtml(r.color)}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
     </div>
     <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:14px">

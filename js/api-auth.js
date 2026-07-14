@@ -40,6 +40,14 @@ function currentUserPermission(key) {
   return !!(auth && auth.permissions && auth.permissions[key]);
 }
 
+// For non-boolean permission values (currently only icSeat, a nullable
+// string enum) — currentUserPermission() coerces everything to boolean via
+// !!, which silently breaks any `=== someString` comparison.
+function currentUserPermissionValue(key) {
+  const auth = getAuth();
+  return auth && auth.permissions ? auth.permissions[key] : null;
+}
+
 async function apiFetch(path, options = {}) {
   const auth = getAuth();
   const headers = Object.assign(

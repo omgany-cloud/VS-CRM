@@ -610,7 +610,7 @@ function renderICModalContent(m) {
   // Member and LP Rep have their own external accounts) — a vote button
   // only renders on the row matching the logged-in user's own role, unvoted.
   const myRole = currentUserRole();
-  const canCastVote = (v) => m.status === 'pending' && !v.vote && currentUserPermission('icSeat') === v.role;
+  const canCastVote = (v) => m.status === 'pending' && !v.vote && currentUserPermissionValue('icSeat') === v.role;
   const anyVotableByMe = m.status === 'pending' && m.votes.some(canCastVote);
 
   const votesHtml = m.votes.map((v, i) => `
