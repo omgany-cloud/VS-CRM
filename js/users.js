@@ -166,11 +166,14 @@ function openEditUserModal(id) {
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
         <input type="text" id="u_editName" value="${u.name || ''}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Email</label>
+        <input type="email" id="u_editEmail" value="${u.email}"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Роль</label>
         <select id="u_editRole" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${roleOptionsHtml(u.role)}
         </select></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (опционально)</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (опционально)</label>
         <input type="password" id="u_editPassword" placeholder="Оставьте пустым, чтобы не менять"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
     </div>
@@ -184,10 +187,12 @@ function openEditUserModal(id) {
 
 async function saveUserEdit(id) {
   const name = document.getElementById('u_editName')?.value?.trim();
+  const email = document.getElementById('u_editEmail')?.value?.trim();
   const role = document.getElementById('u_editRole')?.value;
   const password = document.getElementById('u_editPassword')?.value;
+  if (!email) { showToast('⚠️ Email не может быть пустым', 'red'); return; }
   try {
-    await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ name, role }) });
+    await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ name, email, role }) });
     if (password) {
       if (password.length < 8) { showToast('⚠️ Пароль минимум 8 символов, остальные изменения сохранены', 'red'); }
       else await apiFetch(`/api/users/${id}/password`, { method: 'PUT', body: JSON.stringify({ password }) });

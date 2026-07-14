@@ -103,17 +103,26 @@ app.put('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req, r
   if (b.role != null && !isValidRole(req.tenantId, b.role)) {
     return res.status(400).json({ error: 'role must be one of: ' + listRoleRows(req.tenantId).map(r => r.code).join(', ') });
   }
+  if (b.email != null && !String(b.email).trim()) {
+    return res.status(400).json({ error: 'email cannot be empty' });
+  }
   if (Number(req.params.id) === req.user.id && b.active === false) {
     return res.status(400).json({ error: 'You cannot deactivate your own account' });
   }
 
   const merged = {
+    email: b.email !== undefined ? String(b.email).trim() : existing.email,
     name: b.name !== undefined ? b.name : existing.name,
     role: b.role !== undefined ? b.role : existing.role,
     active: b.active !== undefined ? (b.active ? 1 : 0) : existing.active,
   };
-  db.prepare('UPDATE users SET name=@name, role=@role, active=@active WHERE id=@id AND tenant_id=@tenantId')
-    .run(at({ ...merged, id: existing.id, tenantId: req.tenantId }));
+  try {
+    db.prepare('UPDATE users SET email=@email, name=@name, role=@role, active=@active WHERE id=@id AND tenant_id=@tenantId')
+      .run(at({ ...merged, id: existing.id, tenantId: req.tenantId }));
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'A user with this email already exists in this tenant' });
+    return res.status(500).json({ error: err.message });
+  }
 
   const row = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToUser(row));
