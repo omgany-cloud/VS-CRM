@@ -110,25 +110,32 @@ function simulateDownload(name) {
   showToast(`📥 ${name}`);
 }
 
-function handleFileUpload(input) {
+async function handleFileUpload(input) {
   const files = input.files;
   if (!files || !files.length) return;
   const category = document.getElementById('docUploadCategory').value;
-  Array.from(files).forEach(file => {
+  let uploaded = 0;
+  for (const file of Array.from(files)) {
     const sizeKB = Math.round(file.size / 1024);
-    docFiles.push({
-      id: ++docNextId,
+    // uploader is server-stamped from the logged-in account (server/index.js)
+    // — whatever's sent here is ignored, not trusted.
+    const payload = {
       fundId: activeFundId,
       name: file.name,
       category,
       size: sizeKB > 1024 ? (sizeKB / 1024).toFixed(1) + ' MB' : sizeKB + ' KB',
       date: new Date().toISOString().split('T')[0],
-      uploader: 'Менеджер',
-      comments: [],
-    });
-  });
+    };
+    try {
+      const created = await apiFetch('/api/documents', { method: 'POST', body: JSON.stringify(payload) });
+      docFiles.push(created);
+      uploaded++;
+    } catch (err) {
+      showToast('⚠️ Не удалось загрузить ' + file.name + ': ' + err.message, 'red');
+    }
+  }
   renderDocumentsPage();
-  showToast(`✅ ${currentLang === 'ru' ? 'Загружено' : 'Uploaded'}: ${files.length} ${currentLang === 'ru' ? 'файл(ов)' : 'file(s)'}`);
+  if (uploaded) showToast(`✅ ${currentLang === 'ru' ? 'Загружено' : 'Uploaded'}: ${uploaded} ${currentLang === 'ru' ? 'файл(ов)' : 'file(s)'}`);
   input.value = '';
 }
 

@@ -147,6 +147,25 @@ app.put('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req, r
   res.json(rowToUser(row));
 });
 
+// Self-service password change — any authenticated user, no manageUsers
+// permission required (this only ever touches the caller's own row).
+// Registered before /api/users/:id/password so 'me' never falls through
+// to the :id route and gets treated as a numeric user id.
+app.put('/api/users/me/password', requireAuth, (req, res) => {
+  const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.user.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !bcrypt.compareSync(currentPassword, existing.password_hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+  if (!newPassword || String(newPassword).length < 8) {
+    return res.status(400).json({ error: 'newPassword must be at least 8 characters' });
+  }
+  db.prepare('UPDATE users SET password_hash=@passwordHash WHERE id=@id AND tenant_id=@tenantId')
+    .run(at({ passwordHash: bcrypt.hashSync(newPassword, 10), id: existing.id, tenantId: req.tenantId }));
+  res.json({ ok: true });
+});
+
 app.put('/api/users/:id/password', requireAuth, requirePermission('manageUsers'), (req, res) => {
   const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
@@ -818,7 +837,7 @@ app.get('/api/ic-memos', requireAuth, (req, res) => {
   res.json({ tenant: req.tenantSlug, icMemos: rows.map(rowToIcMemo) });
 });
 
-app.post('/api/ic-memos', requireAuth, requirePermission('authorICMemo'), (req, res) => {
+app.post('/api/ic-memos', requireAuth, requirePermission('authorICMemo'), requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const params = icMemoToParams({ status: 'pending', ...b });
@@ -932,7 +951,8 @@ app.get('/api/documents', requireAuth, requireInternal, (req, res) => {
 app.post('/api/documents', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
-  const params = documentToParams(b);
+  // Server-stamped, not client-trusted — same lesson as restricted_list.added_by.
+  const params = documentToParams({ ...b, uploader: req.user.name || req.user.email });
   const info = db.prepare(DOCUMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToDocument(row));

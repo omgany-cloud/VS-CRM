@@ -1,5 +1,67 @@
 # Turan Capital Fund CRM — Golden Leaves Ltd (GP)
-**Version 6.8** · License: AFSA-A-LA-2024-0038 · Build: GL-CRM-PYRUS-TZ-009
+**Version 6.9** · License: AFSA-A-LA-2024-0038 · Build: GL-CRM-PYRUS-TZ-009
+
+---
+
+## What's New in v6.9 — Role constructor, Workflow backend, security hardening
+
+Three follow-on passes to v6.8's RBAC work.
+
+### Dynamic role constructor
+Permissions moved from hardcoded role-code checks in ~5 files into a `roles`
+DB table (`server/db.js`) with 7 boolean capability flags (`internal`,
+`manageUsers`, `manageRoles`, `accessFM`, `decideConflicts`, `authorICMemo`,
+`riskVeto`) + a nullable `icSeat` enum. `requireAuth` resolves the caller's
+permissions from this table on every request (`server/rolesRepo.js`,
+`server/rolesMapping.js`) — a permission edit takes effect on the next
+request, no re-login needed. New "Роли" tab in "Команда / Пользователи"
+(`js/users.js`) lets the CEO create custom roles with a checkbox-driven
+permission set and an IC-seat picker — a brand-new role works everywhere
+in the app immediately, zero code changes. The 10 built-in roles are
+`is_system=1`: code is immutable and the row is undeletable, but every
+permission stays editable.
+
+### Hybrid user deletion
+`DELETE /api/users/:id` — hard-delete is only allowed for "empty" accounts
+with no footprint in the audit trail (`server/userFootprint.js` checks
+`ob_tasks.completed_by`, `capital_calls.created_by`, `restricted_list.added_by`,
+`engagements.activated_by`, `ic_memos.author`, `documents.uploader`).
+Anyone with real history gets a 409 pointing at the existing deactivate
+flow instead.
+
+### Workflow (согласования) — real backend
+The approval-workflow engine (KYC CO→MLRO→CEO, IC deal review, Capital
+Call and Subscription Agreement sign-off) was the last major module still
+100% client-side. New `workflow_instances` table, `GET/POST /api/workflow`,
+`PUT /api/workflow/:id` (approve/reject the current step — 403 unless the
+caller's role matches, 409 on an already-resolved instance, 400 on a
+rejection with no comment), `POST /api/workflow/:id/withdraw`. Step
+templates are derived server-side (`server/wfDefinitions.js`) — a caller
+can never hand itself every step's role by supplying its own `steps` array.
+
+### Security hardening (from a full audit of the above)
+- IC memo `PUT /api/ic-memos/:id` no longer merges the whole request body
+  once a vote passes its legality check — a vote-caster could otherwise
+  smuggle arbitrary field overwrites (status/resolution/amount) through.
+  `status`/`resolution`/`quorumMet` are now derived server-side from the
+  votes array, never trusted from the client.
+- Chinese Wall (`accessFM`) is now enforced on `/api/lp`, `/api/deals`,
+  `/api/portfolio`, `/api/capital-calls`, and `GET /api/ic-memos` — these
+  were previously `requireInternal`-only, so an `accessFM=false` role
+  (e.g. RM) could read the full LP register/deal pipeline/IC memos.
+- Fixed a role-reassignment path that could leave a tenant with zero
+  users able to manage users/roles (mirrors the existing self-deactivate
+  guard).
+- Fixed stored XSS in the Users/Roles admin UI — every admin-entered field
+  (name, email, role code/label/icon/color) is now HTML-escaped before
+  rendering.
+- Self-service password change (`PUT /api/users/me/password`, "Сменить
+  пароль" in the account menu) — previously only the CEO could reset
+  another user's password; there was no way to change your own.
+- Document uploads (`js/documents.js`) now actually persist via
+  `POST /api/documents` with a server-stamped `uploader` — previously the
+  upload button only mutated an in-memory array and never saved anything,
+  so files disappeared on reload.
 
 ---
 

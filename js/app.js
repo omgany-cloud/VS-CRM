@@ -76,6 +76,49 @@ function toggleUserRoleMenu() {
   }
 }
 
+function openChangePasswordModal() {
+  const menu = document.getElementById('roleMenu');
+  if (menu) menu.style.display = 'none';
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-key" style="color:#3b82f6;margin-right:8px"></i>Сменить пароль';
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div style="display:grid;gap:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Текущий пароль</label>
+        <input type="password" id="pw_current"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (мин. 8 символов)</label>
+        <input type="password" id="pw_new"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Повторите новый пароль</label>
+        <input type="password" id="pw_confirm"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveChangePassword()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+async function saveChangePassword() {
+  const currentPassword = document.getElementById('pw_current')?.value;
+  const newPassword = document.getElementById('pw_new')?.value;
+  const confirmPassword = document.getElementById('pw_confirm')?.value;
+  if (!currentPassword) { showToast('⚠️ Введите текущий пароль', 'red'); return; }
+  if (!newPassword || newPassword.length < 8) { showToast('⚠️ Новый пароль минимум 8 символов', 'red'); return; }
+  if (newPassword !== confirmPassword) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
+  try {
+    await apiFetch('/api/users/me/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
+    closeObNewModal();
+    showToast('✅ Пароль изменён', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
 /* ===== INIT ===== */
 document.addEventListener('DOMContentLoaded', () => {
   setCurrentDate();
