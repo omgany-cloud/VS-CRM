@@ -778,7 +778,7 @@ function openObTaskForm(taskId) {
   if (!client) return;
 
   // ── Restore draft from localStorage (if task not yet completed) ──
-  if (task.status !== 'completed') {
+  if (task.status !== 'completed' && task.status !== 'rejected') {
     const draftFd = obDraftLoad(task.id);
     if (draftFd) {
       // Merge draft into task.formData (draft wins over any previous formData)
@@ -802,7 +802,7 @@ function openObTaskForm(taskId) {
   if (!el) return;
 
   const PHASE_COLORS = ['','#8b5cf6','#f97316','#3b82f6','#22c55e','#eab308'];
-  const isCompleted  = task.status === 'completed';
+  const isCompleted  = task.status === 'completed' || task.status === 'rejected';
 
   el.innerHTML = `
     <!-- ← Назад к задачам -->
@@ -820,7 +820,9 @@ function openObTaskForm(taskId) {
       </div>
       ${isCompleted
         ? ('<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
-           + '<span style="background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">✅ Выполнена</span>'
+           + (task.status === 'rejected'
+               ? '<span style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">❌ Отклонена</span>'
+               : '<span style="background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">✅ Выполнена</span>')
            + (currentUserRole() !== 'RELATIONSHIP_MANAGER'
                ? '<button onclick="reopenObTask(' + taskId + ')" title="Открыть задачу для редактирования" style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);color:#f97316;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class=\\"fas fa-pen\\" style=\\"margin-right:4px\\"></i>Редактировать</button>'
                : '')
@@ -844,7 +846,7 @@ function openObTaskForm(taskId) {
   // ── Post-render init ───────────────────────────────────────
   setTimeout(function() {
     // 1. doc_collection: set initial button state
-    if (task.formKey === 'doc_collection' && task.status !== 'completed') {
+    if (task.formKey === 'doc_collection' && task.status !== 'completed' && task.status !== 'rejected') {
       const list = document.getElementById('docRequiredList');
       if (list) {
         const total = list.querySelectorAll('select[id^="f_doc_"]').length;
@@ -873,7 +875,7 @@ function openObTaskForm(taskId) {
       }
     }
     // 3. Auto-save: attach change listeners to all form fields
-    if (task.status !== 'completed') {
+    if (task.status !== 'completed' && task.status !== 'rejected') {
       obDraftAttachListeners(task.id, task.formKey);
     }
   }, 0);
@@ -898,7 +900,7 @@ function closeObTaskModal() {
 /* ── Build form HTML by formKey ───────────────────── */
 function buildTaskForm(task, client) {
   const fd = task.formData || {};
-  const isCompleted = task.status === 'completed';
+  const isCompleted = task.status === 'completed' || task.status === 'rejected';
   const disabledAttr = isCompleted ? 'disabled' : '';
   const inputStyle = `width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;${isCompleted?'opacity:.7;':''}`;
   const selectStyle = inputStyle;
@@ -1503,7 +1505,7 @@ function buildTaskForm(task, client) {
                 ['f_objGrowth',       'Capital Growth — долгосрочный рост стоимости'],
                 ['f_objSpeculation',  'Speculation — высокий риск / высокая доходность'],
               ].map(([fid, lbl]) => `
-                <label style="display:flex;align-items:flex-start;gap:8px;background:#1c2333;border-radius:6px;padding:8px 10px;cursor:${task.status==='completed'?'default':'pointer'};border:1px solid rgba(42,52,72,0.8)">
+                <label style="display:flex;align-items:flex-start;gap:8px;background:#1c2333;border-radius:6px;padding:8px 10px;cursor:${isCompleted?'default':'pointer'};border:1px solid rgba(42,52,72,0.8)">
                   <input type="checkbox" id="${fid}" ${fd[fid.replace('f_','')]===true||fd[fid]===true||fd[fid]==='true'?'checked':''} ${disabledAttr}
                     style="margin-top:2px;flex-shrink:0;accent-color:#22c55e" />
                   <span style="font-size:11px;color:#cbd5e1;line-height:1.4">${lbl}</span>
@@ -2436,7 +2438,7 @@ function buildTaskForm(task, client) {
     const pdfBtn = task.formKey === 'dd_outcome'
       ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
       : (task.formKey === 'engagement_letter')
-      ? '<button onclick="obGenerateTermSheet(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Term Sheet PDF</button>'
+      ? '<button onclick="obGenerateEngagementLetter(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>EL PDF</button>'
       : (task.formKey === 'subscription_agreement')
       ? '<button onclick="obGenerateSubscriptionAgreement(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>SA PDF</button>'
       : (task.formKey === 'activation' && client.direction === 'FM' && (task.formData?.f_lpaUrl || task.formData?.lpaUrl || client.lpaUrl))
@@ -2888,7 +2890,9 @@ function submitObTask(taskId) {
     }
   }
 
-  if (!rejected) {
+  if (rejected) {
+    task.status = 'rejected';
+  } else {
     unlockNextTask(client.id, task.taskNum);
   }
 
@@ -2913,7 +2917,7 @@ function reopenObTask(taskId) {
 
   const task = obTasks.find(t => t.id === taskId);
   if (!task) return;
-  if (task.status !== 'completed' && task.status !== 'escalated') {
+  if (task.status !== 'completed' && task.status !== 'escalated' && task.status !== 'rejected') {
     showToast('Задача уже открыта для редактирования', 'blue');
     return;
   }

@@ -70,6 +70,21 @@ function updateFundBranding(f) {
   const phase = document.getElementById('fundPhaseText');
   if (phase) phase.textContent = `${f.phase} · Year ${f.phaseYear}`;
   document.documentElement.style.setProperty('--fund-color', f.color);
+
+  // Dashboard headline KPI cards — previously static HTML frozen to
+  // whichever fund happened to load first; now reactive to switchFund().
+  const aum = document.getElementById('kpiAum');
+  if (aum) aum.textContent = `$${f.targetSize}M`;
+  const aumDelta = document.getElementById('kpiAumDelta');
+  if (aumDelta) aumDelta.textContent = `Целевой: $${f.targetSize}M · Min: $5M`;
+  const irr = document.getElementById('kpiIrr');
+  if (irr) irr.textContent = f.targetIRR || '—';
+  const moic = document.getElementById('kpiMoic');
+  if (moic) moic.textContent = f.targetMOIC || '—';
+  const mgmtFee = document.getElementById('kpiMgmtFee');
+  if (mgmtFee) mgmtFee.textContent = `${f.managementFee}% / год`;
+  const carryDelta = document.getElementById('kpiCarryDelta');
+  if (carryDelta) carryDelta.textContent = `Carried Interest: ${f.carriedInterest}%`;
 }
 
 // Opens the "Add Fund" modal in create mode.

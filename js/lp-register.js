@@ -1855,9 +1855,9 @@ function openCCDetail(ccId) {
               <td style="padding:8px 10px;font-size:11px;color:#94a3b8">${li.paymentDate||'—'}</td>
               <td style="padding:8px 10px;font-size:10px;color:#64748b">${li.wireRef||'—'}</td>
               <td style="padding:8px 10px;text-align:center">
-                ${li.amlOk===true ? '<i class="fas fa-check-circle" style="color:#22c55e;font-size:14px"></i>'
-                : li.amlOk===false ? '<i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:14px"></i>'
-                : '<i class="fas fa-clock" style="color:#64748b;font-size:14px"></i>'}
+                ${li.amlOk===true ? '<i class="fas fa-check-circle" style="color:#22c55e;font-size:14px" title="AML подтверждён"></i>'
+                : li.amlOk===false ? '<i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:14px" title="AML Flag"></i>'
+                : `<i class="fas fa-clock" style="color:#64748b;font-size:14px;cursor:pointer" onclick="markLpAmlOk(${ccId}, ${li.lpId})" title="AML ещё не подтверждён — нажмите, чтобы подтвердить"></i>`}
               </td>
               <td style="padding:8px 10px;text-align:center">
                 ${li.status==='Pending' && cc.status!=='Completed' ? `
@@ -1911,10 +1911,14 @@ function markLPPayment(ccId, lpId) {
   const li = cc.lineItems.find(l => l.lpId === lpId);
   if (!li) return;
 
+  if (!confirm(`Подтвердить получение платежа от ${li.lpName} на сумму ${fmtUSD(li.called)}?`)) return;
+
   li.paid        = li.called;
   li.status      = 'Paid';
-  li.amlOk       = true;
   li.paymentDate = today();
+  // NB: AML clearance is a separate, deliberate check — see markLpAmlOk() —
+  // not implied by payment receipt. A wire arriving doesn't mean AML/SoF was
+  // actually verified for it.
 
   // Update LP Register calledAmount + paidAmount
   const lp = lpRegister.find(l => l.id === lpId);
@@ -1933,8 +1937,25 @@ function markLPPayment(ccId, lpId) {
   } else {
     const stillPending = cc.lineItems.filter(l => l.status === 'Paid').length;
     const total        = cc.lineItems.length;
-    showToast(`✅ Платёж получен от ${li.lpName} · ${fmtUSD(li.paid)} · AML OK · ${stillPending}/${total} LP оплатили`, 'green');
+    showToast(`✅ Платёж получен от ${li.lpName} · ${fmtUSD(li.paid)} · ${stillPending}/${total} LP оплатили`, 'green');
   }
+  openCCDetail(ccId);
+  renderCapitalCallsPage();
+}
+
+// AML clearance for one LP's capital-call line item — a separate, deliberate
+// action from payment receipt (see markLPPayment's comment above).
+function markLpAmlOk(ccId, lpId) {
+  const cc = capitalCallsLog.find(c => c.id === ccId);
+  if (!cc) return;
+  const li = cc.lineItems.find(l => l.lpId === lpId);
+  if (!li) return;
+  if (li.amlOk === true) return;
+
+  if (!confirm(`Подтвердить, что AML/Source-of-Funds проверка для ${li.lpName} по этому Capital Call пройдена?`)) return;
+
+  li.amlOk = true;
+  showToast(`✅ AML подтверждён для ${li.lpName}`, 'green');
   openCCDetail(ccId);
   renderCapitalCallsPage();
 }
