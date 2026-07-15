@@ -946,7 +946,6 @@ function dealCard(d) {
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#5a6b8a;margin-top:4px">
         <span><i class="fas fa-user" style="margin-right:3px"></i>${d.manager}</span>
-        ${(d.comments||[]).length > 0 ? `<span><i class="fas fa-comment" style="margin-right:3px;color:#3b82f6"></i>${d.comments.length}</span>` : ''}
         ${d.updatedAt ? `<span>${d.updatedAt}</span>` : ''}
       </div>
       ${nextActionHtml}
@@ -986,7 +985,6 @@ function _renderDealModal(d) {
     { id:'overview',   icon:'fa-eye',           label:'Обзор'      },
     { id:'documents',  icon:'fa-link',           label:'Документы'  },
     { id:'dd',         icon:'fa-microscope',     label:'Due Dil.'   },
-    { id:'history',    icon:'fa-history',        label:'История'    },
   ];
 
   const iS = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
@@ -1301,43 +1299,6 @@ function _renderDealModal(d) {
             <input style="${iS}" value="${d.kpi12m||''}"
               onchange="dealField(${d.id},'kpi12m',this.value)" /></div>
         </div>` : ''}`;
-  }
-
-  else if (_activeDealTab === 'history') {
-    tabContent = `
-      <div style="margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
-          <i class="fas fa-comment-dots" style="margin-right:5px;color:#3b82f6"></i>История комментариев (${(d.comments||[]).length})
-        </div>
-        ${!(d.comments||[]).length ? `<div style="font-size:12px;color:#475569;font-style:italic;padding:16px 0;text-align:center">Комментариев нет</div>` :
-          [...(d.comments||[])].reverse().map(c => `
-            <div style="background:#0f1623;border-radius:10px;padding:12px 14px;margin-bottom:8px">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                <div style="display:flex;align-items:center;gap:7px">
-                  <div style="width:26px;height:26px;border-radius:50%;background:rgba(59,130,246,0.2);
-                    display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#60a5fa">
-                    ${c.author.charAt(0)}
-                  </div>
-                  <span style="font-size:12px;font-weight:700;color:#e2e8f0">${c.author}</span>
-                </div>
-                <span style="font-size:10px;color:#64748b">${c.date}</span>
-              </div>
-              <div style="font-size:12px;color:#94a3b8;line-height:1.6">${c.text}</div>
-            </div>`).join('')}
-      </div>
-      <div style="background:#0f1623;border-radius:10px;padding:12px 14px">
-        <div style="font-size:10px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">Новый комментарий</div>
-        <select id="comment_author_${d.id}" style="${iS};margin-bottom:8px">
-          ${['CEO','Investment Manager','CFO','Analyst','Board Member'].map(r=>`<option>${r}</option>`).join('')}
-        </select>
-        <textarea id="comment_text_${d.id}" rows="3" style="${iS};height:70px;resize:none;margin-bottom:8px"
-          placeholder="Комментарий по сделке..."></textarea>
-        <button onclick="dealAddComment(${d.id})"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
-            padding:6px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
-          <i class="fas fa-paper-plane" style="margin-right:5px"></i>Добавить
-        </button>
-      </div>`;
   }
 
   /* ── Progress bar по этапам ── */
@@ -1815,19 +1776,6 @@ function dealRejectionBlock(d) {
           onchange="dealField(${d.id},'rejectComment',this.value)"
           placeholder="Обоснование решения, пожелания к компании...">${d.rejectComment||''}</textarea></div>
     </div>`;
-}
-
-function dealAddComment(id) {
-  const d = deals.find(x => x.id === id);
-  if (!d) return;
-  const author = document.getElementById(`comment_author_${id}`)?.value || 'CEO';
-  const text   = document.getElementById(`comment_text_${id}`)?.value?.trim();
-  if (!text) { showToast('⚠ Введите текст комментария', 'red'); return; }
-  d.comments = d.comments || [];
-  d.comments.push({ id: Date.now(), author, date: today(), text });
-  _activeDealTab = 'history';
-  _renderDealModal(d);
-  showToast('✅ Комментарий добавлен', 'green');
 }
 
 function dealAddMeeting(id) {
