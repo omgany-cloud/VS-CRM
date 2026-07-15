@@ -1152,6 +1152,44 @@ function icFormSyncDeal() {
           if (typEl.options[i].value === deal.type) { typEl.selectedIndex = i; break; }
         }
       }
+
+      // Draft the thesis/risks/financials text fields from the deal's
+      // already-signed GP conclusion and DD conclusions, so whoever
+      // creates the memo isn't retyping what specialists already
+      // wrote up — same "draft, human reviews and edits" pattern as
+      // draftGpConclusion() (js/app.js). Only overwrites what has a
+      // real source; exit strategy has no equivalent field anywhere
+      // upstream, so it's left for manual entry.
+      const catTitle = key => (typeof DD_CONCLUSION_CATEGORIES !== 'undefined'
+        ? (DD_CONCLUSION_CATEGORIES.find(c => c.key === key) || {}).title : null) || key;
+      const conclusions = deal.ddConclusions || [];
+
+      const thesisEl = document.getElementById('icNewThesis');
+      if (thesisEl && deal.gpConclusionSummary) {
+        thesisEl.value = `Заключение УК (${deal.gpConclusionVerdict}, подписано: ${deal.gpConclusionSignedBy || '—'} ${deal.gpConclusionSignedAt || ''}):\n${deal.gpConclusionSummary}`;
+      }
+
+      const risksEl = document.getElementById('icNewRisks');
+      if (risksEl) {
+        const concerns = conclusions.filter(c => c.verdict === 'Критично' || c.verdict === 'Есть замечания');
+        if (concerns.length) {
+          risksEl.value = concerns.map(c => {
+            const docs = (c.documents || []).map(dc => dc.name || dc.url).join(', ');
+            return `${catTitle(c.category)} — ${c.verdict}${docs ? ' (' + docs + ')' : ''}`;
+          }).join('\n');
+        } else if (conclusions.length) {
+          risksEl.value = 'Существенных замечаний по итогам DD не выявлено (все полученные заключения — «Без замечаний»).';
+        }
+      }
+
+      const finEl = document.getElementById('icNewFinancials');
+      if (finEl) {
+        const finConcl = conclusions.find(c => c.category === 'Financial');
+        if (finConcl) {
+          const docs = (finConcl.documents || []).map(dc => dc.name || dc.url).join(', ');
+          finEl.value = `Financial DD — ${finConcl.verdict}${docs ? '. Документы: ' + docs : ''}`;
+        }
+      }
     }
   }
 }
