@@ -38,8 +38,10 @@ function switchUsersTab(tab) {
   usersActiveTab = tab;
   const btnUsers = document.getElementById('usersTabUsers');
   const btnRoles = document.getElementById('usersTabRoles');
-  if (btnUsers) { btnUsers.style.background = tab === 'users' ? '#3b82f6' : 'transparent'; btnUsers.style.border = tab === 'users' ? 'none' : '1px solid #2a3448'; btnUsers.style.color = tab === 'users' ? '#fff' : '#8a9bbf'; }
-  if (btnRoles) { btnRoles.style.background = tab === 'roles' ? '#3b82f6' : 'transparent'; btnRoles.style.border = tab === 'roles' ? 'none' : '1px solid #2a3448'; btnRoles.style.color = tab === 'roles' ? '#fff' : '#8a9bbf'; }
+  if (btnUsers) { btnUsers.style.background = tab === 'users' ? '#3b82f6' : 'transparent'; btnUsers.style.border = tab === 'users' ? 'none' : '1px solid #2a3448'; btnUsers.style.color = tab === 'users' ? '#fff' : '#8a9bbf'; btnUsers.setAttribute('aria-selected', String(tab === 'users')); }
+  if (btnRoles) { btnRoles.style.background = tab === 'roles' ? '#3b82f6' : 'transparent'; btnRoles.style.border = tab === 'roles' ? 'none' : '1px solid #2a3448'; btnRoles.style.color = tab === 'roles' ? '#fff' : '#8a9bbf'; btnRoles.setAttribute('aria-selected', String(tab === 'roles')); }
+  const content = document.getElementById('usersContent');
+  if (content) content.setAttribute('aria-labelledby', tab === 'roles' ? 'usersTabRoles' : 'usersTabUsers');
   if (tab === 'roles') renderRolesPage(); else renderUsersPage();
 }
 

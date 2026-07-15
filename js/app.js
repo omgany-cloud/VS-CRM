@@ -1498,9 +1498,9 @@ function _renderDealModal(d) {
       </div>
 
       <!-- TABS -->
-      <div style="display:flex;gap:2px;overflow-x:auto;padding-bottom:0">
+      <div role="tablist" aria-label="Разделы сделки" style="display:flex;gap:2px;overflow-x:auto;padding-bottom:0">
         ${tabs.map(t => `
-          <button onclick="switchDealTab('${t.id}',${d.id})"
+          <button role="tab" id="dealTab-${t.id}" aria-selected="${_activeDealTab===t.id}" aria-controls="dealTabPanel" onclick="switchDealTab('${t.id}',${d.id})"
             style="padding:8px 14px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px;font-weight:700;
               white-space:nowrap;transition:all 0.15s;
               background:${'_activeDealTab'==='${t.id}'?'#0f1623':'transparent'};
@@ -1511,7 +1511,7 @@ function _renderDealModal(d) {
     </div>
 
     <!-- ── TAB CONTENT ── -->
-    <div style="padding:20px 24px 24px">
+    <div role="tabpanel" id="dealTabPanel" aria-labelledby="dealTab-${_activeDealTab}" style="padding:20px 24px 24px">
       ${tabContent}
     </div>
   `;
@@ -2777,9 +2777,9 @@ function _renderPortfolioModal(p) {
       </div>
 
       <!-- TABS -->
-      <div style="display:flex;gap:2px;overflow-x:auto;padding-bottom:0">
+      <div role="tablist" aria-label="Разделы портфельной компании" style="display:flex;gap:2px;overflow-x:auto;padding-bottom:0">
         ${tabs.map(t => `
-          <button onclick="switchPortTab('${t.id}',${p.id})"
+          <button role="tab" id="portTab-${t.id}" aria-selected="${_activePortTab===t.id}" aria-controls="portTabPanel" onclick="switchPortTab('${t.id}',${p.id})"
             style="padding:8px 12px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px;font-weight:700;
               white-space:nowrap;transition:all 0.15s;position:relative;
               ${_activePortTab===t.id ? `background:#0f1623;color:#f1f5f9;border-bottom:2px solid ${stCol}`
@@ -2792,7 +2792,7 @@ function _renderPortfolioModal(p) {
     </div>
 
     <!-- ── TAB CONTENT ── -->
-    <div style="padding:20px 24px 24px">
+    <div role="tabpanel" id="portTabPanel" aria-labelledby="portTab-${_activePortTab}" style="padding:20px 24px 24px">
       ${tabContent}
     </div>
   `;
@@ -3274,6 +3274,12 @@ function showToast(msg, color = 'green') {
   el.className = 'toast';
   el.style.borderLeftColor = colors[color] || colors.green;
   el.textContent = msg;
+  // Screen readers otherwise never announce a toast at all — it's just
+  // new DOM content appearing with no notification. role="alert" (an
+  // implicit assertive live region) for red/orange so an error interrupts
+  // and gets read immediately; role="status" (polite) for the rest so it
+  // doesn't cut off whatever's currently being read.
+  el.setAttribute('role', (color === 'red' || color === 'orange') ? 'alert' : 'status');
   container.appendChild(el);
 
   // Defensive ceiling, not a queue — if something spams toasts, drop the

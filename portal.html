@@ -699,6 +699,10 @@ function toast(msg, col='#22c55e') {
   el.style.borderColor = col;
   el.style.color = col === '#ef4444' ? '#fca5a5' : col === '#eab308' ? '#fde047' : '#4ade80';
   el.textContent = msg;
+  // role="alert" (implicit assertive live region) for red/orange so an
+  // error interrupts and gets read immediately; role="status" (polite)
+  // otherwise — same reasoning as js/app.js's showToast().
+  el.setAttribute('role', (col === '#ef4444' || col === '#eab308') ? 'alert' : 'status');
   container.appendChild(el);
 
   const MAX_VISIBLE_TOASTS = 5;

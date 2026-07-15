@@ -30,6 +30,12 @@
 //     stacking on top of each other (e.g. a "new conflict approval"
 //     form opened from within a task detail modal) via a small stack,
 //     not just a single open/closed flag.
+//   - The same moment focus moves into a modal, it also gets
+//     role="dialog" + aria-modal="true" (+ aria-labelledby pointing at
+//     its own heading, if one can be found) — none of the 17 modals had
+//     any of this. Done here rather than by hand-editing 17 HTML blocks
+//     because every modal-header block already follows the same
+//     <h3>...</h3> convention, so it can be found generically.
 // ============================================================
 
 const MODAL_OVERLAY_IDS = [
@@ -68,6 +74,23 @@ function _modalBoxFor(overlayEl) {
   return overlayEl.nextElementSibling;
 }
 
+let _modalAriaIdCounter = 0;
+function _applyDialogAria(box) {
+  if (!box) return;
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  if (box.hasAttribute('aria-label') || box.hasAttribute('aria-labelledby')) return;
+  // Every modal-header block in this app follows the same <h3>...</h3>
+  // title convention (confirmed across all 17); a handful build their
+  // title dynamically via innerHTML instead of having one in the static
+  // markup, so this re-checks on every open rather than assuming a
+  // fixed id exists.
+  const heading = box.querySelector('h1, h2, h3');
+  if (!heading) return;
+  if (!heading.id) heading.id = 'a11y-modal-title-' + (++_modalAriaIdCounter);
+  box.setAttribute('aria-labelledby', heading.id);
+}
+
 let _modalFocusStack = []; // [{ overlay, returnEl }], topmost last
 
 function _reconcileModalFocusStack() {
@@ -92,6 +115,7 @@ function _reconcileModalFocusStack() {
     requestAnimationFrame(() => {
       const box = _modalBoxFor(topmostNow);
       if (!box) return;
+      _applyDialogAria(box);
       if (!box.hasAttribute('tabindex')) box.setAttribute('tabindex', '-1');
       box.focus({ preventScroll: true });
     });

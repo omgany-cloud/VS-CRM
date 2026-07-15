@@ -650,12 +650,12 @@
         <h1>Команда / Пользователи <span class="fund-label">Access Control</span></h1>
         <p>Реальные аккаунты участников CRM и настраиваемые роли — доступ на бэкенде выдаётся строго по правам роли</p>
       </div>
-      <div id="usersTabs" style="display:flex;gap:8px;margin-bottom:14px">
-        <button id="usersTabUsers" onclick="switchUsersTab('users')"
+      <div id="usersTabs" role="tablist" aria-label="Пользователи и роли" style="display:flex;gap:8px;margin-bottom:14px">
+        <button id="usersTabUsers" role="tab" aria-selected="true" aria-controls="usersContent" onclick="switchUsersTab('users')"
           style="background:#3b82f6;border:none;color:#fff;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Пользователи</button>
-        <button id="usersTabRoles" onclick="switchUsersTab('roles')" style="display:none;background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Роли</button>
+        <button id="usersTabRoles" role="tab" aria-selected="false" aria-controls="usersContent" onclick="switchUsersTab('roles')" style="display:none;background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Роли</button>
       </div>
-      <div id="usersContent"></div>
+      <div id="usersContent" role="tabpanel" aria-labelledby="usersTabUsers"></div>
     </section>
 
     <!-- ===== DOCUMENTS ===== -->
@@ -1197,6 +1197,7 @@
 <script src="js/i18n.js"></script>
 <script src="js/currency.js"></script>
 <script src="js/modal-a11y.js"></script>
+<script src="js/a11y.js"></script>
 <script src="js/print-utils.js"></script>
 <script src="js/funds.js"></script>
 <script src="js/documents.js"></script>
