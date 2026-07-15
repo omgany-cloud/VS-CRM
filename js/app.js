@@ -1472,28 +1472,26 @@ function ddConclusionsSection(d) {
             ${c ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${verdictColor}22;color:${verdictColor}">${c.verdict || 'Без вердикта'}</span>` : ''}
           </div>
           ${c ? `
-            <div style="font-size:11px;color:#5a6b8a;margin-bottom:4px">${escapeHtml(c.author)} · ${c.updatedAt}</div>
-            <div style="font-size:12px;color:#e2e8f0;line-height:1.5;margin-bottom:6px;white-space:pre-wrap">${escapeHtml(c.text)}</div>
+            <div style="font-size:11px;color:#5a6b8a;margin-bottom:6px">${escapeHtml(c.author)} · ${c.updatedAt}</div>
             ${(c.documents||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
               ${c.documents.map((doc,i) => `<span style="font-size:10px;background:#1c2333;border-radius:5px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px">
                 <a href="${doc.url}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:none"><i class="fas fa-link" style="margin-right:3px"></i>${escapeHtml(doc.name||doc.url)}</a>
                 <span onclick="removeDDConclusionDoc(${d.id},'${cat.key}',${i})" style="cursor:pointer;color:#64748b">✕</span>
               </span>`).join('')}
-            </div>` : ''}
+            </div>` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:6px">Документы не приложены</div>`}
           ` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:6px">Заключение ещё не внесено</div>`}
           <details>
-            <summary style="font-size:10px;color:#60a5fa;cursor:pointer">${c ? 'Изменить заключение' : 'Внести заключение'}</summary>
+            <summary style="font-size:10px;color:#60a5fa;cursor:pointer">${c ? 'Изменить' : 'Внести заключение'}</summary>
             <div style="margin-top:8px">
               <select id="ddConclVerdict_${d.id}_${cat.key}" style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:11px;margin-bottom:6px;box-sizing:border-box">
                 <option value="">— Вердикт —</option>
                 ${['Без замечаний','Есть замечания','Критично'].map(v => `<option value="${v}" ${c?.verdict===v?'selected':''}>${v}</option>`).join('')}
               </select>
-              <textarea id="ddConclText_${d.id}_${cat.key}" rows="2" placeholder="Текст заключения..." style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:11px;resize:vertical;margin-bottom:6px;box-sizing:border-box">${c ? escapeHtml(c.text) : ''}</textarea>
               <div style="display:flex;gap:6px;margin-bottom:6px">
                 <input id="ddConclDocName_${d.id}_${cat.key}" placeholder="Название документа" style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
                 <input id="ddConclDocUrl_${d.id}_${cat.key}" placeholder="https://..." style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
               </div>
-              <button onclick="saveDDConclusion(${d.id},'${cat.key}')" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class="fas fa-save" style="margin-right:4px"></i>Сохранить заключение</button>
+              <button onclick="saveDDConclusion(${d.id},'${cat.key}')" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class="fas fa-save" style="margin-right:4px"></i>Сохранить</button>
             </div>
           </details>
         </div>`;
@@ -1505,17 +1503,15 @@ async function saveDDConclusion(id, category) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
   const verdict = document.getElementById(`ddConclVerdict_${id}_${category}`)?.value || '';
-  const text    = document.getElementById(`ddConclText_${id}_${category}`)?.value?.trim() || '';
   const docName = document.getElementById(`ddConclDocName_${id}_${category}`)?.value?.trim() || '';
   const docUrl  = document.getElementById(`ddConclDocUrl_${id}_${category}`)?.value?.trim() || '';
-  if (!text) { showToast('⚠️ Введите текст заключения', 'red'); return; }
+  if (!verdict) { showToast('⚠️ Выберите вердикт', 'red'); return; }
 
   d.ddConclusions = d.ddConclusions || [];
   let entry = d.ddConclusions.find(x => x.category === category);
   const prevEntry = entry ? { ...entry, documents: [...(entry.documents||[])] } : null;
   if (!entry) { entry = { category, documents: [] }; d.ddConclusions.push(entry); }
   entry.author = currentUserDisplayName();
-  entry.text = text;
   entry.verdict = verdict;
   entry.updatedAt = today();
   entry.documents = entry.documents || [];
@@ -1738,7 +1734,7 @@ function openGpConclusionDocument(id) {
     return `
     <div class="section">
       <div class="section-title">${cat.title}${c && c.verdict ? ' — ' + c.verdict : ''}</div>
-      <div class="section-text">${c ? (c.text || '—') : 'Заключение не предоставлено'}</div>
+      <div class="section-text">${c ? `${escapeHtml(c.author||'')} · ${c.updatedAt||''}` : 'Заключение не предоставлено'}</div>
       ${c && (c.documents||[]).length ? `<div style="font-size:9pt;color:#4a5568;margin-top:4px">Документы: ${c.documents.map(doc=>doc.name||doc.url).join(', ')}</div>` : ''}
     </div>`;
   }).join('')}
