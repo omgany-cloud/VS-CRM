@@ -64,6 +64,21 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
+// Lets an already-logged-in client re-sync its cached role/permissions
+// without waiting out the 12h token or re-entering credentials. requireAuth
+// already re-reads role/active/permissions live from the DB on every
+// request (see its comment) — this route just surfaces that in a form the
+// client can poll. Also doubles as the deactivation check: once
+// user.active flips false, requireAuth's 401 fires here exactly like it
+// would on any other route, which is what forces a stale client back to
+// the login screen instead of leaving it running on cached permissions.
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json({
+    user: { id: req.user.id, email: req.user.email, name: req.user.name, role: req.user.role },
+    permissions: req.user.permissions,
+  });
+});
+
 function slugify(name) {
   return String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'company';
 }

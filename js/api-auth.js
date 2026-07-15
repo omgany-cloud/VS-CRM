@@ -440,6 +440,51 @@ function toggleAuthForm(which) {
   signupForm.style.display = which === 'signup' ? 'block' : 'none';
 }
 
+// ── Keep a logged-in session's cached role/permissions in sync ──────────
+// getAuth()/currentUserPermission() read from localStorage, populated once
+// at login — without this, an admin revoking access or flipping someone to
+// read-only has no effect on that person's already-open tab until their
+// 12h token expires: the banner stays hidden, buttons stay undimmed, and
+// apiFetch's readOnly guard keeps evaluating the stale cached value. Poll
+// GET /api/auth/me (cheap — requireAuth already re-reads role/active/
+// permissions from the DB on every request, this just exposes that) and
+// re-apply the same UI refresh updateUserRoleUI() already does on login.
+// A 401 here (token expired OR the account was just deactivated) is
+// already handled by apiFetch itself — it clears auth and shows the login
+// overlay, so there's nothing extra to do in that case.
+async function refreshAuthFromServer() {
+  const auth = getAuth();
+  if (!auth) return;
+  try {
+    const data = await apiFetch('/api/auth/me');
+    const prevRole  = auth.user && auth.user.role;
+    const prevPerms = JSON.stringify(auth.permissions);
+    auth.user        = data.user;
+    auth.permissions = data.permissions;
+    setAuth(auth);
+    if (typeof updateUserRoleUI === 'function') updateUserRoleUI(data.user.role);
+    const changed = prevRole !== data.user.role || prevPerms !== JSON.stringify(data.permissions);
+    if (changed && typeof showToast === 'function') {
+      showToast('ℹ️ Ваша роль или права были обновлены администратором', 'blue');
+    }
+  } catch (err) {
+    if (!/Unauthorized/.test(err.message)) console.error('Failed to refresh auth from server:', err);
+  }
+}
+
+let _authRefreshTimer = null;
+const AUTH_REFRESH_INTERVAL_MS = 60 * 1000;
+function startAuthRefreshLoop() {
+  if (_authRefreshTimer) return;
+  _authRefreshTimer = setInterval(refreshAuthFromServer, AUTH_REFRESH_INTERVAL_MS);
+  // Also refresh the moment the tab regains focus — covers the common case
+  // (admin changes something while the user is away/on another tab) faster
+  // than waiting out the rest of the poll interval.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshAuthFromServer();
+  });
+}
+
 // Shared by both the login and signup submit handlers below — same
 // post-auth sequence either way.
 async function completeAuth(data) {
@@ -448,6 +493,7 @@ async function completeAuth(data) {
   await loadRolesFromApi();
   if (typeof initUserRole === 'function') initUserRole();
   loadAllApiData();
+  startAuthRefreshLoop();
 }
 
 (function initAuthGate() {
@@ -507,6 +553,7 @@ async function completeAuth(data) {
     loadRolesFromApi().then(() => {
       if (typeof initUserRole === 'function') initUserRole();
       loadAllApiData();
+      startAuthRefreshLoop();
     });
   } else {
     showLoginOverlay();
