@@ -721,6 +721,22 @@ async function castICVote(memoId, voteIdx, vote) {
   if (!m) return;
   const myVote = m.votes[voteIdx];
   if (!myVote) return;
+
+  // A cast vote can never be changed (no re-vote control renders once
+  // v.vote is set — see canCastVote in renderICModalContent), so this is a
+  // one-shot, permanent decision — confirm before committing, and warn
+  // explicitly when this vote will be the one that finalizes the memo.
+  const wouldFinalize = (() => {
+    const approveN = m.votes.filter((v, i) => v.vote === 'approve' || (i === voteIdx && vote === 'approve')).length;
+    const allVoted = m.votes.every((v, i) => v.vote || i === voteIdx);
+    const quorum   = icQuorumMet(m.votes.map((v, i) => i === voteIdx ? { ...v, vote } : v));
+    return allVoted || (quorum && approveN > m.votes.length / 2);
+  })();
+  const confirmMsg = wouldFinalize
+    ? `Голос «${IC_VOTES[vote].label}» окончательный и не подлежит изменению. Этот голос завершает голосование по меморандуму — решение будет зафиксировано немедленно. Продолжить?`
+    : `Голос «${IC_VOTES[vote].label}» окончательный и не подлежит изменению. Продолжить?`;
+  if (!confirm(confirmMsg)) return;
+
   myVote.vote    = vote;
   myVote.comment = myVote.comment || '';
   m.quorumMet = icQuorumMet(m.votes);

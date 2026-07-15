@@ -2550,6 +2550,21 @@ async function submitObTask(taskId) {
   // (Removed: company does not accept Retail Clients per policy)
 
   const fd = collectFormData(task.formKey, task.clientId);
+
+  // ── Confirm before committing an outcome that halts onboarding and
+  //    notifies leadership (mirrors the rejection checks in the routing
+  //    logic below) — once submitted the task is 'completed' and there is
+  //    no re-decide control in the UI, same one-shot risk as the IC vote /
+  //    conflict-approval decisions this confirm pattern also guards. ──
+  const willHaltOnboarding = ({
+    conflict_precheck:     () => (fd.f_decision       || '').includes('No-Go'),
+    dd_outcome:            () => (fd.f_conclusion     || '').includes('Отказать'),
+    suitability:           () => fd.f_overallResult === 'Не подходит — отказ',
+    lp_qualification:      () => (fd.f_lpQualResult   || '').includes('Не квалифицирован'),
+    lp_investment_profile: () => fd.f_fundSuitResult === 'Нет — отказ',
+  }[task.formKey] || (() => false))();
+  if (willHaltOnboarding && !confirm('Это решение остановит онбординг клиента и уведомит руководство. Отменить его после отправки будет нельзя. Продолжить?')) return;
+
   task.formData    = fd;
   task.status      = 'completed';
   task.completedAt = today();
@@ -5762,6 +5777,13 @@ function openConflictApprovalDetail(id) {
 }
 
 async function decideConflictApproval(id, status) {
+  const a = conflictApprovals.find(x => x.id === id);
+  if (!a) return;
+  const client = obClients.find(c => c.id === a.clientId);
+  // One-shot decision — the Approve/Reject buttons only render while
+  // status === 'Pending' (see openConflictApprovalDetail), so once set
+  // there is no re-decide control in the UI.
+  if (!confirm(`Решение «${status}» по конфликту (${client ? client.name : 'клиент #' + a.clientId}) будет зафиксировано и не подлежит изменению через интерфейс. Продолжить?`)) return;
   try {
     await apiFetch(`/api/conflict-approvals/${id}`, {
       method: 'PUT',

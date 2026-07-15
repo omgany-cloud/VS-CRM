@@ -221,6 +221,11 @@ async function saveUserEdit(id) {
 }
 
 async function toggleUserActive(id, nextActive) {
+  if (!nextActive) {
+    const u = crmUsers.find(x => x.id === id);
+    if (!u) return;
+    if (!confirm(`Деактивировать «${u.name || u.email}»? Доступ к системе будет заблокирован немедленно.`)) return;
+  }
   try {
     await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ active: nextActive }) });
     await loadUsersFromApi();
