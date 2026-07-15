@@ -45,6 +45,9 @@ function updateUserRoleUI(role) {
   const usersNav = document.querySelector('.nav-item[data-page="users"]');
   const canSeeUsersPage = currentUserPermission('manageUsers') || currentUserPermission('manageRoles');
   if (usersNav) usersNav.style.display = canSeeUsersPage ? '' : 'none';
+
+  const roBanner = document.getElementById('readOnlyBanner');
+  if (roBanner) roBanner.style.display = currentUserPermission('readOnly') ? '' : 'none';
 }
 
 // Repurposed from the old self-service role switcher: now just opens the

@@ -48,7 +48,22 @@ function currentUserPermissionValue(key) {
   return auth && auth.permissions ? auth.permissions[key] : null;
 }
 
+// Mirrors server/auth.js's MUTATING_METHODS + readOnly gate exactly (same
+// method set, same intent) — but every mutating action in this app funnels
+// through apiFetch, so blocking here catches all of them in one place,
+// instantly and without a network round-trip. Without this, a read-only
+// user could fill out an entire form (or click Delete) and only discover
+// the restriction after the server's 403 comes back — the UI would look
+// fully functional right up to that point. This makes the client agree
+// with the server from the very first click instead of lying until the end.
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 async function apiFetch(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  if (MUTATING_METHODS.has(method) && currentUserPermission('readOnly')) {
+    showToast('🔒 Ваша роль — «Только просмотр»: изменения недоступны', 'red');
+    throw new Error('Forbidden: read-only role cannot modify data');
+  }
   const auth = getAuth();
   const headers = Object.assign(
     { 'Content-Type': 'application/json' },

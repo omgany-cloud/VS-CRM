@@ -215,6 +215,15 @@
     </div>
   </header>
 
+  <!-- Read-only role banner — hidden by default, shown by updateUserRoleUI()
+       (js/app.js) whenever the logged-in role has the readOnly permission.
+       Persistent across every page/modal so the restriction is visible
+       before the user ever reaches for a Add/Edit/Delete control, not just
+       after clicking one. -->
+  <div id="readOnlyBanner" style="display:none;background:#7c2d12;color:#fed7aa;padding:8px 20px;font-size:12.5px;font-weight:600;text-align:center;border-bottom:1px solid #9a3412">
+    <i class="fas fa-lock" style="margin-right:6px"></i>Ваша роль — «Только просмотр»: создание, редактирование и удаление данных недоступны
+  </div>
+
   <div class="page-content">
 
     <!-- ===== DASHBOARD ===== -->
