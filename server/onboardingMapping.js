@@ -146,6 +146,15 @@ const OB_TASK_UPDATE_SQL = `
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
+/* ===== obTaskComments ===== */
+function rowToObTaskComment(row) {
+  return { id: row.id, taskId: row.task_id, author: row.author, text: row.text, createdAt: row.created_at };
+}
+const OB_TASK_COMMENT_INSERT_SQL = `
+  INSERT INTO ob_task_comments (tenant_id, task_id, author, text)
+  VALUES (@tenantId, @taskId, @author, @text)
+`;
+
 /* ===== engagements ===== */
 const ENGAGEMENT_SCALARS = [
   'engId', 'clientId', 'clientName', 'serviceType', 'contractNum', 'date', 'signedDate', 'status',
@@ -243,6 +252,7 @@ module.exports = {
   coiToParams, rowToCoi, COI_INSERT_SQL,
   obClientToParams, rowToObClient, OB_CLIENT_INSERT_SQL, OB_CLIENT_UPDATE_SQL,
   obTaskToParams, rowToObTask, OB_TASK_INSERT_SQL, OB_TASK_UPDATE_SQL,
+  rowToObTaskComment, OB_TASK_COMMENT_INSERT_SQL,
   engagementToParams, rowToEngagement, ENGAGEMENT_INSERT_SQL, ENGAGEMENT_UPDATE_SQL,
   conflictApprovalToParams, rowToConflictApproval,
   CONFLICT_APPROVAL_INSERT_SQL, CONFLICT_APPROVAL_UPDATE_SQL,

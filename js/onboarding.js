@@ -853,6 +853,7 @@ function openObTaskForm(taskId) {
     <div style="overflow-y:auto;max-height:calc(100% - 70px);padding-right:4px">
       ${renderChineseWallBanner(client)}
       ${buildTaskForm(task, client)}
+      ${renderObTaskComments(task)}
     </div>`;
 
   // ── Post-render init ───────────────────────────────────────
@@ -907,6 +908,55 @@ function closeObTaskForm() {
 /** Stub для обратной совместимости (modal-ob-task больше не используется) */
 function closeObTaskModal() {
   closeObTaskForm();
+}
+
+// Free-text comment thread on a task — separate from the wizard's own
+// structured form fields (task.formData), persisted via POST
+// /api/ob-tasks/:id/comments (server/index.js). Available regardless of
+// task status, same reasoning as obTaskPdfButtonHtml above.
+function renderObTaskComments(task) {
+  const comments = task.comments || [];
+  return `
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #2a3448">
+      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
+        <i class="fas fa-comment-dots" style="margin-right:5px;color:#3b82f6"></i>Комментарии (${comments.length})
+      </div>
+      ${!comments.length ? `<div style="font-size:12px;color:#475569;font-style:italic;padding:12px 0;text-align:center">Комментариев нет</div>` :
+        [...comments].reverse().map(c => `
+          <div style="background:#0f1623;border-radius:10px;padding:10px 14px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+              <span style="font-size:12px;font-weight:700;color:#e2e8f0">${escapeHtml(c.author)}</span>
+              <span style="font-size:10px;color:#64748b">${escapeHtml(c.createdAt || '')}</span>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;line-height:1.6">${escapeHtml(c.text)}</div>
+          </div>`).join('')}
+      <div style="background:#0f1623;border-radius:10px;padding:12px 14px;margin-top:8px">
+        <textarea id="obTaskCommentText_${task.id}" rows="2"
+          style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:8px 10px;color:#e2e8f0;font-size:12px;resize:vertical;box-sizing:border-box;margin-bottom:8px"
+          placeholder="Комментарий к задаче..."></textarea>
+        <button onclick="obAddTaskComment(${task.id})"
+          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-paper-plane" style="margin-right:5px"></i>Добавить
+        </button>
+      </div>
+    </div>`;
+}
+
+async function obAddTaskComment(taskId) {
+  const task = obTasks.find(t => t.id === taskId);
+  if (!task) return;
+  const textEl = document.getElementById(`obTaskCommentText_${taskId}`);
+  const text = textEl?.value?.trim();
+  if (!text) { showToast('⚠️ Введите текст комментария', 'red'); return; }
+  try {
+    const comment = await apiFetch(`/api/ob-tasks/${taskId}/comments`, { method: 'POST', body: JSON.stringify({ text }) });
+    task.comments = task.comments || [];
+    task.comments.push(comment);
+    if (activeObTaskId === taskId) openObTaskForm(taskId); // re-render to show the new comment
+    showToast('✅ Комментарий добавлен', 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить комментарий: ' + err.message, 'red');
+  }
 }
 
 // PDF/document preview-and-print button for a task — available regardless

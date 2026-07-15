@@ -367,6 +367,22 @@ CREATE TABLE IF NOT EXISTS ob_tasks (
   completed_by       TEXT
 );
 
+-- Free-text notes on a task, separate from form_data_json (the wizard's
+-- own structured fields) — append-only, own table rather than a JSON blob
+-- on ob_tasks so concurrent commenters can't race a read-modify-write of
+-- the same column (the risk the amendments_json/comments_json blobs
+-- elsewhere in this schema accept as a deliberate PoC tradeoff).
+CREATE TABLE IF NOT EXISTS ob_task_comments (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id   INTEGER NOT NULL REFERENCES tenants(id),
+  task_id     INTEGER NOT NULL REFERENCES ob_tasks(id),
+  author      TEXT NOT NULL,
+  text        TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ob_task_comments_task ON ob_task_comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_ob_task_comments_tenant ON ob_task_comments(tenant_id);
+
 CREATE TABLE IF NOT EXISTS engagements (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id           INTEGER NOT NULL REFERENCES tenants(id),

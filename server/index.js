@@ -25,6 +25,7 @@ const {
   coiToParams, rowToCoi, COI_INSERT_SQL,
   obClientToParams, rowToObClient, OB_CLIENT_INSERT_SQL, OB_CLIENT_UPDATE_SQL,
   obTaskToParams, rowToObTask, OB_TASK_INSERT_SQL, OB_TASK_UPDATE_SQL,
+  rowToObTaskComment, OB_TASK_COMMENT_INSERT_SQL,
   engagementToParams, rowToEngagement, ENGAGEMENT_INSERT_SQL, ENGAGEMENT_UPDATE_SQL,
   conflictApprovalToParams, rowToConflictApproval, CONFLICT_APPROVAL_INSERT_SQL, CONFLICT_APPROVAL_UPDATE_SQL,
 } = require('./onboardingMapping');
@@ -816,6 +817,19 @@ app.get('/api/onboarding', requireAuth, requireInternal, (req, res) => {
   const visibleClientIds = new Set(obClients.map(c => c.id));
   const obTasks = allTasks.filter(t => visibleClientIds.has(t.clientId));
   const engagements = allEngagements.filter(e => !e.clientId || visibleClientIds.has(e.clientId));
+
+  // Attach comments to each visible task — only for tasks that survived the
+  // Chinese Wall filter above, so an FM task's comments never leak to a
+  // non-accessFM caller either.
+  const visibleTaskIds = new Set(obTasks.map(t => t.id));
+  const commentsByTask = new Map();
+  for (const row of db.prepare('SELECT * FROM ob_task_comments WHERE tenant_id = ? ORDER BY id').all(req.tenantId)) {
+    const c = rowToObTaskComment(row);
+    if (!visibleTaskIds.has(c.taskId)) continue;
+    if (!commentsByTask.has(c.taskId)) commentsByTask.set(c.taskId, []);
+    commentsByTask.get(c.taskId).push(c);
+  }
+  obTasks.forEach(t => { t.comments = commentsByTask.get(t.id) || []; });
   // Restricted List is FM-portfolio-company-only data with no CF&A client link — accessFM-less roles have no legitimate use for it.
   const restrictedList = !req.user.permissions.accessFM
     ? []
@@ -905,6 +919,23 @@ app.post('/api/ob-tasks', requireAuth, requireInternal, (req, res) => {
     db.exec('ROLLBACK');
     res.status(500).json({ error: err.message });
   }
+});
+
+app.post('/api/ob-tasks/:id/comments', requireAuth, requireInternal, (req, res) => {
+  const task = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!task) return res.status(404).json({ error: 'Onboarding task not found in this tenant' });
+  const client = db.prepare('SELECT direction FROM ob_clients WHERE id = ? AND tenant_id = ?').get(task.client_id, req.tenantId);
+  if (client && chineseWallBlocks(req.user.permissions, client.direction)) {
+    return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
+  const text = (req.body && req.body.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'text is required' });
+  // Server-stamped, not client-trusted — same lesson as restricted_list.added_by.
+  const info = db.prepare(OB_TASK_COMMENT_INSERT_SQL).run(at({
+    tenantId: req.tenantId, taskId: task.id, author: req.user.name || req.user.email, text,
+  }));
+  const row = db.prepare('SELECT * FROM ob_task_comments WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  res.status(201).json(rowToObTaskComment(row));
 });
 
 app.post('/api/restricted-list', requireAuth, requirePermission('decideConflicts'), requirePermission('accessFM'), (req, res) => {

@@ -103,7 +103,7 @@ const READONLY_GATED_FN_NAMES = [
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewUser',
   'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveNewRole',
   'saveRoleEdit', 'deleteRole', 'wfAction', 'withdrawWf', 'startWorkflow',
-  'saveNewEngagement', 'updateEngPayment',
+  'saveNewEngagement', 'updateEngPayment', 'obAddTaskComment',
 ];
 const READONLY_GATED_FN_RE = new RegExp('^\\s*(' + READONLY_GATED_FN_NAMES.join('|') + ')\\s*\\(');
 // Triggers that don't call a gated function directly by name (e.g. the
