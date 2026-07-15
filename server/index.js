@@ -926,7 +926,10 @@ app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
-  const params = engagementToParams(b);
+  // currency has NOT NULL DEFAULT 'USD' at the schema level, but *ToParams()
+  // binds an explicit NULL for any field the caller omits, which overrides
+  // a column's SQL-level DEFAULT — same gotcha as funds.nav, same fix.
+  const params = engagementToParams({ currency: 'USD', ...b });
   const info = db.prepare(ENGAGEMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToEngagement(row));
@@ -961,7 +964,7 @@ app.get('/api/conflict-approvals', requireAuth, requireInternal, (req, res) => {
 app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const b = req.body || {};
   if (!b.decisionType) return res.status(400).json({ error: 'decisionType is required' });
-  const params = conflictApprovalToParams({ riskLevel: 'Low', status: 'Pending', ...b });
+  const params = conflictApprovalToParams({ riskLevel: 'Low', status: 'Pending', currency: 'USD', ...b });
   const info = db.prepare(CONFLICT_APPROVAL_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToConflictApproval(row));

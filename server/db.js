@@ -404,7 +404,11 @@ CREATE TABLE IF NOT EXISTS engagements (
   -- Section D) can be detected: two engagement rows for the same client_id
   -- sharing a deal_ref is exactly that scenario, and per Section A.3 it
   -- requires mandatory CF Deal Committee unanimous review.
-  deal_ref            TEXT
+  deal_ref            TEXT,
+  -- CF&A engagements aren't tied to any fund (a client may not even
+  -- reference one), so unlike LP/fund economics this can't be derived
+  -- from fund.currency — it's its own independent choice per engagement.
+  currency            TEXT NOT NULL DEFAULT 'USD'
 );
 
 -- Digital record of the Decision Matrix (GL-ONB-CF&A-001 Section 4.7) and
@@ -437,7 +441,10 @@ CREATE TABLE IF NOT EXISTS conflict_approvals (
   description        TEXT,
   rationale          TEXT,
   decided_at         TEXT,
-  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Same reasoning as engagements.currency — a conflict-approval fee
+  -- isn't fund-scoped either.
+  currency           TEXT NOT NULL DEFAULT 'USD'
 );
 
 CREATE INDEX IF NOT EXISTS idx_lp_register_tenant ON lp_register(tenant_id);
@@ -587,6 +594,9 @@ for (const table of ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_m
   if (!columnExists(table, 'fund_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN fund_id INTEGER REFERENCES funds(id)`);
 }
 if (!columnExists('roles', 'read_only')) db.exec("ALTER TABLE roles ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
+for (const table of ['engagements', 'conflict_approvals']) {
+  if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
+}
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

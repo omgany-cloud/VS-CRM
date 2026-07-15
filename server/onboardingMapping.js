@@ -151,7 +151,7 @@ const ENGAGEMENT_SCALARS = [
   'engId', 'clientId', 'clientName', 'serviceType', 'contractNum', 'date', 'signedDate', 'status',
   'feeType', 'feeAmount', 'successFee', 'retainer', 'payTerms', 'invoiced', 'paid', 'startDate',
   'endDate', 'rm', 'notes', 'direction', 'activationDate', 'activatedBy', 'lpaUrl', 'lpSignedDate',
-  'capitalCallDate', 'contractUrl', 'dealValue', 'feeRate', 'dealRef',
+  'capitalCallDate', 'contractUrl', 'dealValue', 'feeRate', 'dealRef', 'currency',
 ];
 function engagementToParams(e) {
   const out = {};
@@ -171,7 +171,7 @@ function rowToEngagement(row) {
     activationDate: row.activation_date, activatedBy: row.activated_by, lpaUrl: row.lpa_url,
     lpSignedDate: row.lp_signed_date, capitalCallDate: row.capital_call_date,
     amendments: row.amendments_json, contractUrl: row.contract_url, dealValue: row.deal_value, feeRate: row.fee_rate,
-    dealRef: row.deal_ref,
+    dealRef: row.deal_ref, currency: row.currency,
   };
 }
 const ENGAGEMENT_INSERT_SQL = `
@@ -179,12 +179,12 @@ const ENGAGEMENT_INSERT_SQL = `
     (tenant_id, eng_id, client_id, client_name, service_type, contract_num, date, signed_date, status,
      fee_type, fee_amount, success_fee, retainer, pay_terms, invoiced, paid, start_date, end_date,
      rm, notes, direction, activation_date, activated_by, lpa_url, lp_signed_date, capital_call_date,
-     amendments_json, contract_url, deal_value, fee_rate, deal_ref)
+     amendments_json, contract_url, deal_value, fee_rate, deal_ref, currency)
   VALUES
     (@tenantId, @engId, @clientId, @clientName, @serviceType, @contractNum, @date, @signedDate, @status,
      @feeType, @feeAmount, @successFee, @retainer, @payTerms, @invoiced, @paid, @startDate, @endDate,
      @rm, @notes, @direction, @activationDate, @activatedBy, @lpaUrl, @lpSignedDate, @capitalCallDate,
-     @amendmentsJson, @contractUrl, @dealValue, @feeRate, @dealRef)
+     @amendmentsJson, @contractUrl, @dealValue, @feeRate, @dealRef, @currency)
 `;
 const ENGAGEMENT_UPDATE_SQL = `
   UPDATE engagements SET
@@ -194,7 +194,7 @@ const ENGAGEMENT_UPDATE_SQL = `
     invoiced=@invoiced, paid=@paid, start_date=@startDate, end_date=@endDate, rm=@rm, notes=@notes,
     direction=@direction, activation_date=@activationDate, activated_by=@activatedBy, lpa_url=@lpaUrl,
     lp_signed_date=@lpSignedDate, capital_call_date=@capitalCallDate, amendments_json=@amendmentsJson,
-    contract_url=@contractUrl, deal_value=@dealValue, fee_rate=@feeRate, deal_ref=@dealRef
+    contract_url=@contractUrl, deal_value=@dealValue, fee_rate=@feeRate, deal_ref=@dealRef, currency=@currency
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
@@ -202,6 +202,7 @@ const ENGAGEMENT_UPDATE_SQL = `
 const CONFLICT_APPROVAL_SCALARS = [
   'clientId', 'engagementId', 'dealRef', 'decisionType', 'riskLevel', 'feeAmount',
   'decisionMaker', 'escalatedTo', 'requiredTimeline', 'status', 'description', 'rationale', 'decidedAt',
+  'currency',
 ];
 function conflictApprovalToParams(a) {
   const out = {};
@@ -214,22 +215,23 @@ function rowToConflictApproval(row) {
     decisionType: row.decision_type, riskLevel: row.risk_level, feeAmount: row.fee_amount,
     decisionMaker: row.decision_maker, escalatedTo: row.escalated_to, requiredTimeline: row.required_timeline,
     status: row.status, description: row.description, rationale: row.rationale, decidedAt: row.decided_at,
+    currency: row.currency,
   };
 }
 const CONFLICT_APPROVAL_INSERT_SQL = `
   INSERT INTO conflict_approvals
     (tenant_id, client_id, engagement_id, deal_ref, decision_type, risk_level, fee_amount,
-     decision_maker, escalated_to, required_timeline, status, description, rationale, decided_at)
+     decision_maker, escalated_to, required_timeline, status, description, rationale, decided_at, currency)
   VALUES
     (@tenantId, @clientId, @engagementId, @dealRef, @decisionType, @riskLevel, @feeAmount,
-     @decisionMaker, @escalatedTo, @requiredTimeline, @status, @description, @rationale, @decidedAt)
+     @decisionMaker, @escalatedTo, @requiredTimeline, @status, @description, @rationale, @decidedAt, @currency)
 `;
 const CONFLICT_APPROVAL_UPDATE_SQL = `
   UPDATE conflict_approvals SET
     client_id=@clientId, engagement_id=@engagementId, deal_ref=@dealRef, decision_type=@decisionType,
     risk_level=@riskLevel, fee_amount=@feeAmount, decision_maker=@decisionMaker, escalated_to=@escalatedTo,
     required_timeline=@requiredTimeline, status=@status, description=@description, rationale=@rationale,
-    decided_at=@decidedAt
+    decided_at=@decidedAt, currency=@currency
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

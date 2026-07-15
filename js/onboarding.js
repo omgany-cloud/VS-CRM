@@ -1921,12 +1921,16 @@ function buildTaskForm(task, client) {
             ${buildSelect('f_feeType','Структура вознаграждения',
               ['Fixed Fee','Success Fee','Retainer + Success Fee','Fixed Fee + Success Fee','Комбинированный'],
               fd.feeType, disabledAttr, selectStyle, labelStyle)}
-            <div><label style="${labelStyle}">Fixed Fee (USD)</label>
+            <div><label style="${labelStyle}">Fixed Fee</label>
               <input type="number" id="f_feeAmount" value="${fd.feeAmount||''}" ${disabledAttr} style="${inputStyle}" placeholder="50 000" /></div>
             <div><label style="${labelStyle}">Success Fee (%)</label>
               <input type="number" id="f_successFee" value="${fd.successFee||''}" ${disabledAttr} style="${inputStyle}" placeholder="2" /></div>
-            <div><label style="${labelStyle}">Retainer (USD / мес.)</label>
+            <div><label style="${labelStyle}">Retainer (/ мес.)</label>
               <input type="number" id="f_retainer" value="${fd.retainer||''}" ${disabledAttr} style="${inputStyle}" placeholder="5 000" /></div>
+            <div><label style="${labelStyle}">Валюта</label>
+              <select id="f_currency" ${disabledAttr} style="${selectStyle}">
+                ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${(fd.currency||'USD')===code?' selected':''}>${c.label}</option>`).join('')}
+              </select></div>
             ${buildSelect('f_payTerms','Порядок оплаты',
               ['При подписании договора','Ежемесячно','По завершении сделки','50% аванс + 50% по закрытию','По milestone'],
               fd.payTerms, disabledAttr, selectStyle, labelStyle)}
@@ -2677,6 +2681,7 @@ async function submitObTask(taskId) {
         status:      (fd.f_lpSigned || '').startsWith('Да') && (fd.f_gpSigned||'') === 'Да' ? 'Active' : 'Draft',
         feeType:     'Management Fee + Carry',
         feeAmount:   commitment,
+        currency:    currencyForFundId(activeFundId),
         successFee:  20,     // стандартный carry 20%
         retainer:    null,
         payTerms:    'По Capital Call',
@@ -2711,6 +2716,7 @@ async function submitObTask(taskId) {
         status:      fd.f_clientSigned === 'Да' ? 'Active' : 'Draft',
         feeType:     fd.f_feeType || 'Fixed Fee',
         feeAmount:   parseFloat(fd.f_feeAmount) || 0,
+        currency:    fd.f_currency || 'USD',
         successFee:  parseFloat(fd.f_successFee) || null,
         retainer:    parseFloat(fd.f_retainer)   || null,
         payTerms:    fd.f_payTerms || 'При подписании',
@@ -2774,6 +2780,11 @@ async function submitObTask(taskId) {
             status:      'Active',
             feeType:     'Fixed Fee',
             feeAmount:   parseFloat(contractValue) || 0,
+            // No currency field on the 5.1 form itself (only 4.1 has one) —
+            // this branch only fires when 4.1 was skipped entirely, so
+            // there's nothing to read; defaults to USD like everywhere else
+            // absent an explicit choice.
+            currency:    'USD',
             successFee:  parseFloat(successFeeRate) || null,
             retainer:    null,
             payTerms:    'При подписании',
@@ -2840,6 +2851,7 @@ async function submitObTask(taskId) {
             status:      'Active',
             feeType:     'Management Fee + Carry',
             feeAmount:   cmt,
+            currency:    currencyForFundId(activeFundId),
             successFee:  20,
             retainer:    null,
             payTerms:    'По Capital Call',
@@ -4247,9 +4259,9 @@ function obGenerateTermSheet(taskId) {
   section('💰', '3', 'COMMERCIAL TERMS') +
   tbl(
     row('Fee Structure', fd.feeType || '—') +
-    row2('Fixed Fee (USD)', fd.feeAmount ? '$' + Number(fd.feeAmount).toLocaleString('en-US') : '—',
+    row2('Fixed Fee', fd.feeAmount ? currencySymbol(fd.currency || 'USD') + Number(fd.feeAmount).toLocaleString('en-US') : '—',
          'Success Fee (%)', fd.successFee ? fd.successFee + '%' : '—') +
-    row2('Retainer (USD/month)', fd.retainer ? '$' + Number(fd.retainer).toLocaleString('en-US') : '—',
+    row2('Retainer (/month)', fd.retainer ? currencySymbol(fd.currency || 'USD') + Number(fd.retainer).toLocaleString('en-US') : '—',
          'Payment Terms', fd.payTerms || '—')
   ) +
 
@@ -5177,6 +5189,13 @@ function renderEngagementsPage() {
   const el = document.getElementById('engagementsContent');
   if (!el) return;
 
+  // KNOWN LIMITATION: these KPI totals sum every engagement regardless of
+  // its own currency (CF&A engagements can now be USD/EUR/KZT/RUB
+  // independently of each other, unlike fund-scoped amounts elsewhere in
+  // the app). A proper fix needs a per-currency breakdown, not a single
+  // number — out of scope for the currency-selector work that added
+  // per-engagement currency; flagging rather than silently leaving it
+  // looking precise. Individual rows/cards below ARE correctly per-currency.
   const totalFees     = engagements.reduce((s,e) => s + (e.feeAmount||0), 0);
   const totalInvoiced = engagements.reduce((s,e) => s + (e.invoiced||0), 0);
   const totalPaid     = engagements.reduce((s,e) => s + (e.paid||0), 0);
@@ -5296,12 +5315,12 @@ function renderEngagementsPage() {
                   </td>
                   <td style="font-size:12px;color:#94a3b8">${signed}</td>
                   <td>
-                    <div style="font-weight:700;color:#22c55e;font-size:13px">$${((e.feeAmount||0)/1000).toFixed(0)}K</div>
+                    <div style="font-weight:700;color:#22c55e;font-size:13px">${fmtCurrency(e.feeAmount||0, e.currency||'USD')}</div>
                     <div style="font-size:10px;color:#5a6b8a">${e.feeType}</div>
                   </td>
-                  <td style="font-size:12px;color:#f97316">$${((e.invoiced||0)/1000).toFixed(1)}K</td>
-                  <td style="font-size:12px;color:#22c55e">$${((e.paid||0)/1000).toFixed(1)}K</td>
-                  <td style="font-weight:700;color:${balance>0?'#f97316':'#22c55e'};font-size:12px">$${(balance/1000).toFixed(1)}K</td>
+                  <td style="font-size:12px;color:#f97316">${fmtCurrency(e.invoiced||0, e.currency||'USD')}</td>
+                  <td style="font-size:12px;color:#22c55e">${fmtCurrency(e.paid||0, e.currency||'USD')}</td>
+                  <td style="font-weight:700;color:${balance>0?'#f97316':'#22c55e'};font-size:12px">${fmtCurrency(balance, e.currency||'USD')}</td>
                   <td style="text-align:center">
                     ${docUrl
                       ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${docUrl.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${docUrl.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')"
@@ -5393,10 +5412,10 @@ function openEngagementModal(engId) {
       <div style="font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;margin-bottom:10px">Финансы</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
         ${[
-          ['Гонорар', `$${(e.feeAmount/1000).toFixed(0)}K`, '#e2e8f0'],
-          ['Инвойсировано', `$${(e.invoiced/1000).toFixed(1)}K`, '#f97316'],
-          ['Оплачено', `$${(e.paid/1000).toFixed(1)}K`, '#22c55e'],
-          ['Остаток', `$${(balance/1000).toFixed(1)}K`, balance>0?'#ef4444':'#22c55e'],
+          ['Гонорар', fmtCurrency(e.feeAmount, e.currency||'USD'), '#e2e8f0'],
+          ['Инвойсировано', fmtCurrency(e.invoiced, e.currency||'USD'), '#f97316'],
+          ['Оплачено', fmtCurrency(e.paid, e.currency||'USD'), '#22c55e'],
+          ['Остаток', fmtCurrency(balance, e.currency||'USD'), balance>0?'#ef4444':'#22c55e'],
         ].map(([l,v,c]) => `
           <div style="text-align:center;background:#0f1623;border-radius:8px;padding:10px">
             <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">${l}</div>
@@ -5412,12 +5431,12 @@ function openEngagementModal(engId) {
       <!-- Quick pay update -->
       <div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end">
         <div style="flex:1">
-          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Оплачено" ($)</div>
+          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Оплачено" (${currencySymbol(e.currency||'USD')})</div>
           <input type="number" id="engPaidUpdate" value="${e.paid}" min="0"
             style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
         <div style="flex:1">
-          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Инвойсировано" ($)</div>
+          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Инвойсировано" (${currencySymbol(e.currency||'USD')})</div>
           <input type="number" id="engInvoicedUpdate" value="${e.invoiced}" min="0"
             style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
@@ -5458,7 +5477,7 @@ function updateEngPayment(engId) {
   e.invoiced = invoiced;
   // Recalculate balance auto-field
   const balance = invoiced - paid;
-  showToast(`💰 Оплата обновлена. Остаток: $${(balance/1000).toFixed(1)}K`, balance>0?'orange':'green');
+  showToast(`💰 Оплата обновлена. Остаток: ${fmtCurrency(balance, e.currency||'USD')}`, balance>0?'orange':'green');
   openEngagementModal(engId);   // re-render
   renderEngagementsPage();
 }
@@ -5485,9 +5504,13 @@ function openNewEngagementModal() {
       </div>
       ${obNewSelect('eng_serviceType','Тип услуги',['Advising','Arranging','Both'],null)}
       ${obNewSelect('eng_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'],null)}
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Сумма (USD) *</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Сумма *</label>
         <input type="number" id="eng_feeAmount" placeholder="50000"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Валюта *</label>
+        <select id="eng_currency" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${code==='USD'?' selected':''}>${c.label}</option>`).join('')}
+        </select></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
         <input type="date" id="eng_date" value="${today()}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
@@ -5523,6 +5546,7 @@ function saveNewEngagement() {
     status:      'Draft',
     feeType:     document.getElementById('eng_feeType')?.value,
     feeAmount,
+    currency:    document.getElementById('eng_currency')?.value || 'USD',
     successFee:  null,
     retainer:    null,
     payTerms:    'При подписании',
@@ -5653,7 +5677,7 @@ function renderConflictApprovalsPage() {
                   <td style="font-size:12px;color:#94a3b8">${client ? client.name : '—'}</td>
                   <td style="font-size:11px;color:#5a6b8a">${a.dealRef || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${risk.bg};color:${risk.c}">${a.riskLevel}</span></td>
-                  <td style="font-size:12px;color:#22c55e">${a.feeAmount ? '$' + (a.feeAmount/1000).toFixed(0) + 'K' : '—'}</td>
+                  <td style="font-size:12px;color:#22c55e">${a.feeAmount ? fmtCurrency(a.feeAmount, a.currency||'USD') : '—'}</td>
                   <td style="font-size:11px;color:#94a3b8">${a.decisionMaker || '—'}</td>
                   <td style="font-size:11px;color:#8a9bbf">${a.requiredTimeline || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${a.status}</span></td>
@@ -5666,13 +5690,27 @@ function renderConflictApprovalsPage() {
     </div>`;
 }
 
+// When the user picks a linked engagement, default the fee currency to
+// match it (a conflict-approval fee tied to an engagement should normally
+// agree with that engagement's own currency) — still just a smart-fill,
+// the user can still override it afterward since currency is stored
+// independently on the conflict-approval row either way.
+function updateCaCurrencyFromEngagement() {
+  const engSel = document.getElementById('ca_engagementId');
+  const currSel = document.getElementById('ca_currency');
+  if (!engSel || !currSel || !engSel.value) return;
+  const opt = engSel.options[engSel.selectedIndex];
+  const curr = opt && opt.getAttribute('data-currency');
+  if (curr) currSel.value = curr;
+}
+
 function openNewConflictApprovalModal() {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
 
   const clientOptions = obClients.map(c => `<option value="${c.id}">${c.name} (${c.clientId})</option>`).join('');
-  const engOptions = engagements.map(e => `<option value="${e.id}">${e.clientName} — ${e.engId}${e.dealRef ? ' [' + e.dealRef + ']' : ''}</option>`).join('');
+  const engOptions = engagements.map(e => `<option value="${e.id}" data-currency="${e.currency||'USD'}">${e.clientName} — ${e.engId}${e.dealRef ? ' [' + e.dealRef + ']' : ''}</option>`).join('');
 
   document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>Новое решение по конфликту';
   document.getElementById('obNewModalContent').innerHTML = `
@@ -5682,7 +5720,7 @@ function openNewConflictApprovalModal() {
           <option value="">— Не выбран —</option>${clientOptions}
         </select></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Договор (опционально)</label>
-        <select id="ca_engagementId" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+        <select id="ca_engagementId" onchange="updateCaCurrencyFromEngagement()" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           <option value="">— Без привязки к договору —</option>${engOptions}
         </select></div>
       ${obNewSelect('ca_decisionType','Тип конфликта',['Internal Client','Dual-Mandate','Routine Conflict','Other'],null)}
@@ -5690,9 +5728,13 @@ function openNewConflictApprovalModal() {
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref</label>
         <input type="text" id="ca_dealRef" placeholder="DEAL-XXX-2026"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Fee (USD)</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Fee</label>
         <input type="number" id="ca_feeAmount" placeholder="90000"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Валюта</label>
+        <select id="ca_currency" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${code==='USD'?' selected':''}>${c.label}</option>`).join('')}
+        </select></div>
       ${obNewSelect('ca_decisionMaker','Кто принимает решение',['Compliance Officer','CF Deal Committee','Board'],null)}
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Срок рассмотрения</label>
         <input type="text" id="ca_requiredTimeline" placeholder="Convened within 48 hours"
@@ -5726,6 +5768,7 @@ async function saveNewConflictApproval() {
     riskLevel: document.getElementById('ca_riskLevel')?.value || 'Low',
     dealRef: document.getElementById('ca_dealRef')?.value || null,
     feeAmount: parseFloat(document.getElementById('ca_feeAmount')?.value) || null,
+    currency: document.getElementById('ca_currency')?.value || 'USD',
     decisionMaker: document.getElementById('ca_decisionMaker')?.value || null,
     requiredTimeline: document.getElementById('ca_requiredTimeline')?.value || null,
     description: document.getElementById('ca_description')?.value || null,
@@ -5765,7 +5808,7 @@ function openConflictApprovalDetail(id) {
       <div><b style="color:#8a9bbf">Клиент:</b> ${client ? client.name : '—'}</div>
       <div><b style="color:#8a9bbf">Договор:</b> ${eng ? eng.engId : '—'}</div>
       <div><b style="color:#8a9bbf">Deal Ref:</b> ${a.dealRef || '—'}</div>
-      <div><b style="color:#8a9bbf">Fee:</b> ${a.feeAmount ? '$' + a.feeAmount.toLocaleString() : '—'}</div>
+      <div><b style="color:#8a9bbf">Fee:</b> ${a.feeAmount ? currencySymbol(a.currency||'USD') + a.feeAmount.toLocaleString() : '—'}</div>
       <div><b style="color:#8a9bbf">Кто решает:</b> ${a.decisionMaker || '—'}</div>
       <div><b style="color:#8a9bbf">Срок:</b> ${a.requiredTimeline || '—'}</div>
       <div><b style="color:#8a9bbf">Дата решения:</b> ${a.decidedAt || '—'}</div>
