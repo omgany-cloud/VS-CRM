@@ -711,9 +711,150 @@ function renderICModalContent(m) {
       </div>` : ''}
 
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
+      <button onclick="printICMemo(${m.id})"
+        style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-print" style="margin-right:6px"></i>Печать / PDF</button>
       <button onclick="closeICModal()"
         style="background:#3b82f6;border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
     </div>`;
+}
+
+// Printable single-memo document — same openPrintableDocument() pattern
+// (js/print-utils.js) already used by Term Sheet, DD Report, LP Welcome
+// Letter, Capital Call Notice and Capital Account Statement. One memo per
+// print job (not a meeting-wide combined protocol) — matches how the
+// modal itself always shows exactly one memo.
+function printICMemo(id) {
+  const m = icMemos.find(x => x.id === id);
+  if (!m) return;
+  const fp = FUND_PARAMS;
+
+  const docStyle = `
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Times New Roman', serif; font-size:11pt; color:#111; padding:40px 60px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #1e3a8a; padding-bottom:14px; margin-bottom:22px; }
+  .logo-name { font-size:15pt; font-weight:700; color:#1e3a8a; }
+  .logo-sub  { font-size:9pt; color:#4a5568; margin-top:2px; }
+  .ref-block { text-align:right; font-size:9.5pt; color:#4a5568; }
+  h1 { font-size:13pt; font-weight:700; color:#1e3a8a; text-transform:uppercase; text-align:center; margin:18px 0 4px; }
+  .subtitle { text-align:center; font-size:10pt; color:#4a5568; margin-bottom:20px; }
+  .deal-table { width:100%; border-collapse:collapse; margin:14px 0 20px; }
+  .deal-table td { padding:6px 12px; border-bottom:1px solid #e2e8f0; font-size:10.5pt; }
+  .deal-table td:first-child { font-weight:600; color:#2d3748; width:38%; background:#f8fafc; }
+  .section { margin-bottom:14px; }
+  .section-title { font-size:10pt; font-weight:700; color:#1e3a8a; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; border-bottom:1px solid #cbd5e0; padding-bottom:3px; }
+  .section-text { font-size:10.5pt; line-height:1.55; text-align:justify; }
+  .risk-box { border:1px solid #cbd5e0; border-radius:4px; padding:10px 14px; margin-bottom:14px; }
+  .risk-box.veto { border-color:#dc2626; background:#fef2f2; }
+  .votes-table { width:100%; border-collapse:collapse; margin:10px 0 14px; }
+  .votes-table th { background:#1e3a8a; color:#fff; padding:6px 10px; font-size:9.5pt; text-align:left; }
+  .votes-table td { padding:6px 10px; border-bottom:1px solid #e2e8f0; font-size:10pt; }
+  .quorum-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:9.5pt; font-weight:700; }
+  .quorum-yes { background:#dcfce7; color:#15803d; }
+  .quorum-no  { background:#fee2e2; color:#b91c1c; }
+  .resolution-box { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px 16px; margin:14px 0; }
+  .signature-block { margin-top:32px; display:flex; justify-content:space-between; }
+  .sig-col { width:45%; }
+  .sig-line { border-top:1px solid #333; margin-top:44px; padding-top:5px; font-size:10pt; }
+  .footer { margin-top:28px; padding-top:10px; border-top:1px solid #cbd5e0; font-size:8.5pt; color:#718096; text-align:center; }
+  `;
+
+  const quorum = m.status === 'pending' ? icQuorumMet(m.votes) : m.quorumMet;
+
+  const votesRows = m.votes.map(v => `
+    <tr>
+      <td>${v.role}</td>
+      <td>${v.name || '—'}</td>
+      <td>${v.vote ? (IC_VOTES[v.vote]?.label || v.vote) : 'Ожидает'}</td>
+      <td>${v.comment || '—'}</td>
+    </tr>`).join('');
+
+  const body = `
+  <div class="header">
+    <div>
+      <div class="logo-name">${fp.gp}</div>
+      <div class="logo-sub">General Partner · ${fp.name}</div>
+      <div class="logo-sub">AFSA: ${fp.license}</div>
+    </div>
+    <div class="ref-block">
+      <div><b>Memo Ref:</b> IC-${String(m.id).padStart(3,'0')}</div>
+      <div><b>Дата заседания:</b> ${m.meetingDate || '—'}</div>
+      <div><b>STRICTLY CONFIDENTIAL</b></div>
+    </div>
+  </div>
+
+  <h1>Investment Committee Memorandum</h1>
+  <div class="subtitle">Инвестиционный меморандум для Investment Committee (Constitution Section 7)</div>
+
+  <table class="deal-table">
+    <tr><td>Компания</td><td><b>${m.company}</b></td></tr>
+    <tr><td>Сектор</td><td>${m.sector || '—'}</td></tr>
+    <tr><td>Сумма инвестиций</td><td><b>$${m.amount}M</b></td></tr>
+    <tr><td>Тип сделки</td><td>${m.type || '—'}</td></tr>
+    <tr><td>Стадия</td><td>${m.stage || '—'}</td></tr>
+    <tr><td>Автор меморандума</td><td>${m.author || '—'}</td></tr>
+    <tr><td>Дата подготовки</td><td>${m.createdAt || '—'}</td></tr>
+    <tr><td>Статус</td><td>${m.status === 'approved' ? 'Одобрено' : m.status === 'rejected' ? 'Отклонено' : 'На рассмотрении'}</td></tr>
+  </table>
+
+  ${[
+    ['Инвестиционный тезис', m.thesis],
+    ['Риски', m.risks],
+    ['Финансовые показатели', m.financials],
+    ['Стратегия выхода', m.exitPlan],
+  ].map(([title, text]) => `
+    <div class="section">
+      <div class="section-title">${title}</div>
+      <div class="section-text">${text || '—'}</div>
+    </div>`).join('')}
+
+  <div class="risk-box ${m.riskVeto ? 'veto' : ''}">
+    <div class="section-title" style="border:none;margin-bottom:4px">Заключение Risk Manager (независимое вето, Constitution Section 7.7)</div>
+    <div class="section-text"><b>${m.riskConclusion ? (RISK_CONCLUSIONS[m.riskConclusion]?.label || m.riskConclusion) : 'Ещё не рассмотрено'}</b></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Голосование IC</div>
+    <div style="margin-bottom:8px">Кворум: <span class="quorum-badge ${quorum ? 'quorum-yes' : 'quorum-no'}">${quorum ? 'Набран' : 'Не набран'}</span></div>
+    <table class="votes-table">
+      <thead><tr><th>Место в IC</th><th>Имя</th><th>Голос</th><th>Комментарий</th></tr></thead>
+      <tbody>${votesRows}</tbody>
+    </table>
+  </div>
+
+  ${m.resolution ? `
+  <div class="resolution-box">
+    <div class="section-title" style="border:none;color:#15803d">Решение IC</div>
+    <div class="section-text">${m.resolution}</div>
+  </div>` : ''}
+
+  <div class="signature-block">
+    <div class="sig-col">
+      <div class="sig-line">
+        <div>${fp.gpCEO}</div>
+        <div style="color:#4a5568;font-size:9.5pt">Председатель IC / ${fp.gpTitle}</div>
+      </div>
+    </div>
+    <div class="sig-col">
+      <div class="sig-line">
+        <div>_______________________</div>
+        <div style="color:#4a5568;font-size:9.5pt">Секретарь заседания</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · AFSA: ${fp.license}<br>
+    STRICTLY CONFIDENTIAL — Только для членов Investment Committee. Retention: 6 years (Constitution §8.5)
+  </div>
+  `;
+
+  const win = openPrintableDocument(body, {
+    title: `IC Memorandum — ${m.company}`,
+    features: 'width=900,height=800',
+    extraStyle: docStyle,
+  });
+  if (win) showToast(`🖨️ Меморандум по сделке «${m.company}» сформирован`, 'green');
 }
 
 async function castICVote(memoId, voteIdx, vote) {
