@@ -1315,6 +1315,9 @@ function _renderDealModal(d) {
       ${ddBlock('Финансовое DD',  d.ddFinancial, '#22c55e')}
       ${ddBlock('Техническое DD', d.ddTech, '#8b5cf6')}
       ${ddBlock('Коммерческое DD',d.ddCommercial, '#f97316')}
+      ${ddBlock('Risk DD',        d.ddRisk, '#dc2626')}
+      ${ddBlock('Compliance DD',  d.ddCompliance, '#a855f7')}
+      ${ddBlock('MLRO DD',        d.ddMlro, '#0ea5e9')}
 
       ${(d.ddRedFlags||[]).length ? `
         <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:10px 14px;margin-bottom:10px">
@@ -1584,16 +1587,26 @@ function dealRemoveRisk(id, i) {
   if (d && d.icRisks) { d.icRisks.splice(i,1); _renderDealModal(d); }
 }
 
-function cycleDDStatus(id, blockTitle, idx) {
+async function cycleDDStatus(id, blockTitle, idx) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
-  const map = {'Юридическое DD':'ddLegal','Финансовое DD':'ddFinancial','Техническое DD':'ddTech','Коммерческое DD':'ddCommercial'};
+  const map = {
+    'Юридическое DD':'ddLegal','Финансовое DD':'ddFinancial','Техническое DD':'ddTech','Коммерческое DD':'ddCommercial',
+    'Risk DD':'ddRisk','Compliance DD':'ddCompliance','MLRO DD':'ddMlro',
+  };
   const key = map[blockTitle];
   if (!key || !d[key] || !d[key][idx]) return;
   const cycle = ['Запрошен','Получен','В процессе','OK','Red Flag'];
-  const cur = d[key][idx].status;
-  d[key][idx].status = cycle[(cycle.indexOf(cur)+1) % cycle.length];
+  const prevStatus = d[key][idx].status;
+  d[key][idx].status = cycle[(cycle.indexOf(prevStatus)+1) % cycle.length];
   _renderDealModal(d);
+  try {
+    await apiFetch(`/api/deals/${d.id}`, { method: 'PUT', body: JSON.stringify({ [key]: d[key] }) });
+  } catch (err) {
+    d[key][idx].status = prevStatus;
+    _renderDealModal(d);
+    showToast('⚠️ Не удалось сохранить статус DD: ' + err.message, 'red');
+  }
 }
 
 function dealAddComment(id) {
@@ -1753,6 +1766,9 @@ async function saveDeal() {
     ddFinancial: [],
     ddTech:      [],
     ddCommercial:[],
+    ddRisk:      [],
+    ddCompliance:[],
+    ddMlro:      [],
     ddConsultants: [],
     ddRedFlags:  [],
 

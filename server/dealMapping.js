@@ -13,6 +13,9 @@ const JSON_FIELDS = [
   ['ddFinancial', 'ddFinancialJson'],
   ['ddTech', 'ddTechJson'],
   ['ddCommercial', 'ddCommercialJson'],
+  ['ddRisk', 'ddRiskJson'],
+  ['ddCompliance', 'ddComplianceJson'],
+  ['ddMlro', 'ddMlroJson'],
   ['ddRedFlags', 'ddRedFlagsJson'],
   ['ddConsultants', 'ddConsultantsJson'],
   ['comments', 'commentsJson'],
@@ -65,6 +68,9 @@ function rowToDeal(r) {
     ddFinancial: JSON.parse(r.dd_financial_json || '[]'),
     ddTech: JSON.parse(r.dd_tech_json || '[]'),
     ddCommercial: JSON.parse(r.dd_commercial_json || '[]'),
+    ddRisk: JSON.parse(r.dd_risk_json || '[]'),
+    ddCompliance: JSON.parse(r.dd_compliance_json || '[]'),
+    ddMlro: JSON.parse(r.dd_mlro_json || '[]'),
     ddRedFlags: JSON.parse(r.dd_red_flags_json || '[]'),
     ddConsultants: JSON.parse(r.dd_consultants_json || '[]'),
     comments: JSON.parse(r.comments_json || '[]'),
@@ -81,7 +87,8 @@ const INSERT_SQL = `
      reject_category, can_return, reject_follow_up_date, reject_decision_by, reject_comment,
      tags_json, founder_contacts_json, ts_versions_json, signed_docs_urls_json, other_docs_json,
      ic_votes_json, ic_risks_json, dd_legal_json, dd_financial_json, dd_tech_json,
-     dd_commercial_json, dd_red_flags_json, dd_consultants_json, comments_json)
+     dd_commercial_json, dd_risk_json, dd_compliance_json, dd_mlro_json,
+     dd_red_flags_json, dd_consultants_json, comments_json)
   VALUES
     (@tenantId, @fundId, @company, @sector, @stage, @amount, @type, @priority, @manager, @ic,
      @nextAction, @nextActionDate, @updatedAt, @country, @companyStage, @preMoney,
@@ -91,7 +98,8 @@ const INSERT_SQL = `
      @rejectCategory, @canReturn, @rejectFollowUpDate, @rejectDecisionBy, @rejectComment,
      @tagsJson, @founderContactsJson, @tsVersionsJson, @signedDocsUrlsJson, @otherDocsJson,
      @icVotesJson, @icRisksJson, @ddLegalJson, @ddFinancialJson, @ddTechJson,
-     @ddCommercialJson, @ddRedFlagsJson, @ddConsultantsJson, @commentsJson)
+     @ddCommercialJson, @ddRiskJson, @ddComplianceJson, @ddMlroJson,
+     @ddRedFlagsJson, @ddConsultantsJson, @commentsJson)
 `;
 
 const UPDATE_SQL = `
@@ -110,7 +118,9 @@ const UPDATE_SQL = `
     ts_versions_json=@tsVersionsJson, signed_docs_urls_json=@signedDocsUrlsJson,
     other_docs_json=@otherDocsJson, ic_votes_json=@icVotesJson, ic_risks_json=@icRisksJson,
     dd_legal_json=@ddLegalJson, dd_financial_json=@ddFinancialJson, dd_tech_json=@ddTechJson,
-    dd_commercial_json=@ddCommercialJson, dd_red_flags_json=@ddRedFlagsJson,
+    dd_commercial_json=@ddCommercialJson, dd_risk_json=@ddRiskJson,
+    dd_compliance_json=@ddComplianceJson, dd_mlro_json=@ddMlroJson,
+    dd_red_flags_json=@ddRedFlagsJson,
     dd_consultants_json=@ddConsultantsJson, comments_json=@commentsJson
   WHERE id=@id AND tenant_id=@tenantId
 `;

@@ -221,6 +221,13 @@ CREATE TABLE IF NOT EXISTS deals (
   dd_financial_json     TEXT NOT NULL DEFAULT '[]',
   dd_tech_json          TEXT NOT NULL DEFAULT '[]',
   dd_commercial_json    TEXT NOT NULL DEFAULT '[]',
+  -- Specialist sign-off tracks, same {item,status} shape as the 4 DD
+  -- columns above — added so Risk/Compliance/MLRO each have their own
+  -- checklist ahead of the IC memo, not just Legal/Financial/Tech/
+  -- Commercial (see js/app.js's ddBlock()/cycleDDStatus()).
+  dd_risk_json          TEXT NOT NULL DEFAULT '[]',
+  dd_compliance_json    TEXT NOT NULL DEFAULT '[]',
+  dd_mlro_json          TEXT NOT NULL DEFAULT '[]',
   dd_red_flags_json     TEXT NOT NULL DEFAULT '[]',
   dd_consultants_json   TEXT NOT NULL DEFAULT '[]',
   comments_json         TEXT NOT NULL DEFAULT '[]',
@@ -619,6 +626,9 @@ for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
 }
 if (!columnExists('engagements', 'payment_history_json')) db.exec("ALTER TABLE engagements ADD COLUMN payment_history_json TEXT NOT NULL DEFAULT '[]'");
+for (const col of ['dd_risk_json', 'dd_compliance_json', 'dd_mlro_json']) {
+  if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT NOT NULL DEFAULT '[]'`);
+}
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
