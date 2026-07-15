@@ -985,7 +985,6 @@ function _renderDealModal(d) {
   const tabs = [
     { id:'overview',   icon:'fa-eye',           label:'Обзор'      },
     { id:'documents',  icon:'fa-link',           label:'Документы'  },
-    { id:'ic',         icon:'fa-gavel',          label:'IC'         },
     { id:'dd',         icon:'fa-microscope',     label:'Due Dil.'   },
     { id:'history',    icon:'fa-history',        label:'История'    },
   ];
@@ -1013,10 +1012,6 @@ function _renderDealModal(d) {
     </div>`;
 
   /* ── Vote badge ── */
-  const voteBadge = v => `<span style="font-size:10px;padding:2px 8px;border-radius:5px;font-weight:700;
-    background:${v==='Yes'?'rgba(34,197,94,0.12)':v==='No'?'rgba(239,68,68,0.12)':'rgba(100,116,139,0.12)'};
-    color:${v==='Yes'?'#22c55e':v==='No'?'#ef4444':'#64748b'}">${v}</span>`;
-
   /* ── Tab content ── */
   let tabContent = '';
 
@@ -1188,105 +1183,6 @@ function _renderDealModal(d) {
       </button>`;
   }
 
-  else if (_activeDealTab === 'ic') {
-    const icStatusColor = { 'Одобрено':'#22c55e','Отклонено':'#ef4444','На рассмотрении':'#eab308','Не подано':'#64748b','На доработку':'#f97316' };
-    tabContent = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-        <div style="${gS}"><label style="${lS}">Pre-money valuation ($M)</label>
-          <input type="number" style="${iS}" value="${d.preMoney||''}"
-            onchange="dealField(${d.id},'preMoney',parseFloat(this.value))" placeholder="$M" /></div>
-        <div style="${gS}"><label style="${lS}">Тип инструмента</label>
-          <select style="${iS}" onchange="dealField(${d.id},'instrument',this.value)">
-            ${['Equity','SAFE','Convertible Note','Mezzanine','Debt'].map(s=>`<option ${d.instrument===s?'selected':''}>${s}</option>`).join('')}
-          </select></div>
-        <div style="${gS}"><label style="${lS}">Размер чека фонда ($M)</label>
-          <input type="number" style="${iS}" value="${d.checkSize||d.amount||''}"
-            onchange="dealField(${d.id},'checkSize',parseFloat(this.value))" /></div>
-        <div style="${gS}"><label style="${lS}">Со-инвесторы</label>
-          <input style="${iS}" value="${d.coInvestors||''}"
-            onchange="dealField(${d.id},'coInvestors',this.value)" placeholder="Название фонда / инвестора" /></div>
-        <div style="${gS}"><label style="${lS}">Решение IC</label>
-          <select style="${iS}" onchange="dealField(${d.id},'icDecision',this.value);dealField(${d.id},'ic',this.value)">
-            ${['Не подано','Подано','На рассмотрении','Одобрено','Отклонено','На доработку'].map(s=>`<option ${d.icDecision===s?'selected':''}>${s}</option>`).join('')}
-          </select></div>
-        <div style="${gS}"><label style="${lS}">Дата заседания IC</label>
-          <input type="date" style="${iS}" value="${d.icDate||''}"
-            onchange="dealField(${d.id},'icDate',this.value)" /></div>
-      </div>
-
-      <!-- IC Votes -->
-      <div style="font-size:10px;font-weight:700;color:#f97316;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-vote-yea" style="margin-right:5px"></i>Голосование IC
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        ${!(d.icVotes||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic">Голосование не проведено</div>` :
-          d.icVotes.map(v => `
-            <div style="background:#0f1623;border-radius:8px;padding:7px 12px;display:flex;align-items:center;gap:8px">
-              <span style="font-size:11px;color:#94a3b8">${v.member}</span>
-              ${voteBadge(v.vote)}
-            </div>`).join('')}
-      </div>
-
-      <!-- Ключевые риски -->
-      <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-exclamation-triangle" style="margin-right:5px"></i>Ключевые риски
-      </div>
-      ${!(d.icRisks||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:8px">Нет рисков</div>` :
-        d.icRisks.map((r,i) => `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#0f1623;border-radius:7px;margin-bottom:5px">
-            <i class="fas fa-dot-circle" style="color:#ef4444;font-size:10px"></i>
-            <input style="${iS}" value="${r}"
-              onchange="dealRisk(${d.id},${i},this.value)" />
-            <button onclick="dealRemoveRisk(${d.id},${i})"
-              style="background:none;border:none;color:#64748b;cursor:pointer;font-size:12px">✕</button>
-          </div>`).join('')}
-      <button onclick="dealAddRisk(${d.id})"
-        style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;
-          padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:14px">
-        <i class="fas fa-plus" style="margin-right:4px"></i>Добавить риск
-      </button>
-
-      <!-- ── БЛОК ОТКЛОНЕНИЯ IC (всегда виден на вкладке IC) ── -->
-      ${(() => {
-        const isRejected = d.stage === 'Отклонена IC' || d.icDecision === 'Отклонено';
-        const borderColor = isRejected ? 'rgba(239,68,68,0.4)' : 'rgba(100,116,139,0.2)';
-        const headerColor = isRejected ? '#ef4444' : '#64748b';
-        const bgColor     = isRejected ? 'rgba(239,68,68,0.07)' : 'rgba(15,22,35,0.6)';
-        return `
-        <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:14px;margin-top:4px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:10px;font-weight:700;color:${headerColor};text-transform:uppercase">
-              <i class="fas fa-times-circle" style="margin-right:5px"></i>Решение об отклонении IC
-            </div>
-            ${isRejected
-              ? `<span style="font-size:9px;padding:2px 8px;border-radius:5px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700">ОТКЛОНЕНА</span>`
-              : `<span style="font-size:9px;color:#475569;font-style:italic">заполняется при отказе</span>`}
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <div style="${gS}"><label style="${lS}">Причина отказа (категория)</label>
-              <select style="${iS}" onchange="dealField(${d.id},'rejectCategory',this.value)">
-                <option value="">— выбрать —</option>
-                ${['Рынок','Команда','Оценка','Стадия','Продукт','Финансы','Другое'].map(s=>`<option ${d.rejectCategory===s?'selected':''}>${s}</option>`).join('')}
-              </select></div>
-            <div style="${gS}"><label style="${lS}">Возможность вернуться</label>
-              <select style="${iS}" onchange="dealField(${d.id},'canReturn',this.value)">
-                <option value="">— выбрать —</option>
-                ${['Да','Нет','Через 6 месяцев','Через 12 месяцев','Через 2 года'].map(s=>`<option ${d.canReturn===s?'selected':''}>${s}</option>`).join('')}
-              </select></div>
-            <div style="${gS}"><label style="${lS}">Дата следующего follow-up</label>
-              <input type="date" style="${iS}" value="${d.rejectFollowUpDate||''}"
-                onchange="dealField(${d.id},'rejectFollowUpDate',this.value)" /></div>
-            <div style="${gS}"><label style="${lS}">Кто принял решение об отказе</label>
-              <input style="${iS}" value="${d.rejectDecisionBy||''}"
-                onchange="dealField(${d.id},'rejectDecisionBy',this.value)" placeholder="CEO / IC Chair..." /></div>
-          </div>
-          <div style="${gS}"><label style="${lS}">Детальный комментарий</label>
-            <textarea style="${iS};height:70px;resize:none"
-              onchange="dealField(${d.id},'rejectComment',this.value)"
-              placeholder="Обоснование решения, пожелания к компании...">${d.rejectComment||''}</textarea></div>
-        </div>`;
-      })()}`;
-  }
 
   else if (_activeDealTab === 'dd') {
     tabContent = `
@@ -1339,7 +1235,8 @@ function _renderDealModal(d) {
           </div>`).join('')}
 
       ${ddConclusionsSection(d)}
-      ${gpConclusionSection(d)}`;
+      ${gpConclusionSection(d)}
+      ${dealRejectionBlock(d)}`;
   }
 
   else if (_activeDealTab === 'negotiation_DISABLED') {
@@ -1572,22 +1469,6 @@ function dealMoveStage(id, stage) {
   showToast(`✅ ${d.company} → ${stage}`, 'green');
   _renderDealModal(d);
   renderPipeline(deals);
-}
-
-function dealAddRisk(id) {
-  const d = deals.find(x => x.id === id);
-  if (!d) return;
-  d.icRisks = d.icRisks || [];
-  d.icRisks.push('Новый риск');
-  _renderDealModal(d);
-}
-function dealRisk(id, i, val) {
-  const d = deals.find(x => x.id === id);
-  if (d && d.icRisks) d.icRisks[i] = val;
-}
-function dealRemoveRisk(id, i) {
-  const d = deals.find(x => x.id === id);
-  if (d && d.icRisks) { d.icRisks.splice(i,1); _renderDealModal(d); }
 }
 
 async function cycleDDStatus(id, blockTitle, idx) {
@@ -1891,6 +1772,53 @@ function openGpConclusionDocument(id) {
     extraStyle: docStyle,
   });
   if (win) showToast(`📄 Документ заключения УК сформирован`, 'green');
+}
+
+// Moved here from the now-removed "IC" tab — the only part of that tab
+// that wasn't redundant with the real IC process (DD conclusions -> GP
+// sign-off -> icMemos voting). Always rendered (not just when rejected)
+// so it's ready to fill in the moment a rejection happens.
+function dealRejectionBlock(d) {
+  const isRejected = d.stage === 'Отклонена IC' || d.icDecision === 'Отклонено';
+  const borderColor = isRejected ? 'rgba(239,68,68,0.4)' : 'rgba(100,116,139,0.2)';
+  const headerColor = isRejected ? '#ef4444' : '#64748b';
+  const bgColor     = isRejected ? 'rgba(239,68,68,0.07)' : 'rgba(15,22,35,0.6)';
+  const gS = `margin-bottom:12px`;
+  const lS = `font-size:10px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:3px;text-transform:uppercase`;
+  const iS = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
+  return `
+    <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:14px;margin-top:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:${headerColor};text-transform:uppercase">
+          <i class="fas fa-times-circle" style="margin-right:5px"></i>Решение об отклонении IC
+        </div>
+        ${isRejected
+          ? `<span style="font-size:9px;padding:2px 8px;border-radius:5px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700">ОТКЛОНЕНА</span>`
+          : `<span style="font-size:9px;color:#475569;font-style:italic">заполняется при отказе</span>`}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div style="${gS}"><label style="${lS}">Причина отказа (категория)</label>
+          <select style="${iS}" onchange="dealField(${d.id},'rejectCategory',this.value)">
+            <option value="">— выбрать —</option>
+            ${['Рынок','Команда','Оценка','Стадия','Продукт','Финансы','Другое'].map(s=>`<option ${d.rejectCategory===s?'selected':''}>${s}</option>`).join('')}
+          </select></div>
+        <div style="${gS}"><label style="${lS}">Возможность вернуться</label>
+          <select style="${iS}" onchange="dealField(${d.id},'canReturn',this.value)">
+            <option value="">— выбрать —</option>
+            ${['Да','Нет','Через 6 месяцев','Через 12 месяцев','Через 2 года'].map(s=>`<option ${d.canReturn===s?'selected':''}>${s}</option>`).join('')}
+          </select></div>
+        <div style="${gS}"><label style="${lS}">Дата следующего follow-up</label>
+          <input type="date" style="${iS}" value="${d.rejectFollowUpDate||''}"
+            onchange="dealField(${d.id},'rejectFollowUpDate',this.value)" /></div>
+        <div style="${gS}"><label style="${lS}">Кто принял решение об отказе</label>
+          <input style="${iS}" value="${d.rejectDecisionBy||''}"
+            onchange="dealField(${d.id},'rejectDecisionBy',this.value)" placeholder="CEO / IC Chair..." /></div>
+      </div>
+      <div style="${gS}"><label style="${lS}">Детальный комментарий</label>
+        <textarea style="${iS};height:70px;resize:none"
+          onchange="dealField(${d.id},'rejectComment',this.value)"
+          placeholder="Обоснование решения, пожелания к компании...">${d.rejectComment||''}</textarea></div>
+    </div>`;
 }
 
 function dealAddComment(id) {
