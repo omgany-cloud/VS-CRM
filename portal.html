@@ -145,6 +145,12 @@
 </head>
 <body>
 
+<!-- Small-screen warning — same non-dismissible, live-off-viewport-width
+     pattern as index.html's #smallScreenBanner. -->
+<div id="smallScreenBanner" style="display:none;background:#7c2d12;color:#fed7aa;padding:8px 20px;font-size:12.5px;font-weight:600;text-align:center;border-bottom:1px solid #9a3412">
+  <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>Портал оптимизирован для десктопа — на узком экране часть интерфейса может отображаться некорректно
+</div>
+
 <!-- ── HEADER ── -->
 <header class="portal-header">
   <div class="portal-logo">
@@ -578,6 +584,20 @@
 <div id="portalToast"></div>
 
 <script>
+/* Small-screen warning — see index.html's #smallScreenBanner for the
+   same pattern applied to the main CRM app. */
+const SMALL_SCREEN_BREAKPOINT = 600;
+function checkSmallScreenWarning() {
+  const banner = document.getElementById('smallScreenBanner');
+  if (banner) banner.style.display = window.innerWidth < SMALL_SCREEN_BREAKPOINT ? '' : 'none';
+}
+checkSmallScreenWarning();
+let _smallScreenResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_smallScreenResizeTimer);
+  _smallScreenResizeTimer = setTimeout(checkSmallScreenWarning, 150);
+});
+
 /* ══════════════════════════════════════
    PORTAL DATA (mirrors CRM portfolio[])
 ══════════════════════════════════════ */

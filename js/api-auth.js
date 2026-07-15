@@ -593,10 +593,12 @@ async function completeAuth(data) {
       const name = document.getElementById('signupName').value.trim();
       const email = document.getElementById('signupEmail').value.trim();
       const password = document.getElementById('signupPassword').value;
+      const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
       const errEl = document.getElementById('signupError');
       errEl.textContent = '';
       if (!companyName || !name || !email || !password) { errEl.textContent = 'Заполните все поля'; return; }
       if (password.length < 8) { errEl.textContent = 'Пароль минимум 8 символов'; return; }
+      if (password !== passwordConfirm) { errEl.textContent = 'Пароли не совпадают'; return; }
       try {
         const res = await fetch(API_BASE + '/api/auth/signup', {
           method: 'POST',
@@ -610,6 +612,9 @@ async function completeAuth(data) {
         errEl.textContent = err.message || 'Не удалось зарегистрировать компанию';
       }
     });
+    if (typeof attachPasswordStrengthMeter === 'function') {
+      attachPasswordStrengthMeter(document.getElementById('signupPassword'));
+    }
   }
 
   const auth = getAuth();

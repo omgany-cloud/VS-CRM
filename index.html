@@ -66,6 +66,9 @@
       style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:12px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
     <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;">Пароль (мин. 8 символов)</label>
     <input id="signupPassword" type="password" autocomplete="new-password"
+      style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
+    <label style="display:block;color:#8a9bbf;font-size:12px;margin-bottom:4px;margin-top:12px;">Повторите пароль</label>
+    <input id="signupPasswordConfirm" type="password" autocomplete="new-password"
       style="width:100%;box-sizing:border-box;padding:9px 10px;margin-bottom:6px;border-radius:6px;border:1px solid #2a3852;background:#0e1626;color:#e2e8f0;" />
     <div id="signupError" style="color:#ef4444;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
     <button type="submit" style="width:100%;padding:10px;border:none;border-radius:6px;background:#22c55e;color:#fff;font-weight:600;cursor:pointer;">
@@ -222,6 +225,15 @@
        after clicking one. -->
   <div id="readOnlyBanner" style="display:none;background:#7c2d12;color:#fed7aa;padding:8px 20px;font-size:12.5px;font-weight:600;text-align:center;border-bottom:1px solid #9a3412">
     <i class="fas fa-lock" style="margin-right:6px"></i>Ваша роль — «Только просмотр»: создание, редактирование и удаление данных недоступны
+  </div>
+
+  <!-- Small-screen warning — this app is designed for desktop use; below
+       ~600px several layouts (data tables, wide modals) don't adapt and
+       become hard to use. Toggled live off window width by
+       checkSmallScreenWarning() (js/app.js), not a one-time dismissal, so
+       it reappears if the window is narrowed again. -->
+  <div id="smallScreenBanner" style="display:none;background:#7c2d12;color:#fed7aa;padding:8px 20px;font-size:12.5px;font-weight:600;text-align:center;border-bottom:1px solid #9a3412">
+    <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>Приложение оптимизировано для десктопа — на узком экране часть интерфейса может отображаться некорректно
   </div>
 
   <div class="page-content">
@@ -1196,6 +1208,7 @@
 <script src="js/roles.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/status-labels.js"></script>
+<script src="js/password-strength.js"></script>
 <script src="js/currency.js"></script>
 <script src="js/modal-a11y.js"></script>
 <script src="js/a11y.js"></script>

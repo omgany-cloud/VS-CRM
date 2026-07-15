@@ -138,6 +138,9 @@ function openNewUserModal() {
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Пароль *</label>
         <input type="password" id="u_password" placeholder="мин. 8 символов"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Повторите пароль *</label>
+        <input type="password" id="u_passwordConfirm"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Роль *</label>
         <select id="u_role" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${roleOptionsHtml('ANALYST')}
@@ -149,20 +152,24 @@ function openNewUserModal() {
         <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
     </div>`;
   modal.style.display = 'flex';
+  if (typeof attachPasswordStrengthMeter === 'function') attachPasswordStrengthMeter(document.getElementById('u_password'));
+  _snapshotObNewModal();
 }
 
 async function saveNewUser() {
   const email = document.getElementById('u_email')?.value?.trim();
   const password = document.getElementById('u_password')?.value;
+  const passwordConfirm = document.getElementById('u_passwordConfirm')?.value;
   const role = document.getElementById('u_role')?.value;
   const name = document.getElementById('u_name')?.value?.trim();
   if (!email) { showToast('⚠️ Введите email', 'red'); return; }
   if (!password || password.length < 8) { showToast('⚠️ Пароль минимум 8 символов', 'red'); return; }
+  if (password !== passwordConfirm) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
 
   try {
     await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ email, password, role, name }) });
     await loadUsersFromApi();
-    closeObNewModal();
+    closeObNewModalSilent();
     renderUsersPage();
     showToast('✅ Пользователь создан', 'green');
   } catch (err) {
@@ -192,6 +199,9 @@ function openEditUserModal(id) {
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (опционально)</label>
         <input type="password" id="u_editPassword" placeholder="Оставьте пустым, чтобы не менять"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Повторите новый пароль</label>
+        <input type="password" id="u_editPasswordConfirm" placeholder="Только если меняете пароль"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
       <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
@@ -199,6 +209,8 @@ function openEditUserModal(id) {
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
+  if (typeof attachPasswordStrengthMeter === 'function') attachPasswordStrengthMeter(document.getElementById('u_editPassword'));
+  _snapshotObNewModal();
 }
 
 async function saveUserEdit(id) {
@@ -206,7 +218,9 @@ async function saveUserEdit(id) {
   const email = document.getElementById('u_editEmail')?.value?.trim();
   const role = document.getElementById('u_editRole')?.value;
   const password = document.getElementById('u_editPassword')?.value;
+  const passwordConfirm = document.getElementById('u_editPasswordConfirm')?.value;
   if (!email) { showToast('⚠️ Email не может быть пустым', 'red'); return; }
+  if (password && password !== passwordConfirm) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
   try {
     await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ name, email, role }) });
     if (password) {
@@ -214,7 +228,7 @@ async function saveUserEdit(id) {
       else await apiFetch(`/api/users/${id}/password`, { method: 'PUT', body: JSON.stringify({ password }) });
     }
     await loadUsersFromApi();
-    closeObNewModal();
+    closeObNewModalSilent();
     renderUsersPage();
     showToast('✅ Изменения сохранены', 'green');
   } catch (err) {
@@ -369,6 +383,7 @@ function openNewRoleModal() {
         <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
     </div>`;
   modal.style.display = 'flex';
+  _snapshotObNewModal();
 }
 
 function collectPermissionFields(idPrefix) {
@@ -391,7 +406,7 @@ async function saveNewRole() {
   try {
     await apiFetch('/api/roles', { method: 'POST', body: JSON.stringify(payload) });
     await loadRolesFromApi();
-    closeObNewModal();
+    closeObNewModalSilent();
     renderRolesPage();
     showToast('✅ Роль создана', 'green');
   } catch (err) {
@@ -435,6 +450,7 @@ function openEditRoleModal(id) {
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
+  _snapshotObNewModal();
 }
 
 async function saveRoleEdit(id) {
@@ -447,7 +463,7 @@ async function saveRoleEdit(id) {
   try {
     const result = await apiFetch(`/api/roles/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
     await loadRolesFromApi();
-    closeObNewModal();
+    closeObNewModalSilent();
     renderRolesPage();
     if (result && result.warnings && result.warnings.pendingMemosAffected) {
       showToast(`✅ Роль обновлена. ⚠ Затронуто IC-меморандумов на голосовании: ${result.warnings.pendingMemosAffected}`, 'blue');

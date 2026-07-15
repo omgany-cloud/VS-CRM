@@ -173,7 +173,7 @@ async function saveFund() {
       showToast(`✅ ${currentLang === 'ru' ? 'Фонд создан' : 'Fund created'}: ${created.shortName}`);
     }
     renderFundSwitcher();
-    closeModal();
+    closeModalSilent();
   } catch (err) {
     console.error('Failed to save fund:', err);
     showToast('⚠️ ' + err.message, 'red');

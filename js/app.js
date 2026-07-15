@@ -52,6 +52,26 @@ function updateUserRoleUI(role) {
   if (typeof applyReadOnlyUI === 'function') applyReadOnlyUI();
 }
 
+// This app's layout is built for desktop use; below this width, things
+// like data tables (some with a fixed min-width) and wide modals stop
+// adapting and become hard to use. Live off the current viewport width
+// rather than a one-time dismissal, so narrowing the window later still
+// shows it, and widening it back hides it again — not gated behind login,
+// since it's relevant on the login screen too.
+const SMALL_SCREEN_BREAKPOINT = 600;
+function checkSmallScreenWarning() {
+  const banner = document.getElementById('smallScreenBanner');
+  if (banner) banner.style.display = window.innerWidth < SMALL_SCREEN_BREAKPOINT ? '' : 'none';
+}
+if (typeof window !== 'undefined') {
+  checkSmallScreenWarning();
+  let _smallScreenResizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_smallScreenResizeTimer);
+    _smallScreenResizeTimer = setTimeout(checkSmallScreenWarning, 150);
+  });
+}
+
 // Repurposed from the old self-service role switcher: now just opens the
 // account menu (name/role + Logout) — see the #roleMenu block in index.html.
 function toggleUserRoleMenu() {
@@ -109,6 +129,8 @@ function openChangePasswordModal() {
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
+  if (typeof attachPasswordStrengthMeter === 'function') attachPasswordStrengthMeter(document.getElementById('pw_new'));
+  _snapshotObNewModal();
 }
 
 async function saveChangePassword() {
@@ -120,7 +142,7 @@ async function saveChangePassword() {
   if (newPassword !== confirmPassword) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
   try {
     await apiFetch('/api/users/me/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
-    closeObNewModal();
+    closeObNewModalSilent();
     showToast('✅ Пароль изменён', 'green');
   } catch (err) {
     showToast('⚠️ ' + err.message, 'red');
@@ -1770,7 +1792,7 @@ async function saveDeal() {
     deals.push({ ...newDeal, ...created });
     renderPipeline(deals);
     updateBadges();
-    closeModal();
+    closeModalSilent();
     showToast('✅ Сделка добавлена в pipeline');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить сделку: ' + err.message, 'red');
@@ -1860,7 +1882,7 @@ async function savePortfolio() {
     portfolio.push({ ...newPortco, ...created });
     renderPortfolio(portfolio);
     updateBadges();
-    closeModal();
+    closeModalSilent();
     showToast(`✅ Компания добавлена в портфель: ${name}`);
   } catch (err) {
     showToast('⚠️ Не удалось сохранить компанию: ' + err.message, 'red');
@@ -3143,7 +3165,7 @@ function saveCapCall() {
 
   capitalCalls.push({ id: Date.now(), noticeDate: notice, payDate, amount: amount * 1e6, pct, purpose, status: 'Ожидается', received: 0 });
   renderCapitalCalls();
-  closeModal();
+  closeModalSilent();
   showToast('✅ Capital Call создан');
 }
 
@@ -3177,7 +3199,7 @@ function saveDistribution() {
 
   distributions.push({ id: Date.now(), date, source, total, roc, pref, carry });
   renderDistributions();
-  closeModal();
+  closeModalSilent();
   showToast('✅ Distribution добавлено');
 }
 
@@ -3252,10 +3274,43 @@ function renderReportCharts() {
 }
 
 /* ===== MODALS ===== */
+// id -> { fieldId: value } snapshot taken the moment a modal is shown, so
+// closeModal() can tell whether the user actually typed anything before
+// warning about discarding it. Dedicated open*Modal() wrappers that
+// pre-populate fields (e.g. openNewFundModal/openEditFundModal) always
+// call openModal(name) as their LAST step, after populating, so the
+// snapshot always reflects the real starting state, not a blank one.
+const _modalDirtySnapshots = {};
+function _snapshotModalFields(modalEl) {
+  const data = {};
+  modalEl.querySelectorAll('input, select, textarea').forEach(el => {
+    if (!el.id) return;
+    data[el.id] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
+  });
+  return data;
+}
+function _isModalDirty(modalEl) {
+  const snap = _modalDirtySnapshots[modalEl.id];
+  if (!snap) return false;
+  const current = _snapshotModalFields(modalEl);
+  return Object.keys(current).some(k => current[k] !== snap[k]);
+}
+// System 3 (#modal-ob-new, js/onboarding.js + js/users.js): one shared
+// modal div reused for ~8 different forms via innerHTML swaps. Each
+// open*Modal() calls this once right after building its content, so
+// closeObNewModal() (js/onboarding.js) can run the same dirty-check.
+function _snapshotObNewModal() {
+  const modal = document.getElementById('modal-ob-new');
+  if (modal) _modalDirtySnapshots['modal-ob-new'] = _snapshotModalFields(modal);
+}
+
 function openModal(name) {
   document.getElementById('modalOverlay').classList.add('active');
   const m = document.getElementById('modal-' + name);
-  if (m) m.classList.add('active');
+  if (m) {
+    m.classList.add('active');
+    _modalDirtySnapshots[m.id] = _snapshotModalFields(m);
+  }
 }
 // Resets every plain input/select/textarea/checkbox inside a modal back to
 // its HTML-authored default (value/selected/checked attribute), the same
@@ -3275,11 +3330,24 @@ function _resetModalFields(modalEl) {
     el.selectedIndex = def ? def.index : 0;
   });
 }
+// Used by Cancel/X/backdrop-click/Escape — every path a user takes to
+// abandon a modal without saving. Warns first if anything was actually
+// typed (per the dirty snapshot taken in openModal), and aborts the close
+// entirely if the user chooses to keep editing.
 function closeModal() {
+  const activeModals = Array.from(document.querySelectorAll('.modal.active'));
+  const dirty = activeModals.find(m => _isModalDirty(m));
+  if (dirty && !confirm('У вас есть несохранённые изменения. Закрыть без сохранения?')) return;
+  closeModalSilent();
+}
+// Used internally after a successful save — closes without asking, since
+// there's nothing left to lose.
+function closeModalSilent() {
   document.getElementById('modalOverlay').classList.remove('active');
   document.querySelectorAll('.modal.active').forEach(m => {
     m.classList.remove('active');
     _resetModalFields(m);
+    delete _modalDirtySnapshots[m.id];
   });
 }
 

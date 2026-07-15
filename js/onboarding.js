@@ -4883,6 +4883,7 @@ function openNewObClientModal(editId) {
   window._obNewEditId = editId || null;
   document.getElementById('obNewModalContent').innerHTML = html;
   modal.style.display = 'flex';
+  _snapshotObNewModal();
 }
 
 // Глобальная функция — вызывается через onclick атрибут кнопки "Создать клиента"
@@ -4927,10 +4928,21 @@ function switchObNewDirection(dir) {
   if (fmFields)  fmFields.style.display  = dir==='FM'   ? 'block' : 'none';
 }
 
+// Used by Cancel/backdrop-click/Escape — warns first if the form was
+// actually touched (per the snapshot each open*Modal() takes via
+// _snapshotObNewModal(), js/app.js), same convention as closeModal()'s
+// dirty-check for the other modal system.
 function closeObNewModal() {
+  const modal = document.getElementById('modal-ob-new');
+  if (modal && _isModalDirty(modal) && !confirm('У вас есть несохранённые изменения. Закрыть без сохранения?')) return;
+  closeObNewModalSilent();
+}
+// Used internally after a successful save/decision — closes without asking.
+function closeObNewModalSilent() {
   const modal = document.getElementById('modal-ob-new');
   if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
+  delete _modalDirtySnapshots['modal-ob-new'];
 }
 
 async function saveNewObClient() {
@@ -4961,7 +4973,7 @@ async function saveNewObClient() {
     notes:          document.getElementById('ob_notes')?.value,
   });
   if (!client) return; // error toast already shown inside createObClient
-  closeObNewModal();
+  closeObNewModalSilent();
   renderObContent();
   showToast('✅ Клиент "' + client.name + '" создан (' + direction + '). 7 задач сгенерированы.', 'green');
   setTimeout(function(){ openObClientModal(client.id); }, 300);
@@ -4988,7 +5000,7 @@ function saveObClientEdit(id) {
   c.riskRating     = document.getElementById('ob_riskRating')?.value;
   c.startDate      = document.getElementById('ob_startDate')?.value || c.startDate;
   c.notes          = document.getElementById('ob_notes')?.value;
-  closeObNewModal();
+  closeObNewModalSilent();
   renderObContent();
   showToast(`✅ Клиент "${c.name}" обновлён`, 'green');
 }
@@ -5561,6 +5573,7 @@ function openNewEngagementModal() {
     </div>`;
 
   modal.style.display = 'flex';
+  _snapshotObNewModal();
 }
 
 async function saveNewEngagement() {
@@ -5596,7 +5609,7 @@ async function saveNewEngagement() {
   try {
     const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(eng) });
     engagements.push(created);
-    closeObNewModal();
+    closeObNewModalSilent();
     renderEngagementsPage();
     showToast(`✅ Договор ${created.engId} создан`, 'green');
   } catch (err) {
@@ -5793,6 +5806,7 @@ function openNewConflictApprovalModal() {
     </div>`;
 
   modal.style.display = 'flex';
+  _snapshotObNewModal();
 }
 
 async function saveNewConflictApproval() {
@@ -5820,7 +5834,7 @@ async function saveNewConflictApproval() {
   try {
     await apiFetch('/api/conflict-approvals', { method: 'POST', body: JSON.stringify(payload) });
     await loadConflictApprovalsFromApi();
-    closeObNewModal();
+    closeObNewModalSilent();
     renderConflictApprovalsPage();
     showToast('✅ Решение по конфликту заведено', 'green');
   } catch (err) {
@@ -5880,7 +5894,7 @@ async function decideConflictApproval(id, status) {
       body: JSON.stringify({ status, decidedAt: today() }),
     });
     await loadConflictApprovalsFromApi();
-    closeObNewModal();
+    closeObNewModalSilent();
     renderConflictApprovalsPage();
     showToast(`✅ Решение обновлено: ${status}`, 'green');
   } catch (err) {

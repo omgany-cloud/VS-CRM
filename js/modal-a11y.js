@@ -36,6 +36,9 @@
 //     any of this. Done here rather than by hand-editing 17 HTML blocks
 //     because every modal-header block already follows the same
 //     <h3>...</h3> convention, so it can be found generically.
+//   - A beforeunload listener warns before closing the tab/window while
+//     any modal is open (see below). Per-modal dirty-checking on close
+//     itself lives in js/app.js's closeModal()/closeObNewModal().
 // ============================================================
 
 const MODAL_OVERLAY_IDS = [
@@ -133,5 +136,16 @@ if (typeof document !== 'undefined') {
     if (e.key !== 'Escape') return;
     const overlay = _topmostModalOverlay();
     if (overlay) overlay.click();
+  });
+
+  // Warn on tab/window close while any modal is open — closing a modal
+  // itself already warns if its fields were actually touched (closeModal()/
+  // closeObNewModal(), js/app.js + js/onboarding.js), but a tab close skips
+  // all of that, so this uses the simpler "a modal is open at all" signal
+  // instead of re-deriving per-modal dirty state here.
+  window.addEventListener('beforeunload', (e) => {
+    if (!_topmostModalOverlay()) return;
+    e.preventDefault();
+    e.returnValue = '';
   });
 }
