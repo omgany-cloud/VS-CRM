@@ -1576,6 +1576,10 @@ function gpConclusionSection(d) {
       <details style="display:inline-block;vertical-align:middle">
         <summary style="font-size:11px;color:#60a5fa;cursor:pointer;display:inline">${signed ? 'Переподписать' : 'Подписать заключение'}</summary>
         <div style="margin-top:10px;max-width:420px">
+          <button type="button" onclick="draftGpConclusion(${d.id})"
+            style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:8px">
+            <i class="fas fa-wand-magic-sparkles" style="margin-right:5px"></i>Сгенерировать черновик
+          </button>
           <select id="gpConclVerdict_${d.id}" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;margin-bottom:6px;box-sizing:border-box">
             <option value="">— Вердикт —</option>
             ${['Рекомендовано к IC','Не рекомендовано','Требует доработки'].map(v => `<option value="${v}" ${d.gpConclusionVerdict===v?'selected':''}>${v}</option>`).join('')}
@@ -1585,6 +1589,58 @@ function gpConclusionSection(d) {
         </div>
       </details>` : ''}
     </div>`;
+}
+
+// Rule-based draft, not AI — fills the verdict/summary fields from a
+// deterministic read of the 7 DD conclusions so the responsible person
+// isn't starting from a blank page. Explicitly a draft: it only
+// populates the form, never calls signGpConclusion() itself — the human
+// still reviews, edits, and clicks "Подписать" themselves. Written so the
+// text-generation part alone can be swapped for a real LLM call later
+// without touching how it's wired into the sign-off form.
+function draftGpConclusion(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const conclusions = d.ddConclusions || [];
+  const catTitle = key => (DD_CONCLUSION_CATEGORIES.find(c => c.key === key) || {}).title || key;
+
+  const written  = DD_CONCLUSION_CATEGORIES.filter(cat => conclusions.some(c => c.category === cat.key));
+  const missing  = DD_CONCLUSION_CATEGORIES.filter(cat => !conclusions.some(c => c.category === cat.key));
+  const critical = conclusions.filter(c => c.verdict === 'Критично');
+  const flagged  = conclusions.filter(c => c.verdict === 'Есть замечания');
+  const clean    = conclusions.filter(c => c.verdict === 'Без замечаний');
+
+  let verdict;
+  if (missing.length) verdict = 'Требует доработки';
+  else if (critical.length) verdict = 'Не рекомендовано';
+  else if (flagged.length) verdict = 'Требует доработки';
+  else verdict = 'Рекомендовано к IC';
+
+  const lines = [];
+  lines.push(`Заключения получены по ${written.length} из ${DD_CONCLUSION_CATEGORIES.length} направлений DD.`);
+  if (missing.length)  lines.push(`Отсутствуют заключения: ${missing.map(c => c.title).join(', ')}.`);
+  if (critical.length) lines.push(`Критические замечания (${critical.length}): ${critical.map(c => catTitle(c.category)).join(', ')}.`);
+  if (flagged.length)  lines.push(`Есть замечания (${flagged.length}): ${flagged.map(c => catTitle(c.category)).join(', ')}.`);
+  if (clean.length)    lines.push(`Без замечаний (${clean.length}): ${clean.map(c => catTitle(c.category)).join(', ')}.`);
+  lines.push('');
+  lines.push(`Предварительная рекомендация: ${verdict}.`);
+  if (critical.length) {
+    lines.push('Обоснование: выявлены критические замечания, требующие устранения до вынесения на IC.');
+  } else if (missing.length) {
+    lines.push('Обоснование: due diligence не завершён, часть направлений не покрыта заключениями.');
+  } else if (flagged.length) {
+    lines.push('Обоснование: есть отдельные замечания без критичного характера — рекомендуется уточнение перед вынесением на IC.');
+  } else {
+    lines.push('Обоснование: все направления DD пройдены без замечаний.');
+  }
+  lines.push('');
+  lines.push('[Черновик сгенерирован автоматически по правилам — проверьте и отредактируйте перед подписанием]');
+
+  const summaryEl = document.getElementById(`gpConclSummary_${id}`);
+  const verdictEl = document.getElementById(`gpConclVerdict_${id}`);
+  if (summaryEl) summaryEl.value = lines.join('\n');
+  if (verdictEl) verdictEl.value = verdict;
+  showToast('📝 Черновик заключения УК сгенерирован — проверьте перед подписанием', 'blue');
 }
 
 async function signGpConclusion(id) {
