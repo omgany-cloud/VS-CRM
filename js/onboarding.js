@@ -2662,16 +2662,14 @@ async function submitObTask(taskId) {
     }
   }
 
-  // ── Subscription Agreement: auto-push to engagements[] ─
+  // ── Subscription Agreement: auto-create + persist in engagements[] ─
   if (task.formKey === 'subscription_agreement' && !rejected) {
     const subNum = fd.f_subNum || `SA-${new Date().getFullYear()}-${String(engIdCounter).padStart(3,'0')}`;
     const alreadyExists = engagements.some(e => e.contractNum === subNum && e.clientId === client.id);
     if (!alreadyExists) {
-      const seq = String(engIdCounter).padStart(3,'0');
       const commitment = parseFloat(fd.f_subCommitment) || client.commitment || 0;
       const newEng = {
-        id:          engIdCounter++,
-        engId:       `SA-${new Date().getFullYear()}-${seq}`,
+        engId:       `SA-${new Date().getFullYear()}-${String(engIdCounter++).padStart(3,'0')}`,
         clientId:    client.id,
         clientName:  client.name,
         serviceType: 'LP Investment (FM)',
@@ -2692,21 +2690,24 @@ async function submitObTask(taskId) {
         rm:          currentUserDisplayName(),
         notes:       `FM LP Subscription. Commitment: ${fmtCurrency(commitment, currencyForFundId(activeFundId))}. Fund class: ${fd.f_fundClass||'—'}. ${fd.f_rmComment||''}`,
       };
-      engagements.push(newEng);
-      showToast(`📄 Subscription Agreement ${newEng.engId} добавлен в Реестр`, 'green');
+      try {
+        const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(newEng) });
+        engagements.push(created);
+        showToast(`📄 Subscription Agreement ${created.engId} добавлен в Реестр`, 'green');
+      } catch (err) {
+        showToast('⚠️ Не удалось сохранить Subscription Agreement: ' + err.message, 'red');
+      }
     }
   }
 
-  // ── Engagement Letter: auto-push to engagements[] ─────
+  // ── Engagement Letter: auto-create + persist in engagements[] ─────
   if (task.formKey === 'engagement_letter' && !rejected) {
     // Check for duplicate by contract number
     const engNum = fd.f_engNum || `GL-${new Date().getFullYear()}-${String(engIdCounter).padStart(3,'0')}`;
     const alreadyExists = engagements.some(e => e.contractNum === engNum && e.clientId === client.id);
     if (!alreadyExists) {
-      const seq = String(engIdCounter).padStart(3,'0');
       const newEng = {
-        id:          engIdCounter++,
-        engId:       `ENG-${new Date().getFullYear()}-${seq}`,
+        engId:       `ENG-${new Date().getFullYear()}-${String(engIdCounter++).padStart(3,'0')}`,
         clientId:    client.id,
         clientName:  client.name,
         serviceType: client.serviceType,
@@ -2727,8 +2728,13 @@ async function submitObTask(taskId) {
         rm:          currentUserDisplayName(),
         notes:       fd.f_rmComment  || '',
       };
-      engagements.push(newEng);
-      showToast(`📄 Договор ${newEng.engId} автоматически добавлен в Реестр`, 'green');
+      try {
+        const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(newEng) });
+        engagements.push(created);
+        showToast(`📄 Договор ${created.engId} автоматически добавлен в Реестр`, 'green');
+      } catch (err) {
+        showToast('⚠️ Не удалось сохранить договор: ' + err.message, 'red');
+      }
     }
   }
 
@@ -2765,11 +2771,11 @@ async function submitObTask(taskId) {
         const activatedBy    = fd.f_activatedBy      || fd.activatedBy      || '';
         // Update matching engagement record (created at 4.1 step)
         let engRecord = engagements.find(e => e.clientId === client.id && e.serviceType !== 'LP Investment (FM)');
+        const engRecordIsNew = !engRecord;
         if (!engRecord) {
           // 4.1 was skipped — create record now from 5.1 data
-          const seq2 = String(engIdCounter).padStart(3,'0');
+          const seq2 = String(engIdCounter++).padStart(3,'0');
           engRecord = {
-            id:          engIdCounter++,
             engId:       `ENG-${new Date().getFullYear()}-${seq2}`,
             clientId:    client.id,
             clientName:  client.name,
@@ -2794,8 +2800,6 @@ async function submitObTask(taskId) {
             rm:          currentUserDisplayName(),
             notes:       specialCond || '',
           };
-          engagements.push(engRecord);
-          showToast(`📄 Договор ${engRecord.engId} создан и активирован в Реестре`, 'green');
         } else {
           if (contractUrl)    engRecord.contractUrl  = contractUrl;
           if (amendments)     engRecord.amendments   = amendments;
@@ -2806,13 +2810,26 @@ async function submitObTask(taskId) {
           if (feeRate)        engRecord.feeRate      = parseFloat(feeRate);
           if (successFeeRate) engRecord.successFee   = parseFloat(successFeeRate);
           if (specialCond)    engRecord.notes        = (engRecord.notes||'') + ' | ' + specialCond;
-          showToast(`📄 Договор ${contractNum||engRecord.contractNum} обновлён в Реестре → Active`, 'green');
         }
         engRecord.status         = 'Active';
         engRecord.direction      = engRecord.direction || 'CF&A';
         engRecord.activationDate = activationDate;
         engRecord.activatedBy    = activatedBy;
         engRecord.contractUrl    = engRecord.contractUrl || contractUrl;
+        try {
+          if (engRecordIsNew) {
+            const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(engRecord) });
+            Object.assign(engRecord, created);
+            engagements.push(engRecord);
+            showToast(`📄 Договор ${engRecord.engId} создан и активирован в Реестре`, 'green');
+          } else {
+            const updated = await apiFetch(`/api/engagements/${engRecord.id}`, { method: 'PUT', body: JSON.stringify(engRecord) });
+            Object.assign(engRecord, updated);
+            showToast(`📄 Договор ${contractNum||engRecord.contractNum} обновлён в Реестре → Active`, 'green');
+          }
+        } catch (err) {
+          showToast('⚠️ Не удалось сохранить договор: ' + err.message, 'red');
+        }
         // Store on client for quick access
         client.contractUrl = contractUrl;
         client.activatedBy = activatedBy;
@@ -2835,12 +2852,12 @@ async function submitObTask(taskId) {
         const activatedBy        = fd.f_activatedBy        || fd.activatedBy        || '';
         // Find or create SA engagement record
         let saRecord = engagements.find(e => e.clientId === client.id && e.serviceType === 'LP Investment (FM)');
+        const saRecordIsNew = !saRecord;
         if (!saRecord) {
           // 4.1 was skipped — create record now
-          const seq2 = String(engIdCounter).padStart(3,'0');
+          const seq2 = String(engIdCounter++).padStart(3,'0');
           const cmt  = parseFloat(commitmentConfirmed) || client.commitment || 0;
           saRecord = {
-            id:          engIdCounter++,
             engId:       `SA-${new Date().getFullYear()}-${seq2}`,
             clientId:    client.id,
             clientName:  client.name,
@@ -2861,10 +2878,6 @@ async function submitObTask(taskId) {
             rm:          currentUserDisplayName(),
             notes:       `FM LP Subscription. Commitment: ${fmtCurrency(cmt, currencyForFundId(activeFundId))}.`,
           };
-          engagements.push(saRecord);
-          showToast(`📄 LP Agreement ${saRecord.engId} создан и активирован в Реестре`, 'green');
-        } else {
-          showToast(`📄 LP Agreement ${contractNum||saRecord.contractNum} обновлён в Реестре → Active`, 'green');
         }
         // Enrich record with 5.1 form data
         saRecord.status          = 'Active';
@@ -2880,6 +2893,20 @@ async function submitObTask(taskId) {
         if (capitalCallSchedule) saRecord.notes            = (saRecord.notes||'') + ' | CC: ' + capitalCallSchedule;
         saRecord.activationDate  = activationDate;
         saRecord.activatedBy     = activatedBy;
+        try {
+          if (saRecordIsNew) {
+            const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(saRecord) });
+            Object.assign(saRecord, created);
+            engagements.push(saRecord);
+            showToast(`📄 LP Agreement ${saRecord.engId} создан и активирован в Реестре`, 'green');
+          } else {
+            const updated = await apiFetch(`/api/engagements/${saRecord.id}`, { method: 'PUT', body: JSON.stringify(saRecord) });
+            Object.assign(saRecord, updated);
+            showToast(`📄 LP Agreement ${contractNum||saRecord.contractNum} обновлён в Реестре → Active`, 'green');
+          }
+        } catch (err) {
+          showToast('⚠️ Не удалось сохранить LP Agreement: ' + err.message, 'red');
+        }
         // Store on client for quick access
         client.lpaUrl      = lpaUrl;
         client.activatedBy = activatedBy;
@@ -5468,16 +5495,23 @@ function closeEngagementModal() {
   activeEngId = null;
 }
 
-function updateEngPayment(engId) {
+async function updateEngPayment(engId) {
   const e = engagements.find(x => x.id === engId);
   if (!e) return;
   const paid     = parseFloat(document.getElementById('engPaidUpdate')?.value) || 0;
   const invoiced = parseFloat(document.getElementById('engInvoicedUpdate')?.value) || 0;
+  const prevPaid = e.paid, prevInvoiced = e.invoiced;
   e.paid     = paid;
   e.invoiced = invoiced;
-  // Recalculate balance auto-field
-  const balance = invoiced - paid;
-  showToast(`💰 Оплата обновлена. Остаток: ${fmtCurrency(balance, e.currency||'USD')}`, balance>0?'orange':'green');
+  try {
+    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(e) });
+    Object.assign(e, updated);
+    const balance = e.invoiced - e.paid;
+    showToast(`💰 Оплата обновлена. Остаток: ${fmtCurrency(balance, e.currency||'USD')}`, balance>0?'orange':'green');
+  } catch (err) {
+    e.paid = prevPaid; e.invoiced = prevInvoiced;
+    showToast('⚠️ Не удалось сохранить оплату: ' + err.message, 'red');
+  }
   openEngagementModal(engId);   // re-render
   renderEngagementsPage();
 }
@@ -5527,20 +5561,20 @@ function openNewEngagementModal() {
   modal.style.display = 'flex';
 }
 
-function saveNewEngagement() {
+async function saveNewEngagement() {
   const clientIdVal = document.getElementById('eng_clientId')?.value;
   const client = obClients.find(c => String(c.id) === String(clientIdVal));
   const feeAmount = parseFloat(document.getElementById('eng_feeAmount')?.value) || 0;
   if (!client) { showToast('⚠️ Выберите клиента', 'red'); return; }
   if (!feeAmount) { showToast('⚠️ Введите сумму гонорара', 'red'); return; }
 
-  const seq = String(engIdCounter).padStart(3,'0');
+  const seq = String(engIdCounter++).padStart(3,'0');
   const eng = {
-    id:          engIdCounter++,
     engId:       `ENG-${new Date().getFullYear()}-${seq}`,
     clientId:    client.id,
     clientName:  client.name,
     serviceType: document.getElementById('eng_serviceType')?.value,
+    direction:   'CF&A',
     contractNum: `GL-${new Date().getFullYear()}-${seq}`,
     date:        document.getElementById('eng_date')?.value || today(),
     status:      'Draft',
@@ -5557,10 +5591,15 @@ function saveNewEngagement() {
     rm:          currentUserDisplayName(),
     notes:       document.getElementById('eng_notes')?.value || '',
   };
-  engagements.push(eng);
-  closeObNewModal();
-  renderEngagementsPage();
-  showToast(`✅ Договор ${eng.engId} создан`, 'green');
+  try {
+    const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(eng) });
+    engagements.push(created);
+    closeObNewModal();
+    renderEngagementsPage();
+    showToast(`✅ Договор ${created.engId} создан`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить договор: ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════
