@@ -3258,14 +3258,35 @@ function closeModal() {
 }
 
 /* ===== TOAST ===== */
+// Appends one toast element per call instead of reusing a single shared
+// node — previously a second call while the first toast was still up
+// would overwrite its text immediately and leave two competing
+// "hide after 3.5s" timers racing each other, so a fast-following message
+// (or an error right after a success toast) could get silently cut off.
+// Each toast now has its own element and its own timer, so several can be
+// visible at once (stacked via .toast-container's flex layout) and none
+// get cut short by another one firing.
 function showToast(msg, color = 'green') {
-  const t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = msg;
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
   const colors = { red:'var(--accent-red)', orange:'var(--accent-orange)', blue:'var(--accent-blue)', green:'var(--accent-green)' };
-  t.style.borderLeftColor = colors[color] || colors.green;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3500);
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderLeftColor = colors[color] || colors.green;
+  el.textContent = msg;
+  container.appendChild(el);
+
+  // Defensive ceiling, not a queue — if something spams toasts, drop the
+  // oldest rather than let them pile up and cover the screen.
+  const MAX_VISIBLE_TOASTS = 5;
+  while (container.children.length > MAX_VISIBLE_TOASTS) {
+    container.firstElementChild.remove();
+  }
+
+  setTimeout(() => {
+    el.classList.add('toast-leaving');
+    setTimeout(() => el.remove(), 300); // plain timeout, not animationend — still cleans up if animations are disabled (reduced motion etc.)
+  }, 3500);
 }
 
 /* ===== HELPERS ===== */

@@ -122,10 +122,21 @@
     .doc-meta { font-size:10px; color:var(--muted); margin-top:2px; }
 
     /* ── Toast ── */
-    #portalToast { position:fixed; bottom:24px; right:24px; background:#1c2333;
-      border:1px solid var(--border); border-radius:10px; padding:12px 18px;
-      font-size:13px; font-weight:600; z-index:9999; display:none;
-      box-shadow:0 8px 32px rgba(0,0,0,0.4); max-width:360px; }
+    /* Container anchors bottom-right; column-reverse stacks each newly
+       appended toast nearest the anchor, pushing older ones upward — same
+       fix as the main app's toast-container (see js/app.js showToast()):
+       one element per message instead of one shared node, so a second
+       message can't cut off or overwrite a still-visible first one. */
+    #portalToast { position:fixed; bottom:24px; right:24px; z-index:9999;
+      display:flex; flex-direction:column-reverse; gap:10px; max-width:360px;
+      pointer-events:none; }
+    #portalToast .toast-item { background:#1c2333; border:1px solid var(--border);
+      border-radius:10px; padding:12px 18px; font-size:13px; font-weight:600;
+      box-shadow:0 8px 32px rgba(0,0,0,0.4); pointer-events:auto;
+      animation: portalToastIn 0.3s ease; }
+    #portalToast .toast-item.leaving { animation: portalToastOut 0.25s ease forwards; }
+    @keyframes portalToastIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes portalToastOut { from{opacity:1;transform:translateY(0)} to{opacity:0;transform:translateY(10px)} }
 
     /* ── Progress bar ── */
     .prog-bar { height:6px; background:#1e293b; border-radius:3px; overflow:hidden; }
@@ -675,13 +686,30 @@ const esgReports  = [];
 const payConfirms = [];
 
 /* ══ Helpers ══ */
+// One element per call (appended to the #portalToast container) instead
+// of reusing a single shared node — see js/app.js's showToast() for the
+// same fix and the reasoning: a second call used to overwrite the first
+// message's text and race its hide-timer, so a fast-following message
+// could cut the first one off before it was read.
 function toast(msg, col='#22c55e') {
-  const el = document.getElementById('portalToast');
-  el.style.display = 'block';
+  const container = document.getElementById('portalToast');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast-item';
   el.style.borderColor = col;
   el.style.color = col === '#ef4444' ? '#fca5a5' : col === '#eab308' ? '#fde047' : '#4ade80';
   el.textContent = msg;
-  setTimeout(()=> el.style.display='none', 3500);
+  container.appendChild(el);
+
+  const MAX_VISIBLE_TOASTS = 5;
+  while (container.children.length > MAX_VISIBLE_TOASTS) {
+    container.firstElementChild.remove();
+  }
+
+  setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
 }
 function fmtKZT(v) {
   if (!v) return '₸0';

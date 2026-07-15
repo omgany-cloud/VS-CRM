@@ -1118,8 +1118,10 @@
   </div>
 </div>
 
-<!-- Toast -->
-<div class="toast" id="toast"></div>
+<!-- Toasts — showToast() (js/app.js) appends one element per call so
+     several messages can stack and each stays visible for its own full
+     duration, instead of a second message cutting off the first. -->
+<div class="toast-container" id="toastContainer"></div>
 
 <!-- Modal: Новый фонд -->
 <div class="modal" id="modal-addFund">
