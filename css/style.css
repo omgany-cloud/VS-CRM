@@ -2009,3 +2009,14 @@ select option { background: var(--bg-card); }
   cursor: not-allowed !important;
   pointer-events: none !important;
 }
+
+/* ── Double-submit guard: dims the specific button that was just clicked
+   for the duration of its in-flight request (js/api-auth.js) — same
+   mechanics as .ro-disabled, distinct class/name so the two reasons a
+   control might be disabled (read-only role vs. a save already running)
+   stay visually and semantically separate. ── */
+.busy-disabled {
+  opacity: 0.55 !important;
+  cursor: wait !important;
+  pointer-events: none !important;
+}

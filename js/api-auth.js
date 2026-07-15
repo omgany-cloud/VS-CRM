@@ -137,6 +137,70 @@ if (typeof document !== 'undefined') {
     .observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['onclick'] });
 }
 
+// ── Double-submit guard ──────────────────────────────────────────────
+// None of the gated mutating actions above guarded against being
+// re-invoked while a previous call for the same target was still in
+// flight — a double-click (or just an impatient second click before the
+// round-trip finishes) could fire the exact same create/update/delete
+// twice. Reuses READONLY_GATED_FN_NAMES (the same closed set derived
+// from every mutating apiFetch call site) so both guards drift together
+// instead of needing two lists kept in sync by hand.
+//
+// Two parts sharing one in-flight registry, keyed by function name +
+// arguments (e.g. deleteUser(42) and deleteUser(43) are different keys —
+// only a literal re-entrant call for the SAME target is blocked, not
+// unrelated concurrent actions on different rows):
+//  1. Function-level (the actual fix): each gated function is wrapped so
+//     a second call with the same key while the first's promise is still
+//     pending is swallowed before it ever reaches apiFetch — this holds
+//     regardless of what triggered the call (mouse, keyboard, whatever).
+//  2. Visual: the specific element that was clicked gets dimmed
+//     (.busy-disabled, pointer-events:none) for the duration of its call.
+const _inFlightCallElements = new Map(); // key -> Set of DOM elements to un-dim on settle
+
+let _lastClickTarget = null;
+if (typeof document !== 'undefined') {
+  // Capture phase so this runs BEFORE the inline onclick handler fires,
+  // giving the wrapped function below a way to know which element
+  // triggered it (a bare fn() call inside onclick="fn()" doesn't carry
+  // `this` through to fn, so there's no other way to recover the element).
+  document.addEventListener('click', (e) => {
+    _lastClickTarget = e.target.closest('[onclick]') || null;
+  }, true);
+}
+
+function _busyCallKey(fnName, args) {
+  try { return fnName + ':' + JSON.stringify(args); }
+  catch (e) { return fnName + ':' + args.length; } // fallback if an arg isn't JSON-safe
+}
+
+READONLY_GATED_FN_NAMES.forEach(fnName => {
+  const original = window[fnName];
+  if (typeof original !== 'function') return;
+  window[fnName] = function (...args) {
+    const key = _busyCallKey(fnName, args);
+    if (_inFlightCallElements.has(key)) return; // identical call already in flight — swallow the duplicate
+    const clickedEl = _lastClickTarget;
+    const els = new Set();
+    if (clickedEl) { els.add(clickedEl); clickedEl.classList.add('busy-disabled'); }
+    _inFlightCallElements.set(key, els);
+    const settle = () => {
+      els.forEach(el => el.classList.remove('busy-disabled'));
+      _inFlightCallElements.delete(key);
+    };
+    let result;
+    try {
+      result = original.apply(this, args);
+    } catch (err) {
+      settle();
+      throw err;
+    }
+    if (result && typeof result.finally === 'function') result.finally(settle);
+    else settle();
+    return result;
+  };
+});
+
 /* ===== Funds — backed by the real API =====
    Loaded first, before every other loader (loadAllApiData below awaits
    this one), so activeFundId is set to a real fund id before any
