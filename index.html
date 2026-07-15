@@ -1147,7 +1147,16 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Целевой размер ($M)</label>
+        <label>Валюта фонда</label>
+        <select id="nf_currency">
+          <option value="USD" selected>Доллар США (USD, $)</option>
+          <option value="EUR">Евро (EUR, €)</option>
+          <option value="KZT">Тенге (KZT, ₸)</option>
+          <option value="RUB">Рубль (RUB, ₽)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Целевой размер (млн)</label>
         <input type="number" id="nf_size" placeholder="100" />
       </div>
       <div class="form-group">
@@ -1184,6 +1193,7 @@
 
 <script src="js/roles.js"></script>
 <script src="js/i18n.js"></script>
+<script src="js/currency.js"></script>
 <script src="js/print-utils.js"></script>
 <script src="js/funds.js"></script>
 <script src="js/documents.js"></script>

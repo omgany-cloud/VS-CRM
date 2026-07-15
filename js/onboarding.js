@@ -347,7 +347,7 @@ function renderObKPIs() {
                  border:1px solid ${obDirFilter==='FM'?'rgba(59,130,246,0.5)':'rgba(59,130,246,0.2)'}">
           <span style="font-size:18px;font-weight:800;color:#60a5fa">${fmCount}</span>
           <span style="font-size:10px;font-weight:700;color:#3b82f6">FM</span>
-          <span style="font-size:9px;color:#3b82f6;font-weight:600">$${(fmCommitment/1000000).toFixed(1)}M</span>
+          <span style="font-size:9px;color:#3b82f6;font-weight:600">${fmtCurrency(fmCommitment, currencyForFundId(activeFundId))}</span>
         </button>
         ${obDirFilter ? `
         <button onclick="obDirFilter='';renderObKPIs();renderObContent();"
@@ -489,7 +489,7 @@ function renderObPhaseBoard(clients) {
                   ? '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(34,197,94,0.15);color:#22c55e">✅ Active</span>'
                   : obStatusBadge(c.onboardingStatus)}
                 ${c.direction==='FM' && c.commitment
-                  ? `<span style="font-size:9px;color:#3b82f6;font-weight:700">$${(c.commitment/1000000).toFixed(1)}M</span>`
+                  ? `<span style="font-size:9px;color:#3b82f6;font-weight:700">${fmtCurrency(c.commitment, currencyForFundId(activeFundId))}</span>`
                   : c.serviceType && c.direction==='CF&A'
                     ? `<span style="font-size:9px;color:#8b5cf6;font-weight:700">${c.serviceType}</span>`
                     : ''}
@@ -522,7 +522,7 @@ function renderObClientTable(clients) {
             const overdue = tasks.some(t => t.status === 'open' && new Date(t.dueDate) < today);
             const isFm = c.direction === 'FM';
             const detailLine = isFm
-              ? `<div style="font-size:10px;color:#3b82f6">${c.lpType||'LP'} · ${c.commitment?'$'+(c.commitment/1000000).toFixed(1)+'M':'—'}</div>`
+              ? `<div style="font-size:10px;color:#3b82f6">${c.lpType||'LP'} · ${c.commitment?fmtCurrency(c.commitment, currencyForFundId(activeFundId)):'—'}</div>`
               : `<div style="font-size:10px;color:#8b5cf6">${c.serviceType||'—'} · ${c.classification||'—'}</div>`;
             return `
               <tr onclick="openObClientModal(${c.id})" style="cursor:pointer">
@@ -654,7 +654,7 @@ function renderObClientModal(clientId) {
         ['RM', c.rm.split('(')[0].trim()],
         ['Тип LP', c.lpType || '—'],
         ['Квалификация', c.classification],
-        ['Commitment', c.commitment ? `$${(c.commitment/1000000).toFixed(2)}M` : '—'],
+        ['Commitment', c.commitment ? fmtCurrency(c.commitment, currencyForFundId(activeFundId)) : '—'],
         ['Дата начала', c.startDate],
         ['Дата цели', c.targetDate],
         ['Риск', c.riskRating],
@@ -2266,7 +2266,7 @@ function buildTaskForm(task, client) {
           ${buildSelect2('f_lpQualResult','Итоговый результат квалификации',['Квалифицирован — Qualified Investor','Квалифицирован — Professional Investor','Не квалифицирован — отказ'],fd.lpQualResult,disabledAttr,selectStyle,labelStyle,formGroupStyle)}
         </div>
 
-        <div style="${formGroupStyle}"><label style="${labelStyle}">Commitment LP (USD) *</label>
+        <div style="${formGroupStyle}"><label style="${labelStyle}">Commitment LP (${currencyForFundId(activeFundId)}) *</label>
           <input type="number" id="f_commitmentAmount" value="${fd.commitmentAmount||client.commitment||''}" ${disabledAttr} style="${inputStyle}" placeholder="1000000" /></div>
 
         <!-- ══ Client notification ══ -->
@@ -2386,7 +2386,7 @@ function buildTaskForm(task, client) {
             <i class="fas fa-user-tie"></i> Секция 2 — LP: данные подписанта
           </div>
           <div style="background:#1c2333;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#94a3b8">
-            <b style="color:#c4b5fd">${client.name}</b> · ${client.type} · Commitment: <b style="color:#60a5fa">$${((client.commitment||0)/1e6).toFixed(2)}M</b>
+            <b style="color:#c4b5fd">${client.name}</b> · ${client.type} · Commitment: <b style="color:#60a5fa">${fmtCurrency(client.commitment||0, currencyForFundId(activeFundId))}</b>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="${formGroupStyle}"><label style="${labelStyle}">ФИО Директора / CEO LP (подписант) *</label>
@@ -2404,7 +2404,7 @@ function buildTaskForm(task, client) {
             <i class="fas fa-dollar-sign"></i> Секция 3 — Коммерческие условия
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Capital Commitment LP (USD) *</label>
+            <div style="${formGroupStyle}"><label style="${labelStyle}">Capital Commitment LP (${currencyForFundId(activeFundId)}) *</label>
               <input type="number" id="f_subCommitment" value="${fd.subCommitment||client.commitment||''}" ${disabledAttr} style="${inputStyle}" placeholder="500000" min="0" /></div>
             <div style="${formGroupStyle}"><label style="${labelStyle}">Дата первого Capital Call (план)</label>
               <input type="date" id="f_firstCallDate" value="${fd.firstCallDate||''}" ${disabledAttr} style="${inputStyle}" /></div>
@@ -2685,7 +2685,7 @@ async function submitObTask(taskId) {
         startDate:   fd.f_subDate    || today(),
         endDate:     fd.f_subExpiry  || '',
         rm:          currentUserDisplayName(),
-        notes:       `FM LP Subscription. Commitment: $${(commitment/1000000).toFixed(2)}M. Fund class: ${fd.f_fundClass||'—'}. ${fd.f_rmComment||''}`,
+        notes:       `FM LP Subscription. Commitment: ${fmtCurrency(commitment, currencyForFundId(activeFundId))}. Fund class: ${fd.f_fundClass||'—'}. ${fd.f_rmComment||''}`,
       };
       engagements.push(newEng);
       showToast(`📄 Subscription Agreement ${newEng.engId} добавлен в Реестр`, 'green');
@@ -2847,7 +2847,7 @@ async function submitObTask(taskId) {
             startDate:   contractDate || today(),
             endDate:     contractExpiry || '',
             rm:          currentUserDisplayName(),
-            notes:       `FM LP Subscription. Commitment: $${(cmt/1000000).toFixed(2)}M.`,
+            notes:       `FM LP Subscription. Commitment: ${fmtCurrency(cmt, currencyForFundId(activeFundId))}.`,
           };
           engagements.push(saRecord);
           showToast(`📄 LP Agreement ${saRecord.engId} создан и активирован в Реестре`, 'green');
@@ -3347,7 +3347,13 @@ function obGenerateSubscriptionAgreement(taskId) {
   var saDate     = fd.subDate   || '_____, 2025';
   var lpaDate    = fd.lpaDate   || '_____, 2025';
   var commitment = Number(fd.subCommitment || client.commitment || 0);
-  var fmtU       = function(v){ return 'USD ' + Number(v).toLocaleString('en-US'); };
+  // Commitment is genuine LP/fund economics — follows the fund currently
+  // selected in the fund switcher (activeFundId), same as elsewhere in
+  // onboarding (obClients itself carries no fundId, but registerLPFromOnboarding
+  // always stamps the new LP with activeFundId, so that's the honest
+  // context here too). Kept the "CODE 500,000" textual style rather than
+  // an abbreviated symbol — appropriate for a legal document.
+  var fmtU       = function(v){ return currencyForFundId(activeFundId) + ' ' + Number(v).toLocaleString('en-US'); };
   var lpName     = client.name  || '_______________';
   var lpCEO      = fd.lpCEO     || '_______________';
   var lpTitle    = fd.lpSignerTitle || 'Генеральный директор';
@@ -4531,7 +4537,7 @@ function obGenerateDDReport(taskId) {
         </tr>
         <tr>
           <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;border-bottom:1px solid #e2e8f0">Classification</td>
-          <td style="padding:8px 12px;font-size:12px;border-bottom:1px solid #e2e8f0">${client.classification}${isFM && client.commitment ? ' · Commitment: $' + (client.commitment/1000000).toFixed(2) + 'M' : ''}</td>
+          <td style="padding:8px 12px;font-size:12px;border-bottom:1px solid #e2e8f0">${client.classification}${isFM && client.commitment ? ' · Commitment: ' + fmtCurrency(client.commitment, currencyForFundId(activeFundId)) : ''}</td>
         </tr>
         <tr style="background:#f8fafc">
           <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;border-bottom:1px solid #e2e8f0">Corporate Data Verified</td>
@@ -4809,7 +4815,7 @@ function openNewObClientModal(editId) {
     +       '</select>'
     +     '</div>'
     +     '<div style="grid-column:1/-1">'
-    +       '<label style="' + labelStyle + '">Commitment (USD) *</label>'
+    +       '<label style="' + labelStyle + '">Commitment (' + currencyForFundId(activeFundId) + ') *</label>'
     +       '<input type="number" id="ob_commitment" value="' + ((client && client.commitment) || '') + '" placeholder="1000000" style="' + inputStyle + '" />'
     +       '<div style="font-size:10px;color:#5a6b8a;margin-top:3px">Минимум $500K для Qualified Investor по AFSA</div>'
     +     '</div>'
@@ -4896,7 +4902,7 @@ async function saveNewObClient() {
 
   if (isFM) {
     const comm = parseFloat(document.getElementById('ob_commitment')?.value);
-    if (!comm || comm < 1) { showToast('⚠️ Введите Commitment (USD) для LP', 'red'); return; }
+    if (!comm || comm < 1) { showToast('⚠️ Введите Commitment (' + currencyForFundId(activeFundId) + ') для LP', 'red'); return; }
   }
 
   const classEl = isFM

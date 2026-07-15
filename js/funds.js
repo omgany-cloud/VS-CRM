@@ -91,6 +91,7 @@ function updateFundBranding(f) {
 function openNewFundModal() {
   fundModalEditId = null;
   ['nf_name','nf_size','nf_license','nf_desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const currEl = document.getElementById('nf_currency'); if (currEl) currEl.value = 'USD';
   const mfeeEl = document.getElementById('nf_mfee'); if (mfeeEl) mfeeEl.value = 2;
   const carryEl = document.getElementById('nf_carry'); if (carryEl) carryEl.value = 20;
   const prefEl = document.getElementById('nf_pref'); if (prefEl) prefEl.value = 8;
@@ -106,6 +107,7 @@ function openEditFundModal(id) {
   const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val != null ? val : ''; };
   set('nf_name', f.name);
   set('nf_type', f.type);
+  set('nf_currency', f.currency || 'USD');
   set('nf_size', f.targetSize);
   set('nf_vintage', f.vintage);
   set('nf_license', f.license);
@@ -119,8 +121,9 @@ function openEditFundModal(id) {
 }
 
 async function saveFund() {
-  const name    = document.getElementById('nf_name').value.trim();
-  const type    = document.getElementById('nf_type').value;
+  const name     = document.getElementById('nf_name').value.trim();
+  const type     = document.getElementById('nf_type').value;
+  const currency = document.getElementById('nf_currency').value || 'USD';
   const size    = parseFloat(document.getElementById('nf_size').value) || 0;
   const vintage = parseInt(document.getElementById('nf_vintage').value) || new Date().getFullYear();
   const license = document.getElementById('nf_license').value.trim() || '—';
@@ -141,7 +144,7 @@ async function saveFund() {
     license,
     type,
     targetSize: size,
-    currency: 'USD',
+    currency,
     vintage,
     status: isEdit ? undefined : 'fundraising',
     phase: isEdit ? undefined : 'Fundraising',

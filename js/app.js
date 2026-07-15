@@ -345,7 +345,10 @@ function renderDashboardCharts() {
         plugins: { legend: { labels: { color: '#8a9bbf', font:{size:11} } } },
         scales: {
           x: { ticks:{color:'#5a6b8a'}, grid:{color:'#2a3448'} },
-          y: { ticks:{color:'#5a6b8a', callback: v=>'$'+v+'M'}, grid:{color:'#2a3448'} }
+          // Axis symbol follows activeFundId; underlying series is still
+          // static mock data (js/data.js chartData) — pre-existing
+          // limitation, out of scope for this currency-honesty sweep.
+          y: { ticks:{color:'#5a6b8a', callback: v=>currencySymbol(currencyForFundId(activeFundId))+v+'M'}, grid:{color:'#2a3448'} }
         }
       }
     });
@@ -384,14 +387,22 @@ function renderClosing() {
   const fcs = firstClosingState;
 
   /* ── Живые данные из системы ── */
-  const activeLP        = lpRegister.filter(l => l.status === 'Active');
+  // Scoped to activeFundId — this page previously summed LPs/capital calls
+  // across every fund with no fundId filter at all, which was already an
+  // existing cross-fund contamination bug (a second fund's LPs inflated
+  // this checklist's totals) and became a currency-mixing bug too once
+  // funds can have different currencies.
+  const activeLP        = lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId);
   const totalCommit     = activeLP.reduce((s, l) => s + (l.commitment || 0), 0);
   const allKycOk        = activeLP.length > 0 && activeLP.every(l => l.kycStatus === 'Одобрен');
   const allSAok         = activeLP.length > 0 && activeLP.every(l => l.saNumber);
   const commitOk        = totalCommit >= fp.firstClosingMin * 1e6;
   const boardResOk      = !!fcs.boardResolutionUrl;
   const closingCertOk   = !!fcs.closingCertUrl;
-  const firstCC         = capitalCallsLog.find(cc => !cc.individualLP) || capitalCallsLog[0] || null;
+  const fmtUSD          = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
+  const firstCC         = capitalCallsLog.find(cc => cc.fundId === activeFundId && !cc.individualLP)
+                        || capitalCallsLog.find(cc => cc.fundId === activeFundId)
+                        || null;
   const firstCCok       = !!firstCC;
   const wlCount         = fcs.welcomeLetterLog.length;
   const wlTotal         = activeLP.length;
@@ -864,7 +875,7 @@ function renderPipeline(data) {
           ${sd.length
             ? sd.map(d => dealCard(d)).join('')
             : '<div class="pipe-empty">Нет сделок</div>'}
-          ${total > 0 ? `<div class="pipe-total">$${total}M</div>` : ''}
+          ${total > 0 ? `<div class="pipe-total">${currencySymbol(currencyForFundId(activeFundId))}${total}M</div>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -901,9 +912,9 @@ function dealCard(d) {
         ${d.companyStage ? `· <span style="color:#8b5cf6">${d.companyStage}</span>` : ''}
       </div>
       <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:5px">
-        $${d.amount}M
+        ${currencySymbol(currencyForEntity(d))}${d.amount}M
         <span style="font-size:10px;color:#64748b;font-weight:400">· ${d.type}</span>
-        ${d.preMoney ? `<span style="font-size:10px;color:#8b5cf6;font-weight:400"> · pre $${d.preMoney}M</span>` : ''}
+        ${d.preMoney ? `<span style="font-size:10px;color:#8b5cf6;font-weight:400"> · pre ${currencySymbol(currencyForEntity(d))}${d.preMoney}M</span>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:4px">
         <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;
@@ -1462,8 +1473,8 @@ function _renderDealModal(d) {
             </span>
           </div>
           <div style="font-size:11px;color:#64748b;margin-top:4px">
-            ${d.sector} · ${d.country||''} · $${d.amount}M · ${d.type}
-            ${d.preMoney ? ` · pre-money $${d.preMoney}M` : ''}
+            ${d.sector} · ${d.country||''} · ${currencySymbol(currencyForEntity(d))}${d.amount}M · ${d.type}
+            ${d.preMoney ? ` · pre-money ${currencySymbol(currencyForEntity(d))}${d.preMoney}M` : ''}
             · <span style="color:#94a3b8">${d.manager}</span>
           </div>
           ${d.stage !== 'Отклонена IC' ? `
@@ -1975,11 +1986,11 @@ function renderPortfolio(data) {
           <div class="port-card-body">
             <div class="port-metric">
               <span class="port-metric-label">Инвестировано</span>
-              <span class="port-metric-value">$${p.invested}M</span>
+              <span class="port-metric-value">${currencySymbol(currencyForEntity(p))}${p.invested}M</span>
             </div>
             <div class="port-metric">
               <span class="port-metric-label">Текущая стоимость</span>
-              <span class="port-metric-value" style="color:#22c55e">$${p.value}M</span>
+              <span class="port-metric-value" style="color:#22c55e">${currencySymbol(currencyForEntity(p))}${p.value}M</span>
             </div>
             <div class="port-metric">
               <span class="port-metric-label">Доля фонда</span>
@@ -2012,7 +2023,7 @@ function renderPortfolio(data) {
 
           ${overdue ? `<div style="margin-top:6px;font-size:10px;font-weight:700;color:#ef4444;
             padding:4px 8px;background:rgba(239,68,68,0.1);border-radius:5px;text-align:center">
-            ⚠ Просрочка $${(p.financials.overdueAmount/1000000).toFixed(1)}M
+            ⚠ Просрочка ${fmtCurrency(p.financials.overdueAmount, currencyForEntity(p))}
           </div>` : ''}
         </div>`;
     }).join('');
@@ -2026,8 +2037,8 @@ function renderPortfolio(data) {
         <div style="width:34px;height:34px;border-radius:8px;background:${getColor(idx)};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${p.name.charAt(0)}</div>
         <div><strong>${p.name}</strong><div style="font-size:11px;color:var(--text-muted)">${p.sector}</div></div>
         <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${stCol}22;color:${stCol}">${portStatusLabel(st)}</span>
-        <div style="font-weight:700">$${p.invested}M</div>
-        <div style="color:#22c55e;font-weight:700">$${p.value}M</div>
+        <div style="font-weight:700">${currencySymbol(currencyForEntity(p))}${p.invested}M</div>
+        <div style="color:#22c55e;font-weight:700">${currencySymbol(currencyForEntity(p))}${p.value}M</div>
         <div style="color:#60a5fa;font-weight:800">${moic}x</div>
         <div>${p.exitStrategy} · ${p.exitYear}</div>
         <div class="action-btns">
@@ -2117,8 +2128,13 @@ function _renderPortfolioModal(p) {
     const empAct  = f.employees?.actual || [];
     const empPlan = f.employees?.plan   || [];
 
-    const fmtM = v => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : v >= 1000 ? `₸${(v/1000).toFixed(0)}K` : `₸${v}`;
-    const fmtKZT = v => v ? `₸${(v/1000000).toFixed(0)}M` : '—';
+    // Single currency-honest formatter, derived from this company's own
+    // fund (p.fundId) — replaces the old fmtM/fmtKZT pair, which hardcoded
+    // $ and ₸ independently of each other (fmtM even switched currency by
+    // the amount's MAGNITUDE, not by what currency it's actually in) and
+    // is exactly the bug that showed the same overdue-debt figure as $
+    // on the card and ₸ here.
+    const fmt = v => fmtCurrency(v, currencyForEntity(p));
 
     const qTableRow = (label, act, plan, unit='$K') => `
       <tr style="border-bottom:1px solid #1a2335">
@@ -2138,7 +2154,7 @@ function _renderPortfolioModal(p) {
           { label:'MOIC',          val:`${moic}x`,                     color: moic>=2?'#22c55e':moic>=1?'#f97316':'#ef4444', icon:'fa-chart-line' },
           { label:'Debt/EBITDA',   val: debtEbitda>0?`${debtEbitda.toFixed(1)}x`:'—', color:flagDebtEbitda?'#ef4444':'#22c55e', icon:'fa-balance-scale' },
           { label:'DSCR',          val: dscr>0?`${dscr.toFixed(2)}x`:'—',             color:flagDSCR?'#ef4444':'#22c55e',      icon:'fa-shield-alt' },
-          { label:'Просрочка',     val: f.overduePayment ? fmtKZT(f.overdueAmount) : '✓ Нет', color:f.overduePayment?'#ef4444':'#22c55e', icon:'fa-exclamation-circle' },
+          { label:'Просрочка',     val: f.overduePayment ? fmt(f.overdueAmount) : '✓ Нет', color:f.overduePayment?'#ef4444':'#22c55e', icon:'fa-exclamation-circle' },
         ].map(c=>`
           <div style="background:#0f1623;border:1px solid ${c.color}33;border-radius:10px;padding:12px;text-align:center">
             <i class="fas ${c.icon}" style="color:${c.color};font-size:14px;margin-bottom:4px;display:block"></i>
@@ -2191,11 +2207,11 @@ function _renderPortfolioModal(p) {
         <div style="background:#0f1623;border-radius:10px;padding:12px">
           <div style="font-size:10px;font-weight:700;color:#f97316;margin-bottom:8px;text-transform:uppercase">Долговая нагрузка</div>
           ${[
-            ['Общий долг (все кредиторы)', fmtKZT(f.totalDebt)],
-            ['Долг перед фондом',          fmtKZT(f.fundDebt)],
-            ['Годовое обслуживание',       fmtKZT(f.debtService)],
-            ['Ср. зарплата',               f.avgSalary ? `₸${(f.avgSalary/1000).toFixed(0)}K` : '—'],
-            ['Налоговые отчисления',       fmtKZT(f.taxContrib)],
+            ['Общий долг (все кредиторы)', fmt(f.totalDebt)],
+            ['Долг перед фондом',          fmt(f.fundDebt)],
+            ['Годовое обслуживание',       fmt(f.debtService)],
+            ['Ср. зарплата',               fmt(f.avgSalary)],
+            ['Налоговые отчисления',       fmt(f.taxContrib)],
           ].map(([l,v])=>`
             <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a2335;font-size:11px">
               <span style="color:#94a3b8">${l}</span><span style="color:#e2e8f0;font-weight:700">${v}</span>
@@ -2205,7 +2221,7 @@ function _renderPortfolioModal(p) {
           <div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:8px;text-transform:uppercase">Залог</div>
           <div style="font-size:11px;color:#e2e8f0;margin-bottom:8px">${f.collateral||'—'}</div>
           <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-            <span style="color:#94a3b8">Оценка</span><span style="color:#22c55e;font-weight:700">${fmtKZT(f.collateralVal)}</span>
+            <span style="color:#94a3b8">Оценка</span><span style="color:#22c55e;font-weight:700">${fmt(f.collateralVal)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:11px">
             <span style="color:#94a3b8">Статус</span>
@@ -2239,7 +2255,7 @@ function _renderPortfolioModal(p) {
             return `<tr style="border-bottom:1px solid #1a2335">
               <td style="padding:6px 10px;font-size:11px;color:#e2e8f0">${ps.date}</td>
               <td style="padding:6px 10px;font-size:11px;color:#94a3b8">${ps.type}</td>
-              <td style="padding:6px 10px;font-size:11px;color:#e2e8f0;text-align:right;font-weight:700">₸${(ps.amount/1000000).toFixed(1)}M</td>
+              <td style="padding:6px 10px;font-size:11px;color:#e2e8f0;text-align:right;font-weight:700">${fmt(ps.amount)}</td>
               <td style="padding:6px 10px;text-align:center">
                 <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${sCol}22;color:${sCol}">${ps.status}</span>
               </td>
@@ -2742,8 +2758,8 @@ function _renderPortfolioModal(p) {
           </div>
           <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
             ${[
-              [`$${p.invested}M инвестировано`, '#64748b'],
-              [`$${p.value}M текущая стоим.`,   '#22c55e'],
+              [`${currencySymbol(currencyForEntity(p))}${p.invested}M инвестировано`, '#64748b'],
+              [`${currencySymbol(currencyForEntity(p))}${p.value}M текущая стоим.`,   '#22c55e'],
               [`${moic}x MOIC`,                 moicColor],
               [`${p.fundShare||'—'}% доля`,     '#a78bfa'],
             ].map(([v,c])=>`<span style="font-size:12px;font-weight:700;color:${c}">${v}</span>`).join('')}
@@ -3203,7 +3219,10 @@ function renderReportCharts() {
         plugins: { legend: { labels: { color:'#8a9bbf' } } },
         scales: {
           x: { ticks:{color:'#5a6b8a'}, grid:{color:'#2a3448'} },
-          y: { ticks:{color:'#5a6b8a', callback: v=>'$'+v+'M'}, grid:{color:'#2a3448'} }
+          // Axis symbol follows activeFundId; underlying series is still
+          // static mock data (js/data.js chartData) — pre-existing
+          // limitation, out of scope for this currency-honesty sweep.
+          y: { ticks:{color:'#5a6b8a', callback: v=>currencySymbol(currencyForFundId(activeFundId))+v+'M'}, grid:{color:'#2a3448'} }
         }
       }
     });

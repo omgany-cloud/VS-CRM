@@ -27,11 +27,13 @@ let lpRegisterIdCounter = 7;
 let capitalCallsLog = [];  // populated at runtime by js/api-auth.js via GET /api/capital-calls (see server/index.js)
 
 /* ── Utility ─────────────────────────────────────────── */
+// Deprecated shim — kept so any call site this currency sweep missed
+// degrades to today's USD behavior instead of throwing. Every fund-scoped
+// render site below now calls fmtCurrency(amount, currency) directly
+// (js/currency.js), deriving the currency from the amount's own fund
+// instead of hardcoding '$'.
 function fmtUSD(n) {
-  if (!n && n !== 0) return '—';
-  if (Math.abs(n) >= 1000000) return '$' + (n/1000000).toFixed(2) + 'M';
-  if (Math.abs(n) >= 1000)    return '$' + (n/1000).toFixed(0) + 'K';
-  return '$' + n.toLocaleString();
+  return fmtCurrency(n, DEFAULT_CURRENCY);
 }
 function fmtPctLP(n) { return (n||0).toFixed(1) + '%'; }
 
@@ -98,20 +100,25 @@ function getLPCallRate(lp) {
   return (lp.calledAmount / lp.commitment * 100);
 }
 
-function getTotalCommitments() {
-  return lpRegister.filter(l => l.status === 'Active').reduce((s, l) => s + l.commitment, 0);
+// fundId is REQUIRED, no all-funds fallback — summing LPs across different
+// funds is not just a currency-label bug once funds can differ in
+// currency, it's a real arithmetic error (adding $ and ₸ into one number
+// is meaningless). Forcing every caller to pass a fundId (normally
+// activeFundId) makes that scoping decision visible and unskippable.
+function getTotalCommitments(fundId) {
+  return lpRegister.filter(l => l.status === 'Active' && l.fundId === fundId).reduce((s, l) => s + l.commitment, 0);
 }
 
-function getTotalCalled() {
-  return lpRegister.filter(l => l.status === 'Active').reduce((s, l) => s + l.calledAmount, 0);
+function getTotalCalled(fundId) {
+  return lpRegister.filter(l => l.status === 'Active' && l.fundId === fundId).reduce((s, l) => s + l.calledAmount, 0);
 }
 
-function getTotalUnfunded() {
-  return lpRegister.filter(l => l.status === 'Active').reduce((s, l) => s + getLPUnfunded(l), 0);
+function getTotalUnfunded(fundId) {
+  return lpRegister.filter(l => l.status === 'Active' && l.fundId === fundId).reduce((s, l) => s + getLPUnfunded(l), 0);
 }
 
-function getTotalDistributions() {
-  return lpRegister.filter(l => l.status === 'Active').reduce((s, l) => s + (l.distributions||0), 0);
+function getTotalDistributions(fundId) {
+  return lpRegister.filter(l => l.status === 'Active' && l.fundId === fundId).reduce((s, l) => s + (l.distributions||0), 0);
 }
 
 /** Compute pro-rata called amount for a given LP and pct */
@@ -134,6 +141,11 @@ function renderLPRegisterPage() {
   const fundLps = typeof activeFundId !== 'undefined' && activeFundId != null
     ? lpRegister.filter(l => l.fundId === activeFundId)
     : lpRegister;
+
+  // Shadow the global fmtUSD for the rest of this render pass — every LP
+  // on this page belongs to the same activeFundId, so one currency lookup
+  // covers every fmtUSD(...) call below without touching each call site.
+  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
 
   // AFSA triggers
   const activeCount  = fundLps.filter(l => l.status === 'Active').length;
@@ -352,6 +364,7 @@ function openLPDetail(lpId) {
   activeLpId = lpId;
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
 
   // Build CC history for this LP
   const ccHistory = capitalCallsLog.flatMap(cc =>
@@ -545,6 +558,7 @@ function markAfsaNotified(lpId) {
 function openCapitalAccountStatement(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
 
   // Build full call history
   const ccHistory = capitalCallsLog.flatMap(cc =>
@@ -748,6 +762,7 @@ function closeCapitalAccountStatement() {
 function generateLPWelcomeLetter(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
   const fp  = FUND_PARAMS;
   const dt  = today();
   const letterNum = 'GL-' + new Date().getFullYear() + '-LP-' + String(lp.id).padStart(3,'0');
@@ -889,6 +904,7 @@ function generateCCNotice(ccId, lpId) {
   const li = cc.lineItems.find(l => l.lpId === lpId);
   if (!li) return;
   const lp = lpRegister.find(l => l.id === lpId);
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(cc));
   const fp = FUND_PARAMS;
   const noticeNum = cc.ccNumber + '-' + String(lpId).padStart(3,'0');
   const payDue    = cc.paymentDate || '—';
@@ -1029,6 +1045,7 @@ function generateCCNotice(ccId, lpId) {
 function printCapitalAccountStatement(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
   const fp  = FUND_PARAMS;
   const dt  = today();
 
@@ -1400,7 +1417,7 @@ function saveNewLP_DISABLED() {
   if (!name) { showToast('⚠ Укажите наименование LP', 'red'); return; }
   if (!commitment || commitment < 500000) { showToast('⚠ Минимальный Commitment $500,000', 'red'); return; }
 
-  const totalCommit = getTotalCommitments();
+  const totalCommit = getTotalCommitments(activeFundId);
   if (totalCommit + commitment > FUND_PARAMS.targetSize * 1e6) {
     showToast('⚠ Превышает целевой размер фонда $' + FUND_PARAMS.targetSize + 'M', 'red'); return;
   }
@@ -1452,7 +1469,7 @@ function saveNewLP_DISABLED() {
   lpRegister.push(newLP);
 
   // Recalculate ownership %s for all LP
-  recalcOwnershipPcts();
+  recalcOwnershipPcts(activeFundId);
 
   closeNewLPModal();
   showToast(`✅ LP ${newLP.registerId} добавлен в реестр`, 'green');
@@ -1462,10 +1479,14 @@ function saveNewLP_DISABLED() {
   renderLPRegisterPage();
 }
 
-function recalcOwnershipPcts() {
-  const totalC = getTotalCommitments();
+// fundId required — ownership % is only meaningful relative to LPs of the
+// SAME fund. This was previously unscoped (recalculated every LP in every
+// fund off one grand total), which would have silently corrupted other
+// funds' ownership percentages the moment a second fund existed.
+function recalcOwnershipPcts(fundId) {
+  const totalC = getTotalCommitments(fundId);
   if (!totalC) return;
-  lpRegister.forEach(lp => {
+  lpRegister.filter(lp => lp.fundId === fundId).forEach(lp => {
     lp.ownershipPct = parseFloat((lp.commitment / totalC * 100).toFixed(2));
   });
 }
@@ -1494,6 +1515,7 @@ function renderCapitalCallsPage() {
   }).length;
   const totalMgmtFee = fundCCs.filter(cc => cc.managementFee)
     .reduce((s, cc) => s + cc.totalAmount, 0);
+  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
 
   let filtered = fundCCs.filter(cc => {
     if (ccStatusF && cc.status !== ccStatusF) return false;
@@ -1644,9 +1666,10 @@ function renderCapitalCallsPage() {
 
 /* ── Unfunded Commitment Summary ──────────────────────── */
 function renderUnfundedSummaryTable() {
-  const totalC = getTotalCommitments();
-  const totalCalled = getTotalCalled();
-  const totalUF = getTotalUnfunded();
+  const totalC = getTotalCommitments(activeFundId);
+  const totalCalled = getTotalCalled(activeFundId);
+  const totalUF = getTotalUnfunded(activeFundId);
+  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
 
   return `
     <div class="card">
@@ -1671,7 +1694,7 @@ function renderUnfundedSummaryTable() {
             </tr>
           </thead>
           <tbody>
-            ${lpRegister.filter(lp => lp.status === 'Active').map(lp => {
+            ${lpRegister.filter(lp => lp.status === 'Active' && lp.fundId === activeFundId).map(lp => {
               const unfunded = getLPUnfunded(lp);
               const callRate = getLPCallRate(lp);
               return `
@@ -1722,6 +1745,7 @@ function openCCDetail(ccId) {
   const cc = capitalCallsLog.find(c => c.id === ccId);
   if (!cc) return;
   activeCCId = ccId;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(cc));
 
   const received = cc.lineItems.reduce((s, li) => s + (li.paid||0), 0);
   const unpaid   = Math.max(0, cc.totalAmount - received);
@@ -1857,6 +1881,7 @@ async function markLPPayment(ccId, lpId) {
   if (!cc) return;
   const li = cc.lineItems.find(l => l.lpId === lpId);
   if (!li) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(cc));
 
   if (!confirm(`Подтвердить получение платежа от ${li.lpName} на сумму ${fmtUSD(li.called)}?`)) return;
 
@@ -1952,8 +1977,8 @@ function openNewCCModal() {
   if (overlay) overlay.style.display = 'block';
   document.body.style.overflow = 'hidden';
 
-  const activeLP = lpRegister.filter(lp => lp.status === 'Active');
-  const totalC   = getTotalCommitments();
+  const activeLP = lpRegister.filter(lp => lp.status === 'Active' && lp.fundId === activeFundId);
+  const totalC   = getTotalCommitments(activeFundId);
   const inpStyle = `width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box`;
   const lblStyle = `font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase`;
   const grpStyle = `margin-bottom:14px`;
@@ -2017,8 +2042,9 @@ function openNewCCModal() {
 function renderCCProRataPreview(pct, activeLP) {
   if (!activeLP || !activeLP.length) return '<div style="color:#64748b;font-size:12px">Нет активных LP</div>';
   const total = activeLP.reduce((s, lp) => s + proRata(lp, pct), 0);
+  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
   return `
-    <div style="font-size:11px;color:#22c55e;font-weight:700;margin-bottom:8px">Итого: ${fmtUSD(total)} (${pct}% от ${fmtUSD(getTotalCommitments())})</div>
+    <div style="font-size:11px;color:#22c55e;font-weight:700;margin-bottom:8px">Итого: ${fmtUSD(total)} (${pct}% от ${fmtUSD(getTotalCommitments(activeFundId))})</div>
     ${activeLP.map(lp => `
       <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px">
         <span style="color:#94a3b8">${lp.name}</span>
@@ -2029,7 +2055,7 @@ function renderCCProRataPreview(pct, activeLP) {
 function updateCCProRata() {
   const pct = parseFloat(document.getElementById('cc_pct')?.value || 5);
   const el  = document.getElementById('cc_proRataPreview');
-  if (el) el.innerHTML = renderCCProRataPreview(pct, lpRegister.filter(l => l.status === 'Active'));
+  if (el) el.innerHTML = renderCCProRataPreview(pct, lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId));
 }
 
 function updateCCPayDate() {
@@ -2060,6 +2086,7 @@ function closeNewCCModal() {
 }
 
 async function saveNewCC() {
+  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
   const pct     = parseFloat(document.getElementById('cc_pct')?.value);
   const purpose = document.getElementById('cc_purpose')?.value?.trim();
   if (!purpose)           { showToast('⚠ Укажите цель Capital Call', 'red'); return; }
@@ -2133,6 +2160,7 @@ async function saveNewCC() {
 function openIndividualCCModal(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
 
   /* Считаем задолженность: сколько вызвано, но не оплачено по всем CC */
   const pendingItems = capitalCallsLog.flatMap(cc =>
@@ -2249,6 +2277,7 @@ function updateICCPctPreview(commitment) {
 async function saveIndividualCC(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
 
   const amount     = parseFloat(document.getElementById('icc_amount')?.value);
   const purpose    = document.getElementById('icc_purpose')?.value?.trim();
@@ -2320,18 +2349,19 @@ function renderDashboardLPWidget() {
   const el = document.getElementById('dashLPWidget');
   if (!el) return;
 
-  const activeLP     = lpRegister.filter(l => l.status === 'Active');
-  const totalC       = getTotalCommitments();
-  const totalCalled  = getTotalCalled();
-  const totalUnfund  = getTotalUnfunded();
+  const activeLP     = lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId);
+  const totalC       = getTotalCommitments(activeFundId);
+  const totalCalled  = getTotalCalled(activeFundId);
+  const totalUnfund  = getTotalUnfunded(activeFundId);
   const callRate     = totalC ? totalCalled / totalC * 100 : 0;
-  const pendingCC    = capitalCallsLog.filter(cc => cc.status === 'Pending').length;
-  const overdueCC    = capitalCallsLog.filter(cc => cc.status === 'Pending' && new Date(cc.paymentDate) < new Date()).length;
+  const pendingCC    = capitalCallsLog.filter(cc => cc.status === 'Pending' && cc.fundId === activeFundId).length;
+  const overdueCC    = capitalCallsLog.filter(cc => cc.status === 'Pending' && cc.fundId === activeFundId && new Date(cc.paymentDate) < new Date()).length;
   const kycDueSoon   = lpRegister.filter(lp => {
     if (!lp.kycNextReview) return false;
     const d = new Date(lp.kycNextReview), now = new Date();
-    return (d - now) / 86400000 < 60 && lp.status === 'Active';
+    return (d - now) / 86400000 < 60 && lp.status === 'Active' && lp.fundId === activeFundId;
   }).length;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
@@ -2422,7 +2452,7 @@ async function registerLPFromOnboarding(client, saTask, actTask) {
   const kycNext    = new Date();
   kycNext.setMonth(kycNext.getMonth() + kycMos);
 
-  const totalC     = getTotalCommitments();
+  const totalC     = getTotalCommitments(activeFundId);
   const commitment = client.commitment || parseFloat(saFormData.f_subCommitment) || 0;
   const ownershipPct = (totalC + commitment) > 0 ? commitment / (totalC + commitment) * 100 : 0;
 
@@ -2472,7 +2502,7 @@ async function registerLPFromOnboarding(client, saTask, actTask) {
 
   const savedLP = { ...newLP, ...created };
   lpRegister.push(savedLP);
-  recalcOwnershipPcts();
+  recalcOwnershipPcts(activeFundId);
 
   showToast(`📋 LP ${savedLP.registerId} (${client.name}) добавлен в Реестр LP`, 'green');
 
