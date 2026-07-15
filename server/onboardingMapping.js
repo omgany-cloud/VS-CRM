@@ -156,9 +156,11 @@ const ENGAGEMENT_SCALARS = [
 function engagementToParams(e) {
   const out = {};
   for (const f of ENGAGEMENT_SCALARS) out[f] = e[f] != null ? e[f] : null;
-  // amendments is a JSON-stringified array in the original frontend already;
-  // normalize so both a raw array and a pre-stringified value work.
+  // amendments/paymentHistory are JSON-stringified arrays in the original
+  // frontend already; normalize so both a raw array and a pre-stringified
+  // value work.
   out.amendmentsJson = typeof e.amendments === 'string' ? e.amendments : JSON.stringify(e.amendments || []);
+  out.paymentHistoryJson = typeof e.paymentHistory === 'string' ? e.paymentHistory : JSON.stringify(e.paymentHistory || []);
   return out;
 }
 function rowToEngagement(row) {
@@ -171,7 +173,7 @@ function rowToEngagement(row) {
     activationDate: row.activation_date, activatedBy: row.activated_by, lpaUrl: row.lpa_url,
     lpSignedDate: row.lp_signed_date, capitalCallDate: row.capital_call_date,
     amendments: row.amendments_json, contractUrl: row.contract_url, dealValue: row.deal_value, feeRate: row.fee_rate,
-    dealRef: row.deal_ref, currency: row.currency,
+    dealRef: row.deal_ref, currency: row.currency, paymentHistory: row.payment_history_json,
   };
 }
 const ENGAGEMENT_INSERT_SQL = `
@@ -179,12 +181,12 @@ const ENGAGEMENT_INSERT_SQL = `
     (tenant_id, eng_id, client_id, client_name, service_type, contract_num, date, signed_date, status,
      fee_type, fee_amount, success_fee, retainer, pay_terms, invoiced, paid, start_date, end_date,
      rm, notes, direction, activation_date, activated_by, lpa_url, lp_signed_date, capital_call_date,
-     amendments_json, contract_url, deal_value, fee_rate, deal_ref, currency)
+     amendments_json, contract_url, deal_value, fee_rate, deal_ref, currency, payment_history_json)
   VALUES
     (@tenantId, @engId, @clientId, @clientName, @serviceType, @contractNum, @date, @signedDate, @status,
      @feeType, @feeAmount, @successFee, @retainer, @payTerms, @invoiced, @paid, @startDate, @endDate,
      @rm, @notes, @direction, @activationDate, @activatedBy, @lpaUrl, @lpSignedDate, @capitalCallDate,
-     @amendmentsJson, @contractUrl, @dealValue, @feeRate, @dealRef, @currency)
+     @amendmentsJson, @contractUrl, @dealValue, @feeRate, @dealRef, @currency, @paymentHistoryJson)
 `;
 const ENGAGEMENT_UPDATE_SQL = `
   UPDATE engagements SET
@@ -194,7 +196,8 @@ const ENGAGEMENT_UPDATE_SQL = `
     invoiced=@invoiced, paid=@paid, start_date=@startDate, end_date=@endDate, rm=@rm, notes=@notes,
     direction=@direction, activation_date=@activationDate, activated_by=@activatedBy, lpa_url=@lpaUrl,
     lp_signed_date=@lpSignedDate, capital_call_date=@capitalCallDate, amendments_json=@amendmentsJson,
-    contract_url=@contractUrl, deal_value=@dealValue, fee_rate=@feeRate, deal_ref=@dealRef, currency=@currency
+    contract_url=@contractUrl, deal_value=@dealValue, fee_rate=@feeRate, deal_ref=@dealRef, currency=@currency,
+    payment_history_json=@paymentHistoryJson
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

@@ -408,7 +408,12 @@ CREATE TABLE IF NOT EXISTS engagements (
   -- CF&A engagements aren't tied to any fund (a client may not even
   -- reference one), so unlike LP/fund economics this can't be derived
   -- from fund.currency — it's its own independent choice per engagement.
-  currency            TEXT NOT NULL DEFAULT 'USD'
+  currency            TEXT NOT NULL DEFAULT 'USD',
+  -- Audit trail for updateEngPayment() (js/onboarding.js): who changed
+  -- paid/invoiced/deal_ref and when, since those are otherwise silently
+  -- overwritten with no history. Same JSON-array-in-a-column tradeoff as
+  -- amendments_json above.
+  payment_history_json TEXT NOT NULL DEFAULT '[]'
 );
 
 -- Digital record of the Decision Matrix (GL-ONB-CF&A-001 Section 4.7) and
@@ -597,6 +602,7 @@ if (!columnExists('roles', 'read_only')) db.exec("ALTER TABLE roles ADD COLUMN r
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
 }
+if (!columnExists('engagements', 'payment_history_json')) db.exec("ALTER TABLE engagements ADD COLUMN payment_history_json TEXT NOT NULL DEFAULT '[]'");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

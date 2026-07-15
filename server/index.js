@@ -922,9 +922,17 @@ app.post('/api/coi-registry', requireAuth, requireInternal, (req, res) => {
   res.status(201).json(rowToCoi(row));
 });
 
+// invoiced/paid/feeAmount are all money — negative values here would only
+// ever come from a malformed request (the frontend inputs are min="0"), not
+// a legitimate business state, so reject them rather than storing garbage.
+function engagementHasNegativeAmount(b) {
+  return ['invoiced', 'paid', 'feeAmount', 'successFee', 'retainer'].some(f => b[f] != null && Number(b[f]) < 0);
+}
+
 app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
+  if (engagementHasNegativeAmount(b)) return res.status(400).json({ error: 'amount fields cannot be negative' });
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
   // currency has NOT NULL DEFAULT 'USD' at the schema level, but *ToParams()
   // binds an explicit NULL for any field the caller omits, which overrides
@@ -941,6 +949,7 @@ app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
 app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Engagement not found in this tenant' });
+  if (engagementHasNegativeAmount(req.body || {})) return res.status(400).json({ error: 'amount fields cannot be negative' });
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const merged = Object.assign(rowToEngagement(existing), req.body || {});
   if (chineseWallBlocks(req.user.permissions, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });

@@ -5396,7 +5396,10 @@ function openEngagementModal(engId) {
   const isFM       = e.serviceType === 'LP Investment (FM)';
   let amendArr = [];
   try { amendArr = e.amendments ? (typeof e.amendments === 'string' ? JSON.parse(e.amendments) : e.amendments) : []; } catch(_) {}
+  let paymentHistoryArr = [];
+  try { paymentHistoryArr = e.paymentHistory ? (typeof e.paymentHistory === 'string' ? JSON.parse(e.paymentHistory) : e.paymentHistory) : []; } catch(_) {}
   const docUrl = isFM ? (e.lpaUrl || '') : (e.contractUrl || '');
+  const balanceColor = balance > 0 ? '#ef4444' : balance < 0 ? '#60a5fa' : '#22c55e';
 
   // Build info rows dynamically (skip empty optional fields)
   const infoRows = [
@@ -5456,7 +5459,7 @@ function openEngagementModal(engId) {
           ['Гонорар', fmtCurrency(e.feeAmount, e.currency||'USD'), '#e2e8f0'],
           ['Инвойсировано', fmtCurrency(e.invoiced, e.currency||'USD'), '#f97316'],
           ['Оплачено', fmtCurrency(e.paid, e.currency||'USD'), '#22c55e'],
-          ['Остаток', fmtCurrency(balance, e.currency||'USD'), balance>0?'#ef4444':'#22c55e'],
+          [balance < 0 ? 'Переплата' : 'Остаток', fmtCurrency(Math.abs(balance), e.currency||'USD'), balanceColor],
         ].map(([l,v,c]) => `
           <div style="text-align:center;background:#0f1623;border-radius:8px;padding:10px">
             <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">${l}</div>
@@ -5469,16 +5472,21 @@ function openEngagementModal(engId) {
           <div style="width:${e.invoiced>0?Math.min(100,Math.round(e.paid/e.invoiced*100)):0}%;height:6px;background:#22c55e;border-radius:3px"></div>
         </div>
       </div>
-      <!-- Quick pay update -->
-      <div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end">
-        <div style="flex:1">
+      <!-- Quick update: payment + deal ref -->
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:1;min-width:110px">
           <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Оплачено" (${currencySymbol(e.currency||'USD')})</div>
           <input type="number" id="engPaidUpdate" value="${e.paid}" min="0"
             style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
-        <div style="flex:1">
+        <div style="flex:1;min-width:110px">
           <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Инвойсировано" (${currencySymbol(e.currency||'USD')})</div>
           <input type="number" id="engInvoicedUpdate" value="${e.invoiced}" min="0"
+            style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+        </div>
+        <div style="flex:1;min-width:130px">
+          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Deal Ref</div>
+          <input type="text" id="engDealRefUpdate" value="${e.dealRef ? e.dealRef.replace(/"/g,'&quot;') : ''}" placeholder="DEAL-XXX-2026"
             style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
         <button onclick="updateEngPayment(${e.id})"
@@ -5487,6 +5495,16 @@ function openEngagementModal(engId) {
         </button>
       </div>
     </div>
+
+    ${paymentHistoryArr.length > 0 ? `
+    <div style="background:#0f1623;border-radius:8px;padding:9px 12px;margin-bottom:12px">
+      <div style="font-size:10px;color:#22c55e;text-transform:uppercase;font-weight:700;margin-bottom:8px"><i class="fas fa-clock-rotate-left" style="margin-right:4px"></i>История изменений оплаты (${paymentHistoryArr.length})</div>
+      ${paymentHistoryArr.slice().reverse().map(h => `
+        <div style="padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px">
+          <span style="color:#94a3b8;min-width:140px;display:inline-block">${h.at||'—'} · ${h.by||'—'}</span>
+          <span style="color:#e2e8f0">${h.note||'—'}</span>
+        </div>`).join('')}
+    </div>` : ''}
 
     ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c2333;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${e.notes}</div>` : ''}
 
@@ -5514,16 +5532,32 @@ async function updateEngPayment(engId) {
   if (!e) return;
   const paid     = parseFloat(document.getElementById('engPaidUpdate')?.value) || 0;
   const invoiced = parseFloat(document.getElementById('engInvoicedUpdate')?.value) || 0;
-  const prevPaid = e.paid, prevInvoiced = e.invoiced;
+  const dealRef  = document.getElementById('engDealRefUpdate')?.value.trim() || null;
+  if (paid < 0 || invoiced < 0) { showToast('⚠️ Суммы не могут быть отрицательными', 'red'); return; }
+
+  const prevPaid = e.paid, prevInvoiced = e.invoiced, prevDealRef = e.dealRef, prevHistory = e.paymentHistory;
+  let historyArr = [];
+  try { historyArr = e.paymentHistory ? (typeof e.paymentHistory === 'string' ? JSON.parse(e.paymentHistory) : e.paymentHistory) : []; } catch(_) {}
+  const changes = [];
+  if (paid !== e.paid)         changes.push(`Оплачено: ${fmtCurrency(e.paid, e.currency||'USD')} → ${fmtCurrency(paid, e.currency||'USD')}`);
+  if (invoiced !== e.invoiced) changes.push(`Инвойсировано: ${fmtCurrency(e.invoiced, e.currency||'USD')} → ${fmtCurrency(invoiced, e.currency||'USD')}`);
+  if (dealRef !== (e.dealRef || null)) changes.push(`Deal Ref: ${e.dealRef || '—'} → ${dealRef || '—'}`);
+  if (changes.length) historyArr = [...historyArr, { at: today(), by: currentUserDisplayName(), note: changes.join('; ') }];
+
   e.paid     = paid;
   e.invoiced = invoiced;
+  e.dealRef  = dealRef;
+  e.paymentHistory = historyArr;
   try {
     const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(e) });
     Object.assign(e, updated);
     const balance = e.invoiced - e.paid;
-    showToast(`💰 Оплата обновлена. Остаток: ${fmtCurrency(balance, e.currency||'USD')}`, balance>0?'orange':'green');
+    const balanceMsg = balance > 0 ? `Остаток: ${fmtCurrency(balance, e.currency||'USD')}`
+                      : balance < 0 ? `Переплата: ${fmtCurrency(-balance, e.currency||'USD')}`
+                      : 'Оплачено полностью';
+    showToast(`💰 Оплата обновлена. ${balanceMsg}`, balance>0?'orange':balance<0?'blue':'green');
   } catch (err) {
-    e.paid = prevPaid; e.invoiced = prevInvoiced;
+    e.paid = prevPaid; e.invoiced = prevInvoiced; e.dealRef = prevDealRef; e.paymentHistory = prevHistory;
     showToast('⚠️ Не удалось сохранить оплату: ' + err.message, 'red');
   }
   openEngagementModal(engId);   // re-render
@@ -5536,24 +5570,31 @@ function openNewEngagementModal() {
   document.body.style.overflow = 'hidden';
 
   const seq = String(engIdCounter).padStart(3,'0');
-  const clientOptions = obClients.filter(c => c.activated).map(c =>
+  // FM engagements (LP subscriptions) are generated automatically as part
+  // of the onboarding wizard's FM task flow (see registerLPFromOnboarding
+  // and the activation-task handling below) with their own required fields
+  // (LPA, LP signed date, first capital call date) — this generic form
+  // always creates a CF&A engagement, so only CF&A clients are offered
+  // here to avoid mislabeling an FM client's contract as CF&A.
+  const clientOptions = obClients.filter(c => c.activated && c.direction !== 'FM').map(c =>
     `<option value="${c.id}">${c.name} (${c.clientId})</option>`).join('');
 
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="font-size:14px;font-weight:800;color:#f1f5f9;margin-bottom:16px">
       <i class="fas fa-file-contract" style="color:#22c55e;margin-right:8px"></i>Новый договор
     </div>
+    <div style="font-size:11px;color:#5a6b8a;margin-bottom:12px">Только для клиентов CF&amp;A — договоры FM (LP Investment) создаются автоматически на этапе онбординга LP.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div style="grid-column:1/-1">
         <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
         <select id="eng_clientId" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
-          ${clientOptions || '<option value="">— Нет активированных клиентов —</option>'}
+          ${clientOptions || '<option value="">— Нет активированных клиентов CF&A —</option>'}
         </select>
       </div>
       ${obNewSelect('eng_serviceType','Тип услуги',['Advising','Arranging','Both'],null)}
       ${obNewSelect('eng_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'],null)}
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Сумма *</label>
-        <input type="number" id="eng_feeAmount" placeholder="50000"
+        <input type="number" id="eng_feeAmount" placeholder="50000" min="0"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Валюта *</label>
         <select id="eng_currency" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
@@ -5562,6 +5603,10 @@ function openNewEngagementModal() {
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
         <input type="date" id="eng_date" value="${today()}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref (опционально)</label>
+        <input type="text" id="eng_dealRef" placeholder="DEAL-XXX-2026"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+        <div style="font-size:10px;color:#5a6b8a;margin-top:3px">Если у клиента уже есть договор с тем же Deal Ref, система считает это Dual-Mandate — требует рассмотрения CF Deal Committee.</div></div>
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Примечания</label>
         <textarea id="eng_notes" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
     </div>
@@ -5580,8 +5625,17 @@ async function saveNewEngagement() {
   const clientIdVal = document.getElementById('eng_clientId')?.value;
   const client = obClients.find(c => String(c.id) === String(clientIdVal));
   const feeAmount = parseFloat(document.getElementById('eng_feeAmount')?.value) || 0;
+  const dealRef = document.getElementById('eng_dealRef')?.value.trim() || null;
   if (!client) { showToast('⚠️ Выберите клиента', 'red'); return; }
-  if (!feeAmount) { showToast('⚠️ Введите сумму гонорара', 'red'); return; }
+  if (feeAmount <= 0) { showToast('⚠️ Сумма гонорара должна быть больше 0', 'red'); return; }
+
+  // Two engagements for the same client sharing a Deal Ref is exactly the
+  // Dual-Mandate scenario (COI Addendum Section D) — flag it up front
+  // instead of letting it pass silently, since nothing else in the app
+  // currently cross-checks deal_ref automatically.
+  if (dealRef && engagements.some(e => e.clientId === client.id && e.dealRef === dealRef)) {
+    if (!confirm(`У клиента "${client.name}" уже есть договор с Deal Ref "${dealRef}" — это Dual-Mandate (Advising + Arranging по одной сделке) и требует обязательного рассмотрения CF Deal Committee через раздел «Конфликты / Одобрения». Продолжить создание?`)) return;
+  }
 
   const seq = String(engIdCounter++).padStart(3,'0');
   const eng = {
@@ -5605,6 +5659,7 @@ async function saveNewEngagement() {
     endDate:     '',
     rm:          currentUserDisplayName(),
     notes:       document.getElementById('eng_notes')?.value || '',
+    dealRef,
   };
   try {
     const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(eng) });
