@@ -1170,10 +1170,7 @@ function _renderDealModal(d) {
   else if (_activeDealTab === 'dd') {
     tabContent = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <div style="${gS}"><label style="${lS}">Дедлайн DD</label>
-          <input type="date" style="${iS}" value="${d.ddDeadline||''}"
-            onchange="dealField(${d.id},'ddDeadline',this.value)" /></div>
-        <div style="${gS}"><label style="${lS}">Юрист фонда</label>
+        <div style="${gS};grid-column:1/-1"><label style="${lS}">Юрист фонда</label>
           <input style="${iS}" value="${d.tsFundLawyer||''}"
             onchange="dealField(${d.id},'tsFundLawyer',this.value)" placeholder="Dentons / GRATA..." /></div>
       </div>
