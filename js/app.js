@@ -993,23 +993,6 @@ function _renderDealModal(d) {
   const lS = `font-size:10px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:3px;text-transform:uppercase`;
   const gS = `margin-bottom:12px`;
 
-  /* ── DD status helpers ── */
-  const ddStatusColor = s => s==='OK'?'#22c55e':s==='В процессе'||s==='Получен'?'#f97316':s==='Red Flag'?'#ef4444':'#64748b';
-  const ddStatusIcon  = s => s==='OK'?'fa-check-circle':s==='В процессе'?'fa-spinner':s==='Получен'?'fa-download':s==='Red Flag'?'fa-exclamation-triangle':'fa-clock';
-  const ddBlock = (title, items, color) => `
-    <div style="background:#0f1623;border-radius:10px;padding:12px 14px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-folder" style="margin-right:5px"></i>${title}
-      </div>
-      ${!items||!items.length ? `<div style="font-size:11px;color:#475569;font-style:italic">Нет данных</div>` :
-        items.map(it => `
-          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a2335">
-            <i class="fas ${ddStatusIcon(it.status)}" style="color:${ddStatusColor(it.status)};font-size:11px;width:12px;text-align:center"></i>
-            <span style="flex:1;font-size:11px;color:#e2e8f0">${it.item}</span>
-            <span style="font-size:10px;color:${ddStatusColor(it.status)};font-weight:600;cursor:pointer"
-              onclick="event.stopPropagation();cycleDDStatus(${d.id},'${title}',${items.indexOf(it)})">${it.status}</span>
-          </div>`).join('')}
-    </div>`;
 
   /* ── Vote badge ── */
   /* ── Tab content ── */
@@ -1207,14 +1190,6 @@ function _renderDealModal(d) {
             <i class="fas fa-external-link-alt" style="margin-right:4px"></i>Открыть</button>` : ''}
         </div>
       </div>
-      ${ddBlock('Юридическое DD', d.ddLegal, '#3b82f6')}
-      ${ddBlock('Финансовое DD',  d.ddFinancial, '#22c55e')}
-      ${ddBlock('Техническое DD', d.ddTech, '#8b5cf6')}
-      ${ddBlock('Коммерческое DD',d.ddCommercial, '#f97316')}
-      ${ddBlock('Risk DD',        d.ddRisk, '#dc2626')}
-      ${ddBlock('Compliance DD',  d.ddCompliance, '#a855f7')}
-      ${ddBlock('MLRO DD',        d.ddMlro, '#0ea5e9')}
-
       ${(d.ddRedFlags||[]).length ? `
         <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:10px 14px;margin-bottom:10px">
           <div style="font-size:10px;font-weight:700;color:#ef4444;margin-bottom:6px">
@@ -1469,28 +1444,6 @@ function dealMoveStage(id, stage) {
   showToast(`✅ ${d.company} → ${stage}`, 'green');
   _renderDealModal(d);
   renderPipeline(deals);
-}
-
-async function cycleDDStatus(id, blockTitle, idx) {
-  const d = deals.find(x => x.id === id);
-  if (!d) return;
-  const map = {
-    'Юридическое DD':'ddLegal','Финансовое DD':'ddFinancial','Техническое DD':'ddTech','Коммерческое DD':'ddCommercial',
-    'Risk DD':'ddRisk','Compliance DD':'ddCompliance','MLRO DD':'ddMlro',
-  };
-  const key = map[blockTitle];
-  if (!key || !d[key] || !d[key][idx]) return;
-  const cycle = ['Запрошен','Получен','В процессе','OK','Red Flag'];
-  const prevStatus = d[key][idx].status;
-  d[key][idx].status = cycle[(cycle.indexOf(prevStatus)+1) % cycle.length];
-  _renderDealModal(d);
-  try {
-    await apiFetch(`/api/deals/${d.id}`, { method: 'PUT', body: JSON.stringify({ [key]: d[key] }) });
-  } catch (err) {
-    d[key][idx].status = prevStatus;
-    _renderDealModal(d);
-    showToast('⚠️ Не удалось сохранить статус DD: ' + err.message, 'red');
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════
