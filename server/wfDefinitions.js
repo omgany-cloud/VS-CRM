@@ -22,26 +22,21 @@ const WF_DEFINITIONS = {
       { role: 'CEO', label: 'CEO — финальное одобрение', action: 'approve' },
     ],
   },
+  // Historical only — no call site anywhere creates a new 'deal_ic'
+  // instance (confirmed: startWorkflow() is only ever invoked with
+  // 'kyc_lp'/'kyc_cfa'). Kept because 5 seeded workflow_instances rows
+  // (server/seed.js) already use this type for deals whose IC decision
+  // predates the js/modules.js icMemos system — deleting the definition
+  // would break WF_DEFINITIONS[w.type] lookups for those real historical
+  // records. Going forward, an IC decision is tracked by icMemos (richer:
+  // 4-seat quorum voting + independent Risk Manager veto), not this
+  // generic 3-step chain — the two aren't meant to coexist for new deals.
   deal_ic: {
     label: 'Инвестиционный комитет',
     steps: [
       { role: 'ANALYST', label: 'Analyst — Investment Memo', action: 'review' },
       { role: 'RELATIONSHIP_MANAGER', label: 'RM — коммерческая оценка', action: 'review' },
       { role: 'CEO', label: 'IC — решение комитета', action: 'approve' },
-    ],
-  },
-  capital_call: {
-    label: 'Capital Call — согласование',
-    steps: [
-      { role: 'COMPLIANCE_OFFICER', label: 'CO — подготовка Notice', action: 'review' },
-      { role: 'CEO', label: 'CEO — подписание Notice', action: 'sign' },
-    ],
-  },
-  subscription: {
-    label: 'Subscription Agreement',
-    steps: [
-      { role: 'COMPLIANCE_OFFICER', label: 'CO — проверка SA', action: 'review' },
-      { role: 'CEO', label: 'CEO — подписание SA', action: 'sign' },
     ],
   },
 };

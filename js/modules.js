@@ -891,6 +891,7 @@ async function castICVote(memoId, voteIdx, vote) {
   const approveN  = m.votes.filter(v => v.vote === 'approve').length;
   const rejectN   = m.votes.filter(v => v.vote === 'reject').length;
   let toastMsg = null, toastColor = 'blue';
+  let dealToSync = null;
   if (allVoted || (m.quorumMet && approveN > m.votes.length / 2)) {
     m.status     = approveN >= rejectN ? 'approved' : 'rejected';
     const quorumNote = m.quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
@@ -898,7 +899,14 @@ async function castICVote(memoId, voteIdx, vote) {
       ? `Инвестиция одобрена большинством голосов (${approveN}/${m.votes.length}). Сумма: $${m.amount}M.`
       : `Инвестиция отклонена (${rejectN} против).`) + quorumNote;
     const deal = deals.find(d => d.id === m.dealId);
-    if (deal) deal.ic = m.status === 'approved' ? 'Одобрено' : 'Отклонено';
+    // icDecision/ic are two parallel fields the manual dropdown (js/app.js's
+    // dealField() calls in the deal detail modal) always updates together —
+    // matching that here so a deal closed-by-vote doesn't show a stale
+    // 'Не подано' the next time someone opens its detail modal.
+    if (deal) {
+      deal.ic = deal.icDecision = m.status === 'approved' ? 'Одобрено' : 'Отклонено';
+      dealToSync = deal;
+    }
     toastMsg = m.status === 'approved' ? '✅ IC одобрил инвестицию!' : '❌ IC отклонил инвестицию';
     toastColor = m.status === 'approved' ? 'green' : 'red';
   } else {
@@ -910,6 +918,18 @@ async function castICVote(memoId, voteIdx, vote) {
       method: 'PUT',
       body: JSON.stringify({ votes: m.votes, quorumMet: m.quorumMet, status: m.status, resolution: m.resolution }),
     });
+    // Persist the deal's IC decision too — previously this only ever
+    // updated the in-memory deals[] array (no PUT call anywhere in the
+    // frontend touches an existing deal), so a real committee decision
+    // could be silently lost on reload. Only the changed field is sent,
+    // same reasoning as the memo-creation sync above.
+    if (dealToSync) {
+      try {
+        await apiFetch(`/api/deals/${dealToSync.id}`, { method: 'PUT', body: JSON.stringify({ ic: dealToSync.ic, icDecision: dealToSync.icDecision }) });
+      } catch (dealErr) {
+        showToast('⚠️ Голос сохранён, но не удалось обновить статус сделки: ' + dealErr.message, 'orange');
+      }
+    }
     showToast(toastMsg, toastColor);
   } catch (err) {
     showToast('⚠️ Не удалось сохранить голос: ' + err.message, 'red');
@@ -1196,10 +1216,21 @@ async function saveNewICMemo() {
   try {
     const created = await apiFetch('/api/ic-memos', { method: 'POST', body: JSON.stringify(newMemo) });
 
-    // If deal exists — update its IC stage (local-only; deals[] isn't API-backed)
+    // If deal exists — update its IC stage. Only the changed field is
+    // sent (PUT /api/deals/:id merges onto the existing row), not the
+    // whole local deal object, since other deal fields (KPIs, comments)
+    // are edited elsewhere without ever being saved and shouldn't get
+    // pulled in as a side effect of this save.
     if (created.dealId && typeof deals !== 'undefined') {
       const deal = deals.find(d => d.id === created.dealId);
-      if (deal) deal.stage = 'IC Review';
+      if (deal) {
+        deal.stage = 'IC Review';
+        try {
+          await apiFetch(`/api/deals/${deal.id}`, { method: 'PUT', body: JSON.stringify({ stage: deal.stage }) });
+        } catch (dealErr) {
+          showToast('⚠️ Меморандум создан, но не удалось обновить стадию сделки: ' + dealErr.message, 'orange');
+        }
+      }
     }
 
     await loadIcMemosFromApi();

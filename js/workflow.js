@@ -1,8 +1,13 @@
 // ============================================================
 //  workflow.js — Approval Workflow Engine
 //  Golden Leaves Ltd / Turan Capital Fund LP
-//  Covers: KYC/AML approvals CO→MLRO→CEO, Deal IC workflow,
-//          Capital Call approvals, CF&A onboarding sign-offs
+//  Covers: KYC/AML approvals CO→MLRO→CEO. 'deal_ic' also exists below
+//  purely to render 5 historical seeded records — no live call site
+//  creates a new one (see server/wfDefinitions.js's comment on it; an
+//  IC decision going forward is tracked by js/modules.js's icMemos
+//  system instead, not this generic chain). 'capital_call'/
+//  'subscription' definitions were removed — never had a call site or
+//  seed data, purely dead code.
 // ============================================================
 
 /* ─── Workflow Definitions ─────────────────────────────────
@@ -38,24 +43,6 @@ const WF_DEFINITIONS = {
       { role: 'ANALYST', label: 'Analyst — Investment Memo',   action: 'review'  },
       { role: 'RELATIONSHIP_MANAGER',      label: 'RM — коммерческая оценка',    action: 'review'  },
       { role: 'CEO',     label: 'IC — решение комитета',       action: 'approve' },
-    ]
-  },
-  capital_call: {
-    label: 'Capital Call — согласование',
-    icon: 'fa-coins',
-    color: '#22c55e',
-    steps: [
-      { role: 'COMPLIANCE_OFFICER',  label: 'CO — подготовка Notice',      action: 'review'  },
-      { role: 'CEO', label: 'CEO — подписание Notice',     action: 'sign'    },
-    ]
-  },
-  subscription: {
-    label: 'Subscription Agreement',
-    icon: 'fa-file-signature',
-    color: '#14b8a6',
-    steps: [
-      { role: 'COMPLIANCE_OFFICER',   label: 'CO — проверка SA',           action: 'review'  },
-      { role: 'CEO',  label: 'CEO — подписание SA',        action: 'sign'    },
     ]
   },
 };
