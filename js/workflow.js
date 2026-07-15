@@ -332,6 +332,20 @@ async function wfAction(id, decision) {
   const step   = w.steps[w.currentStep];
   if (!step || step.role !== myRole) { showToast('Не ваш шаг', 'red'); return; }
 
+  // Same one-shot-decision rule as withdrawWf/castICVote/decideConflictApproval:
+  // no step here has an "undo" control once recorded. A rejection is at
+  // least as consequential as a withdrawal — it kills the whole workflow
+  // immediately (server: status → 'rejected', terminal) with no restart
+  // control in the UI either. Approving the final step is equally terminal
+  // and pushes the result onto the real entity (syncWfToEntity).
+  const isFinalStep = w.currentStep === w.steps.length - 1;
+  const confirmMsg = decision === 'rejected'
+    ? `Отклонить этот шаг по «${w.entityName}»? Это немедленно завершит весь workflow как отклонённый — чтобы повторить, процесс нужно будет запускать заново с самого начала. Продолжить?`
+    : isFinalStep
+      ? `Это финальный шаг согласования «${w.entityName}» — решение сразу переведёт статус в «Одобрено» и применится к записи. Отменить нельзя. Продолжить?`
+      : `Одобрить этот шаг по «${w.entityName}»? Решение будет зафиксировано без возможности отмены. Продолжить?`;
+  if (!confirm(confirmMsg)) return;
+
   try {
     const updated = await apiFetch(`/api/workflow/${id}`, {
       method: 'PUT',
@@ -360,7 +374,10 @@ async function wfAction(id, decision) {
 }
 
 async function withdrawWf(id) {
-  if (!confirm('Отозвать этот workflow?')) return;
+  const w = workflowInstances.find(x => x.id === id);
+  // No restart control in the UI — undoing this means manually re-triggering
+  // the whole source process and collecting every step's approval again.
+  if (!confirm(`Отозвать workflow по «${w ? w.entityName : 'этой записи'}»? Все уже собранные согласования будут потеряны — восстановить нельзя, для повтора процесс нужно будет запускать заново с начала. Продолжить?`)) return;
   try {
     const updated = await apiFetch(`/api/workflow/${id}/withdraw`, { method: 'POST' });
     const idx = workflowInstances.findIndex(x => x.id === id);
