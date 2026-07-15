@@ -1996,3 +1996,16 @@ select option { background: var(--bg-card); }
   border: 1px solid rgba(239, 68, 68, 0.15);
 }
 .kyc-check-item.missing i { color: #ef4444; }
+
+/* ── Read-only role: visually dim controls that would trigger a mutating
+   API call (create/edit/delete/decide/etc.) — applied by the sweep in
+   js/api-auth.js so a read-only user sees the same restriction the server
+   already enforces, instead of fully-interactive buttons that just fail
+   after the fact. pointer-events:none also structurally blocks the click,
+   on top of apiFetch's own guard. ── */
+.ro-disabled {
+  opacity: 0.4 !important;
+  filter: grayscale(40%);
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}

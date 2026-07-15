@@ -48,6 +48,8 @@ function updateUserRoleUI(role) {
 
   const roBanner = document.getElementById('readOnlyBanner');
   if (roBanner) roBanner.style.display = currentUserPermission('readOnly') ? '' : 'none';
+
+  if (typeof applyReadOnlyUI === 'function') applyReadOnlyUI();
 }
 
 // Repurposed from the old self-service role switcher: now just opens the

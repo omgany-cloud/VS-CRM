@@ -83,6 +83,60 @@ async function apiFetch(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
+// ── Read-only visual dimming ─────────────────────────────────────────
+// The exact, closed set of onclick handlers that call apiFetch with a
+// mutating method (derived by grepping every `method: 'POST'|'PUT'|
+// 'PATCH'|'DELETE'` call site in js/*.js and reading off the enclosing
+// function name — not a guess). Deliberately does NOT include functions
+// that only open a modal/form to view or edit something (e.g.
+// openFundModal, openDealDetailModal) — a read-only user should still be
+// able to open and inspect any record; only the action that would
+// actually attempt to persist a change gets dimmed. Keep this list in
+// sync when a new mutating action is added — apiFetch's own guard above
+// still blocks it either way, this only affects whether it *looks*
+// disabled ahead of the click.
+const READONLY_GATED_FN_NAMES = [
+  'saveChangePassword', 'saveDeal', 'savePortfolio', 'handleFileUpload',
+  'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveNewCC', 'saveIndividualCC',
+  'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
+  'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
+  'saveNewConflictApproval', 'decideConflictApproval', 'saveNewUser',
+  'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveNewRole',
+  'saveRoleEdit', 'deleteRole', 'wfAction', 'withdrawWf', 'startWorkflow',
+];
+const READONLY_GATED_FN_RE = new RegExp('^\\s*(' + READONLY_GATED_FN_NAMES.join('|') + ')\\s*\\(');
+// Triggers that don't call a gated function directly by name (e.g. the
+// hidden <input type="file"> is fired via a wrapper div's onclick) —
+// matched by selector instead.
+const READONLY_GATED_SELECTORS = ['.doc-upload-zone'];
+
+let _roSweepScheduled = false;
+function scheduleReadOnlySweep() {
+  if (_roSweepScheduled) return;
+  _roSweepScheduled = true;
+  requestAnimationFrame(() => {
+    _roSweepScheduled = false;
+    applyReadOnlyUI();
+  });
+}
+
+function applyReadOnlyUI() {
+  const isRO = currentUserPermission('readOnly');
+  document.querySelectorAll('[onclick]').forEach(el => {
+    const isGated = READONLY_GATED_FN_RE.test(el.getAttribute('onclick') || '');
+    if (isGated) el.classList.toggle('ro-disabled', isRO);
+    else if (el.classList.contains('ro-disabled')) el.classList.remove('ro-disabled');
+  });
+  READONLY_GATED_SELECTORS.forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => el.classList.toggle('ro-disabled', isRO));
+  });
+}
+
+if (typeof document !== 'undefined') {
+  new MutationObserver(scheduleReadOnlySweep)
+    .observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['onclick'] });
+}
+
 /* ===== Funds — backed by the real API =====
    Loaded first, before every other loader (loadAllApiData below awaits
    this one), so activeFundId is set to a real fund id before any
