@@ -532,7 +532,7 @@ function renderObClientTable(clients) {
                   ${detailLine}
                   ${c.restrictedMatch ? '<div style="font-size:10px;color:#ef4444;font-weight:700">⚠ Restricted List</div>' : ''}
                 </td>
-                <td style="font-size:12px">${c.type}</td>
+                <td style="font-size:12px">${statusLabel(c.type)}</td>
                 <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:${isFm?'rgba(59,130,246,0.12)':'rgba(139,92,246,0.12)'};color:${isFm?'#3b82f6':'#8b5cf6'}">${c.direction}</span></td>
                 <td><span style="font-size:11px;font-weight:700;color:#f97316">Phase ${c.phase}</span></td>
                 <td>${obStatusBadge(c.onboardingStatus)}</td>
@@ -565,7 +565,7 @@ function obStatusBadge(s) {
 }
 function obRiskBadge(r) {
   const cfg = { Low:{ bg:'rgba(34,197,94,0.12)', c:'#22c55e' }, Medium:{ bg:'rgba(249,115,22,0.12)', c:'#f97316' }, High:{ bg:'rgba(239,68,68,0.12)', c:'#ef4444' } }[r] || {};
-  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg||'#1c2333'};color:${cfg.c||'#94a3b8'}">${r||'—'}</span>`;
+  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg||'#1c2333'};color:${cfg.c||'#94a3b8'}">${r ? statusLabel(r) : '—'}</span>`;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -627,11 +627,11 @@ function renderObClientModal(clientId) {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
           <span style="font-size:17px;font-weight:800;color:#f1f5f9">${c.name}</span>
           ${c.restrictedMatch ? '<span style="font-size:11px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:2px 8px;font-weight:700">⚠ Restricted List</span>' : ''}
-          ${c.activated ? '<span style="font-size:11px;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:2px 8px;font-weight:700">✅ Active</span>' : ''}
+          ${c.activated ? '<span style="font-size:11px;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:2px 8px;font-weight:700">✅ Активен</span>' : ''}
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8a9bbf">
           <span style="color:#8b5cf6;font-weight:700">${c.clientId}</span>
-          <span>${c.type}</span>
+          <span>${statusLabel(c.type)}</span>
           <span style="font-weight:700;color:${c.direction==='FM'?'#3b82f6':'#8b5cf6'}">${c.direction}</span>
           ${c.direction==='FM'
             ? `<span style="background:rgba(59,130,246,0.1);color:#60a5fa;border-radius:5px;padding:1px 7px;font-weight:700">🏦 LP · ${c.lpType||'HNWI'}</span>
@@ -1499,7 +1499,7 @@ function buildTaskForm(task, client) {
           Тип оценки: ${isAdvising
             ? '🎯 Suitability Assessment (Section 3.2) — услуга: Advising on Investments'
             : '📋 Appropriateness Assessment (Section 3.3) — услуга: Arranging Deals in Investments'}
-          <span style="font-weight:400;color:#64748b;font-size:11px;margin-left:4px">· Клиент: ${client.type}</span>
+          <span style="font-weight:400;color:#64748b;font-size:11px;margin-left:4px">· Клиент: ${statusLabel(client.type)}</span>
         </div>
         <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:8px;padding:8px 14px;margin-bottom:14px;font-size:11px;color:#94a3b8">
           ${isAdvising
@@ -2185,7 +2185,7 @@ function buildTaskForm(task, client) {
         <!-- LP type + policy notice -->
         <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px">
           <i class="fas fa-id-card" style="color:#3b82f6"></i>
-          <span>Тип LP: <b style="color:#60a5fa">${client.type}</b> · LP Type: <b style="color:#60a5fa">${client.lpType||'HNWI'}</b></span>
+          <span>Тип LP: <b style="color:#60a5fa">${statusLabel(client.type)}</b> · LP Type: <b style="color:#60a5fa">${client.lpType||'HNWI'}</b></span>
         </div>
 
         <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
@@ -4780,7 +4780,7 @@ function openNewObClientModal(editId) {
 
   function sel(id, label, opts, val) {
     var v = val || opts[0];
-    var options = opts.map(function(o){ return '<option value="' + o + '"' + (v === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+    var options = opts.map(function(o){ return '<option value="' + o + '"' + (v === o ? ' selected' : '') + '>' + statusLabel(o) + '</option>'; }).join('');
     return '<div><label style="' + labelStyle + '">' + label + '</label>'
          + '<select id="' + id + '" style="' + inputStyle + '">' + options + '</select></div>';
   }
@@ -4898,7 +4898,7 @@ function obNewSelect(id, label, options, selected) {
   return `<div>
     <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">${label}</label>
     <select id="${id}" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
-      ${options.map(o => `<option ${(selected||options[0])===o?'selected':''}>${o}</option>`).join('')}
+      ${options.map(o => `<option value="${o}" ${(selected||options[0])===o?'selected':''}>${statusLabel(o)}</option>`).join('')}
     </select>
   </div>`;
 }
@@ -5284,10 +5284,10 @@ function renderEngagementsPage() {
       <select onchange="engStatusFilter=this.value;renderEngagementsPage()"
         style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
         <option value="" ${engStatusFilter===''?'selected':''}>Все статусы</option>
-        <option value="Active"      ${engStatusFilter==='Active'?'selected':''}>Active</option>
-        <option value="Draft"       ${engStatusFilter==='Draft'?'selected':''}>Draft</option>
-        <option value="Completed"   ${engStatusFilter==='Completed'?'selected':''}>Completed</option>
-        <option value="Terminated"  ${engStatusFilter==='Terminated'?'selected':''}>Terminated</option>
+        <option value="Active"      ${engStatusFilter==='Active'?'selected':''}>Активен</option>
+        <option value="Draft"       ${engStatusFilter==='Draft'?'selected':''}>Черновик</option>
+        <option value="Completed"   ${engStatusFilter==='Completed'?'selected':''}>Завершён</option>
+        <option value="Terminated"  ${engStatusFilter==='Terminated'?'selected':''}>Прекращён</option>
       </select>
       <select onchange="engDirFilter=this.value;renderEngagementsPage()"
         style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
@@ -5339,13 +5339,13 @@ function renderEngagementsPage() {
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${dirBg};color:${dirColor}">${dirLabel}</span>
                     <div style="font-size:10px;color:#5a6b8a;margin-top:2px">${e.serviceType}</div>
                   </td>
-                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${statusCfg.bg};color:${statusCfg.c}">${e.status}</span>
+                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${statusCfg.bg};color:${statusCfg.c}">${statusLabel(e.status)}</span>
                     ${e.activationDate ? `<div style="font-size:9px;color:#22c55e;margin-top:2px">✓ ${e.activationDate}</div>` : ''}
                   </td>
                   <td style="font-size:12px;color:#94a3b8">${signed}</td>
                   <td>
                     <div style="font-weight:700;color:#22c55e;font-size:13px">${fmtCurrency(e.feeAmount||0, e.currency||'USD')}</div>
-                    <div style="font-size:10px;color:#5a6b8a">${e.feeType}</div>
+                    <div style="font-size:10px;color:#5a6b8a">${statusLabel(e.feeType)}</div>
                   </td>
                   <td style="font-size:12px;color:#f97316">${fmtCurrency(e.invoiced||0, e.currency||'USD')}</td>
                   <td style="font-size:12px;color:#22c55e">${fmtCurrency(e.paid||0, e.currency||'USD')}</td>
@@ -5392,8 +5392,8 @@ function openEngagementModal(engId) {
     ['Дата подписания',   e.signedDate  || e.date || '—'],
     ['Клиент',            e.clientName],
     ['Тип услуги',        e.serviceType],
-    ['Тип fee',           e.feeType],
-    ['Статус',            e.status],
+    ['Тип fee',           statusLabel(e.feeType)],
+    ['Статус',            statusLabel(e.status)],
     ['Срок',              (e.startDate||'—') + ' → ' + (e.endDate||'—')],
     ['RM',                e.rm],
     ...(e.activationDate ? [['Дата активации',  e.activationDate]] : []),
@@ -5682,10 +5682,10 @@ function renderConflictApprovalsPage() {
       <select onchange="conflictStatusFilter=this.value;renderConflictApprovalsPage()"
         style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
         <option value="" ${conflictStatusFilter===''?'selected':''}>Все статусы</option>
-        <option value="Pending" ${conflictStatusFilter==='Pending'?'selected':''}>Pending</option>
-        <option value="Approved" ${conflictStatusFilter==='Approved'?'selected':''}>Approved</option>
-        <option value="Approved with conditions" ${conflictStatusFilter==='Approved with conditions'?'selected':''}>Approved with conditions</option>
-        <option value="Rejected" ${conflictStatusFilter==='Rejected'?'selected':''}>Rejected</option>
+        <option value="Pending" ${conflictStatusFilter==='Pending'?'selected':''}>На рассмотрении</option>
+        <option value="Approved" ${conflictStatusFilter==='Approved'?'selected':''}>Одобрено</option>
+        <option value="Approved with conditions" ${conflictStatusFilter==='Approved with conditions'?'selected':''}>Одобрено с условиями</option>
+        <option value="Rejected" ${conflictStatusFilter==='Rejected'?'selected':''}>Отклонено</option>
       </select>
       ${(conflictFilter||conflictStatusFilter) ? `<button onclick="conflictFilter='';conflictStatusFilter='';renderConflictApprovalsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
@@ -5714,14 +5714,14 @@ function renderConflictApprovalsPage() {
               const stat   = conflictStatusStyle(a.status);
               return `
                 <tr onclick="openConflictApprovalDetail(${a.id})" style="cursor:pointer">
-                  <td style="font-weight:700;color:#e2e8f0;font-size:13px">${a.decisionType}</td>
+                  <td style="font-weight:700;color:#e2e8f0;font-size:13px">${statusLabel(a.decisionType)}</td>
                   <td style="font-size:12px;color:#94a3b8">${client ? client.name : '—'}</td>
                   <td style="font-size:11px;color:#5a6b8a">${a.dealRef || '—'}</td>
-                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${risk.bg};color:${risk.c}">${a.riskLevel}</span></td>
+                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${risk.bg};color:${risk.c}">${statusLabel(a.riskLevel)}</span></td>
                   <td style="font-size:12px;color:#22c55e">${a.feeAmount ? fmtCurrency(a.feeAmount, a.currency||'USD') : '—'}</td>
                   <td style="font-size:11px;color:#94a3b8">${a.decisionMaker || '—'}</td>
                   <td style="font-size:11px;color:#8a9bbf">${a.requiredTimeline || '—'}</td>
-                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${a.status}</span></td>
+                  <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${statusLabel(a.status)}</span></td>
                   <td style="font-size:11px;color:#5a6b8a">${a.decidedAt || '—'}</td>
                 </tr>`;
             }).join('')}
@@ -5839,11 +5839,11 @@ function openConflictApprovalDetail(id) {
   const risk = conflictRiskStyle(a.riskLevel);
   const stat = conflictStatusStyle(a.status);
 
-  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>${a.decisionType}`;
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>${statusLabel(a.decisionType)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px">
-      <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${risk.bg};color:${risk.c}">Риск: ${a.riskLevel}</span>
-      <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${stat.bg};color:${stat.c}">${a.status}</span>
+      <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${risk.bg};color:${risk.c}">Риск: ${statusLabel(a.riskLevel)}</span>
+      <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${stat.bg};color:${stat.c}">${statusLabel(a.status)}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#94a3b8;margin-bottom:14px">
       <div><b style="color:#8a9bbf">Клиент:</b> ${client ? client.name : '—'}</div>

@@ -551,6 +551,33 @@ select option { background: var(--bg-card); }
 .act-btn:hover { background: var(--bg-card-hover); color: var(--accent-blue); border-color: var(--accent-blue); }
 .act-btn.del:hover { color: var(--accent-red); border-color: var(--accent-red); }
 
+/* Generic hover/focus feedback for buttons/clickables built with inline
+   style="" instead of a CSS class (the majority of the app's buttons) —
+   they can't express their own :hover, so without this they had no
+   tactile response at all, unlike .btn-primary/.btn-ghost/.act-btn above.
+   Uses filter/box-shadow rather than a specific color so it reads
+   correctly regardless of each button's own inline background (solid,
+   gradient, rgba tint, or transparent+border).
+   Cards (.kpi-card, .deal-card, .portfolio-card, .portfolio-list-item,
+   .cfa-client-card, .wf-row) already have their own :hover treatment and
+   are excluded here; any other class-based button (.btn-plan,
+   .export-btn, etc.) is unaffected too — a class selector always beats
+   this element-level one on specificity, so this only ever fills in for
+   elements with no dedicated :hover of their own. */
+button:not(.btn-primary):not(.btn-ghost):not(.act-btn):not(:disabled),
+[role="button"]:not(.kpi-card):not(.deal-card):not(.portfolio-card):not(.portfolio-list-item):not(.cfa-client-card):not(.wf-row) {
+  transition: filter .15s ease, box-shadow .15s ease;
+}
+button:hover:not(.btn-primary):not(.btn-ghost):not(.act-btn):not(:disabled),
+[role="button"]:hover:not(.kpi-card):not(.deal-card):not(.portfolio-card):not(.portfolio-list-item):not(.cfa-client-card):not(.wf-row) {
+  filter: brightness(1.15);
+}
+button:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
 /* ===== PIPELINE KANBAN ===== */
 .pipeline-board {
   display: grid;

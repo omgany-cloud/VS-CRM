@@ -601,9 +601,9 @@ function closeICModal() {
 }
 
 const RISK_CONCLUSIONS = {
-  'No Objection':        { label: 'No Objection',        color: '#22c55e' },
-  'Conditional Approval': { label: 'Conditional Approval', color: '#3b82f6' },
-  'Veto':                 { label: 'VETO',                 color: '#ef4444' },
+  'No Objection':        { label: 'Возражений нет',      color: '#22c55e' },
+  'Conditional Approval': { label: 'Условное одобрение', color: '#3b82f6' },
+  'Veto':                 { label: 'Вето',                color: '#ef4444' },
 };
 
 function icQuorumMet(votes) {

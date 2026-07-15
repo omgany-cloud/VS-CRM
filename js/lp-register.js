@@ -56,7 +56,7 @@ function lpRegStatusBadge(s) {
     'Pending':   { bg:'rgba(249,115,22,0.12)', c:'#f97316', icon:'fa-clock'        },
   }[s] || { bg:'rgba(100,116,139,0.12)', c:'#94a3b8', icon:'fa-circle' };
   return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg};color:${cfg.c}">
-    <i class="fas ${cfg.icon}" style="margin-right:3px;font-size:9px"></i>${s}</span>`;
+    <i class="fas ${cfg.icon}" style="margin-right:3px;font-size:9px"></i>${statusLabel(s)}</span>`;
 }
 
 function ccStatusBadge(s) {
@@ -68,7 +68,7 @@ function ccStatusBadge(s) {
     'Paid':      { bg:'rgba(34,197,94,0.12)',  c:'#22c55e' },
     'Default':   { bg:'rgba(239,68,68,0.12)',  c:'#ef4444' },
   }[s] || { bg:'rgba(100,116,139,0.12)', c:'#94a3b8' };
-  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg};color:${cfg.c}">${s}</span>`;
+  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg};color:${cfg.c}">${statusLabel(s)}</span>`;
 }
 
 function kycBadge(s) {
@@ -242,9 +242,9 @@ function renderLPRegisterPage() {
       <select onchange="lpRegStatus=this.value;renderLPRegisterPage()"
         style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
         <option value="">Все статусы</option>
-        <option value="Active"    ${lpRegStatus==='Active'?'selected':''}>✅ Active</option>
-        <option value="Exited"    ${lpRegStatus==='Exited'?'selected':''}>🚪 Exited</option>
-        <option value="Suspended" ${lpRegStatus==='Suspended'?'selected':''}>⏸ Suspended</option>
+        <option value="Active"    ${lpRegStatus==='Active'?'selected':''}>✅ Активен</option>
+        <option value="Exited"    ${lpRegStatus==='Exited'?'selected':''}>🚪 Вышел</option>
+        <option value="Suspended" ${lpRegStatus==='Suspended'?'selected':''}>⏸ Приостановлен</option>
       </select>
       <button onclick="renderLPRegisterPage()"
         style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px"
@@ -1074,17 +1074,17 @@ function printCapitalAccountStatement(lpId) {
   const termRemain  = Math.max(0, fundYears - yearsPassed);
 
   /* ── Risk badge label ── */
-  const riskLabel = lp.riskRating === 'High'   ? '⚠ High'
-                  : lp.riskRating === 'Medium' ? '● Medium'
-                  : '✓ Low';
+  const riskLabel = lp.riskRating === 'High'   ? '⚠ Высокий'
+                  : lp.riskRating === 'Medium' ? '● Средний'
+                  : '✓ Низкий';
 
   /* ── AML cell helper ── */
-  const amlCell = (v) => v === true  ? '✓ Pass'
-                       : v === false ? '✗ Fail'
-                       : '— Pending';
+  const amlCell = (v) => v === true  ? '✓ Пройдено'
+                       : v === false ? '✗ Не пройдено'
+                       : '— На рассмотрении';
 
   /* ── Status label ── */
-  const liStatusLabel = (s) => s === 'Paid' ? '✓ Paid' : s === 'Pending' ? '○ Pending' : s || '—';
+  const liStatusLabel = (s) => s === 'Paid' ? '✓ Оплачено' : s === 'Pending' ? '○ На рассмотрении' : s || '—';
 
   /* ── Transaction rows HTML ── */
   const rowsHTML = ccHistory.length === 0
@@ -1566,10 +1566,10 @@ function renderCapitalCallsPage() {
       <select onchange="ccStatusF=this.value;renderCapitalCallsPage()"
         style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
         <option value="">Все статусы</option>
-        <option value="Completed" ${ccStatusF==='Completed'?'selected':''}>✅ Completed</option>
-        <option value="Pending"   ${ccStatusF==='Pending'?'selected':''}>⏳ Pending</option>
-        <option value="Overdue"   ${ccStatusF==='Overdue'?'selected':''}>🔴 Overdue</option>
-        <option value="Draft"     ${ccStatusF==='Draft'?'selected':''}>📝 Draft</option>
+        <option value="Completed" ${ccStatusF==='Completed'?'selected':''}>✅ Завершён</option>
+        <option value="Pending"   ${ccStatusF==='Pending'?'selected':''}>⏳ На рассмотрении</option>
+        <option value="Overdue"   ${ccStatusF==='Overdue'?'selected':''}>🔴 Просрочено</option>
+        <option value="Draft"     ${ccStatusF==='Draft'?'selected':''}>📝 Черновик</option>
       </select>
 
     </div>
