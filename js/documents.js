@@ -15,8 +15,34 @@ let docFilterCategory = '';
 let docNextId = 100;
 
 function renderDocumentsPage() {
+  applyDocCategoryVisibility();
   renderDocStats();
   renderDocList(docFiles.filter(d => d.fundId === activeFundId));
+}
+
+// Mirrors server/chineseWall.js's FM_ONLY_DOCUMENT_CATEGORIES — kept in
+// sync by hand, there's no shared module between frontend and backend
+// here. The server already rejects a POST/GET touching these categories
+// for a non-accessFM user (403), so this is UX only: hides the categories
+// they'd just get rejected for instead of letting them pick one and find
+// out from an error toast.
+const FM_ONLY_DOC_CATEGORIES = ['Сделки', 'Портфель', 'Capital Calls', 'Distributions', 'First Closing'];
+
+function applyDocCategoryVisibility() {
+  const hasAccessFM = currentUserPermission('accessFM');
+  const uploadSelect = document.getElementById('docUploadCategory');
+  if (uploadSelect) {
+    Array.from(uploadSelect.options).forEach(o => {
+      o.hidden = !hasAccessFM && FM_ONLY_DOC_CATEGORIES.includes(o.value);
+    });
+    if (uploadSelect.selectedOptions[0]?.hidden) {
+      const firstVisible = Array.from(uploadSelect.options).find(o => !o.hidden);
+      if (firstVisible) uploadSelect.value = firstVisible.value;
+    }
+  }
+  document.querySelectorAll('.doc-cat-btn').forEach(b => {
+    b.style.display = (!hasAccessFM && FM_ONLY_DOC_CATEGORIES.includes(b.dataset.cat)) ? 'none' : '';
+  });
 }
 
 function renderDocStats() {
