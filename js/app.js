@@ -1169,12 +1169,6 @@ function _renderDealModal(d) {
 
   else if (_activeDealTab === 'dd') {
     tabContent = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <div style="${gS};grid-column:1/-1"><label style="${lS}">Юрист фонда</label>
-          <input style="${iS}" value="${d.tsFundLawyer||''}"
-            onchange="dealField(${d.id},'tsFundLawyer',this.value)" placeholder="Dentons / GRATA..." /></div>
-      </div>
-
       <!-- ── DATA ROOM ── -->
       <div style="margin-bottom:16px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
         <label style="${lS}"><i class="fas fa-database" style="margin-right:5px;color:#60a5fa"></i>Data Room — ссылка для DD</label>
