@@ -1640,6 +1640,7 @@ function openGpConclusionDocument(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
   const fp = FUND_PARAMS;
+  const fund = funds.find(f => f.id === d.fundId);
   const conclusions = d.ddConclusions || [];
 
   const docStyle = `
@@ -1674,6 +1675,7 @@ function openGpConclusionDocument(id) {
       <div class="logo-sub">AFSA: ${fp.license}</div>
     </div>
     <div class="ref-block">
+      <div><b>Фонд:</b> ${fund ? fund.shortName : '—'}</div>
       <div><b>Deal:</b> ${d.company}</div>
       <div><b>Дата:</b> ${today()}</div>
       <div><b>STRICTLY CONFIDENTIAL</b></div>
@@ -1681,12 +1683,13 @@ function openGpConclusionDocument(id) {
   </div>
 
   <h1>Заключение управляющей компании</h1>
-  <div class="subtitle">по сделке для рассмотрения Инвестиционным комитетом</div>
+  <div class="subtitle">по сделке для рассмотрения Инвестиционным комитетом ${fund ? escapeHtml(fund.shortName) : ''}</div>
 
   <table class="deal-table">
+    <tr><td>Фонд</td><td><b>${fund ? escapeHtml(fund.name || fund.shortName) : 'Не привязан к фонду'}</b></td></tr>
     <tr><td>Компания</td><td><b>${d.company}</b></td></tr>
     <tr><td>Сектор</td><td>${d.sector||'—'}</td></tr>
-    <tr><td>Сумма инвестиций</td><td><b>$${d.amount}M</b></td></tr>
+    <tr><td>Сумма инвестиций</td><td><b>${currencySymbol(currencyForEntity(d))}${d.amount}M</b></td></tr>
     <tr><td>Стадия</td><td>${d.stage||'—'}</td></tr>
   </table>
 
