@@ -18,6 +18,7 @@ const JSON_FIELDS = [
   ['ddMlro', 'ddMlroJson'],
   ['ddRedFlags', 'ddRedFlagsJson'],
   ['ddConsultants', 'ddConsultantsJson'],
+  ['ddConclusions', 'ddConclusionsJson'],
   ['comments', 'commentsJson'],
 ];
 
@@ -28,6 +29,7 @@ const SCALAR_FIELDS = [
   'pitchDeckUrl', 'icMemoUrl', 'icMinutesUrl', 'wireConfirmUrl', 'instrument', 'coInvestors',
   'icDecision', 'icDate', 'ddDeadline', 'tsFundLawyer', 'dataRoomUrl',
   'rejectCategory', 'canReturn', 'rejectFollowUpDate', 'rejectDecisionBy', 'rejectComment',
+  'gpConclusionVerdict', 'gpConclusionSummary', 'gpConclusionSignedBy', 'gpConclusionSignedAt',
 ];
 
 // Frontend deal object -> flat params object ready for `at()` binding.
@@ -57,6 +59,8 @@ function rowToDeal(r) {
     rejectCategory: r.reject_category, canReturn: r.can_return,
     rejectFollowUpDate: r.reject_follow_up_date, rejectDecisionBy: r.reject_decision_by,
     rejectComment: r.reject_comment,
+    gpConclusionVerdict: r.gp_conclusion_verdict, gpConclusionSummary: r.gp_conclusion_summary,
+    gpConclusionSignedBy: r.gp_conclusion_signed_by, gpConclusionSignedAt: r.gp_conclusion_signed_at,
     tags: JSON.parse(r.tags_json || '[]'),
     founderContacts: JSON.parse(r.founder_contacts_json || '[]'),
     tsVersions: JSON.parse(r.ts_versions_json || '[]'),
@@ -73,6 +77,7 @@ function rowToDeal(r) {
     ddMlro: JSON.parse(r.dd_mlro_json || '[]'),
     ddRedFlags: JSON.parse(r.dd_red_flags_json || '[]'),
     ddConsultants: JSON.parse(r.dd_consultants_json || '[]'),
+    ddConclusions: JSON.parse(r.dd_conclusions_json || '[]'),
     comments: JSON.parse(r.comments_json || '[]'),
   };
 }
@@ -85,10 +90,11 @@ const INSERT_SQL = `
      pitch_deck_url, ic_memo_url, ic_minutes_url, wire_confirm_url, instrument, co_investors,
      ic_decision, ic_date, dd_deadline, ts_fund_lawyer, data_room_url,
      reject_category, can_return, reject_follow_up_date, reject_decision_by, reject_comment,
+     gp_conclusion_verdict, gp_conclusion_summary, gp_conclusion_signed_by, gp_conclusion_signed_at,
      tags_json, founder_contacts_json, ts_versions_json, signed_docs_urls_json, other_docs_json,
      ic_votes_json, ic_risks_json, dd_legal_json, dd_financial_json, dd_tech_json,
      dd_commercial_json, dd_risk_json, dd_compliance_json, dd_mlro_json,
-     dd_red_flags_json, dd_consultants_json, comments_json)
+     dd_red_flags_json, dd_consultants_json, dd_conclusions_json, comments_json)
   VALUES
     (@tenantId, @fundId, @company, @sector, @stage, @amount, @type, @priority, @manager, @ic,
      @nextAction, @nextActionDate, @updatedAt, @country, @companyStage, @preMoney,
@@ -96,10 +102,11 @@ const INSERT_SQL = `
      @pitchDeckUrl, @icMemoUrl, @icMinutesUrl, @wireConfirmUrl, @instrument, @coInvestors,
      @icDecision, @icDate, @ddDeadline, @tsFundLawyer, @dataRoomUrl,
      @rejectCategory, @canReturn, @rejectFollowUpDate, @rejectDecisionBy, @rejectComment,
+     @gpConclusionVerdict, @gpConclusionSummary, @gpConclusionSignedBy, @gpConclusionSignedAt,
      @tagsJson, @founderContactsJson, @tsVersionsJson, @signedDocsUrlsJson, @otherDocsJson,
      @icVotesJson, @icRisksJson, @ddLegalJson, @ddFinancialJson, @ddTechJson,
      @ddCommercialJson, @ddRiskJson, @ddComplianceJson, @ddMlroJson,
-     @ddRedFlagsJson, @ddConsultantsJson, @commentsJson)
+     @ddRedFlagsJson, @ddConsultantsJson, @ddConclusionsJson, @commentsJson)
 `;
 
 const UPDATE_SQL = `
@@ -114,14 +121,17 @@ const UPDATE_SQL = `
     ic_decision=@icDecision, ic_date=@icDate, dd_deadline=@ddDeadline, ts_fund_lawyer=@tsFundLawyer,
     data_room_url=@dataRoomUrl, reject_category=@rejectCategory, can_return=@canReturn,
     reject_follow_up_date=@rejectFollowUpDate, reject_decision_by=@rejectDecisionBy,
-    reject_comment=@rejectComment, tags_json=@tagsJson, founder_contacts_json=@founderContactsJson,
+    reject_comment=@rejectComment,
+    gp_conclusion_verdict=@gpConclusionVerdict, gp_conclusion_summary=@gpConclusionSummary,
+    gp_conclusion_signed_by=@gpConclusionSignedBy, gp_conclusion_signed_at=@gpConclusionSignedAt,
+    tags_json=@tagsJson, founder_contacts_json=@founderContactsJson,
     ts_versions_json=@tsVersionsJson, signed_docs_urls_json=@signedDocsUrlsJson,
     other_docs_json=@otherDocsJson, ic_votes_json=@icVotesJson, ic_risks_json=@icRisksJson,
     dd_legal_json=@ddLegalJson, dd_financial_json=@ddFinancialJson, dd_tech_json=@ddTechJson,
     dd_commercial_json=@ddCommercialJson, dd_risk_json=@ddRiskJson,
     dd_compliance_json=@ddComplianceJson, dd_mlro_json=@ddMlroJson,
     dd_red_flags_json=@ddRedFlagsJson,
-    dd_consultants_json=@ddConsultantsJson, comments_json=@commentsJson
+    dd_consultants_json=@ddConsultantsJson, dd_conclusions_json=@ddConclusionsJson, comments_json=@commentsJson
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

@@ -231,6 +231,17 @@ CREATE TABLE IF NOT EXISTS deals (
   dd_red_flags_json     TEXT NOT NULL DEFAULT '[]',
   dd_consultants_json   TEXT NOT NULL DEFAULT '[]',
   comments_json         TEXT NOT NULL DEFAULT '[]',
+  -- One conclusion per DD category (Legal/Financial/Tech/Commercial/Risk/
+  -- Compliance/MLRO — see js/app.js's DD_CONCLUSION_CATEGORIES), each
+  -- {category, author, text, verdict, documents:[{name,url}], updatedAt}.
+  -- These feed the auto-compiled "Заключение УК" document, which the
+  -- responsible person (CEO/CIO — authorICMemo permission) formally
+  -- signs below before an IC memo can be created for this deal.
+  dd_conclusions_json    TEXT NOT NULL DEFAULT '[]',
+  gp_conclusion_verdict  TEXT,
+  gp_conclusion_summary  TEXT,
+  gp_conclusion_signed_by TEXT,
+  gp_conclusion_signed_at TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -628,6 +639,10 @@ for (const table of ['engagements', 'conflict_approvals']) {
 if (!columnExists('engagements', 'payment_history_json')) db.exec("ALTER TABLE engagements ADD COLUMN payment_history_json TEXT NOT NULL DEFAULT '[]'");
 for (const col of ['dd_risk_json', 'dd_compliance_json', 'dd_mlro_json']) {
   if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT NOT NULL DEFAULT '[]'`);
+}
+if (!columnExists('deals', 'dd_conclusions_json')) db.exec("ALTER TABLE deals ADD COLUMN dd_conclusions_json TEXT NOT NULL DEFAULT '[]'");
+for (const col of ['gp_conclusion_verdict', 'gp_conclusion_summary', 'gp_conclusion_signed_by', 'gp_conclusion_signed_at']) {
+  if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT`);
 }
 
 // node:sqlite's StatementSync binds named params as object keys that

@@ -764,7 +764,16 @@ app.post('/api/deals', requireAuth, requireInternal, requirePermission('accessFM
 app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Deal not found in this tenant' });
-  const merged = Object.assign(rowToDeal(existing), req.body || {});
+  const b = req.body || {};
+  // Signing the Management Company's own conclusion is a formal act, not a
+  // field edit — only whoever is trusted to author/finalize an IC memo
+  // (authorICMemo) may set it, same trust level as POST /api/ic-memos.
+  const touchesGpConclusion = ['gpConclusionVerdict', 'gpConclusionSummary', 'gpConclusionSignedBy', 'gpConclusionSignedAt']
+    .some(f => Object.prototype.hasOwnProperty.call(b, f));
+  if (touchesGpConclusion && !req.user.permissions.authorICMemo) {
+    return res.status(403).json({ error: 'Forbidden: only an IC memo author may sign the GP conclusion' });
+  }
+  const merged = Object.assign(rowToDeal(existing), b);
   const params = dealToParams(merged);
   db.prepare(DEAL_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -1043,6 +1052,17 @@ app.get('/api/ic-memos', requireAuth, (req, res) => {
 app.post('/api/ic-memos', requireAuth, requirePermission('authorICMemo'), requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
+  // A memo tied to a real deal may only be created once the Management
+  // Company's own conclusion is signed off recommending it — enforced
+  // here too (not just the js/modules.js UI gate) so it can't be
+  // bypassed by calling this endpoint directly. Manual/standalone memos
+  // (no dealId) skip this, same as the UI.
+  if (b.dealId != null) {
+    const linkedDeal = db.prepare('SELECT gp_conclusion_verdict FROM deals WHERE id = ? AND tenant_id = ?').get(b.dealId, req.tenantId);
+    if (linkedDeal && linkedDeal.gp_conclusion_verdict !== 'Рекомендовано к IC') {
+      return res.status(409).json({ error: 'Заключение УК по сделке ещё не подписано со статусом "Рекомендовано к IC"' });
+    }
+  }
   const params = icMemoToParams({ status: 'pending', ...b });
   const info = db.prepare(IC_MEMO_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM ic_memos WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);

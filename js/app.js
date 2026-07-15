@@ -1336,7 +1336,10 @@ function _renderDealModal(d) {
             <span style="font-size:12px;font-weight:600;color:#e2e8f0;flex:1">${c.name}</span>
             <span style="font-size:10px;color:#64748b">${c.role}</span>
             <span style="font-size:10px;font-weight:700;color:${c.status==='Завершено'?'#22c55e':'#f97316'}">${c.status}</span>
-          </div>`).join('')}`;
+          </div>`).join('')}
+
+      ${ddConclusionsSection(d)}
+      ${gpConclusionSection(d)}`;
   }
 
   else if (_activeDealTab === 'negotiation_DISABLED') {
@@ -1609,6 +1612,287 @@ async function cycleDDStatus(id, blockTitle, idx) {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   DD CONCLUSIONS — each of the 7 DD categories gets its own
+   written conclusion (not just a checklist status), feeding the
+   auto-compiled "Заключение УК" document below it. See
+   js/modules.js's saveNewICMemo() for the gate this creates: an
+   IC memo tied to a real deal can't be created until the deal's
+   gpConclusionVerdict is 'Рекомендовано к IC'.
+═══════════════════════════════════════════════════════════ */
+const DD_CONCLUSION_CATEGORIES = [
+  { key: 'Legal',      title: 'Юридическое DD', color: '#3b82f6' },
+  { key: 'Financial',  title: 'Финансовое DD',  color: '#22c55e' },
+  { key: 'Tech',       title: 'Техническое DD', color: '#8b5cf6' },
+  { key: 'Commercial', title: 'Коммерческое DD',color: '#f97316' },
+  { key: 'Risk',       title: 'Risk DD',        color: '#dc2626' },
+  { key: 'Compliance', title: 'Compliance DD',  color: '#a855f7' },
+  { key: 'MLRO',       title: 'MLRO DD',        color: '#0ea5e9' },
+];
+
+function ddConclusionsSection(d) {
+  const conclusions = d.ddConclusions || [];
+  return `
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a3448">
+      <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
+        <i class="fas fa-file-signature" style="margin-right:5px"></i>Заключения ответственных лиц
+      </div>
+      ${DD_CONCLUSION_CATEGORIES.map(cat => {
+        const c = conclusions.find(x => x.category === cat.key);
+        const verdictColor = c?.verdict === 'Критично' ? '#ef4444' : c?.verdict === 'Есть замечания' ? '#f97316' : c?.verdict === 'Без замечаний' ? '#22c55e' : '#64748b';
+        return `
+        <div style="background:#0f1623;border-radius:10px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ${cat.color}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:${cat.color};text-transform:uppercase">${cat.title}</span>
+            ${c ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${verdictColor}22;color:${verdictColor}">${c.verdict || 'Без вердикта'}</span>` : ''}
+          </div>
+          ${c ? `
+            <div style="font-size:11px;color:#5a6b8a;margin-bottom:4px">${escapeHtml(c.author)} · ${c.updatedAt}</div>
+            <div style="font-size:12px;color:#e2e8f0;line-height:1.5;margin-bottom:6px;white-space:pre-wrap">${escapeHtml(c.text)}</div>
+            ${(c.documents||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+              ${c.documents.map((doc,i) => `<span style="font-size:10px;background:#1c2333;border-radius:5px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px">
+                <a href="${doc.url}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:none"><i class="fas fa-link" style="margin-right:3px"></i>${escapeHtml(doc.name||doc.url)}</a>
+                <span onclick="removeDDConclusionDoc(${d.id},'${cat.key}',${i})" style="cursor:pointer;color:#64748b">✕</span>
+              </span>`).join('')}
+            </div>` : ''}
+          ` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:6px">Заключение ещё не внесено</div>`}
+          <details>
+            <summary style="font-size:10px;color:#60a5fa;cursor:pointer">${c ? 'Изменить заключение' : 'Внести заключение'}</summary>
+            <div style="margin-top:8px">
+              <select id="ddConclVerdict_${d.id}_${cat.key}" style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:11px;margin-bottom:6px;box-sizing:border-box">
+                <option value="">— Вердикт —</option>
+                ${['Без замечаний','Есть замечания','Критично'].map(v => `<option value="${v}" ${c?.verdict===v?'selected':''}>${v}</option>`).join('')}
+              </select>
+              <textarea id="ddConclText_${d.id}_${cat.key}" rows="2" placeholder="Текст заключения..." style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:11px;resize:vertical;margin-bottom:6px;box-sizing:border-box">${c ? escapeHtml(c.text) : ''}</textarea>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input id="ddConclDocName_${d.id}_${cat.key}" placeholder="Название документа" style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
+                <input id="ddConclDocUrl_${d.id}_${cat.key}" placeholder="https://..." style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
+              </div>
+              <button onclick="saveDDConclusion(${d.id},'${cat.key}')" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class="fas fa-save" style="margin-right:4px"></i>Сохранить заключение</button>
+            </div>
+          </details>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+async function saveDDConclusion(id, category) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const verdict = document.getElementById(`ddConclVerdict_${id}_${category}`)?.value || '';
+  const text    = document.getElementById(`ddConclText_${id}_${category}`)?.value?.trim() || '';
+  const docName = document.getElementById(`ddConclDocName_${id}_${category}`)?.value?.trim() || '';
+  const docUrl  = document.getElementById(`ddConclDocUrl_${id}_${category}`)?.value?.trim() || '';
+  if (!text) { showToast('⚠️ Введите текст заключения', 'red'); return; }
+
+  d.ddConclusions = d.ddConclusions || [];
+  let entry = d.ddConclusions.find(x => x.category === category);
+  const prevEntry = entry ? { ...entry, documents: [...(entry.documents||[])] } : null;
+  if (!entry) { entry = { category, documents: [] }; d.ddConclusions.push(entry); }
+  entry.author = currentUserDisplayName();
+  entry.text = text;
+  entry.verdict = verdict;
+  entry.updatedAt = today();
+  entry.documents = entry.documents || [];
+  if (docUrl) entry.documents.push({ name: docName || docUrl, url: docUrl });
+
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify({ ddConclusions: d.ddConclusions }) });
+    _renderDealModal(d);
+    showToast(`✅ Заключение (${category}) сохранено`, 'green');
+  } catch (err) {
+    if (prevEntry) Object.assign(entry, prevEntry);
+    else d.ddConclusions = d.ddConclusions.filter(x => x !== entry);
+    _renderDealModal(d);
+    showToast('⚠️ Не удалось сохранить заключение: ' + err.message, 'red');
+  }
+}
+
+async function removeDDConclusionDoc(id, category, idx) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const entry = (d.ddConclusions||[]).find(x => x.category === category);
+  if (!entry || !entry.documents || !entry.documents[idx]) return;
+  const removed = entry.documents[idx];
+  entry.documents.splice(idx, 1);
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify({ ddConclusions: d.ddConclusions }) });
+    _renderDealModal(d);
+    showToast('🗑️ Ссылка удалена', 'red');
+  } catch (err) {
+    entry.documents.splice(idx, 0, removed);
+    _renderDealModal(d);
+    showToast('⚠️ Не удалось удалить ссылку: ' + err.message, 'red');
+  }
+}
+
+function gpConclusionSection(d) {
+  const signed = !!d.gpConclusionSignedAt;
+  const verdictColor = d.gpConclusionVerdict === 'Рекомендовано к IC' ? '#22c55e' : d.gpConclusionVerdict === 'Не рекомендовано' ? '#ef4444' : '#f97316';
+  return `
+    <div style="margin-top:18px;padding-top:14px;border-top:2px solid #3b82f6;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;margin-bottom:10px">
+        <i class="fas fa-stamp" style="margin-right:5px"></i>Заключение УК для Инвестиционного комитета
+      </div>
+      ${signed ? `
+        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:12px;font-weight:700;color:#e2e8f0">${escapeHtml(d.gpConclusionSignedBy)}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${verdictColor}22;color:${verdictColor}">${d.gpConclusionVerdict}</span>
+          </div>
+          <div style="font-size:11px;color:#5a6b8a;margin-bottom:6px">${d.gpConclusionSignedAt}</div>
+          <div style="font-size:12px;color:#94a3b8;white-space:pre-wrap">${escapeHtml(d.gpConclusionSummary||'')}</div>
+        </div>` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Заключение УК ещё не подписано — меморандум для IC по этой сделке создать нельзя.</div>`}
+      <button onclick="openGpConclusionDocument(${d.id})"
+        style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;margin-right:8px">
+        <i class="fas fa-file-alt" style="margin-right:5px"></i>Собрать документ
+      </button>
+      ${currentUserPermission('authorICMemo') ? `
+      <details style="display:inline-block;vertical-align:middle">
+        <summary style="font-size:11px;color:#60a5fa;cursor:pointer;display:inline">${signed ? 'Переподписать' : 'Подписать заключение'}</summary>
+        <div style="margin-top:10px;max-width:420px">
+          <select id="gpConclVerdict_${d.id}" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;margin-bottom:6px;box-sizing:border-box">
+            <option value="">— Вердикт —</option>
+            ${['Рекомендовано к IC','Не рекомендовано','Требует доработки'].map(v => `<option value="${v}" ${d.gpConclusionVerdict===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+          <textarea id="gpConclSummary_${d.id}" rows="3" placeholder="Обоснование позиции УК..." style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;resize:vertical;margin-bottom:6px;box-sizing:border-box">${escapeHtml(d.gpConclusionSummary||'')}</textarea>
+          <button onclick="signGpConclusion(${d.id})" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700"><i class="fas fa-signature" style="margin-right:5px"></i>Подписать</button>
+        </div>
+      </details>` : ''}
+    </div>`;
+}
+
+async function signGpConclusion(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const verdict = document.getElementById(`gpConclVerdict_${id}`)?.value;
+  const summary = document.getElementById(`gpConclSummary_${id}`)?.value?.trim() || '';
+  if (!verdict) { showToast('⚠️ Выберите вердикт', 'red'); return; }
+  if (!confirm(`Подписать заключение УК со статусом «${verdict}»? Это официальная позиция управляющей компании для Инвестиционного комитета.`)) return;
+
+  const prev = {
+    verdict: d.gpConclusionVerdict, summary: d.gpConclusionSummary,
+    signedBy: d.gpConclusionSignedBy, signedAt: d.gpConclusionSignedAt,
+  };
+  d.gpConclusionVerdict = verdict;
+  d.gpConclusionSummary = summary;
+  d.gpConclusionSignedBy = currentUserDisplayName();
+  d.gpConclusionSignedAt = today();
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify({
+      gpConclusionVerdict: d.gpConclusionVerdict, gpConclusionSummary: d.gpConclusionSummary,
+      gpConclusionSignedBy: d.gpConclusionSignedBy, gpConclusionSignedAt: d.gpConclusionSignedAt,
+    }) });
+    _renderDealModal(d);
+    showToast('✅ Заключение УК подписано', 'green');
+  } catch (err) {
+    d.gpConclusionVerdict = prev.verdict; d.gpConclusionSummary = prev.summary;
+    d.gpConclusionSignedBy = prev.signedBy; d.gpConclusionSignedAt = prev.signedAt;
+    _renderDealModal(d);
+    showToast('⚠️ Не удалось сохранить заключение УК: ' + err.message, 'red');
+  }
+}
+
+// Auto-compiled document — same openPrintableDocument() pattern already
+// used by printICMemo() and every LP/onboarding document generator.
+// Pulls all 7 category conclusions + the GP's own sign-off into one
+// document; can be generated at any point (before signing too, to review
+// what's been gathered so far), not only once signed.
+function openGpConclusionDocument(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const fp = FUND_PARAMS;
+  const conclusions = d.ddConclusions || [];
+
+  const docStyle = `
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Times New Roman', serif; font-size:11pt; color:#111; padding:40px 60px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #1e3a8a; padding-bottom:14px; margin-bottom:22px; }
+  .logo-name { font-size:15pt; font-weight:700; color:#1e3a8a; }
+  .logo-sub  { font-size:9pt; color:#4a5568; margin-top:2px; }
+  .ref-block { text-align:right; font-size:9.5pt; color:#4a5568; }
+  h1 { font-size:13pt; font-weight:700; color:#1e3a8a; text-transform:uppercase; text-align:center; margin:18px 0 4px; }
+  .subtitle { text-align:center; font-size:10pt; color:#4a5568; margin-bottom:20px; }
+  .deal-table { width:100%; border-collapse:collapse; margin:14px 0 20px; }
+  .deal-table td { padding:6px 12px; border-bottom:1px solid #e2e8f0; font-size:10.5pt; }
+  .deal-table td:first-child { font-weight:600; color:#2d3748; width:38%; background:#f8fafc; }
+  .section { margin-bottom:14px; }
+  .section-title { font-size:10pt; font-weight:700; color:#1e3a8a; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; border-bottom:1px solid #cbd5e0; padding-bottom:3px; }
+  .section-text { font-size:10.5pt; line-height:1.55; text-align:justify; }
+  .resolution-box { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:12px 16px; margin:14px 0; }
+  .risk-box { border:1px solid #cbd5e0; border-radius:4px; padding:10px 14px; margin-bottom:14px; }
+  .risk-box.veto { border-color:#dc2626; background:#fef2f2; }
+  .signature-block { margin-top:32px; display:flex; justify-content:space-between; }
+  .sig-col { width:45%; }
+  .sig-line { border-top:1px solid #333; margin-top:44px; padding-top:5px; font-size:10pt; }
+  .footer { margin-top:28px; padding-top:10px; border-top:1px solid #cbd5e0; font-size:8.5pt; color:#718096; text-align:center; }
+  `;
+
+  const body = `
+  <div class="header">
+    <div>
+      <div class="logo-name">${fp.gp}</div>
+      <div class="logo-sub">General Partner · ${fp.name}</div>
+      <div class="logo-sub">AFSA: ${fp.license}</div>
+    </div>
+    <div class="ref-block">
+      <div><b>Deal:</b> ${d.company}</div>
+      <div><b>Дата:</b> ${today()}</div>
+      <div><b>STRICTLY CONFIDENTIAL</b></div>
+    </div>
+  </div>
+
+  <h1>Заключение управляющей компании</h1>
+  <div class="subtitle">по сделке для рассмотрения Инвестиционным комитетом</div>
+
+  <table class="deal-table">
+    <tr><td>Компания</td><td><b>${d.company}</b></td></tr>
+    <tr><td>Сектор</td><td>${d.sector||'—'}</td></tr>
+    <tr><td>Сумма инвестиций</td><td><b>$${d.amount}M</b></td></tr>
+    <tr><td>Стадия</td><td>${d.stage||'—'}</td></tr>
+  </table>
+
+  ${DD_CONCLUSION_CATEGORIES.map(cat => {
+    const c = conclusions.find(x => x.category === cat.key);
+    return `
+    <div class="section">
+      <div class="section-title">${cat.title}${c && c.verdict ? ' — ' + c.verdict : ''}</div>
+      <div class="section-text">${c ? (c.text || '—') : 'Заключение не предоставлено'}</div>
+      ${c && (c.documents||[]).length ? `<div style="font-size:9pt;color:#4a5568;margin-top:4px">Документы: ${c.documents.map(doc=>doc.name||doc.url).join(', ')}</div>` : ''}
+    </div>`;
+  }).join('')}
+
+  ${d.gpConclusionSignedAt ? `
+  <div class="resolution-box">
+    <div class="section-title" style="border:none">Итоговая позиция УК</div>
+    <div class="section-text"><b>${d.gpConclusionVerdict}</b></div>
+    <div class="section-text">${d.gpConclusionSummary||''}</div>
+  </div>` : `<div class="risk-box veto"><div class="section-text">Заключение УК ещё не подписано.</div></div>`}
+
+  <div class="signature-block">
+    <div class="sig-col">
+      <div class="sig-line">
+        <div>${d.gpConclusionSignedBy || '_______________________'}</div>
+        <div style="color:#4a5568;font-size:9.5pt">${fp.gpTitle}</div>
+        <div style="color:#4a5568;font-size:9.5pt">${fp.gp} (General Partner)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · AFSA: ${fp.license}<br>
+    STRICTLY CONFIDENTIAL — Только для внутреннего использования и Инвестиционного комитета.
+  </div>
+  `;
+
+  const win = openPrintableDocument(body, {
+    title: `Заключение УК — ${d.company}`,
+    features: 'width=900,height=800',
+    extraStyle: docStyle,
+  });
+  if (win) showToast(`📄 Документ заключения УК сформирован`, 'green');
+}
+
 function dealAddComment(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
@@ -1771,6 +2055,8 @@ async function saveDeal() {
     ddMlro:      [],
     ddConsultants: [],
     ddRedFlags:  [],
+    ddConclusions: [],
+    gpConclusionVerdict: '', gpConclusionSummary: '', gpConclusionSignedBy: '', gpConclusionSignedAt: '',
 
     // ── Term Sheet ──
     tsPreMoney: 0, tsPostMoney: 0, tsFundShare: 0,

@@ -1181,6 +1181,19 @@ async function saveNewICMemo() {
   if (!thesis) { showToast('⚠️ Заполните инвестиционный тезис', 'red'); return; }
   if (!risks)  { showToast('⚠️ Заполните раздел рисков', 'red'); return; }
 
+  // A memo tied to a real deal requires the Management Company's own
+  // conclusion to already be signed off recommending it (js/app.js's
+  // gpConclusionSection()/signGpConclusion()) — enforced again server-
+  // side in POST /api/ic-memos so this can't be bypassed by calling the
+  // API directly. Manual/standalone memos (no linked deal) skip this.
+  if (!isManual) {
+    const linkedDeal = typeof deals !== 'undefined' ? deals.find(x => String(x.id) === String(dealSel)) : null;
+    if (linkedDeal && linkedDeal.gpConclusionVerdict !== 'Рекомендовано к IC') {
+      showToast('⚠️ Сначала подпишите заключение УК со статусом "Рекомендовано к IC" на вкладке Due Diligence карточки сделки', 'red');
+      return;
+    }
+  }
+
   // Selected IC members (fixed Constitution Section 7 roster — unchecked
   // ones are recorded as absent, same as the seeded "missing Independent
   // Member" scenario, so quorum still resolves correctly against them)
