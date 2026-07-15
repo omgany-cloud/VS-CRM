@@ -1772,7 +1772,6 @@ async function saveDeal() {
     updateBadges();
     closeModal();
     showToast('✅ Сделка добавлена в pipeline');
-    ['deal_company','deal_amount','deal_comment'].forEach(id => document.getElementById(id).value = '');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить сделку: ' + err.message, 'red');
   }
@@ -1863,7 +1862,6 @@ async function savePortfolio() {
     updateBadges();
     closeModal();
     showToast(`✅ Компания добавлена в портфель: ${name}`);
-    ['port_name','port_invested','port_value','port_date','port_exit_year'].forEach(id => document.getElementById(id).value = '');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить компанию: ' + err.message, 'red');
   }
@@ -1947,6 +1945,14 @@ function renderPortfolio(data) {
   const container = document.getElementById('portfolioGrid');
   if (typeof activeFundId !== 'undefined' && activeFundId != null) {
     data = data.filter(p => p.fundId === activeFundId);
+  }
+  if (data.length === 0) {
+    container.className = portfolioView === 'grid' ? 'portfolio-grid' : 'portfolio-list';
+    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#4a5568">
+      <i class="fas fa-briefcase" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4"></i>
+      Портфельных компаний не найдено
+    </div>`;
+    return;
   }
   if (portfolioView === 'grid') {
     container.className = 'portfolio-grid';
@@ -3139,7 +3145,6 @@ function saveCapCall() {
   renderCapitalCalls();
   closeModal();
   showToast('✅ Capital Call создан');
-  ['cc_notice_date','cc_amount','cc_pct'].forEach(id => document.getElementById(id).value = '');
 }
 
 /* ===== DISTRIBUTIONS ===== */
@@ -3252,9 +3257,30 @@ function openModal(name) {
   const m = document.getElementById('modal-' + name);
   if (m) m.classList.add('active');
 }
+// Resets every plain input/select/textarea/checkbox inside a modal back to
+// its HTML-authored default (value/selected/checked attribute), the same
+// state a fresh page load would show. Runs on every close (save, cancel, X)
+// so static modals reused across "new X" flows (deal/portfolio/capital
+// call/fund) never leak a previous attempt's values into the next open.
+// Dedicated open*Modal() functions that explicitly populate fields for
+// editing (e.g. openEditFundModal) always do so AFTER this has already run
+// on the prior close, so this never clobbers an edit-in-progress.
+function _resetModalFields(modalEl) {
+  modalEl.querySelectorAll('input, textarea').forEach(el => {
+    if (el.type === 'checkbox' || el.type === 'radio') el.checked = el.defaultChecked;
+    else el.value = el.defaultValue;
+  });
+  modalEl.querySelectorAll('select').forEach(el => {
+    const def = Array.from(el.options).find(o => o.defaultSelected);
+    el.selectedIndex = def ? def.index : 0;
+  });
+}
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
-  document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.modal.active').forEach(m => {
+    m.classList.remove('active');
+    _resetModalFields(m);
+  });
 }
 
 /* ===== TOAST ===== */

@@ -5025,7 +5025,8 @@ function renderRestrictedListPage() {
         <table class="data-table">
           <thead><tr><th>Компания</th><th>Сектор</th><th>Фонд</th><th>Доля %</th><th>Ограничение</th><th>CF&A разрешено</th><th>Добавлено</th></tr></thead>
           <tbody>
-            ${restrictedList.map(r => `
+            ${restrictedList.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-ban" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4"></i>Restricted List пуст</td></tr>` :
+            restrictedList.map(r => `
               <tr>
                 <td style="font-weight:700;color:#ef4444">${r.company}</td>
                 <td style="font-size:12px">${r.sector}</td>
@@ -5054,7 +5055,8 @@ function renderRestrictedListPage() {
         <table class="data-table">
           <thead><tr><th>ID</th><th>Дата</th><th>Тип</th><th>Стороны</th><th>Severity</th><th>Статус</th><th>Ответственный</th></tr></thead>
           <tbody>
-            ${coiRegistry.map(r => {
+            ${coiRegistry.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-exclamation-triangle" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4"></i>Конфликтов интересов не зарегистрировано</td></tr>` :
+            coiRegistry.map(r => {
               const sevCfg = {Low:{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},Medium:{c:'#f97316',bg:'rgba(249,115,22,0.12)'},High:{c:'#ef4444',bg:'rgba(239,68,68,0.12)'},Critical:{c:'#dc2626',bg:'rgba(220,38,38,0.15)'}}[r.severity]||{};
               return `
                 <tr>
