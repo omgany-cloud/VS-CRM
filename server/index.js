@@ -14,7 +14,10 @@ const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rol
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
 const { rowToUser } = require('./usersMapping');
 const { computeUserFootprint } = require('./userFootprint');
-const { blocksPermissions: chineseWallBlocks, filterClientsForPermissions } = require('./chineseWall');
+const {
+  blocksPermissions: chineseWallBlocks, filterClientsForPermissions,
+  blocksDocumentCategory, filterDocumentsForPermissions,
+} = require('./chineseWall');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
@@ -1073,12 +1076,20 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
     // key ordering (confirmed: PowerShell's ConvertTo-Json alone flipped
     // key order enough to make a legitimate, unmodified vote row register
     // as "changed" and get rejected).
+    // role must never change via a vote update — it's the seat identity for
+    // that row, not something the voter chose. Checked BEFORE the ownership
+    // comparison, and the ownership check itself compares against the
+    // trusted prev.role, not the caller-supplied v.role: authorizing off
+    // v.role let any seat holder relabel a DIFFERENT (possibly unvoted)
+    // row to their own role and inject a vote there, overwriting that
+    // seat's real vote/identity and effectively casting a second vote.
     const illegalChange = b.votes.some((v, i) => {
       const prev = existingVotes[i] || {};
-      const unchanged = v.role === prev.role && v.name === prev.name
+      if (v.role !== prev.role) return true;
+      const unchanged = v.name === prev.name
         && v.vote === prev.vote && (v.comment || '') === (prev.comment || '');
       if (unchanged) return false;
-      return req.user.permissions.icSeat !== v.role;
+      return req.user.permissions.icSeat !== prev.role;
     });
     if (illegalChange) return res.status(403).json({ error: 'You may only cast your own IC vote' });
   }
@@ -1119,12 +1130,14 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
    isn't part of this migration. */
 app.get('/api/documents', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM documents WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
-  res.json({ tenant: req.tenantSlug, documents: rows.map(rowToDocument) });
+  const visible = filterDocumentsForPermissions(rows.map(rowToDocument), req.user.permissions);
+  res.json({ tenant: req.tenantSlug, documents: visible });
 });
 
 app.post('/api/documents', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
+  if (blocksDocumentCategory(req.user.permissions, b.category)) return res.status(403).json({ error: 'Forbidden: CF&A staff cannot upload FM-category documents' });
   // Server-stamped, not client-trusted — same lesson as restricted_list.added_by.
   const params = documentToParams({ ...b, uploader: req.user.name || req.user.email });
   const info = db.prepare(DOCUMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
@@ -1135,7 +1148,10 @@ app.post('/api/documents', requireAuth, requireInternal, (req, res) => {
 app.put('/api/documents/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Document not found in this tenant' });
-  const merged = Object.assign(rowToDocument(existing), req.body || {});
+  const existingDoc = rowToDocument(existing);
+  if (blocksDocumentCategory(req.user.permissions, existingDoc.category)) return res.status(403).json({ error: 'Forbidden: CF&A staff cannot access FM-category documents' });
+  const merged = Object.assign(existingDoc, req.body || {});
+  if (blocksDocumentCategory(req.user.permissions, merged.category)) return res.status(403).json({ error: 'Forbidden: CF&A staff cannot access FM-category documents' });
   const params = documentToParams(merged);
   db.prepare(DOCUMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
