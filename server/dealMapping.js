@@ -20,6 +20,9 @@ const JSON_FIELDS = [
   ['ddConsultants', 'ddConsultantsJson'],
   ['ddConclusions', 'ddConclusionsJson'],
   ['comments', 'commentsJson'],
+  ['negMeetings', 'negMeetingsJson'],
+  ['negDisputedItems', 'negDisputedItemsJson'],
+  ['negBlockers', 'negBlockersJson'],
 ];
 
 const SCALAR_FIELDS = [
@@ -30,6 +33,11 @@ const SCALAR_FIELDS = [
   'icDecision', 'icDate', 'ddDeadline', 'tsFundLawyer', 'dataRoomUrl',
   'rejectCategory', 'canReturn', 'rejectFollowUpDate', 'rejectDecisionBy', 'rejectComment',
   'gpConclusionVerdict', 'gpConclusionSummary', 'gpConclusionSignedBy', 'gpConclusionSignedAt',
+  // Term Sheet / Переговоры / closed-deal fields — see server/db.js's
+  // migration comment for why these were added separately from the rest.
+  'tsPreMoney', 'tsPostMoney', 'tsFundShare', 'tsRights', 'tsVesting', 'tsSignedDate',
+  'tsStatus', 'tsCompanyLawyer', 'wireDate', 'closingDatePlanned', 'closedDate',
+  'closedAmount', 'closedValuation', 'firstBoardMeeting', 'kpi6m', 'kpi12m',
 ];
 
 // Frontend deal object -> flat params object ready for `at()` binding.
@@ -61,6 +69,12 @@ function rowToDeal(r) {
     rejectComment: r.reject_comment,
     gpConclusionVerdict: r.gp_conclusion_verdict, gpConclusionSummary: r.gp_conclusion_summary,
     gpConclusionSignedBy: r.gp_conclusion_signed_by, gpConclusionSignedAt: r.gp_conclusion_signed_at,
+    tsPreMoney: r.ts_pre_money, tsPostMoney: r.ts_post_money, tsFundShare: r.ts_fund_share,
+    tsRights: r.ts_rights, tsVesting: r.ts_vesting, tsSignedDate: r.ts_signed_date,
+    tsStatus: r.ts_status, tsCompanyLawyer: r.ts_company_lawyer, wireDate: r.wire_date,
+    closingDatePlanned: r.closing_date_planned, closedDate: r.closed_date,
+    closedAmount: r.closed_amount, closedValuation: r.closed_valuation,
+    firstBoardMeeting: r.first_board_meeting, kpi6m: r.kpi_6m, kpi12m: r.kpi_12m,
     tags: JSON.parse(r.tags_json || '[]'),
     founderContacts: JSON.parse(r.founder_contacts_json || '[]'),
     tsVersions: JSON.parse(r.ts_versions_json || '[]'),
@@ -79,6 +93,9 @@ function rowToDeal(r) {
     ddConsultants: JSON.parse(r.dd_consultants_json || '[]'),
     ddConclusions: JSON.parse(r.dd_conclusions_json || '[]'),
     comments: JSON.parse(r.comments_json || '[]'),
+    negMeetings: JSON.parse(r.neg_meetings_json || '[]'),
+    negDisputedItems: JSON.parse(r.neg_disputed_items_json || '[]'),
+    negBlockers: JSON.parse(r.neg_blockers_json || '[]'),
   };
 }
 
@@ -91,10 +108,14 @@ const INSERT_SQL = `
      ic_decision, ic_date, dd_deadline, ts_fund_lawyer, data_room_url,
      reject_category, can_return, reject_follow_up_date, reject_decision_by, reject_comment,
      gp_conclusion_verdict, gp_conclusion_summary, gp_conclusion_signed_by, gp_conclusion_signed_at,
+     ts_pre_money, ts_post_money, ts_fund_share, ts_rights, ts_vesting, ts_signed_date,
+     ts_status, ts_company_lawyer, wire_date, closing_date_planned, closed_date,
+     closed_amount, closed_valuation, first_board_meeting, kpi_6m, kpi_12m,
      tags_json, founder_contacts_json, ts_versions_json, signed_docs_urls_json, other_docs_json,
      ic_votes_json, ic_risks_json, dd_legal_json, dd_financial_json, dd_tech_json,
      dd_commercial_json, dd_risk_json, dd_compliance_json, dd_mlro_json,
-     dd_red_flags_json, dd_consultants_json, dd_conclusions_json, comments_json)
+     dd_red_flags_json, dd_consultants_json, dd_conclusions_json, comments_json,
+     neg_meetings_json, neg_disputed_items_json, neg_blockers_json)
   VALUES
     (@tenantId, @fundId, @company, @sector, @stage, @amount, @type, @priority, @manager, @ic,
      @nextAction, @nextActionDate, @updatedAt, @country, @companyStage, @preMoney,
@@ -103,10 +124,14 @@ const INSERT_SQL = `
      @icDecision, @icDate, @ddDeadline, @tsFundLawyer, @dataRoomUrl,
      @rejectCategory, @canReturn, @rejectFollowUpDate, @rejectDecisionBy, @rejectComment,
      @gpConclusionVerdict, @gpConclusionSummary, @gpConclusionSignedBy, @gpConclusionSignedAt,
+     @tsPreMoney, @tsPostMoney, @tsFundShare, @tsRights, @tsVesting, @tsSignedDate,
+     @tsStatus, @tsCompanyLawyer, @wireDate, @closingDatePlanned, @closedDate,
+     @closedAmount, @closedValuation, @firstBoardMeeting, @kpi6m, @kpi12m,
      @tagsJson, @founderContactsJson, @tsVersionsJson, @signedDocsUrlsJson, @otherDocsJson,
      @icVotesJson, @icRisksJson, @ddLegalJson, @ddFinancialJson, @ddTechJson,
      @ddCommercialJson, @ddRiskJson, @ddComplianceJson, @ddMlroJson,
-     @ddRedFlagsJson, @ddConsultantsJson, @ddConclusionsJson, @commentsJson)
+     @ddRedFlagsJson, @ddConsultantsJson, @ddConclusionsJson, @commentsJson,
+     @negMeetingsJson, @negDisputedItemsJson, @negBlockersJson)
 `;
 
 const UPDATE_SQL = `
@@ -124,6 +149,12 @@ const UPDATE_SQL = `
     reject_comment=@rejectComment,
     gp_conclusion_verdict=@gpConclusionVerdict, gp_conclusion_summary=@gpConclusionSummary,
     gp_conclusion_signed_by=@gpConclusionSignedBy, gp_conclusion_signed_at=@gpConclusionSignedAt,
+    ts_pre_money=@tsPreMoney, ts_post_money=@tsPostMoney, ts_fund_share=@tsFundShare,
+    ts_rights=@tsRights, ts_vesting=@tsVesting, ts_signed_date=@tsSignedDate,
+    ts_status=@tsStatus, ts_company_lawyer=@tsCompanyLawyer, wire_date=@wireDate,
+    closing_date_planned=@closingDatePlanned, closed_date=@closedDate,
+    closed_amount=@closedAmount, closed_valuation=@closedValuation,
+    first_board_meeting=@firstBoardMeeting, kpi_6m=@kpi6m, kpi_12m=@kpi12m,
     tags_json=@tagsJson, founder_contacts_json=@founderContactsJson,
     ts_versions_json=@tsVersionsJson, signed_docs_urls_json=@signedDocsUrlsJson,
     other_docs_json=@otherDocsJson, ic_votes_json=@icVotesJson, ic_risks_json=@icRisksJson,
@@ -131,7 +162,8 @@ const UPDATE_SQL = `
     dd_commercial_json=@ddCommercialJson, dd_risk_json=@ddRiskJson,
     dd_compliance_json=@ddComplianceJson, dd_mlro_json=@ddMlroJson,
     dd_red_flags_json=@ddRedFlagsJson,
-    dd_consultants_json=@ddConsultantsJson, dd_conclusions_json=@ddConclusionsJson, comments_json=@commentsJson
+    dd_consultants_json=@ddConsultantsJson, dd_conclusions_json=@ddConclusionsJson, comments_json=@commentsJson,
+    neg_meetings_json=@negMeetingsJson, neg_disputed_items_json=@negDisputedItemsJson, neg_blockers_json=@negBlockersJson
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

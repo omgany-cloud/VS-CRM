@@ -242,6 +242,30 @@ CREATE TABLE IF NOT EXISTS deals (
   gp_conclusion_summary  TEXT,
   gp_conclusion_signed_by TEXT,
   gp_conclusion_signed_at TEXT,
+  -- Term Sheet / Переговоры / closed-deal fields — these rendered in the
+  -- deal modal from the very first version of this app but never had a
+  -- column, so every value in them was silently lost outside the current
+  -- browser tab (js/app.js's dealField()/dealMoveStage() didn't persist
+  -- at all until this migration — see server/dealMapping.js).
+  ts_pre_money          REAL,
+  ts_post_money         REAL,
+  ts_fund_share         REAL,
+  ts_rights             TEXT,
+  ts_vesting            TEXT,
+  ts_signed_date        TEXT,
+  ts_status             TEXT,
+  ts_company_lawyer     TEXT,
+  wire_date             TEXT,
+  neg_meetings_json     TEXT NOT NULL DEFAULT '[]',
+  neg_disputed_items_json TEXT NOT NULL DEFAULT '[]',
+  neg_blockers_json     TEXT NOT NULL DEFAULT '[]',
+  closing_date_planned  TEXT,
+  closed_date           TEXT,
+  closed_amount         REAL,
+  closed_valuation      REAL,
+  first_board_meeting   TEXT,
+  kpi_6m                TEXT,
+  kpi_12m               TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -643,6 +667,16 @@ for (const col of ['dd_risk_json', 'dd_compliance_json', 'dd_mlro_json']) {
 if (!columnExists('deals', 'dd_conclusions_json')) db.exec("ALTER TABLE deals ADD COLUMN dd_conclusions_json TEXT NOT NULL DEFAULT '[]'");
 for (const col of ['gp_conclusion_verdict', 'gp_conclusion_summary', 'gp_conclusion_signed_by', 'gp_conclusion_signed_at']) {
   if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT`);
+}
+for (const col of ['ts_rights', 'ts_vesting', 'ts_signed_date', 'ts_status', 'ts_company_lawyer',
+  'wire_date', 'closing_date_planned', 'closed_date', 'first_board_meeting', 'kpi_6m', 'kpi_12m']) {
+  if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT`);
+}
+for (const col of ['ts_pre_money', 'ts_post_money', 'ts_fund_share', 'closed_amount', 'closed_valuation']) {
+  if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} REAL`);
+}
+for (const col of ['neg_meetings_json', 'neg_disputed_items_json', 'neg_blockers_json']) {
+  if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT NOT NULL DEFAULT '[]'`);
 }
 
 // node:sqlite's StatementSync binds named params as object keys that

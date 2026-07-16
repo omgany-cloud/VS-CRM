@@ -1367,13 +1367,30 @@ function _renderDealModal(d) {
   `;
 }
 
-/* ── Deal helper functions ── */
-function dealField(id, field, value) {
+/* ── Deal helper functions ──
+   dealField()/dealMoveStage() below persist via PUT /api/deals/:id
+   (only the one changed field, same "never send the whole local deal
+   object" rule as every other save in this file — the server merges
+   onto the existing row) — until this fix, both only mutated the local
+   deals[] array, so every field edited through the deal detail modal
+   was lost on reload. */
+async function dealField(id, field, value) {
   const d = deals.find(x => x.id === id);
-  if (d) { d[field] = value; renderPipeline(deals); }
+  if (!d) return;
+  const prev = d[field];
+  d[field] = value;
+  renderPipeline(deals);
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify({ [field]: value }) });
+  } catch (err) {
+    d[field] = prev;
+    renderPipeline(deals);
+    _renderDealModal(d);
+    showToast('⚠️ Не удалось сохранить изменение: ' + err.message, 'red');
+  }
 }
 
-function dealMoveStage(id, stage) {
+async function dealMoveStage(id, stage) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
 
@@ -1457,11 +1474,21 @@ function dealMoveStage(id, stage) {
     return;
   }
 
+  const prevStage = d.stage, prevUpdatedAt = d.updatedAt;
   d.stage = stage;
   d.updatedAt = today();
-  showToast(`✅ ${d.company} → ${stage}`, 'green');
   _renderDealModal(d);
   renderPipeline(deals);
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify({ stage: d.stage, updatedAt: d.updatedAt }) });
+    showToast(`✅ ${d.company} → ${stage}`, 'green');
+  } catch (err) {
+    d.stage = prevStage;
+    d.updatedAt = prevUpdatedAt;
+    _renderDealModal(d);
+    renderPipeline(deals);
+    showToast('⚠️ Не удалось сохранить стадию: ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1855,86 +1882,132 @@ function dealRejectionBlock(d) {
     </div>`;
 }
 
-function dealAddMeeting(id) {
+// Shared by every array-field mutator below (TS versions, signed docs,
+// other docs, founder contacts, negotiation meetings) — persists the
+// whole current value of one JSON array field, same "one field, current
+// value" PUT as dealField() above. Returns false (and toasts) on
+// failure so the caller can roll back its own snapshot — array shapes
+// differ too much (push vs splice vs indexed edit) for one shared
+// rollback to fit all of them.
+async function _persistDealArrayField(id, field) {
   const d = deals.find(x => x.id === id);
-  if (!d) return;
-  d.negMeetings = d.negMeetings || [];
-  d.negMeetings.push({ date: today(), participants: '', outcome: '' });
-  _renderDealModal(d);
+  if (!d) return true;
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify({ [field]: d[field] }) });
+    return true;
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+    return false;
+  }
 }
 
-function addTSVersion(id) {
+async function dealAddMeeting(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const prev = d.negMeetings || [];
+  d.negMeetings = [...prev, { date: today(), participants: '', outcome: '' }];
+  _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'negMeetings')) { d.negMeetings = prev; _renderDealModal(d); }
+}
+
+async function addTSVersion(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
   const n = (d.tsVersions||[]).length + 1;
-  d.tsVersions = [...(d.tsVersions||[]), { v:`v${n}`, date: today(), url:'' }];
+  const prev = d.tsVersions || [];
+  d.tsVersions = [...prev, { v:`v${n}`, date: today(), url:'' }];
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'tsVersions')) { d.tsVersions = prev; _renderDealModal(d); }
 }
 
-function dealTSVersionUrl(id, i, url) {
+async function dealTSVersionUrl(id, i, url) {
   const d = deals.find(x => x.id === id);
-  if (d && d.tsVersions && d.tsVersions[i]) d.tsVersions[i].url = url;
+  if (!d || !d.tsVersions || !d.tsVersions[i]) return;
+  const prevUrl = d.tsVersions[i].url;
+  d.tsVersions[i].url = url;
+  if (!await _persistDealArrayField(id, 'tsVersions')) { d.tsVersions[i].url = prevUrl; _renderDealModal(d); }
 }
 
-function addSignedDoc(id) {
+async function addSignedDoc(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
   const name = prompt('Название документа (SHA, SPA, SAFE...):');
   if (!name) return;
-  d.signedDocsUrls = [...(d.signedDocsUrls||[]), { name, url:'' }];
+  const prev = d.signedDocsUrls || [];
+  d.signedDocsUrls = [...prev, { name, url:'' }];
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'signedDocsUrls')) { d.signedDocsUrls = prev; _renderDealModal(d); }
 }
 
-function dealSignedDocUrl(id, i, url) {
+async function dealSignedDocUrl(id, i, url) {
   const d = deals.find(x => x.id === id);
-  if (d && d.signedDocsUrls && d.signedDocsUrls[i]) d.signedDocsUrls[i].url = url;
+  if (!d || !d.signedDocsUrls || !d.signedDocsUrls[i]) return;
+  const prevUrl = d.signedDocsUrls[i].url;
+  d.signedDocsUrls[i].url = url;
+  if (!await _persistDealArrayField(id, 'signedDocsUrls')) { d.signedDocsUrls[i].url = prevUrl; _renderDealModal(d); }
 }
 
-function addFounderContact(id) {
+async function addFounderContact(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
-  d.founderContacts = [...(d.founderContacts||[]), { role:'', name:'', phone:'', email:'' }];
+  const prev = d.founderContacts || [];
+  d.founderContacts = [...prev, { role:'', name:'', phone:'', email:'' }];
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'founderContacts')) { d.founderContacts = prev; _renderDealModal(d); }
 }
 
 /* ── TS version delete ── */
-function deleteTSVersion(id, i) {
+async function deleteTSVersion(id, i) {
   const d = deals.find(x => x.id === id);
   if (!d || !d.tsVersions) return;
   if (!confirm(`Удалить версию TS "${d.tsVersions[i]?.v}"?`)) return;
-  d.tsVersions.splice(i, 1);
+  const prev = d.tsVersions;
+  d.tsVersions = prev.filter((_, idx) => idx !== i);
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'tsVersions')) { d.tsVersions = prev; _renderDealModal(d); }
 }
 
 /* ── Signed doc delete ── */
-function deleteSignedDoc(id, i) {
+async function deleteSignedDoc(id, i) {
   const d = deals.find(x => x.id === id);
   if (!d || !d.signedDocsUrls) return;
   if (!confirm(`Удалить документ "${d.signedDocsUrls[i]?.name}"?`)) return;
-  d.signedDocsUrls.splice(i, 1);
+  const prev = d.signedDocsUrls;
+  d.signedDocsUrls = prev.filter((_, idx) => idx !== i);
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'signedDocsUrls')) { d.signedDocsUrls = prev; _renderDealModal(d); }
 }
 
 /* ── Other docs: add / update name / update url / delete ── */
-function addOtherDoc(id) {
+async function addOtherDoc(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
-  d.otherDocs = [...(d.otherDocs||[]), { name:'', url:'' }];
+  const prev = d.otherDocs || [];
+  d.otherDocs = [...prev, { name:'', url:'' }];
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'otherDocs')) { d.otherDocs = prev; _renderDealModal(d); }
 }
-function dealOtherDocName(id, i, val) {
+async function dealOtherDocName(id, i, val) {
   const d = deals.find(x => x.id === id);
-  if (d && d.otherDocs && d.otherDocs[i]) d.otherDocs[i].name = val;
+  if (!d || !d.otherDocs || !d.otherDocs[i]) return;
+  const prevName = d.otherDocs[i].name;
+  d.otherDocs[i].name = val;
+  if (!await _persistDealArrayField(id, 'otherDocs')) { d.otherDocs[i].name = prevName; _renderDealModal(d); }
 }
-function dealOtherDocUrl(id, i, url) {
+async function dealOtherDocUrl(id, i, url) {
   const d = deals.find(x => x.id === id);
-  if (d && d.otherDocs && d.otherDocs[i]) d.otherDocs[i].url = url;
+  if (!d || !d.otherDocs || !d.otherDocs[i]) return;
+  const prevUrl = d.otherDocs[i].url;
+  d.otherDocs[i].url = url;
+  if (!await _persistDealArrayField(id, 'otherDocs')) { d.otherDocs[i].url = prevUrl; _renderDealModal(d); }
 }
-function deleteOtherDoc(id, i) {
+async function deleteOtherDoc(id, i) {
   const d = deals.find(x => x.id === id);
   if (!d || !d.otherDocs) return;
-  d.otherDocs.splice(i, 1);
+  const prev = d.otherDocs;
+  d.otherDocs = prev.filter((_, idx) => idx !== i);
   _renderDealModal(d);
+  if (!await _persistDealArrayField(id, 'otherDocs')) { d.otherDocs = prev; _renderDealModal(d); }
 }
 
 function filterDeals(search) {
