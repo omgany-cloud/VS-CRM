@@ -1195,17 +1195,6 @@ function _renderDealModal(d) {
           ${d.ddRedFlags.map(f=>`<div style="font-size:11px;color:#fca5a5;padding:3px 0">⚠ ${f}</div>`).join('')}
         </div>` : ''}
 
-      <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-user-tie" style="margin-right:5px"></i>Внешние консультанты
-      </div>
-      ${!(d.ddConsultants||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic">Нет консультантов</div>` :
-        d.ddConsultants.map(c => `
-          <div style="display:flex;gap:10px;padding:7px 10px;background:#0f1623;border-radius:7px;margin-bottom:5px;align-items:center">
-            <span style="font-size:12px;font-weight:600;color:#e2e8f0;flex:1">${c.name}</span>
-            <span style="font-size:10px;color:#64748b">${c.role}</span>
-            <span style="font-size:10px;font-weight:700;color:${c.status==='Завершено'?'#22c55e':'#f97316'}">${c.status}</span>
-          </div>`).join('')}
-
       ${ddConclusionsSection(d)}
       ${gpConclusionSection(d)}
       ${dealRejectionBlock(d)}`;
@@ -2013,7 +2002,6 @@ async function saveDeal() {
     ddRisk:      [],
     ddCompliance:[],
     ddMlro:      [],
-    ddConsultants: [],
     ddRedFlags:  [],
     ddConclusions: [],
     gpConclusionVerdict: '', gpConclusionSummary: '', gpConclusionSignedBy: '', gpConclusionSignedAt: '',
