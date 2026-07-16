@@ -46,6 +46,13 @@ function updateUserRoleUI(role) {
   const canSeeUsersPage = currentUserPermission('manageUsers') || currentUserPermission('manageRoles');
   if (usersNav) usersNav.style.display = canSeeUsersPage ? '' : 'none';
 
+  // Portfolio (monitoring conclusions, uploaded documents) is internal-GP-
+  // staff-only — external IC seats (Independent Member, LP Rep) already get
+  // a 403 from the server (requireInternal on /api/portfolio/*), this just
+  // hides the nav link so they don't land on a broken empty page.
+  const portfolioNav = document.querySelector('.nav-item[data-page="portfolio"]');
+  if (portfolioNav) portfolioNav.style.display = currentUserPermission('internal') ? '' : 'none';
+
   const roBanner = document.getElementById('readOnlyBanner');
   if (roBanner) roBanner.style.display = currentUserPermission('readOnly') ? '' : 'none';
 
@@ -2271,9 +2278,6 @@ async function savePortfolio() {
 }
 
 let portfolioView = 'grid';
-let _activePortTab = 'financials';
-let _portChartRevenue = null;
-let _portChartEbitda  = null;
 
 function setPortfolioView(view, btnEl) {
   portfolioView = view;
@@ -2464,7 +2468,6 @@ function renderPortfolio(data) {
 function openPortfolioModal(portId) {
   const p = portfolio.find(x => x.id === portId);
   if (!p) return;
-  _activePortTab = 'financials';
   _renderPortfolioModal(p);
   document.getElementById('portDetailOverlay').style.display = 'block';
   document.getElementById('modal-port-detail').style.display = 'flex';
@@ -2475,14 +2478,6 @@ function closePortfolioModal() {
   document.getElementById('portDetailOverlay').style.display = 'none';
   document.getElementById('modal-port-detail').style.display = 'none';
   document.body.style.overflow = '';
-  if (_portChartRevenue) { _portChartRevenue.destroy(); _portChartRevenue = null; }
-  if (_portChartEbitda)  { _portChartEbitda.destroy();  _portChartEbitda  = null; }
-}
-
-function switchPortTab(tab, portId) {
-  _activePortTab = tab;
-  const p = portfolio.find(x => x.id === portId);
-  if (p) _renderPortfolioModal(p);
 }
 
 function portField(id, field, value) {
@@ -2494,659 +2489,165 @@ function _renderPortfolioModal(p) {
   const st = portAutoStatus(p);
   const stCol = portStatusColor(st);
   const moic = portMOIC(p);
-  const f = p.financials || {};
   const mon = p.monitoring || {};
   const docs = p.documents || { files:[] };
-  const comp = p.compliance || {};
-  const ex = p.exit || {};
-  const hist = p.history || [];
 
   const iS = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
   const lS = `font-size:10px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:3px;text-transform:uppercase`;
   const gS = `margin-bottom:12px`;
 
-  /* ── Auto-flags ── */
-  const ebitdaAct = (f.ebitda?.actual || []);
-  const lastEbitda = ebitdaAct[ebitdaAct.length-1] || 0;
-  const debtEbitda = lastEbitda > 0 ? (f.totalDebt||0) / (lastEbitda * 4 * 1000000 / 1000000) : 0;
-  const dscr = (f.debtService||0) > 0 ? ((lastEbitda * 4 * 1000000) / (f.debtService||1)) : 0;
-  const flagDebtEbitda = debtEbitda > 4;
-  const flagDSCR = dscr > 0 && dscr < 1.2;
-  const docBadge = portDocBadge(p);
-
-  const tabs = [
-    { id:'financials',  icon:'fa-chart-bar',      label:'Финансы',       badge: (flagDebtEbitda||flagDSCR) ? '⚠' : '' },
-    { id:'monitoring',  icon:'fa-eye',             label:'Мониторинг',    badge: '' },
-    { id:'documents',   icon:'fa-folder',          label:'Документы',     badge: docBadge > 0 ? docBadge : '' },
-    { id:'compliance',  icon:'fa-shield-alt',      label:'Соответствие',  badge: '' },
-    { id:'exit',        icon:'fa-sign-out-alt',    label:'Выход',         badge: '' },
-    { id:'history',     icon:'fa-history',         label:'История',       badge: '' },
+  const requiredTypes = [
+    'SHA / Кредитное соглашение',
+    'Залоговые документы',
+    'Финотчётность Q1 2025',
+    'Финотчётность Q4 2024',
+    'Финотчётность Q3 2024',
+    'Финотчётность Q2 2024',
   ];
+  const today30 = new Date(); today30.setDate(today30.getDate()+30);
 
-  let tabContent = '';
+  /* ── Monitoring conclusion (quarterly) ── */
+  const conclusions = mon.conclusions || [];
+  const quarterOpts = recentQuarters(6);
+  const selQuarter = quarterOpts.includes(p._selMonConclQuarter) ? p._selMonConclQuarter : quarterOpts[0];
+  const selConclusion = conclusions.find(c => c.quarter === selQuarter);
 
-  /* ══ TAB 1: FINANCIALS ══ */
-  if (_activePortTab === 'financials') {
-    const qs = f.quarters || [];
-    const revAct  = f.revenue?.actual  || [];
-    const revPlan = f.revenue?.plan    || [];
-    const ebAct   = f.ebitda?.actual   || [];
-    const ebPlan  = f.ebitda?.plan     || [];
-    const npAct   = f.netProfit?.actual || [];
-    const npPlan  = f.netProfit?.plan   || [];
-    const empAct  = f.employees?.actual || [];
-    const empPlan = f.employees?.plan   || [];
+  const conclusionHistory = conclusions
+    .filter(c => c.quarter !== selQuarter)
+    .sort((a, b) => a.quarter < b.quarter ? 1 : -1);
 
-    // Single currency-honest formatter, derived from this company's own
-    // fund (p.fundId) — replaces the old fmtM/fmtKZT pair, which hardcoded
-    // $ and ₸ independently of each other (fmtM even switched currency by
-    // the amount's MAGNITUDE, not by what currency it's actually in) and
-    // is exactly the bug that showed the same overdue-debt figure as $
-    // on the card and ₸ here.
-    const fmt = v => fmtCurrency(v, currencyForEntity(p));
-
-    const qTableRow = (label, act, plan, unit='$K') => `
-      <tr style="border-bottom:1px solid #1a2335">
-        <td style="padding:6px 10px;font-size:11px;color:#94a3b8;font-weight:600">${label}</td>
-        ${qs.map((_,i) => {
-          const a=act[i]||0, pl=plan[i]||0;
-          const col = a >= pl ? '#22c55e' : '#ef4444';
-          return `<td style="padding:6px 8px;text-align:right;font-size:11px;color:${col};font-weight:700">${a}</td>
-                  <td style="padding:6px 8px;text-align:right;font-size:11px;color:#475569">${pl}</td>`;
-        }).join('')}
-      </tr>`;
-
-    tabContent = `
-      <!-- ── KPI CARDS ── -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
-        ${[
-          { label:'MOIC',          val:`${moic}x`,                     color: moic>=2?'#22c55e':moic>=1?'#f97316':'#ef4444', icon:'fa-chart-line' },
-          { label:'Debt/EBITDA',   val: debtEbitda>0?`${debtEbitda.toFixed(1)}x`:'—', color:flagDebtEbitda?'#ef4444':'#22c55e', icon:'fa-balance-scale' },
-          { label:'DSCR',          val: dscr>0?`${dscr.toFixed(2)}x`:'—',             color:flagDSCR?'#ef4444':'#22c55e',      icon:'fa-shield-alt' },
-          { label:'Просрочка',     val: f.overduePayment ? fmt(f.overdueAmount) : '✓ Нет', color:f.overduePayment?'#ef4444':'#22c55e', icon:'fa-exclamation-circle' },
-        ].map(c=>`
-          <div style="background:#0f1623;border:1px solid ${c.color}33;border-radius:10px;padding:12px;text-align:center">
-            <i class="fas ${c.icon}" style="color:${c.color};font-size:14px;margin-bottom:4px;display:block"></i>
-            <div style="font-size:18px;font-weight:800;color:${c.color}">${c.val}</div>
-            <div style="font-size:9px;color:#64748b;text-transform:uppercase;margin-top:2px">${c.label}</div>
-            ${c.label==='Debt/EBITDA'&&flagDebtEbitda?`<div style="font-size:9px;color:#ef4444;margin-top:3px">⚠ > 4.0x</div>`:''}
-            ${c.label==='DSCR'&&flagDSCR?`<div style="font-size:9px;color:#ef4444;margin-top:3px">⚠ < 1.2x</div>`:''}
-          </div>`).join('')}
-      </div>
-
-      <!-- ── QUARTERLY TABLE ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-table" style="margin-right:5px"></i>Квартальные показатели (Факт / План, $K)
-      </div>
-      <div style="overflow-x:auto;margin-bottom:14px">
-        <table style="width:100%;border-collapse:collapse;min-width:500px">
-          <thead>
-            <tr style="background:#0a1120">
-              <th style="padding:7px 10px;text-align:left;font-size:10px;color:#475569;font-weight:700">Показатель</th>
-              ${qs.map(q=>`<th colspan="2" style="padding:7px 6px;text-align:center;font-size:10px;color:#64748b;font-weight:700">${q}</th>`).join('')}
-            </tr>
-            <tr style="background:#0a1120;border-bottom:1px solid #1a2335">
-              <th></th>
-              ${qs.map(()=>`<th style="padding:3px 6px;text-align:right;font-size:9px;color:#22c55e">Факт</th><th style="padding:3px 6px;text-align:right;font-size:9px;color:#475569">План</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-            ${qTableRow('Выручка, $K',     revAct, revPlan)}
-            ${qTableRow('EBITDA, $K',      ebAct,  ebPlan)}
-            ${qTableRow('Чистая прибыль',  npAct,  npPlan)}
-            ${qTableRow('Сотрудники, чел.',empAct, empPlan, 'чел')}
-          </tbody>
-        </table>
-      </div>
-
-      <!-- ── CHARTS ── -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        <div style="background:#0f1623;border-radius:10px;padding:14px">
-          <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:8px;text-transform:uppercase">Выручка — Факт vs План ($K)</div>
-          <div style="height:160px"><canvas id="portChartRevenue_${p.id}"></canvas></div>
+  const tabContent = `
+    <!-- ── Monitoring conclusion (quarterly) ── -->
+    <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.25);border-radius:10px;padding:14px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="font-size:10px;font-weight:700;color:#c4b5fd;text-transform:uppercase">
+          <i class="fas fa-clipboard-list" style="margin-right:5px"></i>Заключение мониторинга (раз в квартал)
         </div>
-        <div style="background:#0f1623;border-radius:10px;padding:14px">
-          <div style="font-size:10px;font-weight:700;color:#a78bfa;margin-bottom:8px;text-transform:uppercase">EBITDA — Факт vs План ($K)</div>
-          <div style="height:160px"><canvas id="portChartEbitda_${p.id}"></canvas></div>
-        </div>
+        <select id="monConclQuarter_${p.id}" style="${iS};width:auto" onchange="switchMonConclQuarter(${p.id},this.value)">
+          ${quarterOpts.map(q=>`<option value="${q}" ${q===selQuarter?'selected':''}>${q}</option>`).join('')}
+        </select>
       </div>
-
-      <!-- ── DEBT & FINANCIAL DETAILS ── -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-        <div style="background:#0f1623;border-radius:10px;padding:12px">
-          <div style="font-size:10px;font-weight:700;color:#f97316;margin-bottom:8px;text-transform:uppercase">Долговая нагрузка</div>
-          ${[
-            ['Общий долг (все кредиторы)', fmt(f.totalDebt)],
-            ['Долг перед фондом',          fmt(f.fundDebt)],
-            ['Годовое обслуживание',       fmt(f.debtService)],
-            ['Ср. зарплата',               fmt(f.avgSalary)],
-            ['Налоговые отчисления',       fmt(f.taxContrib)],
-          ].map(([l,v])=>`
-            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a2335;font-size:11px">
-              <span style="color:#94a3b8">${l}</span><span style="color:#e2e8f0;font-weight:700">${v}</span>
-            </div>`).join('')}
-        </div>
-        <div style="background:#0f1623;border-radius:10px;padding:12px">
-          <div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:8px;text-transform:uppercase">Залог</div>
-          <div style="font-size:11px;color:#e2e8f0;margin-bottom:8px">${f.collateral||'—'}</div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-            <span style="color:#94a3b8">Оценка</span><span style="color:#22c55e;font-weight:700">${fmt(f.collateralVal)}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px">
-            <span style="color:#94a3b8">Статус</span>
-            <span style="color:${f.collateralStatus==='Зарегистрирован'?'#22c55e':'#f97316'};font-weight:700">${f.collateralStatus||'—'}</span>
-          </div>
-          <div style="margin-top:12px">
-            <div style="font-size:10px;font-weight:700;color:#8a9bbf;margin-bottom:6px;text-transform:uppercase">Ковенанты</div>
-            ${(f.covenants||[]).map(c=>`
-              <div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">
-                <i class="fas ${c.ok?'fa-check-circle':'fa-times-circle'}" style="color:${c.ok?'#22c55e':'#ef4444'};font-size:11px;width:14px"></i>
-                <span style="color:${c.ok?'#94a3b8':'#fca5a5'}">${c.name}</span>
-              </div>`).join('')}
-          </div>
-        </div>
-      </div>
-
-      <!-- ── PAYMENT SCHEDULE ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-calendar-check" style="margin-right:5px"></i>График платежей (12 мес.)
-      </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-        <thead><tr style="background:#0a1120">
-          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#475569">Дата</th>
-          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#475569">Тип</th>
-          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#475569">Сумма</th>
-          <th style="padding:7px 10px;text-align:center;font-size:10px;color:#475569">Статус</th>
-        </tr></thead>
-        <tbody>
-          ${(f.paymentSchedule||[]).map(ps => {
-            const sCol = ps.status==='Оплачен'?'#22c55e':ps.status==='Просрочен'?'#ef4444':'#f97316';
-            return `<tr style="border-bottom:1px solid #1a2335">
-              <td style="padding:6px 10px;font-size:11px;color:#e2e8f0">${ps.date}</td>
-              <td style="padding:6px 10px;font-size:11px;color:#94a3b8">${ps.type}</td>
-              <td style="padding:6px 10px;font-size:11px;color:#e2e8f0;text-align:right;font-weight:700">${fmt(ps.amount)}</td>
-              <td style="padding:6px 10px;text-align:center">
-                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${sCol}22;color:${sCol}">${ps.status}</span>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-
-      <!-- ── ФИНАНСОВЫЙ ОТЧЁТ (форма ввода) ── -->
-      <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:14px">
-        <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:10px;text-transform:uppercase">
-          <i class="fas fa-file-upload" style="margin-right:5px"></i>Ввод квартального отчёта
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label style="${lS}">Квартал</label>
-            <select id="qr_quarter_${p.id}" style="${iS}">
-              ${['Q1 2025','Q2 2025','Q3 2025','Q4 2025'].map(q=>`<option>${q}</option>`).join('')}
-            </select></div>
-          <div><label style="${lS}">Выручка ($K)</label>
-            <input type="number" id="qr_rev_${p.id}" style="${iS}" placeholder="1200" /></div>
-          <div><label style="${lS}">EBITDA ($K)</label>
-            <input type="number" id="qr_ebitda_${p.id}" style="${iS}" placeholder="250" /></div>
-          <div><label style="${lS}">Чистая прибыль ($K)</label>
-            <input type="number" id="qr_np_${p.id}" style="${iS}" placeholder="130" /></div>
-          <div><label style="${lS}">Сотрудников, чел.</label>
-            <input type="number" id="qr_emp_${p.id}" style="${iS}" placeholder="56" /></div>
-        </div>
-        <button onclick="savePortQuarterlyReport(${p.id})"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
-            padding:7px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
-          <i class="fas fa-save" style="margin-right:5px"></i>Сохранить данные квартала
+      <textarea id="monConclText_${p.id}" rows="5" style="${iS};height:110px;resize:vertical"
+        placeholder="Нажмите «Сгенерировать черновик» или напишите заключение вручную...">${selConclusion?.text||''}</textarea>
+      ${selConclusion?.editedBy ? `<div style="font-size:10px;color:#8a9bbf;margin-top:6px">Последнее изменение: ${selConclusion.editedBy}, ${selConclusion.editedAt}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button onclick="draftMonitoringConclusion(${p.id})"
+          style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;
+            padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-wand-magic-sparkles" style="margin-right:6px"></i>Сгенерировать черновик
         </button>
-      </div>`;
-  }
-
-  /* ══ TAB 2: MONITORING ══ */
-  else if (_activePortTab === 'monitoring') {
-    const freqDays = {'Ежемесячно':30,'Ежеквартально':90,'Раз в полгода':180}[mon.frequency||'Ежеквартально']||90;
-    const nextMon = mon.lastVisitDate ? new Date(new Date(mon.lastVisitDate).getTime() + freqDays*86400000).toISOString().split('T')[0] : '—';
-    const dSince  = daysSince(mon.lastVisitDate);
-
-    tabContent = `
-      <!-- ── Monitoring Summary ── -->
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
-        ${[
-          { label:'Последний визит', val: mon.lastVisitDate||'—', color:dSince>60?'#ef4444':dSince>30?'#eab308':'#22c55e', icon:'fa-calendar-check' },
-          { label:'Следующий мониторинг', val: nextMon, color:'#60a5fa', icon:'fa-calendar-plus' },
-          { label:'Дней без контакта', val: dSince<999?`${dSince} дн.`:'—', color:dSince>60?'#ef4444':dSince>30?'#eab308':'#22c55e', icon:'fa-clock' },
-        ].map(c=>`
-          <div style="background:#0f1623;border-radius:10px;padding:12px;text-align:center">
-            <i class="fas ${c.icon}" style="color:${c.color};font-size:14px;margin-bottom:4px;display:block"></i>
-            <div style="font-size:14px;font-weight:800;color:${c.color}">${c.val}</div>
-            <div style="font-size:9px;color:#64748b;text-transform:uppercase;margin-top:2px">${c.label}</div>
-          </div>`).join('')}
+        <button onclick="saveMonitoringConclusion(${p.id})"
+          style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;
+            padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-save" style="margin-right:6px"></i>Сохранить
+        </button>
       </div>
-
-      <!-- ── Settings ── -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-        <div style="${gS}"><label style="${lS}">Частота мониторинга</label>
-          <select style="${iS}" onchange="portNestedField(${p.id},'monitoring','frequency',this.value)">
-            ${['Ежемесячно','Ежеквартально','Раз в полгода'].map(v=>`<option ${mon.frequency===v?'selected':''}>${v}</option>`).join('')}
-          </select></div>
-        <div style="${gS}"><label style="${lS}">Статус аудита</label>
-          <select style="${iS}" onchange="portNestedField(${p.id},'monitoring','auditStatus',this.value)">
-            ${['Не требуется','В процессе','Завершён'].map(v=>`<option ${mon.auditStatus===v?'selected':''}>${v}</option>`).join('')}
-          </select></div>
-        <div style="${gS}"><label style="${lS}">Уровень риска</label>
-          <select style="${iS}" onchange="portNestedField(${p.id},'monitoring','riskLevel',this.value)">
-            ${['Низкий','Средний','Высокий'].map(v=>`<option ${mon.riskLevel===v?'selected':''}>${v}</option>`).join('')}
-          </select></div>
-      </div>
-      <div style="${gS}"><label style="${lS}">Нарушения ковенантов</label>
-        <textarea style="${iS};height:55px;resize:none"
-          onchange="portNestedField(${p.id},'monitoring','covenantViolations',this.value)"
-          placeholder="Опишите нарушения или оставьте пустым">${mon.covenantViolations||''}</textarea></div>
-      <div style="${gS}"><label style="${lS}">Комментарий по риску</label>
-        <textarea style="${iS};height:55px;resize:none"
-          onchange="portNestedField(${p.id},'monitoring','riskComment',this.value)">${mon.riskComment||''}</textarea></div>
-
-      <!-- ── Meeting Log ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
-        <i class="fas fa-calendar-alt" style="margin-right:5px"></i>Лог встреч (${(mon.meetings||[]).length})
-      </div>
-      ${!(mon.meetings||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Встреч не записано</div>` :
-        [...(mon.meetings||[])].reverse().map((m,i) => `
-          <div style="background:#0f1623;border-radius:10px;padding:12px 14px;margin-bottom:10px;border-left:3px solid #3b82f6">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:12px;font-weight:700;color:#e2e8f0">${m.date}</span>
-                <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(59,130,246,0.15);color:#60a5fa;font-weight:700">${m.format}</span>
+      ${conclusionHistory.length ? `
+        <details style="margin-top:12px">
+          <summary style="font-size:10px;color:#8a9bbf;cursor:pointer;text-transform:uppercase;font-weight:700">Прошлые кварталы (${conclusionHistory.length})</summary>
+          ${conclusionHistory.map(c=>`
+            <div style="background:#0f1623;border-radius:8px;padding:10px 12px;margin-top:8px">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-bottom:4px">
+                <b style="color:#c4b5fd">${c.quarter}</b><span>${c.editedBy||'—'}, ${c.editedAt||''}</span>
               </div>
-              <span style="font-size:10px;color:#64748b">${m.participants}</span>
-            </div>
-            <div style="font-size:11px;color:#94a3b8;margin-bottom:5px"><b style="color:#8a9bbf">Обсуждалось:</b> ${m.points}</div>
-            <div style="font-size:11px;color:#94a3b8;margin-bottom:5px"><b style="color:#8a9bbf">Решения:</b> ${m.decisions}</div>
-            ${(m.actions||[]).length ? `
-              <div style="margin-top:6px">
-                <div style="font-size:10px;color:#eab308;font-weight:700;margin-bottom:4px">Action Items:</div>
-                ${m.actions.map(a=>`
-                  <div style="font-size:11px;color:#fde68a;padding:2px 0">
-                    • ${a.text} — <span style="color:#64748b">${a.resp}</span> · <span style="color:#eab308">${a.deadline}</span>
-                  </div>`).join('')}
-              </div>` : ''}
-          </div>`).join('')}
+              <div style="font-size:11px;color:#94a3b8;white-space:pre-wrap">${c.text||''}</div>
+            </div>`).join('')}
+        </details>` : ''}
+    </div>
 
-      <!-- ── Add Meeting Form ── -->
-      <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:14px">
-        <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:10px;text-transform:uppercase">
-          <i class="fas fa-plus" style="margin-right:5px"></i>Добавить встречу
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label style="${lS}">Дата</label>
-            <input type="date" id="mtg_date_${p.id}" style="${iS}" value="${today()}" /></div>
-          <div><label style="${lS}">Формат</label>
-            <select id="mtg_fmt_${p.id}" style="${iS}">
-              ${['Визит','Звонок','Онлайн'].map(v=>`<option>${v}</option>`).join('')}
-            </select></div>
-          <div><label style="${lS}">Участники</label>
-            <input id="mtg_pax_${p.id}" style="${iS}" placeholder="CEO, Менеджер компании..." /></div>
-        </div>
-        <div style="margin-bottom:8px"><label style="${lS}">Ключевые обсуждения</label>
-          <textarea id="mtg_pts_${p.id}" rows="2" style="${iS};height:50px;resize:none" placeholder="Что обсуждалось..."></textarea></div>
-        <div style="margin-bottom:8px"><label style="${lS}">Решения</label>
-          <textarea id="mtg_dec_${p.id}" rows="2" style="${iS};height:50px;resize:none" placeholder="Принятые решения..."></textarea></div>
-        <div style="margin-bottom:10px"><label style="${lS}">Action item (следующий шаг)</label>
-          <div style="display:grid;grid-template-columns:1fr auto auto;gap:6px">
-            <input id="mtg_act_${p.id}" style="${iS}" placeholder="Описание действия..." />
-            <input type="date" id="mtg_actd_${p.id}" style="${iS};width:140px" value="${today()}" />
-            <input id="mtg_actr_${p.id}" style="${iS};width:120px" placeholder="Ответственный" />
-          </div>
-        </div>
-        <button onclick="savePortMeeting(${p.id})"
+    <!-- ── Drive link ── -->
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
+      <label style="${lS}"><i class="fas fa-folder" style="margin-right:5px;color:#60a5fa"></i>Ссылка на папку Google Drive</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <input style="${iS}" value="${docs.driveUrl||''}" placeholder="https://drive.google.com/... или загрузите файл"
+          id="portDriveUrl_${p.id}"
+          onchange="portNestedField(${p.id},'documents','driveUrl',this.value)" />
+        ${docUploadBtn('portDriveUrl_' + p.id)}
+        ${docs.driveUrl?`<button onclick="window.open('${resolveDocUrl(docs.driveUrl).replace(/'/g,"\\'")}','_blank')"
           style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
-            padding:7px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
-          <i class="fas fa-save" style="margin-right:5px"></i>Сохранить встречу + создать задачу
-        </button>
+            padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
+          <i class="fas fa-external-link-alt"></i></button>`:''}
+      </div>
+    </div>
+
+    <!-- ── Required docs checklist ── -->
+    <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+      <i class="fas fa-clipboard-check" style="margin-right:5px"></i>Обязательные документы
+    </div>
+    ${requiredTypes.map(rt => {
+      const found = (docs.files||[]).find(f=>f.type===rt);
+      const present = !!found;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;margin-bottom:5px;
+        background:${present?'rgba(34,197,94,0.06)':'rgba(239,68,68,0.06)'};
+        border:1px solid ${present?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.25)'}">
+        <i class="fas ${present?'fa-check-circle':'fa-times-circle'}" style="color:${present?'#22c55e':'#ef4444'};font-size:14px;width:16px"></i>
+        <span style="flex:1;font-size:12px;color:${present?'#e2e8f0':'#fca5a5'};font-weight:${present?'500':'700'}">${rt}</span>
+        ${present?`<span style="font-size:10px;color:#64748b">${found.date}</span>
+          <span style="font-size:10px;color:#94a3b8">${found.uploadedBy}</span>`
+          :`<span style="font-size:10px;color:#ef4444;font-weight:700">ОТСУТСТВУЕТ</span>`}
       </div>`;
-  }
+    }).join('')}
 
-  /* ══ TAB 3: DOCUMENTS ══ */
-  else if (_activePortTab === 'documents') {
-    const requiredTypes = [
-      'SHA / Кредитное соглашение',
-      'Залоговые документы',
-      'Финотчётность Q1 2025',
-      'Финотчётность Q4 2024',
-      'Финотчётность Q3 2024',
-      'Финотчётность Q2 2024',
-    ];
-    const existTypes = (docs.files||[]).map(f=>f.type);
-    const today30 = new Date(); today30.setDate(today30.getDate()+30);
-
-    tabContent = `
-      <!-- ── Drive link ── -->
-      <div style="margin-bottom:14px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
-        <label style="${lS}"><i class="fas fa-folder" style="margin-right:5px;color:#60a5fa"></i>Ссылка на папку Google Drive</label>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <input style="${iS}" value="${docs.driveUrl||''}" placeholder="https://drive.google.com/... или загрузите файл"
-            id="portDriveUrl_${p.id}"
-            onchange="portNestedField(${p.id},'documents','driveUrl',this.value)" />
-          ${docUploadBtn('portDriveUrl_' + p.id)}
-          ${docs.driveUrl?`<button onclick="window.open('${resolveDocUrl(docs.driveUrl).replace(/'/g,"\\'")}','_blank')"
-            style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
-              padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
-            <i class="fas fa-external-link-alt"></i></button>`:''}
-        </div>
-      </div>
-
-      <!-- ── Required docs checklist ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-clipboard-check" style="margin-right:5px"></i>Обязательные документы
-      </div>
-      ${requiredTypes.map(rt => {
-        const found = (docs.files||[]).find(f=>f.type===rt);
-        const present = !!found;
-        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;margin-bottom:5px;
-          background:${present?'rgba(34,197,94,0.06)':'rgba(239,68,68,0.06)'};
-          border:1px solid ${present?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.25)'}">
-          <i class="fas ${present?'fa-check-circle':'fa-times-circle'}" style="color:${present?'#22c55e':'#ef4444'};font-size:14px;width:16px"></i>
-          <span style="flex:1;font-size:12px;color:${present?'#e2e8f0':'#fca5a5'};font-weight:${present?'500':'700'}">${rt}</span>
-          ${present?`<span style="font-size:10px;color:#64748b">${found.date}</span>
-            <span style="font-size:10px;color:#94a3b8">${found.uploadedBy}</span>`
-            :`<span style="font-size:10px;color:#ef4444;font-weight:700">ОТСУТСТВУЕТ</span>`}
+    <!-- ── All docs list ── -->
+    <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin:14px 0 8px">
+      <i class="fas fa-folder-open" style="margin-right:5px"></i>Все документы (${(docs.files||[]).length})
+    </div>
+    ${!(docs.files||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Нет документов</div>` :
+      (docs.files||[]).map((f,i) => {
+        const expiring = f.expiryDate && new Date(f.expiryDate) <= today30 && new Date(f.expiryDate) >= new Date();
+        const expired  = f.expiryDate && new Date(f.expiryDate) < new Date();
+        return `
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#0f1623;border-radius:8px;margin-bottom:6px;
+          border-left:3px solid ${expired?'#ef4444':expiring?'#eab308':'#2a3448'}">
+          <i class="fas fa-file-alt" style="color:${expired?'#ef4444':expiring?'#eab308':'#64748b'};font-size:13px"></i>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">${f.name}</div>
+            <div style="font-size:10px;color:#64748b">${f.type} · ${f.period||'—'} · Загружен: ${f.date} · ${f.uploadedBy}</div>
+            ${f.expiryDate?`<div style="font-size:10px;color:${expired?'#ef4444':expiring?'#eab308':'#64748b'}">
+              ${expired?'⚠ Истёк:':expiring?'⚠ Истекает:':'Действителен до:'} ${f.expiryDate}
+            </div>`:''}
+          </div>
+          ${f.url?`<button onclick="window.open('${resolveDocUrl(f.url).replace(/'/g,"\\'")}','_blank')"
+            style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;
+              padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px" title="Открыть файл"><i class="fas fa-eye"></i></button>`:''}
+          <button onclick="deletePortDoc(${p.id},${i})"
+            style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;
+              padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px">✕</button>
         </div>`;
       }).join('')}
 
-      <!-- ── All docs list ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin:14px 0 8px">
-        <i class="fas fa-folder-open" style="margin-right:5px"></i>Все документы (${(docs.files||[]).length})
+    <!-- ── Add doc form ── -->
+    <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px;margin-top:8px">
+      <div style="font-size:10px;font-weight:700;color:#4ade80;margin-bottom:10px;text-transform:uppercase">
+        <i class="fas fa-plus" style="margin-right:5px"></i>Добавить документ
       </div>
-      ${!(docs.files||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Нет документов</div>` :
-        (docs.files||[]).map((f,i) => {
-          const expiring = f.expiryDate && new Date(f.expiryDate) <= today30 && new Date(f.expiryDate) >= new Date();
-          const expired  = f.expiryDate && new Date(f.expiryDate) < new Date();
-          return `
-          <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#0f1623;border-radius:8px;margin-bottom:6px;
-            border-left:3px solid ${expired?'#ef4444':expiring?'#eab308':'#2a3448'}">
-            <i class="fas fa-file-alt" style="color:${expired?'#ef4444':expiring?'#eab308':'#64748b'};font-size:13px"></i>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11px;font-weight:700;color:#e2e8f0">${f.name}</div>
-              <div style="font-size:10px;color:#64748b">${f.type} · ${f.period||'—'} · Загружен: ${f.date} · ${f.uploadedBy}</div>
-              ${f.expiryDate?`<div style="font-size:10px;color:${expired?'#ef4444':expiring?'#eab308':'#64748b'}">
-                ${expired?'⚠ Истёк:':expiring?'⚠ Истекает:':'Действителен до:'} ${f.expiryDate}
-              </div>`:''}
-            </div>
-            <button onclick="deletePortDoc(${p.id},${i})"
-              style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;
-                padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px">✕</button>
-          </div>`;
-        }).join('')}
-
-      <!-- ── Add doc form ── -->
-      <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px;margin-top:8px">
-        <div style="font-size:10px;font-weight:700;color:#4ade80;margin-bottom:10px;text-transform:uppercase">
-          <i class="fas fa-plus" style="margin-right:5px"></i>Добавить документ
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label style="${lS}">Тип документа</label>
-            <input id="doc_type_${p.id}" style="${iS}" placeholder="SHA / Финотчётность Q2..." /></div>
-          <div><label style="${lS}">Название файла</label>
-            <input id="doc_name_${p.id}" style="${iS}" placeholder="SHA_2025.pdf" /></div>
-          <div><label style="${lS}">Период</label>
-            <input id="doc_period_${p.id}" style="${iS}" placeholder="Q2 2025" /></div>
-          <div><label style="${lS}">Загрузил</label>
-            <input id="doc_by_${p.id}" style="${iS}" placeholder="CEO / Алибек Сейтов" /></div>
-          <div><label style="${lS}">Дата загрузки</label>
-            <input type="date" id="doc_date_${p.id}" style="${iS}" value="${today()}" /></div>
-          <div><label style="${lS}">Срок действия (если есть)</label>
-            <input type="date" id="doc_expiry_${p.id}" style="${iS}" /></div>
-        </div>
-        <button onclick="addPortDoc(${p.id})"
-          style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;
-            padding:7px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
-          <i class="fas fa-plus" style="margin-right:5px"></i>Добавить документ
-        </button>
-      </div>`;
-  }
-
-  /* ══ TAB 4: COMPLIANCE ══ */
-  else if (_activePortTab === 'compliance') {
-    const esg = comp.esg || {};
-    tabContent = `
-      <!-- ── Program Info ── -->
-      <div style="background:#0f1623;border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;margin-bottom:10px">
-          <i class="fas fa-hand-holding-usd" style="margin-right:5px"></i>Программа поддержки
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div style="${gS}"><label style="${lS}">Название программы</label>
-            <input style="${iS}" value="${comp.programName||''}"
-              onchange="portNestedField(${p.id},'compliance','programName',this.value)" /></div>
-          <div style="${gS}"><label style="${lS}">Тип программы</label>
-            <select style="${iS}" onchange="portNestedField(${p.id},'compliance','programType',this.value)">
-              ${[['government','Государственная'],['fund','Фонда'],['grant','Грант'],['subsidized','Субсидирование']].map(([v,l])=>`<option value="${v}" ${comp.programType===v?'selected':''}>${l}</option>`).join('')}
-            </select></div>
-          <div style="${gS}"><label style="${lS}">Субсидируемая ставка (%)</label>
-            <input type="number" style="${iS}" value="${comp.subsidizedRate||''}"
-              onchange="portNestedField(${p.id},'compliance','subsidizedRate',parseFloat(this.value))" /></div>
-          <div style="${gS}"><label style="${lS}">Размер гранта (₸)</label>
-            <input type="number" style="${iS}" value="${comp.grantAmount||''}"
-              onchange="portNestedField(${p.id},'compliance','grantAmount',parseFloat(this.value))" /></div>
-        </div>
-        <div style="${gS}"><label style="${lS}">Условия гранта</label>
-          <textarea style="${iS};height:55px;resize:none"
-            onchange="portNestedField(${p.id},'compliance','grantConditions',this.value)">${comp.grantConditions||''}</textarea></div>
-
-        <!-- Gov programs multi-select -->
-        <div style="font-size:10px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">Государственные программы</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${['Damu','KazAgro','QazIndustry','Другое'].map(prog => {
-            const sel = (comp.programs||[]).includes(prog);
-            return `<button onclick="togglePortProgram(${p.id},'${prog}')"
-              style="padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;transition:all 0.15s;
-                ${sel?'background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.5);color:#a78bfa'
-                      :'background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.25);color:#64748b'}">
-              ${prog}
-            </button>`;
-          }).join('')}
-        </div>
-      </div>
-
-      <!-- ── Reporting Deadlines ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-calendar-exclamation" style="margin-right:5px"></i>Дедлайны отчётности
-      </div>
-      ${!(comp.reportingDeadlines||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Нет дедлайнов</div>` :
-        (comp.reportingDeadlines||[]).map((rd,i) => {
-          const days14 = new Date(); days14.setDate(days14.getDate()+14);
-          const urgent = !rd.done && new Date(rd.deadline) <= days14;
-          return `
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin-bottom:6px;
-            background:${rd.done?'rgba(34,197,94,0.06)':urgent?'rgba(239,68,68,0.07)':'rgba(15,22,35,0.8)'};
-            border:1px solid ${rd.done?'rgba(34,197,94,0.2)':urgent?'rgba(239,68,68,0.3)':'#1a2335'}">
-            <input type="checkbox" ${rd.done?'checked':''} onchange="portToggleReportDL(${p.id},${i},this.checked)"
-              style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer" />
-            <div style="flex:1">
-              <div style="font-size:11px;font-weight:700;color:${rd.done?'#64748b':urgent?'#fca5a5':'#e2e8f0'}">${rd.description}</div>
-              <div style="font-size:10px;color:#64748b">${rd.program} · Дедлайн: ${rd.deadline}${urgent?' ⚠ СРОЧНО':''}</div>
-            </div>
-            ${!rd.done&&urgent?`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700">14 дней</span>`:''}
-          </div>`;
-        }).join('')}
-
-      <button onclick="addPortReportDeadline(${p.id})"
-        style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;
-          padding:6px 14px;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:16px">
-        <i class="fas fa-plus" style="margin-right:4px"></i>Добавить дедлайн
-      </button>
-
-      <!-- ── ESG / Social ── -->
-      <div style="background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px">
-        <div style="font-size:10px;font-weight:700;color:#4ade80;text-transform:uppercase;margin-bottom:12px">
-          <i class="fas fa-leaf" style="margin-right:5px"></i>ESG / Социальные показатели
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
-          ${[
-            ['Новые рабочие места — план', 'esg_jcp', esg.jobsCreatedPlan||0],
-            ['Новые рабочие места — факт', 'esg_jca', esg.jobsCreatedActual||0],
-            ['Сохранено мест — план',      'esg_jpp', esg.jobsPreservedPlan||0],
-            ['Сохранено мест — факт',      'esg_jpa', esg.jobsPreservedActual||0],
-            ['Доля женщин в управлении, %','esg_wp',  esg.womenPct||0],
-          ].map(([l,id,v])=>`
-            <div><label style="${lS}">${l}</label>
-              <input type="number" id="${id}_${p.id}" style="${iS}" value="${v}"
-                onchange="portESGField(${p.id},'${id.replace('esg_','')}',parseInt(this.value))" /></div>`).join('')}
-          <div><label style="${lS}">Тип региона</label>
-            <select style="${iS}" onchange="portNestedNestedField(${p.id},'compliance','esg','regionType',this.value)">
-              ${['Сельский','Городской','Городской центр','Региональный центр'].map(v=>`<option ${esg.regionType===v?'selected':''}>${v}</option>`).join('')}
-            </select></div>
-        </div>
-        <div style="margin-bottom:8px"><label style="${lS}">Женское руководство</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label style="${lS}">Тип документа</label>
+          <input id="doc_type_${p.id}" style="${iS}" placeholder="SHA / Финотчётность Q2..." /></div>
+        <div><label style="${lS}">Название файла</label>
+          <input id="doc_name_${p.id}" style="${iS}" placeholder="SHA_2025.pdf" /></div>
+        <div><label style="${lS}">Период</label>
+          <input id="doc_period_${p.id}" style="${iS}" placeholder="Q2 2025" /></div>
+        <div><label style="${lS}">Загрузил</label>
+          <input id="doc_by_${p.id}" style="${iS}" placeholder="CEO / Алибек Сейтов" /></div>
+        <div><label style="${lS}">Дата загрузки</label>
+          <input type="date" id="doc_date_${p.id}" style="${iS}" value="${today()}" /></div>
+        <div><label style="${lS}">Срок действия (если есть)</label>
+          <input type="date" id="doc_expiry_${p.id}" style="${iS}" /></div>
+        <div style="grid-column:1/-1"><label style="${lS}">Файл (с компьютера) или ссылка</label>
           <div style="display:flex;gap:8px">
-            ${['Да','Нет'].map(v=>`<button onclick="portNestedNestedField(${p.id},'compliance','esg','womenLeadership',${v==='Да'})"
-              style="padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;
-                ${(esg.womenLeadership&&v==='Да')||(!esg.womenLeadership&&v==='Нет')?
-                  'background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#4ade80'
-                  :'background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.25);color:#64748b'}">${v}</button>`).join('')}
+            <input id="doc_url_${p.id}" style="${iS}" placeholder="https://... или загрузите файл" />
+            ${docUploadBtn('doc_url_' + p.id)}
           </div>
         </div>
-        <div style="margin-bottom:8px"><label style="${lS}">Экологические меры</label>
-          <textarea style="${iS};height:50px;resize:none"
-            onchange="portNestedNestedField(${p.id},'compliance','esg','environmentalNotes',this.value)">${esg.environmentalNotes||''}</textarea></div>
-        <div><label style="${lS}">Социальный эффект</label>
-          <textarea style="${iS};height:50px;resize:none"
-            onchange="portNestedNestedField(${p.id},'compliance','esg','socialImpact',this.value)">${esg.socialImpact||''}</textarea></div>
-      </div>`;
-  }
-
-  /* ══ TAB 5: EXIT ══ */
-  else if (_activePortTab === 'exit') {
-    const checklist = ex.checklist || [];
-    const done = checklist.filter(c=>c.done).length;
-    const pct  = checklist.length ? Math.round(done/checklist.length*100) : ex.prepProgress||0;
-    const pctColor = pct>=80?'#22c55e':pct>=50?'#f97316':'#ef4444';
-
-    tabContent = `
-      <!-- ── Exit KPIs ── -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-        <div style="background:#0f1623;border-radius:10px;padding:14px">
-          <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">Параметры выхода</div>
-          <div style="${gS}"><label style="${lS}">Тип выхода</label>
-            <select style="${iS}" onchange="portNestedField(${p.id},'exit','exitType',this.value)">
-              ${['Buyback founder','Strategic Sale','Secondary','IPO on KASE','Другое'].map(v=>`<option ${ex.exitType===v?'selected':''}>${v}</option>`).join('')}
-            </select></div>
-          <div style="${gS}"><label style="${lS}">Планируемая дата</label>
-            <input style="${iS}" value="${ex.plannedDate||''}"
-              onchange="portNestedField(${p.id},'exit','plannedDate',this.value)" placeholder="2028-Q4" /></div>
-          <div><label style="${lS}">Целевая оценка ($M)</label>
-            <input type="number" style="${iS}" value="${ex.targetValuation||''}"
-              onchange="portNestedField(${p.id},'exit','targetValuation',parseFloat(this.value))" /></div>
-        </div>
-        <!-- Progress ring -->
-        <div style="background:#0f1623;border-radius:10px;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center">
-          <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:12px">Готовность к выходу</div>
-          <svg width="100" height="100" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" stroke-width="10"/>
-            <circle cx="50" cy="50" r="40" fill="none" stroke="${pctColor}" stroke-width="10"
-              stroke-dasharray="${2*Math.PI*40}" stroke-dashoffset="${2*Math.PI*40*(1-pct/100)}"
-              stroke-linecap="round" transform="rotate(-90 50 50)"/>
-            <text x="50" y="55" text-anchor="middle" fill="${pctColor}" font-size="18" font-weight="800">${pct}%</text>
-          </svg>
-          <div style="font-size:11px;color:#64748b;margin-top:6px">${done}/${checklist.length} шагов выполнено</div>
-        </div>
       </div>
-
-      <!-- ── Checklist ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-tasks" style="margin-right:5px"></i>Чеклист подготовки
-      </div>
-      ${checklist.map((c,i)=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin-bottom:5px;
-          background:${c.done?'rgba(34,197,94,0.06)':'rgba(15,22,35,0.8)'};
-          border:1px solid ${c.done?'rgba(34,197,94,0.2)':'#1a2335'}">
-          <input type="checkbox" ${c.done?'checked':''} onchange="portExitCheck(${p.id},${i},this.checked)"
-            style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer" />
-          <span style="font-size:12px;color:${c.done?'#64748b':'#e2e8f0'};
-            ${c.done?'text-decoration:line-through':''}">${c.item}</span>
-          ${c.done?`<i class="fas fa-check-circle" style="color:#22c55e;font-size:12px;margin-left:auto"></i>`:''}
-        </div>`).join('')}
-      
-      <!-- Progress bar -->
-      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;margin-bottom:16px">
-        <div style="flex:1;height:6px;background:#1e293b;border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:3px;transition:width 0.4s"></div>
-        </div>
-        <span style="font-size:11px;color:${pctColor};font-weight:700;white-space:nowrap">${pct}%</span>
-      </div>
-
-      <!-- ── Buyers ── -->
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-        <i class="fas fa-user-tie" style="margin-right:5px"></i>Потенциальные покупатели
-      </div>
-      ${!(ex.buyers||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Нет записей</div>` :
-        (ex.buyers||[]).map((b,i)=>`
-          <div style="background:#0f1623;border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:700;color:#e2e8f0;min-width:120px">${b.name}</span>
-            <span style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(59,130,246,0.12);color:#60a5fa">${b.type}</span>
-            <span style="font-size:10px;color:#64748b;flex:1">${b.contact}</span>
-            <span style="font-size:10px;font-weight:700;color:#eab308">${b.status}</span>
-            <button onclick="deletePortBuyer(${p.id},${i})"
-              style="background:none;border:none;color:#475569;cursor:pointer;font-size:12px">✕</button>
-          </div>`).join('')}
-      <button onclick="addPortBuyer(${p.id})"
-        style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;
-          padding:6px 14px;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:14px">
-        <i class="fas fa-plus" style="margin-right:4px"></i>Добавить покупателя
+      <button onclick="addPortDoc(${p.id})"
+        style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;
+          padding:7px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
+        <i class="fas fa-plus" style="margin-right:5px"></i>Добавить документ
       </button>
+    </div>`;
 
-      <div><label style="${lS}">Заметки по стратегии выхода</label>
-        <textarea style="${iS};height:80px;resize:none"
-          onchange="portNestedField(${p.id},'exit','notes',this.value)">${ex.notes||''}</textarea></div>`;
-  }
-
-  /* ══ TAB 6: HISTORY ══ */
-  else if (_activePortTab === 'history') {
-    const allHistory = [...hist].sort((a,b) => new Date(b.date)-new Date(a.date));
-    const iconMap = { comment:'fa-comment-dots', status:'fa-exchange-alt', doc:'fa-file-upload', task:'fa-tasks' };
-    const colorMap= { comment:'#60a5fa', status:'#eab308', doc:'#22c55e', task:'#a78bfa' };
-
-    tabContent = `
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:12px">
-        <i class="fas fa-stream" style="margin-right:5px"></i>Лента активности (${allHistory.length} событий)
-      </div>
-
-      <div style="position:relative">
-        <!-- Timeline line -->
-        <div style="position:absolute;left:18px;top:0;bottom:0;width:2px;background:#1e293b"></div>
-
-        ${allHistory.length ? allHistory.map(h => `
-          <div style="display:flex;gap:12px;margin-bottom:12px;position:relative">
-            <div style="width:36px;height:36px;border-radius:50%;
-              background:${colorMap[h.type]||'#64748b'}22;
-              border:2px solid ${colorMap[h.type]||'#64748b'};
-              display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1">
-              <i class="fas ${iconMap[h.type]||'fa-circle'}" style="color:${colorMap[h.type]||'#64748b'};font-size:12px"></i>
-            </div>
-            <div style="background:#0f1623;border-radius:10px;padding:10px 14px;flex:1">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span style="font-size:11px;font-weight:700;color:#e2e8f0">${h.author}</span>
-                <span style="font-size:10px;color:#64748b">${h.date}</span>
-              </div>
-              <div style="font-size:12px;color:#94a3b8">${h.text}</div>
-            </div>
-          </div>`).join('')
-        : `<div style="font-size:12px;color:#475569;font-style:italic;padding:20px 0 20px 48px">История пуста</div>`}
-      </div>
-
-      <!-- ── Add comment ── -->
-      <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:14px;margin-top:8px">
-        <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:8px;text-transform:uppercase">Новый комментарий</div>
-        <select id="portHist_author_${p.id}" style="${iS};margin-bottom:8px">
-          ${['CEO','Investment Manager','CFO','Analyst'].map(r=>`<option>${r}</option>`).join('')}
-        </select>
-        <textarea id="portHist_text_${p.id}" rows="3" style="${iS};height:70px;resize:none;margin-bottom:8px"
-          placeholder="Комментарий по компании..."></textarea>
-        <button onclick="addPortHistoryComment(${p.id})"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
-            padding:7px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
-          <i class="fas fa-paper-plane" style="margin-right:5px"></i>Добавить
-        </button>
-      </div>`;
-  }
 
   /* ── Assemble modal ── */
   const moicColor = moic>=2?'#22c55e':moic>=1.5?'#60a5fa':moic>=1?'#f97316':'#ef4444';
@@ -3186,75 +2687,37 @@ function _renderPortfolioModal(p) {
               border-radius:7px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
       </div>
-
-      <!-- TABS -->
-      <div role="tablist" aria-label="Разделы портфельной компании" style="display:flex;gap:2px;overflow-x:auto;padding-bottom:0">
-        ${tabs.map(t => `
-          <button role="tab" id="portTab-${t.id}" aria-selected="${_activePortTab===t.id}" aria-controls="portTabPanel" onclick="switchPortTab('${t.id}',${p.id})"
-            style="padding:8px 12px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-size:11px;font-weight:700;
-              white-space:nowrap;transition:all 0.15s;position:relative;
-              ${_activePortTab===t.id ? `background:#0f1623;color:#f1f5f9;border-bottom:2px solid ${stCol}`
-                                      : 'background:transparent;color:#64748b;border-bottom:2px solid transparent'}">
-            <i class="fas ${t.icon}" style="margin-right:5px"></i>${t.label}
-            ${t.badge ? `<span style="position:absolute;top:4px;right:4px;font-size:9px;padding:1px 5px;border-radius:8px;
-              background:${typeof t.badge==='number'?'#ef4444':'#eab308'};color:#fff;font-weight:800;line-height:1.4">${t.badge}</span>` : ''}
-          </button>`).join('')}
-      </div>
     </div>
 
-    <!-- ── TAB CONTENT ── -->
-    <div role="tabpanel" id="portTabPanel" aria-labelledby="portTab-${_activePortTab}" style="padding:20px 24px 24px">
+    <!-- ── DOCUMENTS ── -->
+    <div style="padding:20px 24px 24px">
       ${tabContent}
     </div>
   `;
-
-  /* ── Render charts after DOM injection ── */
-  if (_activePortTab === 'financials') {
-    setTimeout(() => {
-      const qs = f.quarters || [];
-      const chartCfg = (labels, ds1, ds2, color1, color2) => ({
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            { label:'Факт', data:ds1, backgroundColor:color1+'99', borderColor:color1, borderWidth:1.5, borderRadius:4 },
-            { label:'План', data:ds2, backgroundColor:color2+'44', borderColor:color2, borderWidth:1.5, borderRadius:4, borderDash:[4,3] },
-          ]
-        },
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins:{ legend:{ labels:{ color:'#94a3b8', font:{ size:10 }, boxWidth:12 }}},
-          scales:{
-            x:{ ticks:{ color:'#64748b', font:{size:9} }, grid:{ color:'#1e293b' }},
-            y:{ ticks:{ color:'#64748b', font:{size:9} }, grid:{ color:'#1e293b' }},
-          }
-        }
-      });
-      const revCanvas = document.getElementById(`portChartRevenue_${p.id}`);
-      const ebCanvas  = document.getElementById(`portChartEbitda_${p.id}`);
-      if (revCanvas) {
-        if (_portChartRevenue) _portChartRevenue.destroy();
-        _portChartRevenue = new Chart(revCanvas, chartCfg(qs, f.revenue?.actual||[], f.revenue?.plan||[], '#60a5fa','#1e40af'));
-      }
-      if (ebCanvas) {
-        if (_portChartEbitda) _portChartEbitda.destroy();
-        _portChartEbitda = new Chart(ebCanvas, chartCfg(qs, f.ebitda?.actual||[], f.ebitda?.plan||[], '#a78bfa','#4c1d95'));
-      }
-    }, 50);
-  }
 }
 
 /* ══════════════════════════════════════════════
    PORTFOLIO HELPER FUNCTIONS
 ══════════════════════════════════════════════ */
-function portChangeStatus(id, status) {
+async function portChangeStatus(id, status) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
   const old = p.status;
+  const prevLastUpdated = p.lastUpdated;
   p.status = status;
   p.lastUpdated = today();
   p.history = p.history || [];
   p.history.push({ type:'status', date:today(), author:'System', text:`Статус изменён: ${portStatusLabel(old)} → ${portStatusLabel(status)}` });
+  try {
+    await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ status: p.status, history: p.history, lastUpdated: p.lastUpdated }) });
+  } catch (err) {
+    p.status = old;
+    p.lastUpdated = prevLastUpdated;
+    p.history.pop();
+    _renderPortfolioModal(p);
+    showToast('⚠️ Не удалось сохранить статус: ' + err.message, 'red');
+    return;
+  }
   if (status === 'Problem') {
     // Auto-create urgent task
     if (typeof addTask === 'function') {
@@ -3319,92 +2782,7 @@ async function portNestedNestedField(id, section, subsection, field, value) {
   }
 }
 
-function portESGField(id, key, value) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p) return;
-  const keyMap = { jcp:'jobsCreatedPlan',jca:'jobsCreatedActual',jpp:'jobsPreservedPlan',jpa:'jobsPreservedActual',wp:'womenPct' };
-  const field = keyMap[key];
-  if (!field) return;
-  if (!p.compliance) p.compliance = {};
-  if (!p.compliance.esg) p.compliance.esg = {};
-  p.compliance.esg[field] = value;
-}
-
-function savePortQuarterlyReport(id) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p) return;
-  const q   = document.getElementById(`qr_quarter_${id}`)?.value;
-  const rev = parseFloat(document.getElementById(`qr_rev_${id}`)?.value) || 0;
-  const eb  = parseFloat(document.getElementById(`qr_ebitda_${id}`)?.value) || 0;
-  const np  = parseFloat(document.getElementById(`qr_np_${id}`)?.value) || 0;
-  const emp = parseInt(document.getElementById(`qr_emp_${id}`)?.value) || 0;
-  if (!rev && !eb) { showToast('⚠ Введите хотя бы Выручку или EBITDA', 'red'); return; }
-  if (!p.financials) p.financials = { quarters:[], revenue:{actual:[],plan:[]}, ebitda:{actual:[],plan:[]}, netProfit:{actual:[],plan:[]}, employees:{actual:[],plan:[]} };
-  const f = p.financials;
-  if (!f.quarters.includes(q)) {
-    f.quarters.push(q);
-    (f.revenue.actual).push(rev);
-    (f.ebitda.actual).push(eb);
-    (f.netProfit.actual).push(np);
-    (f.employees.actual).push(emp);
-    (f.revenue.plan).push(rev);
-    (f.ebitda.plan).push(eb);
-    (f.netProfit.plan).push(np);
-    (f.employees.plan).push(emp);
-  } else {
-    const i = f.quarters.indexOf(q);
-    f.revenue.actual[i]   = rev;
-    f.ebitda.actual[i]    = eb;
-    f.netProfit.actual[i] = np;
-    f.employees.actual[i] = emp;
-  }
-  p.history = p.history || [];
-  p.history.push({ type:'doc', date:today(), author:'Менеджер', text:`Введены данные квартального отчёта ${q}: Выручка $${rev}K, EBITDA $${eb}K` });
-  p.lastUpdated = today();
-  showToast(`✅ Отчёт ${q} сохранён`, 'green');
-  _renderPortfolioModal(p);
-  renderPortfolio(portfolio);
-}
-
-function savePortMeeting(id) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p) return;
-  const date = document.getElementById(`mtg_date_${id}`)?.value || today();
-  const fmt  = document.getElementById(`mtg_fmt_${id}`)?.value || 'Визит';
-  const pax  = document.getElementById(`mtg_pax_${id}`)?.value?.trim() || '';
-  const pts  = document.getElementById(`mtg_pts_${id}`)?.value?.trim() || '';
-  const dec  = document.getElementById(`mtg_dec_${id}`)?.value?.trim() || '';
-  const actT = document.getElementById(`mtg_act_${id}`)?.value?.trim() || '';
-  const actD = document.getElementById(`mtg_actd_${id}`)?.value || today();
-  const actR = document.getElementById(`mtg_actr_${id}`)?.value?.trim() || '';
-  if (!pts) { showToast('⚠ Заполните ключевые обсуждения', 'red'); return; }
-  if (!p.monitoring) p.monitoring = {};
-  p.monitoring.meetings = p.monitoring.meetings || [];
-  const meeting = { date, format:fmt, participants:pax, points:pts, decisions:dec, actions:[] };
-  if (actT) meeting.actions.push({ text:actT, deadline:actD, resp:actR });
-  p.monitoring.meetings.push(meeting);
-  p.monitoring.lastVisitDate = date;
-  p.lastUpdated = today();
-  p.history = p.history || [];
-  p.history.push({ type:'comment', date, author:pax.split(',')[0]||'Менеджер', text:`Встреча (${fmt}): ${pts.slice(0,80)}${pts.length>80?'…':''}` });
-  // Auto-create monitoring task
-  const freqDays = {'Ежемесячно':30,'Ежеквартально':90,'Раз в полгода':180}[p.monitoring.frequency||'Ежеквартально']||90;
-  const nextDate = new Date(new Date(date).getTime() + freqDays*86400000).toISOString().split('T')[0];
-  if (typeof addTask === 'function') {
-    addTask({
-      title: `Мониторинг ${p.name} — следующий визит до ${nextDate}`,
-      type: 'Прочее', priority: 'medium', assignee: 'RM (Relationship Manager)',
-      relatedClient: p.name, relatedModule: 'portfolio',
-      deadline: nextDate,
-      description: `Плановый мониторинговый визит для портфельной компании «${p.name}».`,
-    });
-  }
-  showToast(`✅ Встреча сохранена. Задача «Следующий мониторинг» создана на ${nextDate}.`, 'green');
-  _activePortTab = 'monitoring';
-  _renderPortfolioModal(p);
-}
-
-function addPortDoc(id) {
+async function addPortDoc(id) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
   const type   = document.getElementById(`doc_type_${id}`)?.value?.trim();
@@ -3413,11 +2791,22 @@ function addPortDoc(id) {
   const by     = document.getElementById(`doc_by_${id}`)?.value?.trim() || 'Менеджер';
   const date   = document.getElementById(`doc_date_${id}`)?.value || today();
   const expiry = document.getElementById(`doc_expiry_${id}`)?.value || '';
+  const url    = document.getElementById(`doc_url_${id}`)?.value?.trim() || '';
   if (!type || !name) { showToast('⚠ Введите тип и название файла', 'red'); return; }
   if (!p.documents) p.documents = { files:[] };
-  p.documents.files.push({ type, name, date, period, uploadedBy:by, expiryDate:expiry, status:'OK' });
-  p.history = p.history || [];
-  p.history.push({ type:'doc', date, author:by, text:`Загружен документ: ${name} (${type})` });
+  const prevFiles = [...(p.documents.files||[])];
+  const prevLastUpdated = p.lastUpdated;
+  p.documents.files.push({ type, name, date, period, uploadedBy:by, expiryDate:expiry, status:'OK', url });
+  p.lastUpdated = today();
+  try {
+    await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ documents: p.documents, lastUpdated: p.lastUpdated }) });
+  } catch (err) {
+    p.documents.files = prevFiles;
+    p.lastUpdated = prevLastUpdated;
+    _renderPortfolioModal(p);
+    showToast('⚠️ Не удалось сохранить документ: ' + err.message, 'red');
+    return;
+  }
   // Auto-task if expiry set
   if (expiry && typeof addTask === 'function') {
     const exDate = new Date(expiry); exDate.setDate(exDate.getDate()-30);
@@ -3429,79 +2818,92 @@ function addPortDoc(id) {
       description: `Документ «${type}» портфельной компании «${p.name}» истекает ${expiry}. Требуется продление/обновление.`,
     });
   }
-  p.lastUpdated = today();
   showToast(`✅ Документ «${name}» добавлен`, 'green');
   _renderPortfolioModal(p);
+  renderPortfolio(portfolio);
 }
 
-function deletePortDoc(id, i) {
+async function deletePortDoc(id, i) {
   const p = portfolio.find(x=>x.id===id);
   if (!p?.documents?.files) return;
   if (!confirm(`Удалить документ «${p.documents.files[i]?.name}»?`)) return;
+  const prevFiles = [...p.documents.files];
+  const prevLastUpdated = p.lastUpdated;
   p.documents.files.splice(i, 1);
-  _renderPortfolioModal(p);
-}
-
-function togglePortProgram(id, prog) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p) return;
-  if (!p.compliance) p.compliance = {};
-  p.compliance.programs = p.compliance.programs || [];
-  const idx = p.compliance.programs.indexOf(prog);
-  if (idx >= 0) p.compliance.programs.splice(idx,1);
-  else p.compliance.programs.push(prog);
-  _renderPortfolioModal(p);
-}
-
-function portToggleReportDL(id, i, checked) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p?.compliance?.reportingDeadlines?.[i]) return;
-  p.compliance.reportingDeadlines[i].done = checked;
   p.lastUpdated = today();
+  try {
+    await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ documents: p.documents, lastUpdated: p.lastUpdated }) });
+  } catch (err) {
+    p.documents.files = prevFiles;
+    p.lastUpdated = prevLastUpdated;
+    showToast('⚠️ Не удалось удалить документ: ' + err.message, 'red');
+  }
+  _renderPortfolioModal(p);
+  renderPortfolio(portfolio);
 }
 
-function addPortReportDeadline(id) {
+/* ── Monitoring conclusion (quarterly, rule-based draft — see
+   draftGpConclusion() in the Deal module for the same pattern: a
+   deterministic summary built from what's already on file, not a real
+   AI/LLM call. Written so the text-generation step alone can be swapped
+   for a real model call later without touching the save/edit/history
+   plumbing around it. ── */
+function recentQuarters(count) {
+  const now = new Date();
+  const curQ = Math.floor(now.getMonth() / 3) + 1;
+  const out = [];
+  let q = curQ, y = now.getFullYear();
+  for (let i = 0; i < count; i++) {
+    out.push(`Q${q} ${y}`);
+    q -= 1;
+    if (q < 1) { q = 4; y -= 1; }
+  }
+  return out;
+}
+
+function switchMonConclQuarter(id, quarter) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
-  if (!p.compliance) p.compliance = {};
-  p.compliance.reportingDeadlines = p.compliance.reportingDeadlines || [];
-  p.compliance.reportingDeadlines.push({ program:'', deadline:'', description:'Новый дедлайн', done:false });
+  p._selMonConclQuarter = quarter;
   _renderPortfolioModal(p);
 }
 
-function portExitCheck(id, i, checked) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p?.exit?.checklist?.[i]) return;
-  p.exit.checklist[i].done = checked;
-  p.lastUpdated = today();
-  _renderPortfolioModal(p);
-}
-
-function addPortBuyer(id) {
+function draftMonitoringConclusion(id) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
-  if (!p.exit) p.exit = {};
-  p.exit.buyers = p.exit.buyers || [];
-  p.exit.buyers.push({ name:'', type:'PE Fund', contact:'', status:'Первичный контакт' });
-  _renderPortfolioModal(p);
+  const quarter = document.getElementById(`monConclQuarter_${id}`)?.value || recentQuarters(1)[0];
+  const files = (p.documents?.files || []);
+  const requiredTypes = [
+    'SHA / Кредитное соглашение', 'Залоговые документы',
+    'Финотчётность Q1 2025', 'Финотчётность Q4 2024', 'Финотчётность Q3 2024', 'Финотчётность Q2 2024',
+  ];
+  const missing = requiredTypes.filter(rt => !files.some(f => f.type === rt));
+  const conclusions = (p.monitoring?.conclusions || []).slice().sort((a,b) => a.quarter < b.quarter ? 1 : -1);
+  const prevConclusion = conclusions.find(c => c.quarter !== quarter);
+  const newFiles = prevConclusion ? files.filter(f => f.date > (prevConclusion.editedAt || '')) : files;
+  const expired = files.filter(f => f.expiryDate && f.expiryDate < today());
+
+  const lines = [];
+  lines.push(`Мониторинг ${quarter}: в деле ${files.length} документ(ов), из них ${newFiles.length} — новых с последнего заключения (${prevConclusion ? prevConclusion.quarter : 'заключений ранее не было'}).`);
+  lines.push(missing.length ? `Отсутствуют обязательные документы: ${missing.join(', ')}.` : 'Все обязательные документы в наличии.');
+  if (newFiles.length) lines.push(`Новые документы за период: ${newFiles.map(f=>`${f.type} (${f.name})`).join('; ')}.`);
+  if (expired.length) lines.push(`⚠ Истёк срок действия: ${expired.map(f=>`${f.type} (до ${f.expiryDate})`).join('; ')}.`);
+  lines.push('— Черновик сформирован автоматически по составу и датам загруженных документов (без анализа их содержимого). Требует проверки и корректировки менеджером перед сохранением.');
+
+  const el = document.getElementById(`monConclText_${id}`);
+  if (el) el.value = lines.join('\n');
 }
 
-function deletePortBuyer(id, i) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p?.exit?.buyers) return;
-  p.exit.buyers.splice(i,1);
-  _renderPortfolioModal(p);
-}
-
-function addPortHistoryComment(id) {
+async function saveMonitoringConclusion(id) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
-  const author = document.getElementById(`portHist_author_${id}`)?.value || 'CEO';
-  const text   = document.getElementById(`portHist_text_${id}`)?.value?.trim();
-  if (!text) { showToast('⚠ Введите текст комментария', 'red'); return; }
-  p.history = p.history || [];
-  p.history.push({ type:'comment', date:today(), author, text });
-  showToast('✅ Комментарий добавлен', 'green');
+  const quarter = document.getElementById(`monConclQuarter_${id}`)?.value || recentQuarters(1)[0];
+  const text = document.getElementById(`monConclText_${id}`)?.value?.trim() || '';
+  if (!text) { showToast('⚠ Заключение пустое — нечего сохранять', 'red'); return; }
+  const conclusions = (p.monitoring?.conclusions || []).filter(c => c.quarter !== quarter);
+  conclusions.push({ quarter, text, editedBy: (typeof currentUserDisplayName === 'function' ? currentUserDisplayName() : 'Менеджер'), editedAt: today() });
+  await portNestedField(id, 'monitoring', 'conclusions', conclusions);
+  showToast(`✅ Заключение мониторинга за ${quarter} сохранено`, 'green');
   _renderPortfolioModal(p);
 }
 

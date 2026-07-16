@@ -215,7 +215,7 @@
       <i class="fas fa-folder" style="margin-right:6px"></i>Документы
     </button>
     <button class="pnav-btn" onclick="switchPortalTab('payments',this)">
-      <i class="fas fa-calendar-check" style="margin-right:6px"></i>График платежей
+      <i class="fas fa-calendar-check" style="margin-right:6px"></i>Платежи
     </button>
     <button class="pnav-btn" onclick="switchPortalTab('esg',this)">
       <i class="fas fa-leaf" style="margin-right:6px"></i>ESG / Соц. показатели
@@ -240,11 +240,6 @@
         <div class="p-section-title"><i class="fas fa-bolt" style="color:#eab308"></i>Следующее действие</div>
         <div id="overviewNextAction" style="font-size:14px;font-weight:700;color:#e2e8f0;margin-bottom:4px"></div>
         <div id="overviewNextDate" style="font-size:12px;color:#64748b"></div>
-      </div>
-
-      <div class="p-section">
-        <div class="p-section-title"><i class="fas fa-shield-alt" style="color:#a78bfa"></i>Статус ковенантов</div>
-        <div id="overviewCovenants"></div>
       </div>
 
       <div class="p-section">
@@ -431,27 +426,8 @@
     <!-- ══ TAB: PAYMENTS ══ -->
     <div id="ptab-payments" class="ptab">
       <div style="margin-bottom:20px">
-        <h2 style="font-size:18px;font-weight:800;margin-bottom:6px">График платежей</h2>
-        <p style="font-size:12px;color:#64748b">Ваш персональный график погашения задолженности перед фондом</p>
-      </div>
-
-      <!-- Summary -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px"
-           id="paymentSummary"></div>
-
-      <!-- Schedule table -->
-      <div class="p-section">
-        <div class="p-section-title"><i class="fas fa-calendar-alt" style="color:#f97316"></i>Ближайшие платежи</div>
-        <div style="overflow-x:auto">
-          <table class="p-table" id="paymentTable">
-            <thead>
-              <tr>
-                <th>Дата</th><th>Тип</th><th>Сумма</th><th>Статус</th><th>Действие</th>
-              </tr>
-            </thead>
-            <tbody id="paymentTableBody"></tbody>
-          </table>
-        </div>
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:6px">Платежи</h2>
+        <p style="font-size:12px;color:#64748b">Отправьте подтверждение платежа в адрес фонда</p>
       </div>
 
       <!-- Confirm payment form -->
@@ -803,7 +779,6 @@ async function portalAttachUpload(inputId) {
 /* ══ INIT ══ */
 function initPortal() {
   const c = currentCompany;
-  const fin = c.financials || {};
   document.getElementById('overviewCompanyName').textContent = c.name;
   document.getElementById('overviewMeta').textContent = `${c.sector||'—'} · BIN: ${c.bin} · Доля фонда: ${c.fundShare||0}%`;
   document.getElementById('overviewStatus').outerHTML =
@@ -824,43 +799,6 @@ function initPortal() {
       <div class="kpi-val" style="color:${k.color}">${k.val}</div>
       <div class="kpi-label">${k.label}</div>
     </div>`).join('');
-
-  // Covenants — from the same p.financials.covenants[] the internal CRM's
-  // own Portfolio Finance tab reads (js/app.js), so a covenant added there
-  // shows up here identically, no separate data entry.
-  document.getElementById('overviewCovenants').innerHTML = (fin.covenants||[]).length
-    ? fin.covenants.map(cv=>`
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1a2335;font-size:12px">
-        <i class="fas ${cv.ok?'fa-check-circle':'fa-times-circle'}" style="color:${cv.ok?'#22c55e':'#ef4444'};width:16px;font-size:13px"></i>
-        <span style="color:${cv.ok?'#94a3b8':'#fca5a5'}">${cv.name}</span>
-      </div>`).join('')
-    : '<div style="font-size:12px;color:#475569;font-style:italic">Ковенанты не заданы</div>';
-
-  // Payment summary / table — from p.financials.paymentSchedule[] (real
-  // debt schedule, only present for companies with fund debt; empty for
-  // pure-equity deals like NomadTech).
-  const schedule = fin.paymentSchedule || [];
-  const total   = schedule.reduce((s,p)=>s+p.amount,0);
-  const overdue = schedule.filter(p=>p.status==='Просрочен').reduce((s,p)=>s+p.amount,0);
-  const next    = schedule.find(p=>p.status==='Предстоит');
-  document.getElementById('paymentSummary').innerHTML = [
-    { label:'Общий остаток', val:fmtKZT(total),  color:'#f97316' },
-    { label:'Просрочено',    val:fmtKZT(overdue), color: overdue>0?'#ef4444':'#22c55e' },
-    { label:'Следующий платёж', val: next ? `${fmtKZT(next.amount)}<div style="font-size:10px;color:#64748b;margin-top:2px">${next.date}</div>` : '—', color:'#60a5fa' },
-  ].map(k=>`<div class="kpi-card"><div class="kpi-val" style="color:${k.color}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
-
-  // Payment table
-  document.getElementById('paymentTableBody').innerHTML = schedule.length ? schedule.map(p=>{
-    const sc = p.status==='Оплачен'?'green':p.status==='Просрочен'?'red':'yellow';
-    return `<tr>
-      <td>${p.date}</td><td>${p.type}</td>
-      <td style="font-weight:700">${fmtKZT(p.amount)}</td>
-      <td><span class="sbadge ${sc}">${p.status}</span></td>
-      <td>${p.status==='Предстоит'||p.status==='Просрочен'
-        ? `<button class="btn-ghost" style="font-size:10px;padding:3px 9px"
-             onclick="prefillPayment(${p.amount},'${p.date}')">Оплатить</button>`:''}</td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#475569;font-style:italic;padding:14px">Платёжный график пуст</td></tr>';
 
   // Required docs
   renderRequiredDocs();
@@ -1004,13 +942,6 @@ async function submitDocument() {
 }
 
 /* ══ PAYMENTS ══ */
-function prefillPayment(amount, date) {
-  document.getElementById('pay_amount').value = amount;
-  document.getElementById('pay_date').value   = date;
-  switchPortalTab('payments', document.querySelector('[onclick*="payments"]'));
-  document.getElementById('pay_bank').focus();
-}
-
 async function submitPaymentConfirm() {
   const date   = document.getElementById('pay_date').value;
   const amount = parseInt(document.getElementById('pay_amount').value)||0;
