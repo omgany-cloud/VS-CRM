@@ -184,6 +184,55 @@ function resolveDocUrl(url) {
   return url + sep + 'token=' + encodeURIComponent(auth ? auth.token : '');
 }
 
+// ── Generic "upload from computer" attach point, reused by every
+// document-link field in the app (markLPPayment() was the first, one-off
+// version of this before it got generalized here). Deliberately doesn't
+// know anything about which entity/field it's filling in — it just puts
+// the uploaded file's URL into an existing <input> and then lets that
+// input's own already-working save path take over, exactly as if the
+// user had pasted the link themselves:
+//   - if the input has an inline onchange="save(...,this.value)" handler
+//     (true for every onchange-auto-saved field), calling input.onchange()
+//     re-invokes it with `this` correctly bound to the input, so
+//     `this.value` resolves to the URL just set;
+//   - fields that save via a separate explicit button (First Closing's
+//     fcSaveUrl(), the DD-conclusion "add document" inputs, onboarding's
+//     submit-the-whole-form pattern) have no onchange handler at all, so
+//     this just fills the field and stops — the user still clicks
+//     whatever button they'd have clicked after pasting a link.
+//   - a caller that needs to force the save anyway (fields not driven by
+//     the input's own onchange, e.g. First Closing's button-triggered
+//     fcSaveUrl) can pass saveFn, invoked instead of the onchange fallback.
+async function attachUploadedFile(inputId, saveFn) {
+  const file = await pickFile('.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx');
+  if (!file) return;
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  showToast('📎 Загрузка файла...', 'blue');
+  try {
+    const uploaded = await uploadFile(file);
+    input.value = uploaded.url;
+    if (typeof saveFn === 'function') saveFn();
+    else if (typeof input.onchange === 'function') input.onchange();
+    showToast(`✅ Файл «${file.name}» загружен`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось загрузить файл: ' + err.message, 'red');
+  }
+}
+
+// Render helper — a small paperclip button next to a doc-link <input>.
+// saveCallExpr, if given, is a literal JS call expression (as a string,
+// e.g. "fcSaveUrl('boardResolutionUrl','fc_boardResUrl')") wrapped in an
+// arrow function and passed as attachUploadedFile's explicit saveFn; omit
+// it for the (much more common) case where the input's own onchange
+// handler already does the right thing once its value is set.
+function docUploadBtn(inputId, saveCallExpr) {
+  const args = saveCallExpr ? `'${inputId}',()=>{${saveCallExpr}}` : `'${inputId}'`;
+  return `<button type="button" onclick="attachUploadedFile(${args})"
+    style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:0 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0"
+    title="Загрузить файл с компьютера"><i class="fas fa-paperclip"></i></button>`;
+}
+
 // ── Read-only visual dimming ─────────────────────────────────────────
 // The exact, closed set of onclick handlers that call apiFetch with a
 // mutating method (derived by grepping every `method: 'POST'|'PUT'|
@@ -210,7 +259,8 @@ const READONLY_GATED_FN_NAMES = [
   'addSignedDoc', 'dealSignedDocUrl', 'addFounderContact', 'deleteTSVersion',
   'deleteSignedDoc', 'addOtherDoc', 'dealOtherDocName', 'dealOtherDocUrl', 'deleteOtherDoc',
   'markAfsaNotified', 'fcSaveUrl', 'fcSaveClosingDate', 'fcSaveAFSA',
-  'fcGenerateWelcomeLetter', 'fcGenerateAllWelcomeLetters',
+  'fcGenerateWelcomeLetter', 'fcGenerateAllWelcomeLetters', 'attachUploadedFile',
+  'portNestedField',
 ];
 const READONLY_GATED_FN_RE = new RegExp('^\\s*(' + READONLY_GATED_FN_NAMES.join('|') + ')\\s*\\(');
 // Triggers that don't call a gated function directly by name (e.g. the

@@ -2145,7 +2145,11 @@ function buildTaskForm(task, client) {
             Укажите ссылку на подписанный обеими сторонами PDF договор (Google Drive, SharePoint, OneDrive, корпоративный сервер и т.д.)
           </div>
           <div style="${formGroupStyle}"><label style="${labelStyle}">🔗 Ссылка на подписанный договор (PDF) *</label>
-            <input type="url" id="f_contractUrl" value="${fd.contractUrl||''}" ${disabledAttr} style="${inputStyle}" placeholder="https://drive.google.com/file/d/... или https://sharepoint.com/..." /></div>
+            <div style="display:flex;gap:6px">
+              <input type="url" id="f_contractUrl" value="${fd.contractUrl||''}" ${disabledAttr} style="${inputStyle}" placeholder="https://drive.google.com/file/d/... или загрузите файл" />
+              ${!isCompleted ? docUploadBtn('f_contractUrl') : ''}
+            </div>
+          </div>
           ${!isCompleted ? `
           <button type="button" onclick="obViewContract()" style="margin-top:4px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">
             <i class="fas fa-eye"></i> Предпросмотр договора
@@ -2174,7 +2178,11 @@ function buildTaskForm(task, client) {
               <div><label style="${labelStyle}">Краткое описание</label>
                 <input type="text" id="ob_amend_desc" style="${inputStyle}" placeholder="Изменение ставки, продление срока..." /></div>
               <div><label style="${labelStyle}">🔗 Ссылка на ДС</label>
-                <input type="url" id="ob_amend_url" style="${inputStyle}" placeholder="https://..." /></div>
+                <div style="display:flex;gap:4px">
+                  <input type="url" id="ob_amend_url" style="${inputStyle}" placeholder="https://... или файл" />
+                  ${docUploadBtn('ob_amend_url')}
+                </div>
+              </div>
             </div>
             <button type="button" onclick="obAddAmendment(${task.id})" style="margin-top:8px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);color:#c4b5fd;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">
               <i class="fas fa-plus"></i> Добавить доп. соглашение
@@ -3150,7 +3158,7 @@ function _obRenderSavedAmendments(arr, isCompleted) {
     return '<div style="font-size:12px;color:#4a5568;padding:8px;text-align:center">Доп. соглашений нет</div>';
   }
   return arr.map(function(am, i) {
-    var urlCell = am.url ? '<a href="' + am.url + '" target="_blank" style="color:#60a5fa">' + am.url + '</a>' : '—';
+    var urlCell = am.url ? '<a href="' + resolveDocUrl(am.url) + '" target="_blank" style="color:#60a5fa">' + am.url + '</a>' : '—';
     var delBtn  = isCompleted ? '' : '<button type="button" onclick="obRemoveAmendment(' + i + ')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px">🗑</button>';
     return '<div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c2333;border-radius:8px;padding:8px 10px" data-amend-idx="' + i + '">'
       + '<div style="font-size:11px;font-weight:700;color:#c4b5fd">' + (am.num || '—') + '</div>'
@@ -3176,7 +3184,7 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
     + '<div><label style="' + labelStyle + '">Номер ДС</label><input type="text" id="ob_amend_num" style="' + inputStyle + '" placeholder="ДС-1" /></div>'
     + '<div><label style="' + labelStyle + '">Дата подписания</label><input type="date" id="ob_amend_date" style="' + inputStyle + '" /></div>'
     + '<div><label style="' + labelStyle + '">Краткое описание</label><input type="text" id="ob_amend_desc" style="' + inputStyle + '" placeholder="Изменение суммы Commitment, продление срока..." /></div>'
-    + '<div><label style="' + labelStyle + '">🔗 Ссылка на ДС</label><input type="url" id="ob_amend_url" style="' + inputStyle + '" placeholder="https://..." /></div>'
+    + '<div><label style="' + labelStyle + '">🔗 Ссылка на ДС</label><div style="display:flex;gap:4px"><input type="url" id="ob_amend_url" style="' + inputStyle + '" placeholder="https://... или файл" />' + docUploadBtn('ob_amend_url') + '</div></div>'
     + '</div>'
     + '<button type="button" onclick="obAddAmendment(' + task.id + ')" style="margin-top:8px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);color:#c4b5fd;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-plus"></i> Добавить доп. соглашение</button>'
     + '</div>';
@@ -3187,7 +3195,10 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
     + '<div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-link"></i> Секция 1 — Соглашение с LP (ссылка на LPA)</div>'
     + '<div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd"><i class="fas fa-info-circle" style="margin-right:5px"></i>Вставьте ссылку на подписанный LP Agreement (LPA), подготовленный юристами на основе Subscription Agreement.</div>'
     + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">🔗 Ссылка на подписанный LP Agreement (LPA) *</label>'
-    + '<input type="url" id="f_lpaUrl" value="' + (fd.lpaUrl || '') + '" ' + dis + ' style="' + inputStyle + '" placeholder="https://drive.google.com/file/d/... или https://sharepoint.com/..." /></div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<input type="url" id="f_lpaUrl" value="' + (fd.lpaUrl || '') + '" ' + dis + ' style="' + inputStyle + '" placeholder="https://drive.google.com/file/d/... или загрузите файл" />'
+    + (dis ? '' : docUploadBtn('f_lpaUrl'))
+    + '</div></div>'
     + '<button type="button" onclick="obViewLpaContract()" style="margin-top:4px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-eye"></i> ' + previewBtnLabel + '</button>'
     + '</div>'
 
@@ -3283,11 +3294,12 @@ function _obRenderAmendments(taskId) {
 
 function obViewContract() {
   const urlEl = document.getElementById('f_contractUrl');
-  const url   = urlEl ? urlEl.value.trim() : '';
-  if (!url) {
+  const rawUrl = urlEl ? urlEl.value.trim() : '';
+  if (!rawUrl) {
     showToast('⚠️ Укажите ссылку на договор', 'orange');
     return;
   }
+  const url = resolveDocUrl(rawUrl);
   // Build a Google Drive preview URL if it's a Drive link
   let previewUrl = url;
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
@@ -3364,13 +3376,14 @@ function _obOpenPreviewModal(previewUrl, originalUrl) {
 function obViewContractFromTask(taskId) {
   const task   = obTasks.find(t => t.id === taskId);
   const client = task ? obClients.find(c => c.id === task.clientId) : null;
-  const url    = (task && task.formData && (task.formData.f_contractUrl || task.formData.contractUrl))
+  const rawUrl = (task && task.formData && (task.formData.f_contractUrl || task.formData.contractUrl))
                || (client && client.contractUrl)
                || '';
-  if (!url) {
+  if (!rawUrl) {
     showToast('⚠️ Ссылка на договор не указана', 'orange');
     return;
   }
+  const url = resolveDocUrl(rawUrl);
   let previewUrl = url;
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
   if (driveMatch) {
@@ -3382,11 +3395,12 @@ function obViewContractFromTask(taskId) {
 // View LPA from FM activation form (reads f_lpaUrl input)
 function obViewLpaContract() {
   const urlEl = document.getElementById('f_lpaUrl');
-  const url   = urlEl ? urlEl.value.trim() : '';
-  if (!url) {
+  const rawUrl = urlEl ? urlEl.value.trim() : '';
+  if (!rawUrl) {
     showToast('⚠️ Укажите ссылку на LP Agreement', 'orange');
     return;
   }
+  const url = resolveDocUrl(rawUrl);
   let previewUrl = url;
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
   if (driveMatch) {
@@ -3399,13 +3413,14 @@ function obViewLpaContract() {
 function obViewLpaFromTask(taskId) {
   const task   = obTasks.find(t => t.id === taskId);
   const client = task ? obClients.find(c => c.id === task.clientId) : null;
-  const url    = (task && task.formData && (task.formData.f_lpaUrl || task.formData.lpaUrl))
+  const rawUrl = (task && task.formData && (task.formData.f_lpaUrl || task.formData.lpaUrl))
                || (client && client.lpaUrl)
                || '';
-  if (!url) {
+  if (!rawUrl) {
     showToast('⚠️ Ссылка на LP Agreement не указана', 'orange');
     return;
   }
+  const url = resolveDocUrl(rawUrl);
   let previewUrl = url;
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
   if (driveMatch) {

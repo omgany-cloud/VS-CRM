@@ -636,15 +636,16 @@ function renderClosing() {
           Решение GP Board о проведении First Closing · Подписывается всеми директорами Golden Leaves Ltd
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <input type="text" id="fc_boardResUrl" placeholder="https://drive.google.com/... (ссылка на подписанный документ)"
+          <input type="text" id="fc_boardResUrl" placeholder="https://drive.google.com/... или загрузите файл"
             value="${fcs.boardResolutionUrl}" style="${inpStyle}" />
+          ${docUploadBtn('fc_boardResUrl', "fcSaveUrl('boardResolutionUrl','fc_boardResUrl')")}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button onclick="fcSaveUrl('boardResolutionUrl','fc_boardResUrl')" style="${saveBtnS}">
             <i class="fas fa-save" style="margin-right:4px"></i>Сохранить
           </button>
           ${fcs.boardResolutionUrl ? `
-            <button onclick="_obOpenPreviewModal('${fcs.boardResolutionUrl.replace(/'/g,"\\'")}','${fcs.boardResolutionUrl.replace(/'/g,"\\'")}')"
+            <button onclick="_obOpenPreviewModal('${resolveDocUrl(fcs.boardResolutionUrl).replace(/'/g,"\\'")}','${resolveDocUrl(fcs.boardResolutionUrl).replace(/'/g,"\\'")}')"
               style="${prevBtnS}"><i class="fas fa-eye" style="margin-right:4px"></i>Открыть
             </button>` : ''}
         </div>
@@ -660,8 +661,9 @@ function renderClosing() {
           Официальный сертификат First Closing · Дата закрытия, сумма commitments, список LP
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
-          <input type="text" id="fc_certUrl" placeholder="https://drive.google.com/..."
+          <input type="text" id="fc_certUrl" placeholder="https://drive.google.com/... или загрузите файл"
             value="${fcs.closingCertUrl}" style="${inpStyle}" />
+          ${docUploadBtn('fc_certUrl', "fcSaveUrl('closingCertUrl','fc_certUrl')")}
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <label style="font-size:11px;color:#8a9bbf;white-space:nowrap">Дата закрытия:</label>
@@ -676,7 +678,7 @@ function renderClosing() {
             <i class="fas fa-save" style="margin-right:4px"></i>Сохранить
           </button>
           ${fcs.closingCertUrl ? `
-            <button onclick="_obOpenPreviewModal('${fcs.closingCertUrl.replace(/'/g,"\\'")}','${fcs.closingCertUrl.replace(/'/g,"\\'")}')"
+            <button onclick="_obOpenPreviewModal('${resolveDocUrl(fcs.closingCertUrl).replace(/'/g,"\\'")}','${resolveDocUrl(fcs.closingCertUrl).replace(/'/g,"\\'")}')"
               style="${prevBtnS}"><i class="fas fa-eye" style="margin-right:4px"></i>Открыть
             </button>` : ''}
         </div>
@@ -798,7 +800,10 @@ function renderClosing() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">URL подтверждения</label>
-            <input type="text" id="fc_afsaUrl" placeholder="https://..." value="${fcs.afsaConfirmUrl}" style="${inpStyle};width:100%" />
+            <div style="display:flex;gap:6px">
+              <input type="text" id="fc_afsaUrl" placeholder="https://... или файл" value="${fcs.afsaConfirmUrl}" style="${inpStyle};width:100%" />
+              ${docUploadBtn('fc_afsaUrl')}
+            </div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -806,7 +811,7 @@ function renderClosing() {
             <i class="fas fa-save" style="margin-right:4px"></i>Сохранить данные AFSA
           </button>
           ${fcs.afsaConfirmUrl ? `
-            <button onclick="_obOpenPreviewModal('${fcs.afsaConfirmUrl.replace(/'/g,"\\'")}','${fcs.afsaConfirmUrl.replace(/'/g,"\\'")}')"
+            <button onclick="_obOpenPreviewModal('${resolveDocUrl(fcs.afsaConfirmUrl).replace(/'/g,"\\'")}','${resolveDocUrl(fcs.afsaConfirmUrl).replace(/'/g,"\\'")}')"
               style="${prevBtnS}"><i class="fas fa-eye" style="margin-right:4px"></i>Подтверждение
             </button>` : ''}
         </div>
@@ -1110,19 +1115,24 @@ function _renderDealModal(d) {
   }
 
   else if (_activeDealTab === 'documents') {
-    const docRow = (label, field) => `
+    const docRow = (label, field) => {
+      const inputId = `docfield_${field}_${d.id}`;
+      const resolved = resolveDocUrl(d[field] || '');
+      return `
       <div style="margin-bottom:12px">
         <label style="${lS}">${label}</label>
         <div style="display:flex;gap:8px">
-          <input style="${iS}" value="${d[field]||''}" placeholder="https://drive.google.com/..."
-            id="docfield_${field}_${d.id}"
+          <input style="${iS}" value="${d[field]||''}" placeholder="https://drive.google.com/... или загрузите файл"
+            id="${inputId}"
             onchange="dealField(${d.id},'${field}',this.value)" />
-          ${d[field] ? `<button onclick="_obOpenPreviewModal('${(d[field]||'').replace(/'/g,"\\'")}','${(d[field]||'').replace(/'/g,"\\'")}')"
+          ${docUploadBtn(inputId)}
+          ${d[field] ? `<button onclick="_obOpenPreviewModal('${resolved.replace(/'/g,"\\'")}','${resolved.replace(/'/g,"\\'")}')"
             style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;
               padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
             <i class="fas fa-eye"></i></button>` : ''}
         </div>
       </div>`;
+    };
 
     tabContent = `
       ${docRow('Pitch Deck', 'pitchDeckUrl')}
@@ -1133,13 +1143,15 @@ function _renderDealModal(d) {
         <i class="fas fa-file-contract" style="margin-right:5px"></i>Term Sheet — версии
       </div>
       ${!(d.tsVersions||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:8px">Нет версий</div>` :
-        d.tsVersions.map((v,i) => `
+        d.tsVersions.map((v,i) => { const tsInputId = `tsver_${d.id}_${i}`; return `
           <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0f1623;border-radius:7px;margin-bottom:5px">
             <span style="font-size:11px;font-weight:700;color:#eab308;min-width:48px">${v.v}</span>
             <span style="font-size:11px;color:#64748b;white-space:nowrap">${v.date}</span>
-            <input style="${iS}" value="${v.url||''}" placeholder="https://..."
+            <input style="${iS}" value="${v.url||''}" placeholder="https://... или загрузите файл"
+              id="${tsInputId}"
               onchange="dealTSVersionUrl(${d.id},${i},this.value)" />
-            ${v.url ? `<button onclick="_obOpenPreviewModal('${v.url.replace(/'/g,"\\'")}','${v.url.replace(/'/g,"\\'")}')"
+            ${docUploadBtn(tsInputId)}
+            ${v.url ? `<button onclick="_obOpenPreviewModal('${resolveDocUrl(v.url).replace(/'/g,"\\'")}','${resolveDocUrl(v.url).replace(/'/g,"\\'")}')"
               style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;
                 padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">
               <i class="fas fa-eye"></i></button>` : ''}
@@ -1147,7 +1159,7 @@ function _renderDealModal(d) {
               style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;
                 padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap"
               title="Удалить версию"><i class="fas fa-trash"></i></button>
-          </div>`).join('')}
+          </div>`; }).join('')}
       <button onclick="addTSVersion(${d.id})"
         style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);color:#eab308;
           padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:14px">
@@ -1158,12 +1170,14 @@ function _renderDealModal(d) {
         <i class="fas fa-signature" style="margin-right:5px"></i>Подписанные документы (закрытие)
       </div>
       ${!(d.signedDocsUrls||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:8px">Нет документов</div>` :
-        d.signedDocsUrls.map((doc,i) => `
+        d.signedDocsUrls.map((doc,i) => { const sdInputId = `signeddoc_${d.id}_${i}`; return `
           <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0f1623;border-radius:7px;margin-bottom:5px">
             <span style="font-size:11px;font-weight:700;color:#22c55e;min-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.name}</span>
-            <input style="${iS}" value="${doc.url||''}" placeholder="https://..."
+            <input style="${iS}" value="${doc.url||''}" placeholder="https://... или загрузите файл"
+              id="${sdInputId}"
               onchange="dealSignedDocUrl(${d.id},${i},this.value)" />
-            ${doc.url ? `<button onclick="_obOpenPreviewModal('${doc.url.replace(/'/g,"\\'")}','${doc.url.replace(/'/g,"\\'")}')"
+            ${docUploadBtn(sdInputId)}
+            ${doc.url ? `<button onclick="_obOpenPreviewModal('${resolveDocUrl(doc.url).replace(/'/g,"\\'")}','${resolveDocUrl(doc.url).replace(/'/g,"\\'")}')"
               style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#4ade80;
                 padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">
               <i class="fas fa-eye"></i></button>` : ''}
@@ -1171,7 +1185,7 @@ function _renderDealModal(d) {
               style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;
                 padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap"
               title="Удалить"><i class="fas fa-trash"></i></button>
-          </div>`).join('')}
+          </div>`; }).join('')}
       <button onclick="addSignedDoc(${d.id})"
         style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#4ade80;
           padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:14px">
@@ -1185,13 +1199,15 @@ function _renderDealModal(d) {
         <i class="fas fa-paperclip" style="margin-right:5px"></i>Прочие документы
       </div>
       ${!(d.otherDocs||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:8px">Нет документов</div>` :
-        d.otherDocs.map((doc,i) => `
+        d.otherDocs.map((doc,i) => { const odInputId = `otherdoc_${d.id}_${i}`; return `
           <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;background:#0f1623;border-radius:7px;margin-bottom:5px">
             <input style="${iS};max-width:150px" value="${doc.name||''}" placeholder="Название..."
               onchange="dealOtherDocName(${d.id},${i},this.value)" />
-            <input style="${iS}" value="${doc.url||''}" placeholder="https://..."
+            <input style="${iS}" value="${doc.url||''}" placeholder="https://... или загрузите файл"
+              id="${odInputId}"
               onchange="dealOtherDocUrl(${d.id},${i},this.value)" />
-            ${doc.url ? `<button onclick="_obOpenPreviewModal('${(doc.url||'').replace(/'/g,"\\'")}','${(doc.url||'').replace(/'/g,"\\'")}')"
+            ${docUploadBtn(odInputId)}
+            ${doc.url ? `<button onclick="_obOpenPreviewModal('${resolveDocUrl(doc.url).replace(/'/g,"\\'")}','${resolveDocUrl(doc.url).replace(/'/g,"\\'")}')"
               style="background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;
                 padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">
               <i class="fas fa-eye"></i></button>` : ''}
@@ -1199,7 +1215,7 @@ function _renderDealModal(d) {
               style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;
                 padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap"
               title="Удалить"><i class="fas fa-trash"></i></button>
-          </div>`).join('')}
+          </div>`; }).join('')}
       <button onclick="addOtherDoc(${d.id})"
         style="background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.25);color:#94a3b8;
           padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
@@ -1214,9 +1230,11 @@ function _renderDealModal(d) {
       <div style="margin-bottom:16px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
         <label style="${lS}"><i class="fas fa-database" style="margin-right:5px;color:#60a5fa"></i>Data Room — ссылка для DD</label>
         <div style="display:flex;gap:8px;margin-top:4px">
-          <input style="${iS}" value="${d.dataRoomUrl||''}" placeholder="https://dataroom.intralinks.com/..."
+          <input style="${iS}" value="${d.dataRoomUrl||''}" placeholder="https://dataroom.intralinks.com/... или загрузите файл"
+            id="dataRoomUrl_${d.id}"
             onchange="dealField(${d.id},'dataRoomUrl',this.value)" />
-          ${d.dataRoomUrl ? `<button onclick="window.open('${(d.dataRoomUrl||'').replace(/'/g,"\\'")}','_blank')"
+          ${docUploadBtn('dataRoomUrl_' + d.id)}
+          ${d.dataRoomUrl ? `<button onclick="window.open('${resolveDocUrl(d.dataRoomUrl||'').replace(/'/g,"\\'")}','_blank')"
             style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
               padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
             <i class="fas fa-external-link-alt" style="margin-right:4px"></i>Открыть</button>` : ''}
@@ -1564,7 +1582,7 @@ function ddConclusionsSection(d) {
             <div style="font-size:11px;color:#5a6b8a;margin-bottom:6px">${escapeHtml(c.author)} · ${c.updatedAt}</div>
             ${(c.documents||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
               ${c.documents.map((doc,i) => `<span style="font-size:10px;background:#1c2333;border-radius:5px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px">
-                <a href="${doc.url}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:none"><i class="fas fa-link" style="margin-right:3px"></i>${escapeHtml(doc.name||doc.url)}</a>
+                <a href="${resolveDocUrl(doc.url)}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:none"><i class="fas fa-link" style="margin-right:3px"></i>${escapeHtml(doc.name||doc.url)}</a>
                 <span onclick="removeDDConclusionDoc(${d.id},'${cat.key}',${i})" style="cursor:pointer;color:#64748b">✕</span>
               </span>`).join('')}
             </div>` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:6px">Документы не приложены</div>`}
@@ -1578,7 +1596,8 @@ function ddConclusionsSection(d) {
               </select>
               <div style="display:flex;gap:6px;margin-bottom:6px">
                 <input id="ddConclDocName_${d.id}_${cat.key}" placeholder="Название документа" style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
-                <input id="ddConclDocUrl_${d.id}_${cat.key}" placeholder="https://..." style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
+                <input id="ddConclDocUrl_${d.id}_${cat.key}" placeholder="https://... или загрузите файл" style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
+                ${docUploadBtn(`ddConclDocUrl_${d.id}_${cat.key}`)}
               </div>
               <button onclick="saveDDConclusion(${d.id},'${cat.key}')" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class="fas fa-save" style="margin-right:4px"></i>Сохранить</button>
             </div>
@@ -2803,9 +2822,11 @@ function _renderPortfolioModal(p) {
       <div style="margin-bottom:14px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
         <label style="${lS}"><i class="fas fa-folder" style="margin-right:5px;color:#60a5fa"></i>Ссылка на папку Google Drive</label>
         <div style="display:flex;gap:8px;margin-top:4px">
-          <input style="${iS}" value="${docs.driveUrl||''}" placeholder="https://drive.google.com/..."
+          <input style="${iS}" value="${docs.driveUrl||''}" placeholder="https://drive.google.com/... или загрузите файл"
+            id="portDriveUrl_${p.id}"
             onchange="portNestedField(${p.id},'documents','driveUrl',this.value)" />
-          ${docs.driveUrl?`<button onclick="window.open('${docs.driveUrl.replace(/'/g,"\\'")}','_blank')"
+          ${docUploadBtn('portDriveUrl_' + p.id)}
+          ${docs.driveUrl?`<button onclick="window.open('${resolveDocUrl(docs.driveUrl).replace(/'/g,"\\'")}','_blank')"
             style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
               padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
             <i class="fas fa-external-link-alt"></i></button>`:''}
@@ -3253,21 +3274,49 @@ function portChangeStatus(id, status) {
   renderPortfolio(portfolio);
 }
 
-function portNestedField(id, section, field, value) {
+// Both of these only ever mutated the in-memory portfolio[] array — no
+// apiFetch call at all, despite the server already having a real
+// documents_json/monitoring_json/etc. column ready to receive updates
+// (server/portfolioMapping.js). Every edit anywhere in the Portfolio
+// company modal (monitoring, compliance, exit, document links, ...)
+// was silently lost on reload.
+async function portNestedField(id, section, field, value) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
   if (!p[section]) p[section] = {};
+  const prevSection = { ...p[section] };
+  const prevLastUpdated = p.lastUpdated;
   p[section][field] = value;
   p.lastUpdated = today();
+  try {
+    await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ [section]: p[section], lastUpdated: p.lastUpdated }) });
+    renderPortfolio(portfolio);
+  } catch (err) {
+    p[section] = prevSection;
+    p.lastUpdated = prevLastUpdated;
+    _renderPortfolioModal(p);
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
 }
 
-function portNestedNestedField(id, section, subsection, field, value) {
+async function portNestedNestedField(id, section, subsection, field, value) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
   if (!p[section]) p[section] = {};
   if (!p[section][subsection]) p[section][subsection] = {};
+  const prevSection = JSON.parse(JSON.stringify(p[section]));
+  const prevLastUpdated = p.lastUpdated;
   p[section][subsection][field] = value;
   p.lastUpdated = today();
+  try {
+    await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ [section]: p[section], lastUpdated: p.lastUpdated }) });
+    renderPortfolio(portfolio);
+  } catch (err) {
+    p[section] = prevSection;
+    p.lastUpdated = prevLastUpdated;
+    _renderPortfolioModal(p);
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
 }
 
 function portESGField(id, key, value) {
