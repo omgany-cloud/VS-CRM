@@ -647,6 +647,26 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_tenant_icseat ON roles(tenant_id, ic_seat) WHERE ic_seat IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_roles_tenant ON roles(tenant_id);
 
+-- Real uploaded files (server/index.js's POST/GET /api/uploads) — every
+-- document reference elsewhere in this app (pitchDeckUrl, closingCertUrl,
+-- wireConfirmUrl, ...) is a plain "paste a link" TEXT field with no
+-- actual file storage behind it; this is the one place that stores real
+-- file bytes on disk (server/data/uploads/), keyed by an unguessable
+-- stored_name so the original filename never becomes a path. A row's
+-- @tenantId is checked on every download (GET /api/uploads/:id) so one
+-- tenant can never fetch another's file by guessing an id.
+CREATE TABLE IF NOT EXISTS uploaded_files (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id      INTEGER NOT NULL REFERENCES tenants(id),
+  stored_name    TEXT NOT NULL,
+  original_name  TEXT NOT NULL,
+  mime_type      TEXT,
+  size_bytes     INTEGER NOT NULL DEFAULT 0,
+  uploaded_by    TEXT,
+  uploaded_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_tenant ON uploaded_files(tenant_id);
+
 -- One row per fund tracking its First Closing checklist (js/app.js's
 -- renderClosing()) -- this used to be a single hardcoded, never-
 -- persisted, never-fund-scoped object (js/data.js's firstClosingState),

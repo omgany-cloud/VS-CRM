@@ -6,10 +6,14 @@
 // ============================================================
 
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
+const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { db, at } = require('./db');
-const { signToken, requireAuth, requirePermission, requireInternal } = require('./auth');
+const { signToken, requireAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
 const { rowToUser } = require('./usersMapping');
@@ -51,6 +55,86 @@ app.use(express.json());
 // stale login screen should be able to prompt a reload too.
 const SERVER_STARTED_AT = String(Date.now());
 app.get('/api/version', (req, res) => res.json({ version: SERVER_STARTED_AT }));
+
+/* ===== File uploads — real disk storage, unlike every other document
+   field in this app (pitchDeckUrl, closingCertUrl, wireConfirmUrl, ...),
+   which are all "paste a link you already have" TEXT fields with nothing
+   stored server-side. Currently only wired up for Capital Call payment
+   confirmation (js/lp-register.js's markLPPayment()), but the endpoints
+   are generic so any other document field can start using them later.
+   ===== */
+const UPLOADS_DIR = path.join(__dirname, 'data', 'uploads');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png', 'image/jpeg', 'image/gif',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB — payment orders/scans, not video
+
+const uploadMiddleware = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    // The original filename is never used as a path component (it's
+    // fully caller-controlled input) — a random name on disk, with the
+    // real name kept only as a DB column for display, sidesteps path
+    // traversal and filename-collision risk entirely.
+    filename: (req, file, cb) => cb(null, crypto.randomUUID() + path.extname(file.originalname || '').slice(0, 20)),
+  }),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: (req, file, cb) => cb(null, ALLOWED_UPLOAD_MIME_TYPES.has(file.mimetype)),
+});
+
+app.post('/api/uploads', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  uploadMiddleware.single('file')(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE' ? `File exceeds the ${MAX_UPLOAD_BYTES / 1024 / 1024}MB limit` : err.message;
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded, or file type not allowed (PDF, image, Word, Excel only)' });
+    }
+    const info = db.prepare(`
+      INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+      VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+    `).run(at({
+      tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
+      mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: req.user.email,
+    }));
+    res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
+  });
+});
+
+// Deliberately NOT behind requireAuth — this route accepts the JWT via
+// either the normal Authorization header OR a ?token= query param, so a
+// plain <a href>/window.open/iframe (no way to attach a header) can open
+// it directly, the same way every other document link in this app just
+// works when clicked. Same trust level as those external Drive/SharePoint
+// links already are — the file is reachable by anyone holding a valid
+// token for the right tenant, not by the general public, and tenant_id
+// is still checked against the row before anything is served.
+app.get('/api/uploads/:id', (req, res) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : (req.query.token || null);
+  if (!token) return res.status(401).json({ error: 'Missing bearer token' });
+  let payload;
+  try {
+    payload = jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+  const row = db.prepare('SELECT * FROM uploaded_files WHERE id = ? AND tenant_id = ?').get(req.params.id, payload.tenantId);
+  if (!row) return res.status(404).json({ error: 'File not found in this tenant' });
+  const filePath = path.join(UPLOADS_DIR, row.stored_name);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing from storage' });
+  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(row.original_name)}"`);
+  res.sendFile(filePath);
+});
 
 /* ===== Auth ===== */
 app.post('/api/auth/login', (req, res) => {

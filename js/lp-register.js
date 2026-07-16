@@ -1790,7 +1790,7 @@ function openCCDetail(ccId) {
               <td style="padding:8px 10px;font-size:11px;color:#94a3b8">${li.paymentDate||'—'}</td>
               <td style="padding:8px 10px;font-size:10px;color:#64748b">
                 ${li.wireRef||'—'}
-                ${li.wireConfirmUrl ? `<i class="fas fa-eye" style="color:#a78bfa;margin-left:5px;cursor:pointer" onclick="_obOpenPreviewModal('${li.wireConfirmUrl.replace(/'/g,"\\'")}','${li.wireConfirmUrl.replace(/'/g,"\\'")}')" title="Открыть подтверждающий документ"></i>` : ''}
+                ${li.wireConfirmUrl ? `<i class="fas fa-eye" style="color:#a78bfa;margin-left:5px;cursor:pointer" onclick="_obOpenPreviewModal('${resolveDocUrl(li.wireConfirmUrl).replace(/'/g,"\\'")}','${resolveDocUrl(li.wireConfirmUrl).replace(/'/g,"\\'")}')" title="Открыть подтверждающий документ"></i>` : ''}
               </td>
               <td style="padding:8px 10px;text-align:center">
                 ${li.amlOk===true ? '<i class="fas fa-check-circle" style="color:#22c55e;font-size:14px" title="AML подтверждён"></i>'
@@ -1899,10 +1899,21 @@ async function markLPPayment(ccId, lpId) {
 
   const wireRef = prompt(`Номер платёжного поручения (wire reference) от ${li.lpName} на сумму ${fmtUSD(li.called)}:`);
   if (!wireRef || !wireRef.trim()) { showToast('⚠ Отменено — номер платёжного поручения обязателен', 'red'); return; }
-  const wireConfirmUrl = prompt('Ссылка на подтверждающий документ (платёжное поручение / SWIFT):');
-  if (!wireConfirmUrl || !wireConfirmUrl.trim()) { showToast('⚠ Отменено — ссылка на документ обязательна', 'red'); return; }
 
-  if (!confirm(`Подтвердить получение платежа от ${li.lpName} на сумму ${fmtUSD(li.called)}?`)) return;
+  showToast('📎 Выберите файл платёжного поручения (PDF/скан)...', 'blue');
+  const file = await pickFile('.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx');
+  if (!file) { showToast('⚠ Отменено — файл подтверждающего документа обязателен', 'red'); return; }
+
+  let wireConfirmUrl;
+  try {
+    const uploaded = await uploadFile(file);
+    wireConfirmUrl = uploaded.url;
+  } catch (err) {
+    showToast('⚠️ Не удалось загрузить файл: ' + err.message, 'red');
+    return;
+  }
+
+  if (!confirm(`Подтвердить получение платежа от ${li.lpName} на сумму ${fmtUSD(li.called)}? Файл «${file.name}» будет прикреплён как подтверждение.`)) return;
 
   // NB: AML clearance is a separate, deliberate check — see markLpAmlOk() —
   // not implied by payment receipt. A wire arriving doesn't mean AML/SoF was

@@ -115,6 +115,75 @@ async function apiFetch(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
+// ── Real file uploads (POST/GET /api/uploads, server/index.js) ───────
+// Every other document field in this app is a "paste a link you already
+// have" text input — this is the one path that actually stores file
+// bytes on the server, currently wired up for Capital Call payment
+// confirmation (js/lp-register.js's markLPPayment()).
+
+// Opens the native file picker and resolves with the chosen File, or
+// null if the user cancelled. No <input type="file"> markup needed at
+// the call site — this builds and tears down its own hidden element.
+function pickFile(accept) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (accept) input.accept = accept;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    let settled = false;
+    const cleanup = () => { if (input.parentNode) input.parentNode.removeChild(input); };
+    input.addEventListener('change', () => {
+      settled = true;
+      resolve(input.files && input.files[0] ? input.files[0] : null);
+      cleanup();
+    }, { once: true });
+    // The native picker gives no cancel event — the window regaining
+    // focus without a prior 'change' is the best available signal that
+    // the user dismissed the dialog instead of choosing a file.
+    window.addEventListener('focus', function onFocus() {
+      window.removeEventListener('focus', onFocus);
+      setTimeout(() => { if (!settled) { resolve(null); cleanup(); } }, 300);
+    }, { once: true });
+    input.click();
+  });
+}
+
+// Raw fetch, not apiFetch — multipart bodies need the browser to set
+// their own Content-Type (with the boundary), which apiFetch's hardcoded
+// 'Content-Type: application/json' would break.
+async function uploadFile(file) {
+  if (MUTATING_METHODS.has('POST') && currentUserPermission('readOnly')) {
+    showToast('🔒 Ваша роль — «Только просмотр»: изменения недоступны', 'red');
+    throw new Error('Forbidden: read-only role cannot modify data');
+  }
+  const auth = getAuth();
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(API_BASE + '/api/uploads', {
+    method: 'POST',
+    headers: auth ? { Authorization: 'Bearer ' + auth.token } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || ('HTTP ' + res.status));
+  }
+  return res.json(); // { id, url, name }
+}
+
+// GET /api/uploads/:id has no session/cookie to ride on — a bare <a>/
+// window.open/iframe can't attach an Authorization header, so the
+// current viewer's own token gets appended as a query param instead
+// (server/index.js accepts either). External links (Google Drive,
+// SharePoint, ...) pass through untouched.
+function resolveDocUrl(url) {
+  if (!url || !url.startsWith('/api/uploads/')) return url;
+  const auth = getAuth();
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 'token=' + encodeURIComponent(auth ? auth.token : '');
+}
+
 // ── Read-only visual dimming ─────────────────────────────────────────
 // The exact, closed set of onclick handlers that call apiFetch with a
 // mutating method (derived by grepping every `method: 'POST'|'PUT'|
