@@ -69,6 +69,152 @@ let activeWfId  = null;   // currently open modal
 function renderWorkflowPage() {
   renderWfKPIs();
   renderWfList();
+  renderPendingApprovalsBoard();
+}
+
+/* ─────────────────────────────────────────────────────────
+   UNIFIED PENDING-APPROVALS BOARD
+   The KYC/AML chain above is this file's own engine. Every other real
+   approval process in the app lives in its own module with its own
+   data/permission model (see the comment on each entry below for
+   exactly what "pending" means there) — this just surfaces all of them
+   in one place so "Согласования" reflects everything, not just KYC.
+   Nothing about how any of these processes actually work changes here;
+   each row just navigates to and opens the real place the decision is
+   made.
+───────────────────────────────────────────────────────── */
+function collectExternalPendingApprovals() {
+  const items = [];
+
+  // IC Memo voting — quorum-based (4 fixed seats), not a linear chain.
+  // "Pending" = memo hasn't reached a final decision yet (js/modules.js).
+  (typeof icMemos !== 'undefined' ? icMemos : []).forEach(m => {
+    if (m.status !== 'pending') return;
+    items.push({
+      category: 'IC Memo', icon: 'fa-handshake', color: '#f97316',
+      title: m.company || `IC Memo #${m.id}`,
+      meta: 'Голосование Investment Committee (кворум)',
+      permission: 'icSeat',
+      action: () => { navigateTo('ic'); setTimeout(() => openICModal(m.id), 200); },
+    });
+  });
+
+  // Capital Call — Draft awaiting the ccApprove gate before it can be sent.
+  (typeof capitalCallsLog !== 'undefined' ? capitalCallsLog : []).forEach(cc => {
+    if (cc.status !== 'Draft') return;
+    items.push({
+      category: 'Capital Call', icon: 'fa-coins', color: '#8b5cf6',
+      title: `Capital Call ${cc.ccNumber || ''} — ${cc.purpose || ''}`.trim(),
+      meta: 'Ожидает одобрения (Черновик → Отправлен)',
+      permission: 'ccApprove',
+      action: () => { navigateTo('lp-capital-calls'); setTimeout(() => openCCDetail(cc.id), 200); },
+    });
+  });
+
+  // Capital Call — per-LP payment confirmation / AML clearance. Both are
+  // one-shot gates on a line item, independent of each other and of the
+  // call-level approval above.
+  (typeof capitalCallsLog !== 'undefined' ? capitalCallsLog : []).forEach(cc => {
+    if (cc.status === 'Draft') return;
+    (cc.lineItems || []).forEach(li => {
+      if (li.status === 'Pending' && !li.wireRef) {
+        items.push({
+          category: 'CC — платёж', icon: 'fa-money-check-dollar', color: '#22c55e',
+          title: `${li.lpName} — Capital Call ${cc.ccNumber || ''}`,
+          meta: 'Ожидает подтверждения оплаты (wire ref + документ)',
+          permission: 'paymentConfirm',
+          action: () => { navigateTo('lp-capital-calls'); setTimeout(() => openCCDetail(cc.id), 200); },
+        });
+      }
+      if (!li.amlOk) {
+        items.push({
+          category: 'CC — AML', icon: 'fa-user-shield', color: '#0ea5e9',
+          title: `${li.lpName} — Capital Call ${cc.ccNumber || ''}`,
+          meta: 'Ожидает AML/SoF проверки',
+          permission: 'amlClear',
+          action: () => { navigateTo('lp-capital-calls'); setTimeout(() => openCCDetail(cc.id), 200); },
+        });
+      }
+    });
+  });
+
+  // GP Conclusion sign-off — single approver, only once every DD category
+  // has a written conclusion (don't surface deals whose DD isn't done yet).
+  (typeof deals !== 'undefined' ? deals : []).forEach(d => {
+    if (typeof DD_CONCLUSION_CATEGORIES === 'undefined') return;
+    const conclusions = d.ddConclusions || [];
+    const ddComplete = DD_CONCLUSION_CATEGORIES.every(cat => conclusions.some(c => c.category === cat.key));
+    if (!ddComplete || d.gpConclusionSignedAt) return;
+    items.push({
+      category: 'GP Conclusion', icon: 'fa-file-signature', color: '#a855f7',
+      title: d.company || `Сделка #${d.id}`,
+      meta: 'DD завершён — ожидает подписания GP Conclusion',
+      permission: 'authorICMemo',
+      action: () => { navigateTo('deals'); setTimeout(() => { openDealDetailModal(d.id); switchDealTab('dd', d.id); }, 200); },
+    });
+  });
+
+  // Conflict Approvals — single decision-maker, one-shot.
+  (typeof conflictApprovals !== 'undefined' ? conflictApprovals : []).forEach(a => {
+    if (a.status !== 'Pending') return;
+    const client = (typeof obClients !== 'undefined' ? obClients : []).find(c => c.id === a.clientId);
+    items.push({
+      category: 'Конфликты / Одобрения', icon: 'fa-gavel', color: '#ef4444',
+      title: (client ? client.name : a.dealRef) || `Конфликт #${a.id}`,
+      meta: a.description || 'Ожидает решения Compliance',
+      permission: 'decideConflicts',
+      action: () => { navigateTo('conflict-approvals'); setTimeout(() => openConflictApprovalDetail(a.id), 200); },
+    });
+  });
+
+  return items;
+}
+
+// Rendered items are kept here (not re-derived from an inline onclick
+// string) so each row's action closure — which captures a real object
+// reference from collectExternalPendingApprovals()'s loops — stays
+// callable; serializing a closure into an onclick="..." string would
+// lose the variables it closed over.
+let _pendingApprovalItems = [];
+
+function runPendingApprovalAction(idx) {
+  const item = _pendingApprovalItems[idx];
+  if (item) item.action();
+}
+
+function renderPendingApprovalsBoard() {
+  const el = document.getElementById('pendingApprovalsBoard');
+  if (!el) return;
+  _pendingApprovalItems = collectExternalPendingApprovals();
+
+  const header = el.closest('.card')?.querySelector('.card-title');
+  if (header) header.innerHTML = `<i class="fas fa-list-check" style="color:#f97316;margin-right:6px"></i>Все ожидающие решения (${_pendingApprovalItems.length})`;
+
+  if (!_pendingApprovalItems.length) {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#8a9bbf">Нет ожидающих решений вне KYC/AML</div>';
+    return;
+  }
+
+  el.innerHTML = _pendingApprovalItems.map((it, idx) => {
+    const canAct = typeof currentUserPermission !== 'function' || !it.permission || currentUserPermission(it.permission);
+    return `
+      <div class="wf-row" onclick="runPendingApprovalAction(${idx})">
+        <div class="wf-row-icon" style="background:${it.color}22;color:${it.color}">
+          <i class="fas ${it.icon}"></i>
+        </div>
+        <div class="wf-row-main">
+          <div class="wf-row-title">
+            <span class="wf-entity-name">${it.title}</span>
+            ${canAct ? '<span class="wf-my-badge"><i class="fas fa-bell"></i> Ваша роль может решить</span>' : ''}
+          </div>
+          <div class="wf-row-meta">
+            <span style="color:${it.color};font-size:11px;font-weight:700">${it.category}</span>
+            <span class="wf-meta-sep">·</span>
+            <span style="font-size:11px;color:#8a9bbf">${it.meta}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function renderWfKPIs() {

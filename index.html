@@ -484,17 +484,30 @@
     <section id="page-workflow" class="page">
       <div class="section-header">
         <h1>Согласования <span class="fund-label">Approval Workflow</span></h1>
-        <p>KYC/AML · IC · Capital Call · Subscription Agreement — многоуровневые согласования</p>
+        <p>KYC/AML · Инвестиционный комитет · Capital Call · GP Conclusion · Конфликты/Одобрения — все процессы согласования фонда в одном месте</p>
       </div>
       <div class="kpi-row" id="wfKPIs"></div>
+
+      <!-- Unified board: every real approval process in the app (IC Memo
+           voting, Capital Call approve/payment/AML, GP Conclusion sign-off,
+           Conflict Approvals), each row linking to where the decision is
+           actually made — see collectExternalPendingApprovals() in
+           js/workflow.js. The KYC/AML chain below is the one process this
+           page's own engine natively runs; everything else lives in its own
+           module and is only surfaced here for visibility. -->
       <div class="card" style="margin-top:16px">
         <div class="card-header">
-          <span class="card-title"><i class="fas fa-stream" style="color:#3b82f6;margin-right:6px"></i>Все workflow</span>
+          <span class="card-title"><i class="fas fa-list-check" style="color:#f97316;margin-right:6px"></i>Все ожидающие решения</span>
+        </div>
+        <div id="pendingApprovalsBoard"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-stream" style="color:#3b82f6;margin-right:6px"></i>KYC/AML workflow</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button onclick="startWorkflow('kyc_lp',0,'Новый LP','LP')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> KYC LP</button>
             <button onclick="startWorkflow('kyc_cfa',0,'Новый CF&A','CF&A')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> KYC CF&A</button>
-            <button onclick="startWorkflow('deal_ic',0,'Новая сделка','Deal')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> IC Review</button>
-            <button onclick="startWorkflow('capital_call',0,'Capital Call','Fund')" class="btn-ghost" style="font-size:12px"><i class="fas fa-plus"></i> Capital Call</button>
           </div>
         </div>
         <div id="wfList"></div>

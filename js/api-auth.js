@@ -416,6 +416,18 @@ async function loadLpRegisterFromApi() {
   }
 }
 
+// The Согласования page's unified pending-approvals board (js/workflow.js)
+// reads from capitalCallsLog/icMemos/deals/conflictApprovals, none of
+// which it owns the loading of — each of those arrays' own loader calls
+// this after refreshing, so the board picks up new data whenever any of
+// its sources does, not just when workflow's own instances change.
+function refreshPendingApprovalsBoardIfActive() {
+  const page = document.getElementById('page-workflow');
+  if (page && page.classList.contains('active') && typeof renderPendingApprovalsBoard === 'function') {
+    renderPendingApprovalsBoard();
+  }
+}
+
 /* ===== Capital Calls — backed by the real API ===== */
 async function loadCapitalCallsFromApi() {
   try {
@@ -427,6 +439,7 @@ async function loadCapitalCallsFromApi() {
     if (page && page.classList.contains('active') && typeof renderCapitalCallsPage === 'function') {
       renderCapitalCallsPage();
     }
+    refreshPendingApprovalsBoardIfActive();
   } catch (err) {
     console.error('Failed to load capital calls from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить Capital Calls из API: ' + err.message, 'red');
@@ -449,6 +462,7 @@ async function loadDealsFromApi() {
     }
     if (typeof renderPipeline === 'function') renderPipeline(deals);
     if (typeof renderDashboard === 'function') renderDashboard();
+    refreshPendingApprovalsBoardIfActive();
   } catch (err) {
     console.error('Failed to load deals from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить сделки из API: ' + err.message, 'red');
@@ -518,6 +532,7 @@ async function loadIcMemosFromApi() {
     const page = document.getElementById('page-ic');
     if (page && page.classList.contains('active') && typeof renderICPage === 'function') renderICPage();
     if (typeof updateBadges === 'function') updateBadges();
+    refreshPendingApprovalsBoardIfActive();
   } catch (err) {
     console.error('Failed to load IC memos from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить IC-меморандумы из API: ' + err.message, 'red');
@@ -580,6 +595,7 @@ async function loadConflictApprovalsFromApi() {
     const page = document.getElementById('page-conflict-approvals');
     if (page && page.classList.contains('active') && typeof renderConflictApprovalsPage === 'function') renderConflictApprovalsPage();
     if (typeof updateBadges === 'function') updateBadges();
+    refreshPendingApprovalsBoardIfActive();
   } catch (err) {
     console.error('Failed to load conflict approvals from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить конфликты/одобрения из API: ' + err.message, 'red');
@@ -638,7 +654,16 @@ async function loadRolesFromApi() {
     if (page === 'ob-clients' || page === 'ob-restricted' || page === 'engagements') { loadOnboardingFromApi(); loadConflictApprovalsFromApi(); }
     if (page === 'conflict-approvals') loadConflictApprovalsFromApi();
     if (page === 'ic') loadIcMemosFromApi();
-    if (page === 'workflow') loadWorkflowFromApi();
+    if (page === 'workflow') {
+      // The unified pending-approvals board on this page pulls from all
+      // four of these sources (see collectExternalPendingApprovals(),
+      // js/workflow.js) in addition to this page's own workflow instances.
+      loadWorkflowFromApi();
+      loadCapitalCallsFromApi();
+      loadIcMemosFromApi();
+      loadDealsFromApi();
+      loadConflictApprovalsFromApi();
+    }
     if (page === 'documents' || page === 'vault') loadDocumentsFromApi();
     if (page === 'users') loadUsersFromApi();
   };
