@@ -257,7 +257,7 @@ function exportDeals() {
   ]);
 
   const closed = deals.filter(d => d.stage === 'Закрыта');
-  const pipeline = deals.filter(d => d.stage !== 'Закрыта' && d.stage !== 'Отклонена IC');
+  const pipeline = deals.filter(d => !['Закрыта', 'Отклонена', 'Отклонена IC'].includes(d.stage));
   rows.push([]);
   rows.push(['', `Закрыто сделок: ${closed.length}`, '', '', closed.reduce((s, d) => s + d.amount, 0).toFixed(1), '', '', '', '', '']);
   rows.push(['', `В пайплайне: ${pipeline.length}`, '', '', pipeline.reduce((s, d) => s + d.amount, 0).toFixed(1), '', '', '', '', '']);
@@ -355,8 +355,9 @@ function exportFundOverview() {
     ['СДЕЛКИ'],
     ['Всего в базе',             deals.length],
     ['Закрыто',                  deals.filter(d => d.stage === 'Закрыта').length],
-    ['В пайплайне',              deals.filter(d => !['Закрыта','Отклонена IC'].includes(d.stage)).length],
-    ['Отклонено',                deals.filter(d => d.stage === 'Отклонена IC').length],
+    ['В пайплайне',              deals.filter(d => !['Закрыта','Отклонена','Отклонена IC'].includes(d.stage)).length],
+    ['Отклонено до IC',          deals.filter(d => d.stage === 'Отклонена').length],
+    ['Отклонено комитетом (IC)', deals.filter(d => d.stage === 'Отклонена IC').length],
   ];
 
   // График капитал-коллов

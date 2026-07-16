@@ -176,7 +176,7 @@ function setCurrentDate() {
 
 /* ===== BADGES ===== */
 function updateBadges() {
-  const activeDeals = deals.filter(d => d.stage !== 'Закрыта' && d.stage !== 'Отклонена IC').length;
+  const activeDeals = deals.filter(d => d.stage !== 'Закрыта' && d.stage !== 'Отклонена' && d.stage !== 'Отклонена IC').length;
 
   // Badges
   const wfPending   = typeof getActiveWfCount === 'function' ? getActiveWfCount() : 0;
@@ -868,7 +868,14 @@ function renderClosingDocs()      {}
 function toggleClosingItem()      {}
 
 /* ===== PIPELINE (KANBAN) ===== */
-const DEAL_STAGES = ['Скрининг','Due Diligence','IC Review','Term Sheet','Переговоры','Закрыта','Отклонена IC'];
+// 'Отклонена' и 'Отклонена IC' are deliberately two different terminal
+// stages, not one — see dealMoveStage()'s gates. 'Отклонена' is an early,
+// informal pass (Скрининг/DD, no committee involved — any RM/CEO can call
+// it); 'Отклонена IC' can only be reached via a real Investment Committee
+// vote (castICVote, js/modules.js). Conflating them into one label would
+// corrupt the fund's own pipeline-conversion reporting (sourced -> DD ->
+// IC -> closed) and blur who was actually accountable for the "no".
+const DEAL_STAGES = ['Скрининг','Due Diligence','IC Review','Term Sheet','Переговоры','Закрыта','Отклонена','Отклонена IC'];
 const STAGE_COLORS = {
   'Скрининг':     '#06b6d4',
   'IC Review':    '#f97316',
@@ -876,6 +883,7 @@ const STAGE_COLORS = {
   'Term Sheet':   '#eab308',
   'Переговоры':   '#3b82f6',
   'Закрыта':      '#22c55e',
+  'Отклонена':    '#64748b',
   'Отклонена IC': '#ef4444',
 };
 
@@ -1302,9 +1310,10 @@ function _renderDealModal(d) {
   }
 
   /* ── Progress bar по этапам ── */
-  const stageOrder = DEAL_STAGES.filter(s => s !== 'Отклонена IC');
+  const isRejectedStage = d.stage === 'Отклонена IC' || d.stage === 'Отклонена';
+  const stageOrder = DEAL_STAGES.filter(s => s !== 'Отклонена IC' && s !== 'Отклонена');
   const stageIdx   = stageOrder.indexOf(d.stage);
-  const progressPct = d.stage === 'Отклонена IC' ? 0
+  const progressPct = isRejectedStage ? 0
     : stageIdx >= 0 ? Math.round((stageIdx + 1) / stageOrder.length * 100) : 0;
 
   document.getElementById('dealDetailContent').innerHTML = `
@@ -1329,7 +1338,7 @@ function _renderDealModal(d) {
             ${d.preMoney ? ` · pre-money ${currencySymbol(currencyForEntity(d))}${d.preMoney}M` : ''}
             · <span style="color:#94a3b8">${d.manager}</span>
           </div>
-          ${d.stage !== 'Отклонена IC' ? `
+          ${!isRejectedStage ? `
           <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
             <div style="flex:1;height:4px;background:#0f1623;border-radius:2px;overflow:hidden">
               <div style="height:100%;width:${progressPct}%;background:${stageColor};border-radius:2px;transition:width 0.4s"></div>
@@ -1409,6 +1418,28 @@ function dealMoveStage(id, stage) {
   // same two fields, since castICVote only ever sets `ic`).
   if ((stage === 'Term Sheet' || stage === 'Переговоры') && d.ic !== 'Одобрено' && d.icDecision !== 'Одобрено') {
     showToast(`⛔ Нельзя перейти к «${stage}» без одобрения IC (текущее решение IC: ${d.ic || d.icDecision || 'Не подано'})`, 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
+  // 'Отклонена' is the early, informal pass (Скрининг/DD — no committee
+  // involved yet, any RM/CEO can call it). Once the deal has actually
+  // reached the committee, a "no" has to go through the real thing —
+  // routing it through the generic bucket instead would hide a real IC
+  // rejection behind a label that claims no committee was ever involved.
+  if (stage === 'Отклонена' && ['IC Review', 'Term Sheet', 'Переговоры'].includes(d.stage)) {
+    showToast('⛔ Сделка уже на рассмотрении IC — отклонить можно только через решение комитета («Отклонена IC»)', 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
+  // 'Отклонена IC' is the mirror image of the Закрыта gate above: it
+  // asserts the committee rejected this deal, so it can only be reached
+  // once that's actually true, never picked by hand.
+  if (stage === 'Отклонена IC' && d.ic !== 'Отклонено' && d.icDecision !== 'Отклонено') {
+    showToast(`⛔ Нельзя пометить как «Отклонена IC» без решения комитета (текущее решение IC: ${d.ic || d.icDecision || 'Не подано'})`, 'red');
     _renderDealModal(d);
     renderPipeline(deals);
     return;
@@ -1762,7 +1793,13 @@ function openGpConclusionDocument(id) {
 // sign-off -> icMemos voting). Always rendered (not just when rejected)
 // so it's ready to fill in the moment a rejection happens.
 function dealRejectionBlock(d) {
-  const isRejected = d.stage === 'Отклонена IC' || d.icDecision === 'Отклонено';
+  // 'Отклонена' (early, informal pass) and 'Отклонена IC' (formal
+  // committee rejection, gated in dealMoveStage()) are different events
+  // for pipeline-conversion reporting, but share the same follow-up
+  // fields — this block just labels which one actually happened.
+  const isIcRejection = d.stage === 'Отклонена IC' || d.icDecision === 'Отклонено';
+  const isEarlyRejection = d.stage === 'Отклонена' && !isIcRejection;
+  const isRejected = isIcRejection || isEarlyRejection;
   const borderColor = isRejected ? 'rgba(239,68,68,0.4)' : 'rgba(100,116,139,0.2)';
   const headerColor = isRejected ? '#ef4444' : '#64748b';
   const bgColor     = isRejected ? 'rgba(239,68,68,0.07)' : 'rgba(15,22,35,0.6)';
@@ -1773,10 +1810,12 @@ function dealRejectionBlock(d) {
     <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:14px;margin-top:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-size:10px;font-weight:700;color:${headerColor};text-transform:uppercase">
-          <i class="fas fa-times-circle" style="margin-right:5px"></i>Решение об отклонении IC
+          <i class="fas fa-times-circle" style="margin-right:5px"></i>Решение об отклонении
         </div>
-        ${isRejected
-          ? `<span style="font-size:9px;padding:2px 8px;border-radius:5px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700">ОТКЛОНЕНА</span>`
+        ${isIcRejection
+          ? `<span style="font-size:9px;padding:2px 8px;border-radius:5px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700">ОТКЛОНЕНА КОМИТЕТОМ (IC)</span>`
+          : isEarlyRejection
+          ? `<span style="font-size:9px;padding:2px 8px;border-radius:5px;background:rgba(100,116,139,0.15);color:#94a3b8;font-weight:700">ОТКЛОНЕНА ДО IC</span>`
           : `<span style="font-size:9px;color:#475569;font-style:italic">заполняется при отказе</span>`}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
