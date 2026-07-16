@@ -125,14 +125,6 @@
     <a href="#" class="nav-item" data-page="portfolio">
       <i class="fas fa-briefcase"></i><span data-i18n="nav_portfolio">Портфель</span>
     </a>
-    <a href="#" class="nav-item" data-page="harvesting">
-      <i class="fas fa-sign-out-alt"></i><span data-i18n="nav_harvesting">Harvesting / Exit</span>
-    </a>
-
-    <div class="nav-group-label">Финансы и отчёты</div>
-    <a href="#" class="nav-item" data-page="distributions">
-      <i class="fas fa-water"></i><span>Distributions</span>
-    </a>
 
     <div class="nav-group-label">Compliance</div>
     <a href="#" class="nav-item" data-page="workflow">
@@ -281,16 +273,6 @@
           <div class="lc-stage" data-page="portfolio">
             <div class="lc-dot">4</div>
             <span>Создание стоимости</span>
-          </div>
-          <div class="lc-connector"></div>
-          <div class="lc-stage" data-page="harvesting">
-            <div class="lc-dot">5</div>
-            <span>Harvesting</span>
-          </div>
-          <div class="lc-connector"></div>
-          <div class="lc-stage" data-page="distributions">
-            <div class="lc-dot">6</div>
-            <span>Exit & Liquidation</span>
           </div>
         </div>
       </div>
@@ -490,44 +472,6 @@
       <div id="portfolioGrid" class="portfolio-grid"></div>
     </section>
 
-    <!-- ===== HARVESTING / EXIT ===== -->
-    <section id="page-harvesting" class="page">
-      <div class="section-header">
-        <h1>Harvesting &amp; Exit <span class="fund-label">Years 6–10</span></h1>
-        <p>Стратегии выхода · M&A, IPO, Secondary Sale, Recapitalization</p>
-      </div>
-
-      <div class="stats-row" style="margin-bottom:20px">
-        <div class="stat-mini green"><span>Реализованные выходы</span><strong id="exitRealized">0</strong></div>
-        <div class="stat-mini blue"><span>В процессе выхода</span><strong id="exitInProgress">0</strong></div>
-        <div class="stat-mini orange"><span>DPI</span><strong>0.4x</strong></div>
-        <div class="stat-mini purple"><span>RVPI</span><strong>1.7x</strong></div>
-      </div>
-
-      <div class="table-card">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Компания</th>
-              <th>Стратегия выхода</th>
-              <th>Инвестировано</th>
-              <th>Стоимость выхода</th>
-              <th>MOIC</th>
-              <th>IRR</th>
-              <th>Статус</th>
-              <th>Дата выхода</th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-          <tbody id="harvestingTableBody"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ===== СДЕЛКИ ===== -->
-
-    <!-- ===== EXPORT / REPORTS PANEL ===== -->
-
     <!-- ===== EXPORT / REPORTS PANEL ===== -->
     <section id="page-export" class="page">
       <div class="section-header">
@@ -565,15 +509,6 @@
         <p>Отслеживание дат KYC/AML — LP и CF&A клиенты · AFSA AML Rules · обновление каждые 12 месяцев</p>
       </div>
       <div id="kycRenewalContent"></div>
-    </section>
-
-    <!-- ===== DISTRIBUTION WATERFALL ===== -->
-    <section id="page-distributions" class="page">
-      <div class="section-header">
-        <h1>Distributions <span class="fund-label">Waterfall</span></h1>
-        <p>Расчёт распределений: Return of Capital → Hurdle Rate → GP Catch-up → Carried Interest</p>
-      </div>
-      <div id="distributionContent"></div>
     </section>
 
     <!-- ===== COMPLIANCE CALENDAR ===== -->
@@ -1091,45 +1026,6 @@
 </div>
 
 <!-- Modal: Distribution -->
-<div class="modal" id="modal-addDistribution">
-  <div class="modal-header">
-    <h3><i class="fas fa-hand-holding-usd"></i> Новое Distribution</h3>
-    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body">
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Дата</label>
-        <input type="date" id="dist_date" />
-      </div>
-      <div class="form-group">
-        <label>Источник</label>
-        <input type="text" id="dist_source" placeholder="Название компании (Exit)" />
-      </div>
-      <div class="form-group">
-        <label>Общая сумма ($M)</label>
-        <input type="number" id="dist_total" placeholder="10" />
-      </div>
-      <div class="form-group">
-        <label>Return of Capital ($M)</label>
-        <input type="number" id="dist_roc" placeholder="5" />
-      </div>
-      <div class="form-group">
-        <label>Preferred Return ($M)</label>
-        <input type="number" id="dist_pref" placeholder="2" />
-      </div>
-      <div class="form-group">
-        <label>Carried Interest GP ($M)</label>
-        <input type="number" id="dist_carry" placeholder="0.6" />
-      </div>
-    </div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
-    <button class="btn-primary" onclick="saveDistribution()"><i class="fas fa-save"></i> Сохранить</button>
-  </div>
-</div>
-
 <!-- Toasts — showToast() (js/app.js) appends one element per call so
      several messages can stack and each stays visible for its own full
      duration, instead of a second message cutting off the first. -->

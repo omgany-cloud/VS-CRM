@@ -170,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderClosing();
   renderPipeline(deals);
   renderPortfolio(portfolio);
-  renderHarvesting();
   renderDocumentsPage();
   renderSubscriptionPage();
 });
@@ -247,8 +246,6 @@ const PAGE_LABELS = {
   closing:       'nav_closing',
   deals:         'nav_deals',
   portfolio:     'nav_portfolio',
-  harvesting:    'nav_harvesting',
-  distributions: 'Distributions — Waterfall',
   documents:     'nav_documents',
   export:        'Экспорт Excel',
   workflow:      'Согласования',
@@ -282,7 +279,6 @@ function navigateTo(page) {
   if (page === 'export')       { renderExportPage(); }
   if (page === 'workflow')     { renderWorkflowPage(); }
   if (page === 'kycrenewal')   { renderKycRenewalPage(); }
-  if (page === 'distributions'){ renderDistributionPage(); }
   if (page === 'calendar')     { renderComplianceCalendar(); }
   if (page === 'ic')           { renderICPage(); }
   if (page === 'vault')        { renderVaultPage(); }
@@ -2907,45 +2903,6 @@ async function saveMonitoringConclusion(id) {
   _renderPortfolioModal(p);
 }
 
-/* ===== HARVESTING ===== */
-function renderHarvesting() {
-  const realized = harvestingList.filter(h => h.status === 'Реализован').length;
-  const inProg   = harvestingList.filter(h => h.status === 'На выходе').length;
-  document.getElementById('exitRealized').textContent = realized;
-  document.getElementById('exitInProgress').textContent = inProg;
-
-  const tbody = document.getElementById('harvestingTableBody');
-  tbody.innerHTML = harvestingList.map(h => `
-    <tr>
-      <td><strong style="color:var(--text-primary)">${h.name}</strong></td>
-      <td><span class="badge badge-blue">${h.exitStrategy}</span></td>
-      <td>$${h.invested}M</td>
-      <td>${h.exitValue > 0 ? `<strong style="color:var(--accent-green)">$${h.exitValue}M</strong>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-      <td>${h.moic > 0 ? `<strong style="color:var(--accent-green)">${h.moic}x</strong>` : '—'}</td>
-      <td>${h.irr > 0 ? `<strong style="color:var(--accent-green)">${h.irr}%</strong>` : '—'}</td>
-      <td>${exitStatusBadge(h.status)}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${h.exitDate}</td>
-      <td>
-        <div class="action-btns">
-          <button class="act-btn" onclick="markExitDone(${h.id})"><i class="fas fa-check-double"></i></button>
-        </div>
-      </td>
-    </tr>`).join('');
-}
-
-function markExitDone(id) {
-  const h = harvestingList.find(x => x.id === id);
-  if (!h) return;
-  const val = prompt('Введите сумму выхода ($M):', '');
-  if (!val) return;
-  h.exitValue = parseFloat(val);
-  h.moic = h.invested > 0 ? Math.round((h.exitValue / h.invested) * 100) / 100 : 0;
-  h.irr  = Math.round(Math.pow(h.exitValue / h.invested, 1 / 5) * 100 - 100);
-  h.status = 'Реализован';
-  renderHarvesting();
-  showToast(`✅ Выход завершён: ${h.name} · MOIC ${h.moic}x`);
-}
-
 /* ===== CAPITAL CALLS ===== */
 function renderCapitalCalls() {
   const tbody = document.getElementById('capCallsTableBody');
@@ -2980,40 +2937,6 @@ function saveCapCall() {
   renderCapitalCalls();
   closeModalSilent();
   showToast('✅ Capital Call создан');
-}
-
-/* ===== DISTRIBUTIONS ===== */
-function renderDistributions() {
-  const tbody = document.getElementById('distributionsTableBody');
-  if (!tbody) return;
-  if (!distributions.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px">Distributions ещё не проводились</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = distributions.map(d => `
-    <tr>
-      <td>${formatDate(d.date)}</td>
-      <td><strong style="color:var(--text-primary)">${d.source}</strong></td>
-      <td><strong style="color:var(--accent-green)">$${d.total}M</strong></td>
-      <td>$${d.roc}M</td>
-      <td>$${d.pref}M</td>
-      <td>$${d.carry}M</td>
-      <td><span class="badge badge-green">Завершено</span></td>
-    </tr>`).join('');
-}
-
-function saveDistribution() {
-  const date   = document.getElementById('dist_date').value;
-  const source = document.getElementById('dist_source').value.trim() || '—';
-  const total  = parseFloat(document.getElementById('dist_total').value) || 0;
-  const roc    = parseFloat(document.getElementById('dist_roc').value) || 0;
-  const pref   = parseFloat(document.getElementById('dist_pref').value) || 0;
-  const carry  = parseFloat(document.getElementById('dist_carry').value) || 0;
-
-  distributions.push({ id: Date.now(), date, source, total, roc, pref, carry });
-  renderDistributions();
-  closeModalSilent();
-  showToast('✅ Distribution добавлено');
 }
 
 /* ===== REPORTS ===== */
@@ -3218,7 +3141,3 @@ function stageBadgePort(s) {
   return `<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;
 }
 
-function exitStatusBadge(s) {
-  const m = { 'Реализован':'badge-green','На выходе':'badge-orange','Мониторинг':'badge-blue' };
-  return `<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;
-}

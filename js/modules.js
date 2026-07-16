@@ -138,199 +138,7 @@ function startKycRenewal(id, name) {
 
 
 /* ═══════════════════════════════════════════════════════════
-   MODULE 2 — DISTRIBUTION WATERFALL
-   Hurdle Rate → GP Catch-up → Carried Interest split
-═══════════════════════════════════════════════════════════ */
-
-// No distributions yet — the fund is still in its Investment Period (Year 2, 2025),
-// all three portfolio companies (NomadTech Solutions, VitaMed Astana, Dala Agro Holding)
-// are still held (Value Creation / Active), and none have been realised/exited.
-// renderDistributionPage() already handles an empty list gracefully (see the
-// "Нет записей о распределениях" empty-state branch below), so this is left empty
-// rather than inventing a fictitious interim distribution.
-let distributionsList = [];
-let distIdCounter = 1;
-
-function calcWaterfall(grossAmount) {
-  const p = FUND_PARAMS;
-  const totalCommit = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0);
-  // Step 1: Return of Capital (100% LP)
-  const totalInvested = portfolio.reduce((s, p) => s + (p.invested || 0), 0) * 1e6;
-  const returnOfCap   = Math.min(grossAmount, totalInvested);
-  let   remaining     = grossAmount - returnOfCap;
-  // Step 2: Preferred Return / Hurdle (hurdle% → LP)
-  const prefReturn = Math.min(remaining, totalCommit * (p.preferredReturn / 100));
-  remaining -= prefReturn;
-  // Step 3: GP Catch-up (GP gets 20% of prefReturn to "catch up")
-  const gpCatchup = Math.min(remaining, prefReturn * (p.carriedInterest / (100 - p.carriedInterest)));
-  remaining -= gpCatchup;
-  // Step 4: Carried Interest split (80% LP / 20% GP)
-  const gpCarried = remaining * (p.carriedInterest / 100);
-  const lpCarried = remaining - gpCarried;
-  const totalLP   = returnOfCap + prefReturn + lpCarried;
-  const totalGP   = gpCatchup  + gpCarried;
-
-  // Per-LP breakdown (proportional to commitment)
-  const lpBreakdown = lpRegister.map(lp => {
-    const share = lp.commitment / totalCommit;
-    return { name: lp.name, commit: lp.commitment / 1e6, share: (share*100).toFixed(1), amount: (totalLP * share) };
-  });
-
-  return { grossAmount, returnOfCap, prefReturn, gpCatchup, gpCarried, lpCarried, totalLP, totalGP, lpBreakdown };
-}
-
-function renderDistributionPage() {
-  const el = document.getElementById('distributionContent');
-  if (!el) return;
-
-  const totalDistributed = distributionsList.reduce((s,d) => s + d.amount, 0);
-  const p = FUND_PARAMS;
-
-  el.innerHTML = `
-    <!-- KPIs -->
-    <div class="kpi-row" style="margin-bottom:20px">
-      <div class="kpi-card">
-        <div class="kpi-icon green"><i class="fas fa-water"></i></div>
-        <div class="kpi-body"><span class="kpi-label">Всего распределено</span>
-          <span class="kpi-value">$${(totalDistributed/1e6).toFixed(2)}M</span>
-          <span class="kpi-delta up">${distributionsList.length} распределений</span></div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon blue"><i class="fas fa-percent"></i></div>
-        <div class="kpi-body"><span class="kpi-label">Carried Interest</span>
-          <span class="kpi-value">${p.carriedInterest}%</span>
-          <span class="kpi-delta">GP ${p.carriedInterest}% / LP ${100-p.carriedInterest}%</span></div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon orange"><i class="fas fa-chart-line"></i></div>
-        <div class="kpi-body"><span class="kpi-label">Hurdle Rate</span>
-          <span class="kpi-value">${p.preferredReturn}%</span>
-          <span class="kpi-delta">Preferred Return</span></div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon purple"><i class="fas fa-landmark"></i></div>
-        <div class="kpi-body"><span class="kpi-label">GP — Golden Leaves</span>
-          <span class="kpi-value">${p.carriedInterest}%</span>
-          <span class="kpi-delta">Carried + ${p.managementFee}% Mgmt Fee</span></div>
-      </div>
-    </div>
-
-    <!-- Waterfall Calculator -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header">
-        <span class="card-title"><i class="fas fa-water" style="color:#3b82f6;margin-right:6px"></i>Distribution Waterfall — Калькулятор</span>
-      </div>
-      <div style="padding:0 0 16px">
-        <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
-          <div class="form-group" style="flex:1;min-width:200px">
-            <label>Сумма распределения ($)</label>
-            <input id="wfCalcAmount" type="number" placeholder="например: 5000000" step="100000"
-              oninput="updateWaterfallCalc()" style="font-size:14px" />
-          </div>
-          <div class="form-group" style="flex:1;min-width:160px">
-            <label>Источник</label>
-            <input id="wfCalcSource" type="text" placeholder="Realisation / Dividend / Fee" />
-          </div>
-          <button onclick="recordDistribution()"
-            style="background:#22c55e;border:none;color:#fff;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;flex-shrink:0;margin-bottom:2px">
-            <i class="fas fa-plus"></i> Записать
-          </button>
-        </div>
-        <div id="waterfallResult"></div>
-      </div>
-    </div>
-
-    <!-- History -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title"><i class="fas fa-history" style="color:#8b5cf6;margin-right:6px"></i>История распределений</span>
-      </div>
-      ${distributionsList.length ? `
-        <div class="table-scroll">
-          <table class="data-table">
-            <thead><tr><th>Дата</th><th>Источник</th><th>Сумма ($)</th><th>LP Доля</th><th>GP Доля</th><th>Статус</th><th>Утвердил</th></tr></thead>
-            <tbody>
-              ${distributionsList.map(d => {
-                const wf = d.waterfall || calcWaterfall(d.amount);
-                return `<tr>
-                  <td style="font-size:12px">${new Date(d.date).toLocaleDateString('ru-RU')}</td>
-                  <td style="font-size:12px">${d.source}</td>
-                  <td style="font-weight:700;color:#22c55e">$${(d.amount/1e6).toFixed(3)}M</td>
-                  <td style="font-size:12px;color:#3b82f6">$${(wf.totalLP/1e6).toFixed(3)}M</td>
-                  <td style="font-size:12px;color:#f97316">$${(wf.totalGP/1e6).toFixed(3)}M</td>
-                  <td><span class="task-status-pill" style="background:rgba(34,197,94,0.12);color:#22c55e">${d.status}</span></td>
-                  <td style="font-size:11px;color:#8a9bbf">${d.approvedBy}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>` : '<div style="padding:30px;text-align:center;color:#8a9bbf">Нет записей о распределениях</div>'}
-    </div>`;
-}
-
-function updateWaterfallCalc() {
-  const amount = parseFloat(document.getElementById('wfCalcAmount')?.value) || 0;
-  const el = document.getElementById('waterfallResult');
-  if (!el) return;
-  if (!amount) { el.innerHTML = ''; return; }
-  const wf = calcWaterfall(amount);
-
-  el.innerHTML = `
-    <div style="background:#1c2333;border-radius:12px;padding:16px">
-      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:12px;text-transform:uppercase">Waterfall Breakdown — $${(amount/1e6).toFixed(3)}M</div>
-      <div style="display:flex;flex-direction:column;gap:0">
-        ${[
-          ['1. Возврат капитала LP',    wf.returnOfCap, '#3b82f6'],
-          ['2. Preferred Return (${FUND_PARAMS.preferredReturn}%) → LP', wf.prefReturn,   '#8b5cf6'],
-          ['3. GP Catch-up',            wf.gpCatchup,   '#f97316'],
-          ['4. Carried LP (${100-FUND_PARAMS.carriedInterest}%)', wf.lpCarried,  '#22c55e'],
-          ['4. Carried GP (${FUND_PARAMS.carriedInterest}%)',  wf.gpCarried,  '#f97316'],
-        ].map(([label, val, color]) => `
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2a3448;font-size:13px">
-            <span style="color:#94a3b8">${label}</span>
-            <span style="font-weight:700;color:${color}">$${(val/1e6).toFixed(4)}M</span>
-          </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;padding:10px 0 0;font-size:14px;font-weight:800">
-          <span style="color:#3b82f6">Итого LP: $${(wf.totalLP/1e6).toFixed(4)}M</span>
-          <span style="color:#f97316">Итого GP: $${(wf.totalGP/1e6).toFixed(4)}M</span>
-        </div>
-      </div>
-      <!-- Per-LP table -->
-      <div style="margin-top:14px">
-        <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:8px">Разбивка по LP:</div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          ${wf.lpBreakdown.map(l => `
-            <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #1e293b">
-              <span style="color:#94a3b8">${l.name} <span style="color:#8a9bbf;font-size:10px">(${l.share}%)</span></span>
-              <span style="color:#3b82f6;font-weight:700">$${(l.amount/1e6).toFixed(4)}M</span>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>`;
-}
-
-function recordDistribution() {
-  const amount = parseFloat(document.getElementById('wfCalcAmount')?.value) || 0;
-  const source = document.getElementById('wfCalcSource')?.value?.trim() || 'Не указан';
-  if (!amount) { showToast('Введите сумму', 'red'); return; }
-  const wf = calcWaterfall(amount);
-  distributionsList.unshift({
-    id: distIdCounter++, date: new Date().toISOString().split('T')[0],
-    amount, source, status: 'Одобрено',
-    approvedBy: currentUserDisplayName(), waterfall: wf,
-  });
-  // Update LP distributions
-  wf.lpBreakdown.forEach(lb => {
-    const lp = lpRegister.find(l => l.name === lb.name);
-    if (lp) lp.distributions = (lp.distributions||0) + lb.amount;
-  });
-  renderDistributionPage();
-  showToast(`✅ Распределение записано: $${(amount/1e6).toFixed(3)}M`, 'green');
-}
-
-
-/* ═══════════════════════════════════════════════════════════
-   MODULE 3 — COMPLIANCE CALENDAR
+   MODULE 2 — COMPLIANCE CALENDAR
    AFSA deadlines + KYC renewals + Capital Calls + Tasks
 ═══════════════════════════════════════════════════════════ */
 
@@ -472,7 +280,7 @@ function renderCalEvent(e, isOverdue) {
 
 
 /* ═══════════════════════════════════════════════════════════
-   MODULE 4 — IC MODULE (Investment Committee)
+   MODULE 3 — IC MODULE (Investment Committee)
    Меморандумы, голосование, история решений
 ═══════════════════════════════════════════════════════════ */
 
@@ -1300,7 +1108,7 @@ async function saveNewICMemo() {
 
 
 /* ═══════════════════════════════════════════════════════════
-   MODULE 5 — LP INDIVIDUAL REPORTS
+   MODULE 4 — LP INDIVIDUAL REPORTS
    NAV Statement + Capital Account per LP
 ═══════════════════════════════════════════════════════════ */
 

@@ -91,13 +91,6 @@ let dealIdCounter = 8;
 let portfolio = [];  // populated at runtime by js/api-auth.js via GET /api/portfolio (see server/index.js)
 let portfolioIdCounter = 4;
 
-/* ===== HARVESTING / EXIT ===== */
-let harvestingList = [
-  { id: 1, name: 'NomadTech Solutions', exitStrategy: 'M&A',            invested: 4.5, exitValue: 0, moic: 0, irr: 0, status: 'Мониторинг', exitDate: '2028-12-31' },
-  { id: 2, name: 'VitaMed Astana',      exitStrategy: 'Strategic Sale', invested: 5,   exitValue: 0, moic: 0, irr: 0, status: 'Мониторинг', exitDate: '2029-06-30' },
-  { id: 3, name: 'Dala Agro Holding',   exitStrategy: 'IPO',            invested: 6,   exitValue: 0, moic: 0, irr: 0, status: 'Мониторинг', exitDate: '2030-03-31' },
-];
-
 /* ===== CAPITAL CALLS ===== */
 let capitalCalls = [
   { id: 1, noticeDate: '2024-11-15', payDate: '2024-12-02', amount: 4500000, pct: 13.5, purpose: 'Инвестиция в NomadTech Solutions',  status: 'Завершён', received: 4500000 },
@@ -105,10 +98,6 @@ let capitalCalls = [
   { id: 3, noticeDate: '2025-05-05', payDate: '2025-05-22', amount: 6000000, pct: 18,   purpose: 'Инвестиция в Dala Agro Holding',      status: 'Завершён', received: 6000000 },
   { id: 4, noticeDate: '2025-07-01', payDate: '2025-07-21', amount: 2000000, pct: 6,    purpose: 'Пополнение операционного резерва фонда', status: 'Ожидается', received: 0 },
 ];
-
-/* ===== DISTRIBUTIONS =====
-   Пока пусто — фонд на 2-м году инвестиционного периода, реализованных выходов ещё не было. */
-let distributions = [];
 
 /* ===== CLOSING CHECKLIST ===== */
 const closingChecklist = [
