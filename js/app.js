@@ -1400,6 +1400,17 @@ function dealMoveStage(id, stage) {
     return;
   }
 
+  // IC approval alone isn't capital actually being deployed — that also
+  // needs the definitive agreements (SHA/SPA) on record, not just a
+  // committee vote. d.signedDocsUrls is the "Подписанные документы
+  // (закрытие)" list on the Документы tab (addSignedDoc()).
+  if (stage === 'Закрыта' && !(d.signedDocsUrls || []).length) {
+    showToast('⛔ Нельзя закрыть сделку без подписанных документов (SHA/SPA) — добавьте их на вкладке Документы', 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
   // Entering IC Review by hand must respect the same gate as creating a
   // real IC memo (saveNewICMemo(), js/modules.js) — otherwise the board
   // could show a deal "at IC Review" that no specialist has actually
@@ -1418,6 +1429,18 @@ function dealMoveStage(id, stage) {
   // same two fields, since castICVote only ever sets `ic`).
   if ((stage === 'Term Sheet' || stage === 'Переговоры') && d.ic !== 'Одобрено' && d.icDecision !== 'Одобрено') {
     showToast(`⛔ Нельзя перейти к «${stage}» без одобрения IC (текущее решение IC: ${d.ic || d.icDecision || 'Не подано'})`, 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
+  // Переговоры means negotiating/signing the DEFINITIVE agreements (SHA/
+  // SPA — d.signedDocsUrls, "Подписанные документы" on the Документы tab)
+  // based on terms the Term Sheet already settled, so it can't start
+  // before the Term Sheet itself is actually signed (tsStatus, set in the
+  // "Term Sheet — Условия" panel on that same tab).
+  if (stage === 'Переговоры' && d.tsStatus !== 'Подписан') {
+    showToast('⛔ Term Sheet ещё не подписан — сначала завершите согласование условий на вкладке Документы', 'red');
     _renderDealModal(d);
     renderPipeline(deals);
     return;
