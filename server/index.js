@@ -753,8 +753,14 @@ app.post('/api/deals', requireAuth, requireInternal, requirePermission('accessFM
   const b = req.body || {};
   if (!b.company) return res.status(400).json({ error: 'company is required' });
   const now = new Date().toISOString().slice(0, 10);
+  // stage/ic are forced, not defaulted — they used to sit after ...b (a
+  // default a caller could simply override), which combined with the
+  // New Deal form's now-removed deal_stage/deal_ic selects to let anyone
+  // creating a deal back-date it straight to Закрыта/Одобрено with zero
+  // DD, zero signed GP conclusion, zero real IC vote. A brand new deal
+  // has no history to have earned anything but Скрининг/Не подано.
   const params = dealToParams({
-    stage: 'Скрининг', ic: 'Не подано', updatedAt: now, ...b,
+    ...b, stage: 'Скрининг', ic: 'Не подано', icDecision: 'Не подано', updatedAt: now,
   });
   const info = db.prepare(DEAL_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -772,6 +778,18 @@ app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('acces
     .some(f => Object.prototype.hasOwnProperty.call(b, f));
   if (touchesGpConclusion && !req.user.permissions.authorICMemo) {
     return res.status(403).json({ error: 'Forbidden: only an IC memo author may sign the GP conclusion' });
+  }
+  // ic/icDecision assert an actual Investment Committee decision — the
+  // only legitimate writer is the server-derived sync inside
+  // PUT /api/ic-memos/:id (a resolved vote), which writes the deals
+  // table directly rather than going through this route. There is no
+  // longer any legitimate caller of this route that sets either field
+  // (the New Deal form's ic dropdown that used to justify it is gone
+  // too), so block it outright rather than gating it behind a
+  // permission that would just move the bypass to whoever holds it.
+  const touchesIcDecision = ['ic', 'icDecision'].some(f => Object.prototype.hasOwnProperty.call(b, f));
+  if (touchesIcDecision) {
+    return res.status(403).json({ error: 'Forbidden: ic/icDecision can only be set by a resolved IC vote' });
   }
   const merged = Object.assign(rowToDeal(existing), b);
   const params = dealToParams(merged);
@@ -1059,7 +1077,14 @@ app.post('/api/ic-memos', requireAuth, requirePermission('authorICMemo'), requir
   // (no dealId) skip this, same as the UI.
   if (b.dealId != null) {
     const linkedDeal = db.prepare('SELECT gp_conclusion_verdict FROM deals WHERE id = ? AND tenant_id = ?').get(b.dealId, req.tenantId);
-    if (linkedDeal && linkedDeal.gp_conclusion_verdict !== 'Рекомендовано к IC') {
+    // A dealId that doesn't resolve in this tenant (typo, foreign id, a
+    // deal that no longer exists) used to skip the check below entirely
+    // instead of failing it — reject outright instead of silently
+    // treating "no matching deal" as "no gate to enforce".
+    if (!linkedDeal) {
+      return res.status(400).json({ error: 'dealId does not reference a deal in this tenant' });
+    }
+    if (linkedDeal.gp_conclusion_verdict !== 'Рекомендовано к IC') {
       return res.status(409).json({ error: 'Заключение УК по сделке ещё не подписано со статусом "Рекомендовано к IC"' });
     }
   }
@@ -1119,6 +1144,14 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
   if (isRiskUpdate && !req.user.permissions.riskVeto) {
     return res.status(403).json({ error: 'Only Risk Manager can set risk veto/conclusion' });
   }
+  // Same reasoning as the vote lock below: once the committee has
+  // resolved the memo, the Risk Manager's conclusion is part of the
+  // record that resolution was made against — changing it afterwards
+  // would let the audit trail show a veto (or its absence) that the
+  // actual vote never saw.
+  if (isRiskUpdate && existing.status !== 'pending') {
+    return res.status(409).json({ error: 'This memo is already resolved — the risk conclusion is final' });
+  }
   if (isVoteUpdate) {
     if (existing.status !== 'pending') {
       return res.status(409).json({ error: 'This memo is already resolved — votes are final' });
@@ -1154,7 +1187,12 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
     });
     if (illegalChange) return res.status(403).json({ error: 'You may only cast your own IC vote' });
   }
-  if (!isVoteUpdate && !isRiskUpdate && !req.user.permissions.internal) {
+  // No UI reaches this branch today (the client only ever sends `votes`
+  // or `riskVeto`/`riskConclusion` bodies) — but it's a real full-field
+  // edit of an existing memo (status, amount, thesis, ...), so it should
+  // require the same trust level as creating one (authorICMemo), not
+  // just generic internal staff access.
+  if (!isVoteUpdate && !isRiskUpdate && !req.user.permissions.authorICMemo) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

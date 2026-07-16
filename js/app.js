@@ -2029,22 +2029,26 @@ function filterDeals(search) {
 async function saveDeal() {
   const company  = document.getElementById('deal_company').value.trim();
   const sector   = document.getElementById('deal_sector').value;
-  const stage    = document.getElementById('deal_stage').value;
   const amount   = parseFloat(document.getElementById('deal_amount').value) || 0;
   const type     = document.getElementById('deal_type').value;
   const priority = document.getElementById('deal_priority').value;
   const manager  = document.getElementById('deal_manager').value;
-  const ic       = document.getElementById('deal_ic').value;
   const description = document.getElementById('deal_comment').value.trim();
 
   if (!company) { alert('Введите название компании'); return; }
 
+  // Every new deal starts at Скрининг with no IC decision on record —
+  // both used to be free-form selects on this form (deal_stage/deal_ic),
+  // which meant creating a deal let you back-date it straight to
+  // "Закрыта"/ic:"Одобрено" with zero DD, zero GP conclusion, zero real
+  // IC vote. Real progression now only happens through dealMoveStage()'s
+  // gates and castICVote()'s server-derived resolution.
   const newDeal = {
     fundId: typeof activeFundId !== 'undefined' ? activeFundId : null,
     // ── Core (from form) ──
-    company, sector, stage, amount,
+    company, sector, stage: 'Скрининг', amount,
     type, priority, manager,
-    ic: ic || 'Не подано',
+    ic: 'Не подано',
 
     // ── Overview fields ──
     country: '', companyStage: 'Growth Stage', dealSource: 'Inbound',
@@ -2061,8 +2065,8 @@ async function saveDeal() {
     preMoney: 0, instrument: type || 'Equity',
     coInvestors: '',
     icRisks: [],
-    icDecision: ic || 'Не подано',
-    icDate: '', 
+    icDecision: 'Не подано',
+    icDate: '',
     icVotes: [],
 
     // ── Due Diligence ──
