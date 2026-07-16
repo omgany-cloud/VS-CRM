@@ -615,6 +615,12 @@ CREATE TABLE IF NOT EXISTS roles (
   author_ic_memo    INTEGER NOT NULL DEFAULT 0,
   risk_veto         INTEGER NOT NULL DEFAULT 0,
   read_only         INTEGER NOT NULL DEFAULT 0,
+  -- AML/SoF clearance on a capital-call payment (markLpAmlOk, js/lp-
+  -- register.js) is a compliance judgment, not an operational fact like
+  -- recording that a wire arrived — restricted to Compliance
+  -- Officer/MLRO by default, same reasoning as risk_veto being separate
+  -- from ordinary IC voting.
+  aml_clear         INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -622,6 +628,27 @@ CREATE TABLE IF NOT EXISTS roles (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_roles_tenant_icseat ON roles(tenant_id, ic_seat) WHERE ic_seat IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_roles_tenant ON roles(tenant_id);
+
+-- One row per fund tracking its First Closing checklist (js/app.js's
+-- renderClosing()) -- this used to be a single hardcoded, never-
+-- persisted, never-fund-scoped object (js/data.js's firstClosingState),
+-- so every value on that whole page was fake and shared across every
+-- fund in the tenant.
+CREATE TABLE IF NOT EXISTS first_closing (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id               INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id                 INTEGER NOT NULL REFERENCES funds(id),
+  board_resolution_url    TEXT,
+  closing_cert_url        TEXT,
+  closing_date            TEXT,
+  first_cc_id             INTEGER,
+  afsa_notif_date         TEXT,
+  afsa_notif_num          TEXT,
+  afsa_confirm_url        TEXT,
+  welcome_letter_log_json TEXT NOT NULL DEFAULT '[]',
+  updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(tenant_id, fund_id)
+);
 
 -- Approval workflow engine (KYC CO->MLRO->CEO, IC deal review, Capital Call
 -- and Subscription Agreement sign-off). steps_json holds the full ordered
@@ -657,6 +684,12 @@ for (const table of ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_m
   if (!columnExists(table, 'fund_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN fund_id INTEGER REFERENCES funds(id)`);
 }
 if (!columnExists('roles', 'read_only')) db.exec("ALTER TABLE roles ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
+if (!columnExists('roles', 'aml_clear')) db.exec("ALTER TABLE roles ADD COLUMN aml_clear INTEGER NOT NULL DEFAULT 0");
+// upsertRole() (server/tenantProvisioning.js) only inserts missing roles,
+// never updates existing ones — so adding aml_clear to rolesSeed.js above
+// has no effect on a tenant whose system roles were already seeded before
+// this column existed. One-time backfill, idempotent via the WHERE guard.
+db.exec("UPDATE roles SET aml_clear = 1 WHERE is_system = 1 AND code IN ('COMPLIANCE_OFFICER', 'MLRO') AND aml_clear = 0");
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
 }

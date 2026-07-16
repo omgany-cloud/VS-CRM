@@ -108,6 +108,8 @@ const READONLY_GATED_FN_NAMES = [
   'dealField', 'dealMoveStage', 'dealAddMeeting', 'addTSVersion', 'dealTSVersionUrl',
   'addSignedDoc', 'dealSignedDocUrl', 'addFounderContact', 'deleteTSVersion',
   'deleteSignedDoc', 'addOtherDoc', 'dealOtherDocName', 'dealOtherDocUrl', 'deleteOtherDoc',
+  'markAfsaNotified', 'fcSaveUrl', 'fcSaveClosingDate', 'fcSaveAFSA',
+  'fcGenerateWelcomeLetter', 'fcGenerateAllWelcomeLetters',
 ];
 const READONLY_GATED_FN_RE = new RegExp('^\\s*(' + READONLY_GATED_FN_NAMES.join('|') + ')\\s*\\(');
 // Triggers that don't call a gated function directly by name (e.g. the
@@ -224,6 +226,23 @@ async function loadFundsFromApi() {
   } catch (err) {
     console.error('Failed to load funds from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить фонды из API: ' + err.message, 'red');
+  }
+}
+
+/* ===== First Closing Checklist — backed by the real API, one row per fund ===== */
+async function loadFirstClosingFromApi() {
+  try {
+    const data = await apiFetch('/api/first-closing');
+    if (typeof firstClosingList === 'undefined') return;
+    firstClosingList.length = 0;
+    firstClosingList.push(...data.firstClosing);
+    const page = document.getElementById('page-closing');
+    if (page && page.classList.contains('active') && typeof renderClosing === 'function') {
+      renderClosing();
+    }
+  } catch (err) {
+    console.error('Failed to load First Closing data from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить данные First Closing из API: ' + err.message, 'red');
   }
 }
 
@@ -478,6 +497,7 @@ async function loadAllApiData() {
   await loadFundsFromApi();
   loadLpRegisterFromApi();
   loadCapitalCallsFromApi();
+  loadFirstClosingFromApi();
   loadDealsFromApi();
   loadPortfolioFromApi();
   loadOnboardingFromApi();

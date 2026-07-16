@@ -542,11 +542,17 @@ function closeLPDetail() {
   document.body.style.overflow = '';
 }
 
-function markAfsaNotified(lpId) {
+async function markAfsaNotified(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
   lp.afsaNotified = true;
-  showToast(`✅ AFSA уведомлён — ${lp.name} (${lp.registerId})`, 'green');
+  try {
+    await apiFetch(`/api/lp/${lpId}`, { method: 'PUT', body: JSON.stringify({ afsaNotified: true }) });
+    showToast(`✅ AFSA уведомлён — ${lp.name} (${lp.registerId})`, 'green');
+  } catch (err) {
+    lp.afsaNotified = false;
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
   openLPDetail(lpId);
   renderLPRegisterPage();
 }
@@ -1409,86 +1415,30 @@ function closeNewLPModal() {
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
 }
-/** saveNewLP — отключена, LP регистрируется через onboarding activation */
-
-function saveNewLP_DISABLED() {
-  const name       = document.getElementById('lp_name')?.value?.trim();
-  const commitment = parseFloat(document.getElementById('lp_commitment')?.value);
-  if (!name) { showToast('⚠ Укажите наименование LP', 'red'); return; }
-  if (!commitment || commitment < 500000) { showToast('⚠ Минимальный Commitment $500,000', 'red'); return; }
-
-  const totalCommit = getTotalCommitments(activeFundId);
-  if (totalCommit + commitment > FUND_PARAMS.targetSize * 1e6) {
-    showToast('⚠ Превышает целевой размер фонда $' + FUND_PARAMS.targetSize + 'M', 'red'); return;
-  }
-
-  const seq  = String(lpRegisterIdCounter).padStart(3,'0');
-  const year = new Date().getFullYear();
-  const riskRating = document.getElementById('lp_risk')?.value || 'Low';
-  const kycNextMap = { Low: 24, Medium: 12, High: 6 };
-  const kycDate = today();
-  const kycNext = new Date(kycDate);
-  kycNext.setMonth(kycNext.getMonth() + (kycNextMap[riskRating] || 24));
-
-  const totalNew   = totalCommit + commitment;
-  const ownershipPct = totalNew > 0 ? commitment / totalNew * 100 : 0;
-
-  const newLP = {
-    id:               lpRegisterIdCounter++,
-    registerId:       `LP-${year}-${seq}`,
-    name,
-    type:             document.getElementById('lp_type')?.value || 'Corporate',
-    lpType:           document.getElementById('lp_lpType')?.value || 'Institution',
-    country:          document.getElementById('lp_country')?.value || '',
-    address:          document.getElementById('lp_address')?.value || '',
-    taxId:            document.getElementById('lp_taxId')?.value || '',
-    contact:          document.getElementById('lp_contact')?.value || '',
-    email:            document.getElementById('lp_email')?.value || '',
-    phone:            '',
-    commitment,
-    calledAmount:     0,
-    paidAmount:       0,
-    distributions:    0,
-    fundClass:        document.getElementById('lp_fundClass')?.value || 'A',
-    ownershipPct:     parseFloat(ownershipPct.toFixed(2)),
-    professionalClient: document.getElementById('lp_profClient')?.value || 'Assessed Professional Client',
-    kycStatus:        document.getElementById('lp_kycStatus')?.value || 'В процессе',
-    kycDate,
-    kycNextReview:    kycNext.toISOString().slice(0,10),
-    riskRating,
-    admissionDate:    document.getElementById('lp_admDate')?.value || today(),
-    saNumber:         document.getElementById('lp_saNum')?.value || '',
-    afsaNotified:     false,
-    lpacMember:       commitment >= 3000000,
-    status:           'Active',
-    exitDate:         null,
-    notes:            document.getElementById('lp_notes')?.value || '',
-    obClientId:       null,
-  };
-
-  lpRegister.push(newLP);
-
-  // Recalculate ownership %s for all LP
-  recalcOwnershipPcts(activeFundId);
-
-  closeNewLPModal();
-  showToast(`✅ LP ${newLP.registerId} добавлен в реестр`, 'green');
-  if (newLP.ownershipPct > 20) {
-    showToast(`⚠ ${name} — доля >20%. Требуется уведомление AFSA (10 р.д.)`, 'yellow');
-  }
-  renderLPRegisterPage();
-}
-
 // fundId required — ownership % is only meaningful relative to LPs of the
 // SAME fund. This was previously unscoped (recalculated every LP in every
 // fund off one grand total), which would have silently corrupted other
 // funds' ownership percentages the moment a second fund existed.
-function recalcOwnershipPcts(fundId) {
+//
+// A new LP joining a fund shrinks every existing LP's ownership % — this
+// used to only ever update the new LP's own row on the server (from its
+// own creation POST); every other LP's recalculated % was applied to
+// lpRegister[] locally and never persisted, so it silently drifted from
+// the DB (and from what a regulatory >20% AFSA-notification check would
+// see on reload) the moment a second LP ever joined a fund.
+async function recalcOwnershipPcts(fundId) {
   const totalC = getTotalCommitments(fundId);
   if (!totalC) return;
-  lpRegister.filter(lp => lp.fundId === fundId).forEach(lp => {
-    lp.ownershipPct = parseFloat((lp.commitment / totalC * 100).toFixed(2));
-  });
+  const affected = lpRegister.filter(lp => lp.fundId === fundId);
+  const results = await Promise.allSettled(affected.map(lp => {
+    const newPct = parseFloat((lp.commitment / totalC * 100).toFixed(2));
+    if (newPct === lp.ownershipPct) return Promise.resolve();
+    lp.ownershipPct = newPct;
+    return apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ ownershipPct: newPct }) });
+  }));
+  if (results.some(r => r.status === 'rejected')) {
+    showToast('⚠️ Часть долей владения LP не удалось пересчитать на сервере', 'orange');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2502,7 +2452,7 @@ async function registerLPFromOnboarding(client, saTask, actTask) {
 
   const savedLP = { ...newLP, ...created };
   lpRegister.push(savedLP);
-  recalcOwnershipPcts(activeFundId);
+  await recalcOwnershipPcts(activeFundId);
 
   showToast(`📋 LP ${savedLP.registerId} (${client.name}) добавлен в Реестр LP`, 'green');
 

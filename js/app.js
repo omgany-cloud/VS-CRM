@@ -398,15 +398,26 @@ function renderDashboardCharts() {
 /* ═══════════════════════════════════════════════════════════
    FIRST CLOSING — Live Operational Dashboard
    Все статусы считаются из реальных данных системы:
-   lpRegister, capitalCallsLog, firstClosingState
+   lpRegister, capitalCallsLog, firstClosingList
 ═══════════════════════════════════════════════════════════ */
+
+// firstClosingList (js/data.js) is loaded from GET /api/first-closing —
+// one row per fund. Returns a blank, not-yet-saved state for a fund that
+// has never had one of its fields edited yet (the first PUT creates the
+// real row server-side).
+function currentFirstClosingState() {
+  return firstClosingList.find(f => f.fundId === activeFundId) || {
+    fundId: activeFundId, boardResolutionUrl: '', closingCertUrl: '', closingDate: '',
+    firstCCId: null, afsaNotifDate: '', afsaNotifNum: '', afsaConfirmUrl: '', welcomeLetterLog: [],
+  };
+}
 
 function renderClosing() {
   const el = document.getElementById('closingDashboard');
   if (!el) return;
 
   const fp  = FUND_PARAMS;
-  const fcs = firstClosingState;
+  const fcs = currentFirstClosingState();
 
   /* ── Живые данные из системы ── */
   // Scoped to activeFundId — this page previously summed LPs/capital calls
@@ -807,52 +818,76 @@ function renderClosing() {
 
 /* ── First Closing helpers ─────────────────────────────── */
 
-function fcSaveUrl(field, inputId) {
+// Shared by every fc* mutator below — PUTs the changed field(s) to this
+// fund's first-closing row (server upserts if none exists yet) and syncs
+// the local firstClosingList entry from the response. Same "one field,
+// server merges" pattern used everywhere else in this app.
+async function _persistFirstClosingFields(fields) {
+  try {
+    const updated = await apiFetch(`/api/first-closing/${activeFundId}`, {
+      method: 'PUT', body: JSON.stringify(fields),
+    });
+    const idx = firstClosingList.findIndex(f => f.fundId === activeFundId);
+    if (idx === -1) firstClosingList.push(updated); else firstClosingList[idx] = updated;
+    return true;
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+    return false;
+  }
+}
+
+async function fcSaveUrl(field, inputId) {
   const val = document.getElementById(inputId)?.value?.trim();
   if (!val) { showToast('⚠ Вставьте ссылку на документ', 'red'); return; }
-  firstClosingState[field] = val;
-  showToast('✅ Ссылка сохранена', 'green');
-  renderClosing();
+  if (await _persistFirstClosingFields({ [field]: val })) {
+    showToast('✅ Ссылка сохранена', 'green');
+    renderClosing();
+  }
 }
 
-function fcSaveClosingDate() {
+async function fcSaveClosingDate() {
   const val = document.getElementById('fc_closingDate')?.value;
   if (!val) return;
-  firstClosingState.closingDate = val;
-  showToast('✅ Дата закрытия сохранена', 'green');
-  renderClosing();
+  if (await _persistFirstClosingFields({ closingDate: val })) {
+    showToast('✅ Дата закрытия сохранена', 'green');
+    renderClosing();
+  }
 }
 
-function fcSaveAFSA() {
+async function fcSaveAFSA() {
   const date = document.getElementById('fc_afsaDate')?.value;
   const num  = document.getElementById('fc_afsaNum')?.value?.trim();
   const url  = document.getElementById('fc_afsaUrl')?.value?.trim();
   if (!date || !num) { showToast('⚠ Укажите дату и номер письма', 'red'); return; }
-  firstClosingState.afsaNotifDate   = date;
-  firstClosingState.afsaNotifNum    = num;
-  firstClosingState.afsaConfirmUrl  = url || '';
-  showToast('✅ Данные AFSA Notification сохранены', 'green');
-  renderClosing();
+  if (await _persistFirstClosingFields({ afsaNotifDate: date, afsaNotifNum: num, afsaConfirmUrl: url || '' })) {
+    showToast('✅ Данные AFSA Notification сохранены', 'green');
+    renderClosing();
+  }
 }
 
-function fcGenerateWelcomeLetter(lpId) {
+async function fcGenerateWelcomeLetter(lpId) {
   generateLPWelcomeLetter(lpId);
-  if (!firstClosingState.welcomeLetterLog.includes(lpId)) {
-    firstClosingState.welcomeLetterLog.push(lpId);
+  const fcs = currentFirstClosingState();
+  if (!fcs.welcomeLetterLog.includes(lpId)) {
+    await _persistFirstClosingFields({ welcomeLetterLog: [...fcs.welcomeLetterLog, lpId] });
   }
   setTimeout(() => renderClosing(), 400);
 }
 
-function fcGenerateAllWelcomeLetters() {
-  const activeLP = lpRegister.filter(l => l.status === 'Active');
+async function fcGenerateAllWelcomeLetters() {
+  // fundId scoping was missing here (every other spot on this page
+  // already scopes activeLP by activeFundId — this one call site got
+  // missed in that earlier pass), so a second fund's Active LPs used to
+  // get Welcome Letters generated too.
+  const activeLP = lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId);
   if (!activeLP.length) { showToast('⚠ Нет активных LP', 'red'); return; }
+  const log = [...currentFirstClosingState().welcomeLetterLog];
   activeLP.forEach((lp, i) => {
-    setTimeout(() => {
+    setTimeout(async () => {
       generateLPWelcomeLetter(lp.id);
-      if (!firstClosingState.welcomeLetterLog.includes(lp.id)) {
-        firstClosingState.welcomeLetterLog.push(lp.id);
-      }
+      if (!log.includes(lp.id)) log.push(lp.id);
       if (i === activeLP.length - 1) {
+        await _persistFirstClosingFields({ welcomeLetterLog: log });
         setTimeout(() => {
           showToast(`✅ Welcome Letters сгенерированы для всех ${activeLP.length} LP`, 'green');
           renderClosing();

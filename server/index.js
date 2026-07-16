@@ -35,6 +35,7 @@ const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } 
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
+const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -724,6 +725,13 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   if (!item) return res.status(404).json({ error: 'Line item not found' });
 
   const b = req.body || {};
+  // AML/SoF clearance is a compliance judgment, not the operational fact
+  // that a wire arrived (paid/status/wireRef stay open to any accessFM
+  // staffer recording a payment) — restricted to Compliance Officer/MLRO
+  // (amlClear) so an RM can't confirm their own client's AML check.
+  if (Object.prototype.hasOwnProperty.call(b, 'amlOk') && !req.user.permissions.amlClear) {
+    return res.status(403).json({ error: 'Forbidden: only Compliance/MLRO may confirm AML clearance' });
+  }
   db.prepare(`
     UPDATE capital_call_line_items SET
       paid=@paid, payment_date=@paymentDate, status=@status, wire_ref=@wireRef, aml_ok=@amlOk
@@ -741,6 +749,39 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   const cc = rowToCC(row);
   cc.lineItems = lineItemsStmt.all(call.id, req.tenantId).map(rowToLineItem);
   res.json(cc);
+});
+
+/* ===== First Closing Checklist — tenant-scoped, one row per fund =====
+   Used to be a single hardcoded js/data.js object with no backing store
+   at all and no fund scoping (see server/db.js's first_closing comment).
+   GET returns every fund's row (client finds its own by activeFundId,
+   same convention as /api/deals); PUT upserts one fund's row, merging
+   only the fields the caller sent (a fund with no row yet just gets one
+   created on its first edit). */
+app.get('/api/first-closing', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = db.prepare('SELECT * FROM first_closing WHERE tenant_id = ?').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, firstClosing: rows.map(rowToFirstClosing) });
+});
+
+app.put('/api/first-closing/:fundId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const fundId = Number(req.params.fundId);
+  const fund = db.prepare('SELECT id FROM funds WHERE id = ? AND tenant_id = ?').get(fundId, req.tenantId);
+  if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+
+  const existing = db.prepare('SELECT * FROM first_closing WHERE tenant_id = ? AND fund_id = ?').get(req.tenantId, fundId);
+  const b = req.body || {};
+  const blank = { fundId, boardResolutionUrl: '', closingCertUrl: '', closingDate: '', firstCCId: null,
+    afsaNotifDate: '', afsaNotifNum: '', afsaConfirmUrl: '', welcomeLetterLog: [] };
+  const merged = Object.assign(existing ? rowToFirstClosing(existing) : blank, b);
+  const params = firstClosingToParams(merged);
+
+  if (existing) {
+    db.prepare(FIRST_CLOSING_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
+  } else {
+    db.prepare(FIRST_CLOSING_INSERT_SQL).run(at({ tenantId: req.tenantId, fundId, ...params }));
+  }
+  const row = db.prepare('SELECT * FROM first_closing WHERE tenant_id = ? AND fund_id = ?').get(req.tenantId, fundId);
+  res.json(rowToFirstClosing(row));
 });
 
 // Server-side mirror of js/app.js's dealMoveStage() gates. The client

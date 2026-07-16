@@ -31,6 +31,7 @@ const PERMISSION_DEFS = [
   { key: 'decideConflicts', label: 'Решения по конфликтам', hint: 'Restricted List + Conflict Approvals' },
   { key: 'authorICMemo', label: 'Авторство IC-меморандумов', hint: 'Создание новых меморандумов IC' },
   { key: 'riskVeto', label: 'Risk Manager вето', hint: 'Заключение/вето по IC-меморандумам' },
+  { key: 'amlClear', label: 'AML/KYC подтверждение', hint: 'Подтверждение AML/SoF по платежам Capital Call' },
   { key: 'readOnly', label: 'Только просмотр', hint: 'Блокирует создание/редактирование/удаление данных для этой роли' },
 ];
 

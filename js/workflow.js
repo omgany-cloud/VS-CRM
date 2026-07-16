@@ -343,10 +343,10 @@ async function wfAction(id, decision) {
 
     if (updated.status === 'rejected') {
       showToast(`❌ Workflow отклонён: ${w.entityName}`, 'red');
-      syncWfToEntity(updated, 'rejected');
+      await syncWfToEntity(updated, 'rejected');
     } else if (updated.status === 'approved') {
       showToast(`✅ Workflow завершён: ${w.entityName}`, 'green');
-      syncWfToEntity(updated, 'approved');
+      await syncWfToEntity(updated, 'approved');
     } else {
       const nextStep = updated.steps[updated.currentStep];
       showToast(`✅ Шаг одобрен → ожидает ${nextStep.role}`, 'blue');
@@ -378,12 +378,25 @@ async function withdrawWf(id) {
 }
 
 /* Sync workflow result back to entity data */
-function syncWfToEntity(w, result) {
+async function syncWfToEntity(w, result) {
   if (w.entityType === 'LP') {
     const lp = lpRegister.find(l => l.id === w.entityId);
     if (lp) {
+      const prev = { kycStatus: lp.kycStatus, kycDate: lp.kycDate, status: lp.status };
       lp.kycStatus = result === 'approved' ? 'Одобрен' : 'Отклонён';
       if (result === 'approved') { lp.kycDate = new Date().toISOString().split('T')[0]; lp.status = 'Active'; }
+      // KYC renewal completing is a real compliance milestone — this used
+      // to only ever update lpRegister[] in memory (no apiFetch at all),
+      // so the renewal's outcome was lost on reload despite the workflow
+      // instance itself being correctly saved.
+      try {
+        await apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({
+          kycStatus: lp.kycStatus, kycDate: lp.kycDate, status: lp.status,
+        }) });
+      } catch (err) {
+        Object.assign(lp, prev);
+        showToast('⚠️ Workflow завершён, но не удалось сохранить KYC-статус LP: ' + err.message, 'orange');
+      }
     }
   }
   if (w.entityType === 'CF&A') {
@@ -394,6 +407,12 @@ function syncWfToEntity(w, result) {
     // by ad-hoc KYC renewal workflows), so there's nothing further to do.
   }
   if (w.entityType === 'Deal') {
+    // deal_ic is historical-only (see server/wfDefinitions.js) — no live
+    // call site creates a new instance of this type, so this branch only
+    // ever ran for the 5 seeded records, all already resolved. Left as a
+    // local-only mutation deliberately: PUT /api/deals/:id now hard-
+    // blocks ic/icDecision entirely (a real IC decision can only come
+    // from a resolved icMemos vote), so persisting here would 403 anyway.
     const d = deals.find(x => x.id === w.entityId);
     if (d) { d.ic = result === 'approved' ? 'Одобрено' : 'Отклонено'; }
   }

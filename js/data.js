@@ -127,20 +127,13 @@ const closingChecklist = [
 ];
 
 /* ===== FIRST CLOSING STATE =====
-   Хранит URL загруженных документов и операционные данные
-   Board Resolution, Closing Certificate, AFSA Notification
-   welcomeLetterLog — какие LP уже получили Welcome Letter
+   One row per fund (GET /api/first-closing, server/index.js) — used to be
+   a single hardcoded object here with no backing store and no fund
+   scoping at all. firstClosingList is populated by loadFirstClosingFromApi()
+   (js/api-auth.js); currentFirstClosingState() (js/app.js) resolves the
+   current fund's row, defaulting to a blank (never-yet-saved) state.
 ================================================================ */
-let firstClosingState = {
-  boardResolutionUrl:  '',   // Template 2 — URL загруженного Board Resolution
-  closingCertUrl:      '',   // Template 3 — URL Closing Certificate
-  closingDate:         '2025-01-15',  // фактическая дата Closing Day
-  firstCCId:           null, // id первого Capital Call (CC-2024-001)
-  afsaNotifDate:       '',   // дата отправки уведомления в AFSA
-  afsaNotifNum:        '',   // номер письма / reference
-  afsaConfirmUrl:      '',   // URL подтверждения от AFSA
-  welcomeLetterLog:    [],   // [lpId, lpId, ...] — кому уже сгенерирован Welcome Letter
-};
+let firstClosingList = [];
 
 
 const closingDocuments = [
