@@ -97,7 +97,7 @@ async function apiFetch(path, options = {}) {
 // disabled ahead of the click.
 const READONLY_GATED_FN_NAMES = [
   'saveChangePassword', 'saveDeal', 'savePortfolio', 'handleFileUpload',
-  'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveNewCC', 'saveIndividualCC',
+  'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveNewCC', 'saveIndividualCC', 'approveCC',
   'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
   'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewUser',

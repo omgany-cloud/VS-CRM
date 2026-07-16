@@ -662,7 +662,11 @@ app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('
       tenantId: req.tenantId, fundId: b.fundId || null, ccNumber,
       noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
       totalAmount, pctOfCommit, purpose: b.purpose, purposeType: b.purposeType || 'Investment',
-      status: b.status || 'Pending', managementFee: b.managementFee ? 1 : 0,
+      // Always Draft on creation, regardless of what the caller sends —
+      // a Capital Call is a real cash call on every LP the moment it's
+      // Pending, so it can't be created pre-approved (same reasoning as
+      // deals always starting at Скрининг/Не подано).
+      status: 'Draft', managementFee: b.managementFee ? 1 : 0,
       bankRef: b.bankRef || '', createdBy: b.createdBy || req.user.email, notes: b.notes || '',
     }));
     const callId = info.lastInsertRowid;
@@ -695,6 +699,14 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
   const existing = db.prepare('SELECT * FROM capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Capital call not found in this tenant' });
   const b = req.body || {};
+  // The Draft -> Pending transition is the moment this becomes a real,
+  // live cash call on every LP of the fund — whoever drafted it (any
+  // accessFM staffer) can't also be the one who sends it. Every other
+  // status transition (e.g. auto-completing once all LPs paid) stays
+  // open to any accessFM staffer, same as before.
+  if (existing.status === 'Draft' && b.status === 'Pending' && !req.user.permissions.ccApprove) {
+    return res.status(403).json({ error: 'Forbidden: only CEO/CFO may approve and send a Capital Call' });
+  }
   const merged = Object.assign(rowToCC(existing), b);
   db.prepare(`
     UPDATE capital_calls SET
@@ -723,6 +735,11 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   const item = db.prepare('SELECT * FROM capital_call_line_items WHERE call_id = ? AND lp_id = ? AND tenant_id = ?')
     .get(call.id, req.params.lpId, req.tenantId);
   if (!item) return res.status(404).json({ error: 'Line item not found' });
+  // A Draft call was never actually sent to any LP — there's nothing
+  // real to record a payment or AML clearance against yet.
+  if (call.status === 'Draft') {
+    return res.status(409).json({ error: 'This Capital Call is still a draft — approve it before recording payments' });
+  }
 
   const b = req.body || {};
   // AML/SoF clearance is a compliance judgment, not the operational fact

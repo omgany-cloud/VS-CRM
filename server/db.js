@@ -621,6 +621,11 @@ CREATE TABLE IF NOT EXISTS roles (
   -- Officer/MLRO by default, same reasoning as risk_veto being separate
   -- from ordinary IC voting.
   aml_clear         INTEGER NOT NULL DEFAULT 0,
+  -- A Capital Call moving from Draft to Pending is the moment it becomes
+  -- a real, live cash call on every LP of the fund — restricted to
+  -- CEO/CFO by default so the person who drafted it (any accessFM
+  -- staffer) can't also be the one who sends it.
+  cc_approve        INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -690,6 +695,8 @@ if (!columnExists('roles', 'aml_clear')) db.exec("ALTER TABLE roles ADD COLUMN a
 // has no effect on a tenant whose system roles were already seeded before
 // this column existed. One-time backfill, idempotent via the WHERE guard.
 db.exec("UPDATE roles SET aml_clear = 1 WHERE is_system = 1 AND code IN ('COMPLIANCE_OFFICER', 'MLRO') AND aml_clear = 0");
+if (!columnExists('roles', 'cc_approve')) db.exec("ALTER TABLE roles ADD COLUMN cc_approve INTEGER NOT NULL DEFAULT 0");
+db.exec("UPDATE roles SET cc_approve = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND cc_approve = 0");
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
 }

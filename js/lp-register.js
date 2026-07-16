@@ -1728,6 +1728,20 @@ function openCCDetail(ccId) {
       </div>
     </div>
 
+    ${cc.status === 'Draft' ? (
+      currentUserPermission('ccApprove')
+        ? `<div style="background:rgba(100,116,139,0.08);border:1px solid rgba(100,116,139,0.3);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div style="font-size:12px;color:#94a3b8"><i class="fas fa-file-signature" style="margin-right:6px;color:#94a3b8"></i>Черновик — ещё не отправлен ни одному LP. Проверьте условия перед подтверждением.</div>
+            <button onclick="approveCC(${ccId})"
+              style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">
+              <i class="fas fa-check" style="margin-right:5px"></i>Подтвердить и отправить
+            </button>
+          </div>`
+        : `<div style="background:rgba(100,116,139,0.08);border:1px solid rgba(100,116,139,0.3);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#94a3b8">
+            <i class="fas fa-file-signature" style="margin-right:6px"></i>Черновик — ожидает подтверждения CFO/CEO перед отправкой LP.
+          </div>`
+    ) : ''}
+
     <!-- Summary Row -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
       ${[
@@ -1778,10 +1792,11 @@ function openCCDetail(ccId) {
               <td style="padding:8px 10px;text-align:center">
                 ${li.amlOk===true ? '<i class="fas fa-check-circle" style="color:#22c55e;font-size:14px" title="AML подтверждён"></i>'
                 : li.amlOk===false ? '<i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:14px" title="AML Flag"></i>'
+                : cc.status==='Draft' ? '<i class="fas fa-clock" style="color:#3a4457;font-size:14px" title="Черновик ещё не отправлен"></i>'
                 : `<i class="fas fa-clock" style="color:#64748b;font-size:14px;cursor:pointer" onclick="markLpAmlOk(${ccId}, ${li.lpId})" title="AML ещё не подтверждён — нажмите, чтобы подтвердить"></i>`}
               </td>
               <td style="padding:8px 10px;text-align:center">
-                ${li.status==='Pending' && cc.status!=='Completed' ? `
+                ${li.status==='Pending' && cc.status!=='Completed' && cc.status!=='Draft' ? `
                   <button onclick="markLPPayment(${ccId}, ${li.lpId})"
                     style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700">
                     Получено ✓
@@ -1824,6 +1839,38 @@ function closeCCDetail() {
   if (modal)   modal.style.display   = 'none';
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// Draft -> Pending is the moment a Capital Call becomes a real cash call
+// on every LP on it — server-gated behind ccApprove (CEO/CFO by default,
+// server/index.js), same as this button only rendering for those roles
+// (openCCDetail()). Only now does each LP's calledAmount actually count
+// this call — a draft that never gets approved never touched it.
+async function approveCC(ccId) {
+  const cc = capitalCallsLog.find(c => c.id === ccId);
+  if (!cc || cc.status !== 'Draft') return;
+  const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(cc));
+  if (!confirm(`Подтвердить и отправить Capital Call ${cc.ccNumber} на ${fmtUSD(cc.totalAmount)} (${cc.lineItems.length} LP)? Это реальный cash call — отменить нельзя.`)) return;
+
+  try {
+    const updated = await apiFetch(`/api/capital-calls/${ccId}`, { method: 'PUT', body: JSON.stringify({ status: 'Pending' }) });
+    Object.assign(cc, updated);
+
+    cc.lineItems.forEach(li => {
+      const lp = lpRegister.find(l => l.id === li.lpId);
+      if (!lp) return;
+      lp.calledAmount = (lp.calledAmount || 0) + li.called;
+      apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: lp.calledAmount }) })
+        .catch(err => showToast(`⚠️ CC отправлен, но не обновлён итог LP ${lp.name}: ` + err.message, 'orange'));
+    });
+
+    showToast(`✅ Capital Call ${cc.ccNumber} подтверждён и отправлен · ${fmtUSD(cc.totalAmount)}`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось подтвердить Capital Call: ' + err.message, 'red');
+    return;
+  }
+  openCCDetail(ccId);
+  renderCapitalCallsPage();
 }
 
 async function markLPPayment(ccId, lpId) {
@@ -1982,7 +2029,7 @@ function openNewCCModal() {
         style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
       <button onclick="saveNewCC()"
         style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-        <i class="fas fa-paper-plane" style="margin-right:6px"></i>Создать Capital Call
+        <i class="fas fa-file-signature" style="margin-right:6px"></i>Сохранить как черновик
       </button>
     </div>`;
 
@@ -2063,6 +2110,11 @@ async function saveNewCC() {
   }));
   const totalAmount = lineItems.reduce((s, li) => s + li.called, 0);
 
+  // status is deliberately omitted — POST /api/capital-calls always
+  // forces Draft regardless of what's sent, so a call can never be
+  // created pre-approved. LPs' calledAmount is NOT touched here either:
+  // a draft isn't a real cash call yet, so it shouldn't count against
+  // anyone's called total until approveCC() actually sends it.
   const newCC = {
     fundId:       typeof activeFundId !== 'undefined' ? activeFundId : null,
     noticeDate,
@@ -2071,7 +2123,6 @@ async function saveNewCC() {
     pctOfCommit:  pct,
     purpose,
     purposeType:  ccType,
-    status:       'Pending',
     managementFee: ccType === 'Management Fee',
     bankRef,
     createdBy:    currentUserDisplayName(),
@@ -2082,19 +2133,8 @@ async function saveNewCC() {
   try {
     const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
     capitalCallsLog.push(created);
-
-    // Sync each LP's calledAmount — best-effort, doesn't block the CC's own
-    // success (the call is already safely saved either way).
-    created.lineItems.forEach(li => {
-      const lp = lpRegister.find(l => l.id === li.lpId);
-      if (!lp) return;
-      lp.calledAmount = (lp.calledAmount || 0) + li.called;
-      apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: lp.calledAmount }) })
-        .catch(err => showToast(`⚠️ CC сохранён, но не обновлён итог LP ${lp.name}: ` + err.message, 'orange'));
-    });
-
     closeNewCCModal();
-    showToast(`✅ Capital Call ${created.ccNumber} создан · ${fmtUSD(created.totalAmount)} · 10 р.д. уведомление`, 'green');
+    showToast(`📝 Capital Call ${created.ccNumber} сохранён как черновик · ${fmtUSD(created.totalAmount)} — требует подтверждения CFO/CEO`, 'blue');
     renderCapitalCallsPage();
   } catch (err) {
     showToast('⚠️ Не удалось создать Capital Call: ' + err.message, 'red');
@@ -2202,7 +2242,7 @@ function openIndividualCCModal(lpId) {
         style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
       <button onclick="saveIndividualCC(${lp.id})"
         style="background:linear-gradient(135deg,#f97316,#dc2626);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-        <i class="fas fa-paper-plane" style="margin-right:6px"></i>Создать Individual CC
+        <i class="fas fa-file-signature" style="margin-right:6px"></i>Сохранить как черновик
       </button>
     </div>`;
 
@@ -2259,6 +2299,8 @@ async function saveIndividualCC(lpId) {
     amlOk:       null,
   }];
 
+  // Same reasoning as saveNewCC(): status omitted (server forces Draft),
+  // calledAmount not touched until approveCC() actually sends it.
   const newCC = {
     fundId:       lp.fundId != null ? lp.fundId : null,
     noticeDate,
@@ -2267,7 +2309,6 @@ async function saveIndividualCC(lpId) {
     pctOfCommit:  +pct.toFixed(2),
     purpose,
     purposeType:  ccType,
-    status:       'Pending',
     managementFee: ccType === 'Management Fee',
     bankRef,
     createdBy:    currentUserDisplayName(),
@@ -2278,13 +2319,8 @@ async function saveIndividualCC(lpId) {
   try {
     const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
     capitalCallsLog.push(created);
-
-    lp.calledAmount = (lp.calledAmount || 0) + amount;
-    apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: lp.calledAmount }) })
-      .catch(err => showToast('⚠️ CC сохранён, но не обновлён итог LP: ' + err.message, 'orange'));
-
     closeNewCCModal();
-    showToast(`✅ Individual CC ${created.ccNumber} создан для ${lp.name} · ${fmtUSD(amount)}`, 'green');
+    showToast(`📝 Individual CC ${created.ccNumber} сохранён как черновик для ${lp.name} · ${fmtUSD(amount)} — требует подтверждения CFO/CEO`, 'blue');
     renderCapitalCallsPage();
   } catch (err) {
     showToast('⚠️ Не удалось создать Individual CC: ' + err.message, 'red');
