@@ -158,18 +158,23 @@ function buildCalendarEvents() {
   // Capital Call dates — capitalCallsLog (server-backed, same data the LP
   // Register / Capital Calls page and the Согласования board use), not the
   // old js/data.js mock `capitalCalls` array this used to read (frozen,
-  // disconnected demo rows unrelated to any real capital call).
+  // disconnected demo rows unrelated to any real capital call). Clickable:
+  // takes you to the actual call detail, same as the Согласования board.
   (typeof capitalCallsLog !== 'undefined' ? capitalCallsLog : []).forEach(cc => {
     events.push({
       date: cc.noticeDate, label: `Capital Call ${cc.ccNumber || ''} — ${cc.purpose || 'Notice'}`,
       category: 'capital', status: cc.status, resp: 'CFO',
       color: cc.status === 'Completed' || cc.status === 'Завершён' ? '#22c55e' : '#f97316',
+      action: () => { navigateTo('lp-capital-calls'); setTimeout(() => openCCDetail(cc.id), 200); },
     });
   });
 
   // KYC Renewals due — same LP + CF&A merge as renderKycRenewalPage()
   // (Module 1 above), so a CF&A client's renewal deadline shows up here
-  // too, not just LP renewals.
+  // too, not just LP renewals. Clickable: goes to the KYC Renewal page,
+  // where that same LP/client's own row has the "Обновить KYC" button —
+  // the calendar doesn't launch the renewal workflow itself, it just gets
+  // you to where you would.
   const kycLpItems  = lpRegister.map(lp => ({ name: lp.name, kycDate: lp.kycDate || null }));
   const kycCfaItems = (typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'CF&A') : [])
     .map(c => ({ name: c.name, kycDate: c.startDate || null }));
@@ -180,6 +185,7 @@ function buildCalendarEvents() {
       label: `KYC Renewal: ${item.name}`,
       category: 'kyc', status: r.status === 'ok' ? 'Актуально' : r.status === 'warning' ? 'Скоро' : 'Просрочено',
       resp: 'CO', color: r.color,
+      action: () => navigateTo('kycrenewal'),
     });
   });
 
@@ -192,10 +198,23 @@ const CAL_CATEGORIES = {
   kyc:     { label: 'KYC Renewal',     icon: 'fa-shield-alt',     color: '#8b5cf6'  },
 };
 
+// Rows are dispatched by index into this array (not a serialized closure
+// in the onclick attribute) so each event's `action` — a real function
+// closing over its own cc/item reference from buildCalendarEvents()'s
+// loops — stays callable. Same pattern as js/workflow.js's
+// _pendingApprovalItems/runPendingApprovalAction.
+let _calendarEvents = [];
+
+function runCalendarEventAction(idx) {
+  const evt = _calendarEvents[idx];
+  if (evt && evt.action) evt.action();
+}
+
 function renderComplianceCalendar() {
   const el = document.getElementById('calendarContent');
   if (!el) return;
   const events  = buildCalendarEvents();
+  _calendarEvents = events;
   const today   = new Date();
   const upcoming = events.filter(e => {
     const d = new Date(e.date);
@@ -267,8 +286,14 @@ function renderCalEvent(e, isOverdue) {
   const d    = new Date(e.date);
   const daysFromNow = Math.ceil((d - new Date()) / 86400000);
   const dStr = d.toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
+  // Only KYC/Capital Call events carry an action (see buildCalendarEvents())
+  // — AFSA events have nowhere real to link to yet (no report-tracking
+  // backend), so they stay plain, non-clickable rows.
+  const clickable = !!e.action;
+  const idx = clickable ? _calendarEvents.indexOf(e) : -1;
   return `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #1e293b">
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #1e293b;${clickable ? 'cursor:pointer' : ''}"
+      ${clickable ? `onclick="runCalendarEventAction(${idx})" title="Перейти к действию"` : ''}>
       <div style="width:36px;height:36px;border-radius:9px;background:${e.color}22;color:${e.color};
                   display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px">
         <i class="fas ${cat.icon}"></i>
@@ -277,6 +302,7 @@ function renderCalEvent(e, isOverdue) {
         <div style="font-size:13px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.label}</div>
         <div style="font-size:11px;color:#8a9bbf;margin-top:2px">${cat.label} · ${e.resp||'—'} · ${e.status}</div>
       </div>
+      ${clickable ? '<i class="fas fa-chevron-right" style="color:#475569;font-size:11px;flex-shrink:0"></i>' : ''}
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:12px;font-weight:700;color:${isOverdue?'#ef4444':daysFromNow<=7?'#f97316':'#8a9bbf'}">${dStr}</div>
         <div style="font-size:10px;color:${isOverdue?'#ef4444':daysFromNow<=7?'#f97316':'#94a3b8'}">
