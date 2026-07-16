@@ -155,21 +155,29 @@ function buildCalendarEvents() {
     });
   });
 
-  // Capital Call dates
-  capitalCalls.forEach((cc, i) => {
+  // Capital Call dates — capitalCallsLog (server-backed, same data the LP
+  // Register / Capital Calls page and the Согласования board use), not the
+  // old js/data.js mock `capitalCalls` array this used to read (frozen,
+  // disconnected demo rows unrelated to any real capital call).
+  (typeof capitalCallsLog !== 'undefined' ? capitalCallsLog : []).forEach(cc => {
     events.push({
-      date: cc.noticeDate, label: `Capital Call #${i+1} — Notice`,
+      date: cc.noticeDate, label: `Capital Call ${cc.ccNumber || ''} — ${cc.purpose || 'Notice'}`,
       category: 'capital', status: cc.status, resp: 'CFO',
-      color: cc.status === 'Завершён' ? '#22c55e' : '#f97316',
+      color: cc.status === 'Completed' || cc.status === 'Завершён' ? '#22c55e' : '#f97316',
     });
   });
 
-  // KYC Renewals due
-  lpRegister.forEach(lp => {
-    const r = getKycRenewalStatus(lp.kycDate);
+  // KYC Renewals due — same LP + CF&A merge as renderKycRenewalPage()
+  // (Module 1 above), so a CF&A client's renewal deadline shows up here
+  // too, not just LP renewals.
+  const kycLpItems  = lpRegister.map(lp => ({ name: lp.name, kycDate: lp.kycDate || null }));
+  const kycCfaItems = (typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'CF&A') : [])
+    .map(c => ({ name: c.name, kycDate: c.startDate || null }));
+  [...kycLpItems, ...kycCfaItems].forEach(item => {
+    const r = getKycRenewalStatus(item.kycDate);
     if (r.renewDue) events.push({
       date: r.renewDue.toISOString().split('T')[0],
-      label: `KYC Renewal: ${lp.name}`,
+      label: `KYC Renewal: ${item.name}`,
       category: 'kyc', status: r.status === 'ok' ? 'Актуально' : r.status === 'warning' ? 'Скоро' : 'Просрочено',
       resp: 'CO', color: r.color,
     });
