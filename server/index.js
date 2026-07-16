@@ -743,6 +743,43 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   res.json(cc);
 });
 
+// Server-side mirror of js/app.js's dealMoveStage() gates. The client
+// checks stay for instant feedback, but relying on them alone means a
+// raw PUT with a `stage` field skips every one of them — unlike
+// ic/icDecision (blocked outright above/below), a legitimate stage
+// change has to be allowed to land somewhere, so this validates against
+// the trusted DB row (`existing`, snake_case columns) rather than
+// blocking the field entirely. Kept in exact sync with dealMoveStage()
+// by design — a gate added to one side without the other reopens
+// exactly the bypass this closes.
+function validateStageTransition(existing, newStage) {
+  if (newStage === existing.stage) return null;
+  const icApproved = existing.ic === 'Одобрено' || existing.ic_decision === 'Одобрено';
+  const icRejected = existing.ic === 'Отклонено' || existing.ic_decision === 'Отклонено';
+
+  if (newStage === 'Закрыта') {
+    if (!icApproved) return 'Нельзя закрыть сделку без одобрения IC';
+    const signedDocs = JSON.parse(existing.signed_docs_urls_json || '[]');
+    if (!signedDocs.length) return 'Нельзя закрыть сделку без подписанных документов (SHA/SPA)';
+  }
+  if (newStage === 'IC Review' && existing.gp_conclusion_verdict !== 'Рекомендовано к IC') {
+    return 'Сначала подпишите заключение УК со статусом "Рекомендовано к IC"';
+  }
+  if ((newStage === 'Term Sheet' || newStage === 'Переговоры') && !icApproved) {
+    return `Нельзя перейти к «${newStage}» без одобрения IC`;
+  }
+  if (newStage === 'Переговоры' && existing.ts_status !== 'Подписан') {
+    return 'Term Sheet ещё не подписан';
+  }
+  if (newStage === 'Отклонена' && ['IC Review', 'Term Sheet', 'Переговоры'].includes(existing.stage)) {
+    return 'Сделка уже на рассмотрении IC — отклонить можно только через решение комитета («Отклонена IC»)';
+  }
+  if (newStage === 'Отклонена IC' && !icRejected) {
+    return 'Нельзя пометить как «Отклонена IC» без решения комитета';
+  }
+  return null;
+}
+
 /* ===== Deals (Deal Pipeline) API — tenant-scoped ===== */
 app.get('/api/deals', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM deals WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
@@ -790,6 +827,10 @@ app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('acces
   const touchesIcDecision = ['ic', 'icDecision'].some(f => Object.prototype.hasOwnProperty.call(b, f));
   if (touchesIcDecision) {
     return res.status(403).json({ error: 'Forbidden: ic/icDecision can only be set by a resolved IC vote' });
+  }
+  if (Object.prototype.hasOwnProperty.call(b, 'stage')) {
+    const stageError = validateStageTransition(existing, b.stage);
+    if (stageError) return res.status(409).json({ error: stageError });
   }
   const merged = Object.assign(rowToDeal(existing), b);
   const params = dealToParams(merged);
