@@ -42,6 +42,16 @@ const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 
+// Changes on every server restart with zero manual bookkeeping (no build
+// step in this app, so there's no bundle hash to key off) — the client
+// (js/api-auth.js's startVersionCheckLoop()) polls this to notice a
+// deploy happened and prompt a reload, since the SPA's script tags load
+// once and never re-fetch on their own for as long as the tab stays open.
+// Unauthenticated on purpose: cheap, reveals nothing sensitive, and a
+// stale login screen should be able to prompt a reload too.
+const SERVER_STARTED_AT = String(Date.now());
+app.get('/api/version', (req, res) => res.json({ version: SERVER_STARTED_AT }));
+
 /* ===== Auth ===== */
 app.post('/api/auth/login', (req, res) => {
   const { email, password, tenant } = req.body || {};

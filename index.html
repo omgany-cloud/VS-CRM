@@ -227,6 +227,20 @@
     <i class="fas fa-lock" style="margin-right:6px"></i>Ваша роль — «Только просмотр»: создание, редактирование и удаление данных недоступны
   </div>
 
+  <!-- Update-available banner — hidden by default, shown by
+       js/api-auth.js's startVersionCheckLoop() when GET /api/version
+       returns a value different from the one this page loaded with (the
+       server restarted, i.e. a deploy happened). This SPA's <script>
+       tags load once and never re-fetch on their own, so without this a
+       long-open tab can silently keep running old JS against a newer
+       server indefinitely — exactly what happened the first time this
+       was hit (a Capital Call feature looked "missing" because the tab
+       predated it). -->
+  <div id="updateAvailableBanner" style="display:none;background:#1e3a5f;color:#bfdbfe;padding:8px 20px;font-size:12.5px;font-weight:600;text-align:center;border-bottom:1px solid #2563eb">
+    <i class="fas fa-rotate" style="margin-right:6px"></i>Доступно обновление приложения —
+    <a href="#" onclick="location.reload();return false;" style="color:#fff;text-decoration:underline;font-weight:700">перезагрузите страницу</a>
+  </div>
+
   <!-- Small-screen warning — this app is designed for desktop use; below
        ~600px several layouts (data tables, wide modals) don't adapt and
        become hard to use. Toggled live off window width by

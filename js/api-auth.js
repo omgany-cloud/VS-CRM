@@ -14,6 +14,38 @@
 const API_BASE = window.location.origin;
 const AUTH_STORAGE_KEY = 'turan_auth_v1';
 
+// ===== Update-available check =====
+// This SPA's <script> tags (index.html) load once per page load and
+// never re-fetch on their own — a tab left open across a server restart
+// (i.e. a deploy) keeps running the old JS indefinitely, with no
+// indication anything changed even though the API underneath it is
+// already new. Runs independently of login state (an unauthenticated
+// login screen should be promptable too), starts immediately.
+let _appVersionAtLoad = null;
+const VERSION_CHECK_INTERVAL_MS = 60 * 1000;
+async function checkAppVersion() {
+  try {
+    const res = await fetch(API_BASE + '/api/version');
+    const data = await res.json();
+    if (_appVersionAtLoad === null) { _appVersionAtLoad = data.version; return; }
+    if (data.version !== _appVersionAtLoad) {
+      const banner = document.getElementById('updateAvailableBanner');
+      if (banner) banner.style.display = 'block';
+    }
+  } catch (err) {
+    // Silent — a failed version check shouldn't itself be disruptive,
+    // and a transient network blip shouldn't fire a false "please reload".
+  }
+}
+function startVersionCheckLoop() {
+  checkAppVersion();
+  setInterval(checkAppVersion, VERSION_CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkAppVersion();
+  });
+}
+if (typeof document !== 'undefined') startVersionCheckLoop();
+
 function getAuth() {
   try { return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null'); }
   catch (e) { return null; }
