@@ -166,30 +166,36 @@ function exportCapitalCalls() {
     '№', 'Дата уведомления', 'Дата платежа', 'Сумма ($)',
     '% от Commitment', 'Назначение', 'Статус', 'Получено ($)'
   ];
-  const rows = capitalCalls.map((cc, i) => [
+  const ccPaid = cc => (cc.lineItems || []).reduce((s, li) => s + (li.paid || 0), 0);
+  const rows = capitalCallsLog.map((cc, i) => [
     i + 1,
     fmtDate(cc.noticeDate),
-    fmtDate(cc.payDate),
-    cc.amount,
-    fmtPct(cc.pct),
+    fmtDate(cc.paymentDate),
+    cc.totalAmount,
+    fmtPct(cc.pctOfCommit),
     cc.purpose,
     cc.status,
-    cc.received,
+    ccPaid(cc),
   ]);
 
-  const totalAmount   = capitalCalls.reduce((s, cc) => s + (cc.amount || 0), 0);
-  const totalReceived = capitalCalls.reduce((s, cc) => s + (cc.received || 0), 0);
+  const totalAmount   = capitalCallsLog.reduce((s, cc) => s + (cc.totalAmount || 0), 0);
+  const totalReceived = capitalCallsLog.reduce((s, cc) => s + ccPaid(cc), 0);
   rows.push([]);
   rows.push(['', 'ИТОГО', '', totalAmount, '', '', '', totalReceived]);
 
-  // Разбивка по LP
+  // Разбивка по LP — exact per-LP called amount from each call's own
+  // lineItems, not an approximated pro-rata of the call total (the real
+  // data already has the precise figure per LP per call).
   const lpBreakdownHeader = [
-    'LP', 'Commitment ($M)', ...capitalCalls.map((cc, i) => `CC#${i + 1} (${fmtDate(cc.noticeDate)})`), 'Итого Paid'
+    'LP', 'Commitment ($M)', ...capitalCallsLog.map(cc => `${cc.ccNumber} (${fmtDate(cc.noticeDate)})`), 'Итого Paid'
   ];
   const lpRows = lpRegister.map(lp => {
-    const pct = capitalCalls.map(cc => cc.status === 'Завершён'
-      ? `$${((lp.commitment / lpRegister.reduce((s, l) => s + l.commitment, 0)) * cc.amount / 1e6).toFixed(3)}M` : '—');
-    return [lp.name, lp.commitment / 1e6, ...pct, `$${(lp.calledAmount/1e6).toFixed(2)}M`];
+    const perCC = capitalCallsLog.map(cc => {
+      if (cc.status !== 'Completed') return '—';
+      const li = (cc.lineItems || []).find(x => x.lpId === lp.id);
+      return li ? `$${(li.called / 1e6).toFixed(3)}M` : '—';
+    });
+    return [lp.name, lp.commitment / 1e6, ...perCC, `$${(lp.calledAmount/1e6).toFixed(2)}M`];
   });
 
   downloadExcel([
@@ -362,8 +368,9 @@ function exportFundOverview() {
 
   // График капитал-коллов
   const ccHeader = ['Capital Call', 'Дата уведомления', 'Дата платежа', 'Сумма ($)', 'Получено ($)', 'Статус'];
-  const ccRows = capitalCalls.map((cc, i) => [
-    `CC #${i + 1}`, fmtDate(cc.noticeDate), fmtDate(cc.payDate), cc.amount, cc.received, cc.status,
+  const ccRows = capitalCallsLog.map(cc => [
+    cc.ccNumber, fmtDate(cc.noticeDate), fmtDate(cc.paymentDate), cc.totalAmount,
+    (cc.lineItems || []).reduce((s, li) => s + (li.paid || 0), 0), cc.status,
   ]);
 
   downloadExcel([
@@ -458,7 +465,7 @@ function exportFullCRM() {
   const kycRows   = lpRegister.map((lp, i) => [i+1, lp.name, lp.type, yesNo(lp.amlScreeningCleared), yesNo(lp.pepCheckCleared), yesNo(lp.sofVerified), yesNo(lp.uboVerified), fmtDate(lp.kycDate)]);
 
   const ccHeader  = ['№','Дата','Сумма ($)','%','Назначение','Статус'];
-  const ccRows    = capitalCalls.map((cc, i) => [i+1, fmtDate(cc.noticeDate), cc.amount, fmtPct(cc.pct), cc.purpose, cc.status]);
+  const ccRows    = capitalCallsLog.map((cc, i) => [i+1, fmtDate(cc.noticeDate), cc.totalAmount, fmtPct(cc.pctOfCommit), cc.purpose, cc.status]);
 
   const portHeader = ['№','Компания','Сектор','Инвестировано ($M)','Стоимость ($M)','MOIC','Выход'];
   const portRows   = portfolio.map((p, i) => [i+1, p.name, p.sector, p.invested, p.value, p.moic ? p.moic.toFixed(2)+'x':'—', p.exitStrategy]);
