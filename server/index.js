@@ -614,6 +614,7 @@ function rowToLineItem(r) {
     paymentDate: r.payment_date,
     status: r.status,
     wireRef: r.wire_ref,
+    wireConfirmUrl: r.wire_confirm_url,
     amlOk: r.aml_ok === null ? null : !!r.aml_ok,
   };
 }
@@ -752,16 +753,35 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   }
 
   const b = req.body || {};
-  // AML/SoF clearance is a compliance judgment, not the operational fact
-  // that a wire arrived (paid/status/wireRef stay open to any accessFM
-  // staffer recording a payment) — restricted to Compliance Officer/MLRO
-  // (amlClear) so an RM can't confirm their own client's AML check.
+  // AML/SoF clearance is a compliance judgment — restricted to Compliance
+  // Officer/MLRO (amlClear) so an RM can't confirm their own client's AML
+  // check.
   if (Object.prototype.hasOwnProperty.call(b, 'amlOk') && !req.user.permissions.amlClear) {
     return res.status(403).json({ error: 'Forbidden: only Compliance/MLRO may confirm AML clearance' });
   }
+  // Confirming receipt is a bank-reconciliation judgment, not something
+  // the person who created/approved the call should self-certify —
+  // restricted to CFO/CEO (paymentConfirm), and requires the actual
+  // evidence (wire reference + a link to the payment order/SWIFT
+  // confirmation) rather than a bare status flip. Only enforced on the
+  // transition INTO Paid — editing an already-paid item's other fields
+  // later doesn't re-trigger this.
+  const confirmingPayment = b.status === 'Paid' && item.status !== 'Paid';
+  if (confirmingPayment) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may confirm a Capital Call payment' });
+    }
+    if (!b.wireRef || !b.wireRef.trim()) {
+      return res.status(400).json({ error: 'wireRef is required to confirm payment' });
+    }
+    if (!b.wireConfirmUrl || !b.wireConfirmUrl.trim()) {
+      return res.status(400).json({ error: 'wireConfirmUrl (payment order document link) is required to confirm payment' });
+    }
+  }
   db.prepare(`
     UPDATE capital_call_line_items SET
-      paid=@paid, payment_date=@paymentDate, status=@status, wire_ref=@wireRef, aml_ok=@amlOk
+      paid=@paid, payment_date=@paymentDate, status=@status, wire_ref=@wireRef,
+      wire_confirm_url=@wireConfirmUrl, aml_ok=@amlOk
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({
     id: item.id, tenantId: req.tenantId,
@@ -769,6 +789,7 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
     paymentDate: b.paymentDate || item.payment_date,
     status: b.status || item.status,
     wireRef: b.wireRef != null ? b.wireRef : item.wire_ref,
+    wireConfirmUrl: b.wireConfirmUrl != null ? b.wireConfirmUrl : item.wire_confirm_url,
     amlOk: b.amlOk != null ? (b.amlOk ? 1 : 0) : item.aml_ok,
   }));
 

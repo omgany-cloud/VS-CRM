@@ -1788,7 +1788,10 @@ function openCCDetail(ccId) {
               <td style="padding:8px 10px;font-size:12px;font-weight:700;color:#f97316;text-align:right">${fmtUSD(li.called)}</td>
               <td style="padding:8px 10px;font-size:12px;font-weight:700;color:${li.paid===li.called?'#22c55e':li.paid>0?'#eab308':'#ef4444'};text-align:right">${fmtUSD(li.paid)}</td>
               <td style="padding:8px 10px;font-size:11px;color:#94a3b8">${li.paymentDate||'—'}</td>
-              <td style="padding:8px 10px;font-size:10px;color:#64748b">${li.wireRef||'—'}</td>
+              <td style="padding:8px 10px;font-size:10px;color:#64748b">
+                ${li.wireRef||'—'}
+                ${li.wireConfirmUrl ? `<i class="fas fa-eye" style="color:#a78bfa;margin-left:5px;cursor:pointer" onclick="_obOpenPreviewModal('${li.wireConfirmUrl.replace(/'/g,"\\'")}','${li.wireConfirmUrl.replace(/'/g,"\\'")}')" title="Открыть подтверждающий документ"></i>` : ''}
+              </td>
               <td style="padding:8px 10px;text-align:center">
                 ${li.amlOk===true ? '<i class="fas fa-check-circle" style="color:#22c55e;font-size:14px" title="AML подтверждён"></i>'
                 : li.amlOk===false ? '<i class="fas fa-exclamation-circle" style="color:#ef4444;font-size:14px" title="AML Flag"></i>'
@@ -1796,11 +1799,14 @@ function openCCDetail(ccId) {
                 : `<i class="fas fa-clock" style="color:#64748b;font-size:14px;cursor:pointer" onclick="markLpAmlOk(${ccId}, ${li.lpId})" title="AML ещё не подтверждён — нажмите, чтобы подтвердить"></i>`}
               </td>
               <td style="padding:8px 10px;text-align:center">
-                ${li.status==='Pending' && cc.status!=='Completed' && cc.status!=='Draft' ? `
-                  <button onclick="markLPPayment(${ccId}, ${li.lpId})"
-                    style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700">
-                    Получено ✓
-                  </button>` : ccStatusBadge(li.status)}
+                ${li.status==='Pending' && cc.status!=='Completed' && cc.status!=='Draft'
+                  ? (currentUserPermission('paymentConfirm')
+                      ? `<button onclick="markLPPayment(${ccId}, ${li.lpId})"
+                          style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700">
+                          Получено ✓
+                        </button>`
+                      : `<span style="font-size:9px;color:#5a6b8a;font-style:italic">Ожидает CFO/CEO</span>`)
+                  : ccStatusBadge(li.status)}
               </td>
               <td style="padding:8px 10px;text-align:center">
                 <button onclick="generateCCNotice(${ccId}, ${li.lpId})"
@@ -1873,12 +1879,28 @@ async function approveCC(ccId) {
   renderCapitalCallsPage();
 }
 
+// Confirming a payment is a bank-reconciliation judgment, not a bare
+// status flip — restricted to CFO/CEO (paymentConfirm, server-enforced
+// too) and requires the actual evidence: a wire reference and a link to
+// the payment order/SWIFT confirmation. Previously this was a single
+// confirm() click with no proof of any kind — wireRef existed as a
+// column but no UI anywhere ever set it.
 async function markLPPayment(ccId, lpId) {
   const cc = capitalCallsLog.find(c => c.id === ccId);
   if (!cc) return;
   const li = cc.lineItems.find(l => l.lpId === lpId);
   if (!li) return;
   const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(cc));
+
+  if (!currentUserPermission('paymentConfirm')) {
+    showToast('⛔ Подтверждать платежи может только CFO/CEO', 'red');
+    return;
+  }
+
+  const wireRef = prompt(`Номер платёжного поручения (wire reference) от ${li.lpName} на сумму ${fmtUSD(li.called)}:`);
+  if (!wireRef || !wireRef.trim()) { showToast('⚠ Отменено — номер платёжного поручения обязателен', 'red'); return; }
+  const wireConfirmUrl = prompt('Ссылка на подтверждающий документ (платёжное поручение / SWIFT):');
+  if (!wireConfirmUrl || !wireConfirmUrl.trim()) { showToast('⚠ Отменено — ссылка на документ обязательна', 'red'); return; }
 
   if (!confirm(`Подтвердить получение платежа от ${li.lpName} на сумму ${fmtUSD(li.called)}?`)) return;
 
@@ -1889,7 +1911,10 @@ async function markLPPayment(ccId, lpId) {
   try {
     const updatedCC = await apiFetch(`/api/capital-calls/${ccId}/line-items/${lpId}`, {
       method: 'PUT',
-      body: JSON.stringify({ paid: called, status: 'Paid', paymentDate: today() }),
+      body: JSON.stringify({
+        paid: called, status: 'Paid', paymentDate: today(),
+        wireRef: wireRef.trim(), wireConfirmUrl: wireConfirmUrl.trim(),
+      }),
     });
     Object.assign(cc, updatedCC);
 

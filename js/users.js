@@ -33,6 +33,7 @@ const PERMISSION_DEFS = [
   { key: 'riskVeto', label: 'Risk Manager вето', hint: 'Заключение/вето по IC-меморандумам' },
   { key: 'amlClear', label: 'AML/KYC подтверждение', hint: 'Подтверждение AML/SoF по платежам Capital Call' },
   { key: 'ccApprove', label: 'Подтверждение Capital Call', hint: 'Перевод Capital Call из черновика в отправленный' },
+  { key: 'paymentConfirm', label: 'Подтверждение платежа LP', hint: 'Подтверждение поступления средств по Capital Call (сверка с банком)' },
   { key: 'readOnly', label: 'Только просмотр', hint: 'Блокирует создание/редактирование/удаление данных для этой роли' },
 ];
 

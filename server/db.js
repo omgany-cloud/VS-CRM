@@ -161,6 +161,12 @@ CREATE TABLE IF NOT EXISTS capital_call_line_items (
   payment_date   TEXT,
   status         TEXT NOT NULL DEFAULT 'Pending',
   wire_ref       TEXT,
+  -- Proof of receipt (payment order / SWIFT confirmation link) — added
+  -- alongside wire_ref because wire_ref existed as a column for a long
+  -- time but no UI ever actually set it; both are now required together
+  -- by PUT /api/capital-calls/:id/line-items/:lpId whenever a line item
+  -- is first marked Paid, gated behind paymentConfirm (CFO/CEO).
+  wire_confirm_url TEXT,
   aml_ok         INTEGER
 );
 
@@ -626,6 +632,13 @@ CREATE TABLE IF NOT EXISTS roles (
   -- CEO/CFO by default so the person who drafted it (any accessFM
   -- staffer) can't also be the one who sends it.
   cc_approve        INTEGER NOT NULL DEFAULT 0,
+  -- Confirming a Capital Call line item as actually Paid is a bank-
+  -- reconciliation judgment (does the wire reference/amount on the
+  -- statement really match this LP's call?), not something the person
+  -- who created or approved the call should self-certify — restricted
+  -- to CFO/CEO by default, same segregation-of-duties reasoning as
+  -- cc_approve and aml_clear.
+  payment_confirm   INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -697,6 +710,9 @@ if (!columnExists('roles', 'aml_clear')) db.exec("ALTER TABLE roles ADD COLUMN a
 db.exec("UPDATE roles SET aml_clear = 1 WHERE is_system = 1 AND code IN ('COMPLIANCE_OFFICER', 'MLRO') AND aml_clear = 0");
 if (!columnExists('roles', 'cc_approve')) db.exec("ALTER TABLE roles ADD COLUMN cc_approve INTEGER NOT NULL DEFAULT 0");
 db.exec("UPDATE roles SET cc_approve = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND cc_approve = 0");
+if (!columnExists('roles', 'payment_confirm')) db.exec("ALTER TABLE roles ADD COLUMN payment_confirm INTEGER NOT NULL DEFAULT 0");
+db.exec("UPDATE roles SET payment_confirm = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND payment_confirm = 0");
+if (!columnExists('capital_call_line_items', 'wire_confirm_url')) db.exec("ALTER TABLE capital_call_line_items ADD COLUMN wire_confirm_url TEXT");
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
 }
