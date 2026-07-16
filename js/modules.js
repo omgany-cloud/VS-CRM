@@ -488,7 +488,12 @@ function icRoleDefs() {
     return { role: seat, name: r ? r.label : '— вакантно —' };
   });
 }
-const IC_VOTES   = { approve: { label:'Одобрить', color:'#22c55e' }, reject: { label:'Отклонить', color:'#ef4444' }, abstain: { label:'Воздержаться', color:'#94a3b8' } };
+const IC_VOTES   = { approve: { label:'Одобрить', color:'#22c55e' }, reject: { label:'Отклонить', color:'#ef4444' }, defer: { label:'Доп. DD', color:'#8b5cf6' }, abstain: { label:'Воздержаться', color:'#94a3b8' } };
+// 'defer' = комитет требует дополнительного due diligence (напр. внешние
+// консультанты) прежде чем решать — не одобрение и не отказ. Резолюция
+// меморандума (approved/rejected/deferred) выводится сервером в
+// deriveIcResolution (server/index.js), это лишь метки для UI.
+const IC_MEMO_STATUS_LABELS = { approved:'Одобрено', rejected:'Отклонено', deferred:'Доп. DD запрошено', pending:'На голосовании' };
 
 let icMemos = [];  // populated at runtime by js/api-auth.js via GET /api/ic-memos (see server/index.js)
 let icIdCounter = 6;
@@ -549,6 +554,7 @@ function renderICList() {
     const statusCfg = { approved:{label:'Одобрено',color:'#22c55e',bg:'rgba(34,197,94,0.12)'},
       pending:{label:'На голосовании',color:'#f97316',bg:'rgba(249,115,22,0.12)'},
       rejected:{label:'Отклонено',color:'#ef4444',bg:'rgba(239,68,68,0.12)'},
+      deferred:{label:'Доп. DD запрошено',color:'#8b5cf6',bg:'rgba(139,92,246,0.12)'},
     }[m.status] || {};
     return `
       <div class="wf-row" onclick="openICModal(${m.id})" style="cursor:pointer">
@@ -696,7 +702,7 @@ function renderICModalContent(m) {
       <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC (Constitution Section 7)</div>
       ${m.status !== 'pending' ? `
         <div style="font-size:11px;color:#5a6b8a;font-style:italic;margin-bottom:8px">
-          Голосование завершено, меморандум переведён в статус «${m.status === 'approved' ? 'Одобрено' : 'Отклонено'}» — записи ниже финальны.
+          Голосование завершено, меморандум переведён в статус «${IC_MEMO_STATUS_LABELS[m.status] || m.status}» — записи ниже финальны.
         </div>` : !anyVotableByMe ? `
         <div style="font-size:11px;color:#f97316;margin-bottom:8px">
           <i class="fas fa-info-circle" style="margin-right:4px"></i>Ваша роль (${roleLabel(myRole)}) не занимает ни одно из 4 мест IC в этом меморандуме, либо вы уже проголосовали.
@@ -794,7 +800,7 @@ function printICMemo(id) {
     <tr><td>Стадия</td><td>${m.stage || '—'}</td></tr>
     <tr><td>Автор меморандума</td><td>${m.author || '—'}</td></tr>
     <tr><td>Дата подготовки</td><td>${m.createdAt || '—'}</td></tr>
-    <tr><td>Статус</td><td>${m.status === 'approved' ? 'Одобрено' : m.status === 'rejected' ? 'Отклонено' : 'На рассмотрении'}</td></tr>
+    <tr><td>Статус</td><td>${IC_MEMO_STATUS_LABELS[m.status] || 'На рассмотрении'}</td></tr>
   </table>
 
   ${[
@@ -878,64 +884,59 @@ async function castICVote(memoId, voteIdx, vote) {
     : `Голос «${IC_VOTES[vote].label}» окончательный и не подлежит изменению. Продолжить?`;
   if (!confirm(confirmMsg)) return;
 
-  myVote.vote    = vote;
-  myVote.comment = myVote.comment || '';
-  m.quorumMet = icQuorumMet(m.votes);
-
-  // Auto-resolve once everyone has voted, OR once quorum is met (Constitution
-  // Section 7 requires the Independent Member's actual vote for quorum) AND
-  // the outcome is a decisive majority — never on majority alone, otherwise
-  // 3 quick votes from the non-Independent-Member seats can finalize the
-  // memo before the Independent Member ever gets a chance to vote.
-  const allVoted  = m.votes.every(v => v.vote);
-  const approveN  = m.votes.filter(v => v.vote === 'approve').length;
-  const rejectN   = m.votes.filter(v => v.vote === 'reject').length;
-  let toastMsg = null, toastColor = 'blue';
-  let dealToSync = null;
-  if (allVoted || (m.quorumMet && approveN > m.votes.length / 2)) {
-    m.status     = approveN >= rejectN ? 'approved' : 'rejected';
-    const quorumNote = m.quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
-    m.resolution = (approveN >= rejectN
-      ? `Инвестиция одобрена большинством голосов (${approveN}/${m.votes.length}). Сумма: $${m.amount}M.`
-      : `Инвестиция отклонена (${rejectN} против).`) + quorumNote;
-    const deal = deals.find(d => d.id === m.dealId);
-    // icDecision/ic are two parallel fields the manual dropdown (js/app.js's
-    // dealField() calls in the deal detail modal) always updates together —
-    // matching that here so a deal closed-by-vote doesn't show a stale
-    // 'Не подано' the next time someone opens its detail modal.
-    if (deal) {
-      deal.ic = deal.icDecision = m.status === 'approved' ? 'Одобрено' : 'Отклонено';
-      dealToSync = deal;
-    }
-    toastMsg = m.status === 'approved' ? '✅ IC одобрил инвестицию!' : '❌ IC отклонил инвестицию';
-    toastColor = m.status === 'approved' ? 'green' : 'red';
-  } else {
-    toastMsg = `Голос "${IC_VOTES[vote].label}" зафиксирован (${myVote.role})`;
-  }
+  const wasPending = m.status === 'pending';
+  const votesPayload = m.votes.map((v, i) => i === voteIdx ? { ...v, vote, comment: v.comment || '' } : v);
 
   try {
-    await apiFetch(`/api/ic-memos/${m.id}`, {
+    // The server derives quorum/status/resolution from the votes array
+    // itself (deriveIcResolution, server/index.js) and never trusts a
+    // client-computed value for them — so the vote isn't applied locally
+    // until the server confirms it (previously it was mutated into `m`
+    // before the request even went out, so a failed save could leave a
+    // vote looking cast when it never persisted).
+    //
+    // The server also syncs the linked deal (ic/icDecision, and for a
+    // "deferred" outcome: stage back to Due Diligence + the GP conclusion
+    // reset) as part of this same request, with its own authority — that
+    // can't be done from here at all: an IC vote is very often cast by an
+    // external seat (Independent Member, LP Rep — server/rolesSeed.js:
+    // internal:false, accessFM:false) who could never legally call
+    // PUT /api/deals/:id themselves, let alone touch gpConclusion* fields
+    // (gated behind authorICMemo, which those seats don't have either).
+    const updated = await apiFetch(`/api/ic-memos/${m.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ votes: m.votes, quorumMet: m.quorumMet, status: m.status, resolution: m.resolution }),
+      body: JSON.stringify({ votes: votesPayload }),
     });
-    // Persist the deal's IC decision too — previously this only ever
-    // updated the in-memory deals[] array (no PUT call anywhere in the
-    // frontend touches an existing deal), so a real committee decision
-    // could be silently lost on reload. Only the changed field is sent,
-    // same reasoning as the memo-creation sync above.
-    if (dealToSync) {
-      try {
-        await apiFetch(`/api/deals/${dealToSync.id}`, { method: 'PUT', body: JSON.stringify({ ic: dealToSync.ic, icDecision: dealToSync.icDecision }) });
-      } catch (dealErr) {
-        showToast('⚠️ Голос сохранён, но не удалось обновить статус сделки: ' + dealErr.message, 'orange');
+    Object.assign(m, updated);
+
+    if (wasPending && m.status !== 'pending' && m.dealId != null) {
+      const deal = deals.find(d => d.id === m.dealId);
+      if (deal) {
+        if (m.status === 'deferred') {
+          deal.ic = deal.icDecision = 'Доп. DD';
+          deal.stage = 'Due Diligence';
+          deal.gpConclusionVerdict = '';
+          deal.gpConclusionSummary = '';
+          deal.gpConclusionSignedBy = '';
+          deal.gpConclusionSignedAt = '';
+        } else {
+          deal.ic = deal.icDecision = m.status === 'approved' ? 'Одобрено' : 'Отклонено';
+        }
       }
     }
+
+    const toastMsg = m.status === 'approved' ? '✅ IC одобрил инвестицию!'
+      : m.status === 'rejected' ? '❌ IC отклонил инвестицию'
+      : m.status === 'deferred' ? '🔄 IC запросил доп. due diligence — сделка возвращена на стадию DD'
+      : `Голос "${IC_VOTES[vote].label}" зафиксирован (${myVote.role})`;
+    const toastColor = m.status === 'approved' ? 'green' : m.status === 'rejected' ? 'red' : m.status === 'deferred' ? 'orange' : 'blue';
     showToast(toastMsg, toastColor);
   } catch (err) {
     showToast('⚠️ Не удалось сохранить голос: ' + err.message, 'red');
   }
   renderICModalContent(m);
   renderICPage();
+  if (typeof renderPipeline === 'function' && typeof deals !== 'undefined') renderPipeline(deals);
 }
 
 async function saveRiskConclusion(memoId) {

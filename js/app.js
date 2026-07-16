@@ -868,7 +868,7 @@ function renderClosingDocs()      {}
 function toggleClosingItem()      {}
 
 /* ===== PIPELINE (KANBAN) ===== */
-const DEAL_STAGES = ['Скрининг','IC Review','Due Diligence','Term Sheet','Переговоры','Закрыта','Отклонена IC'];
+const DEAL_STAGES = ['Скрининг','Due Diligence','IC Review','Term Sheet','Переговоры','Закрыта','Отклонена IC'];
 const STAGE_COLORS = {
   'Скрининг':     '#06b6d4',
   'IC Review':    '#f97316',
@@ -1302,7 +1302,7 @@ function _renderDealModal(d) {
   }
 
   /* ── Progress bar по этапам ── */
-  const stageOrder = ['Скрининг','IC Review','Due Diligence','Term Sheet','Переговоры','Закрыта'];
+  const stageOrder = DEAL_STAGES.filter(s => s !== 'Отклонена IC');
   const stageIdx   = stageOrder.indexOf(d.stage);
   const progressPct = d.stage === 'Отклонена IC' ? 0
     : stageIdx >= 0 ? Math.round((stageIdx + 1) / stageOrder.length * 100) : 0;
@@ -1340,7 +1340,7 @@ function _renderDealModal(d) {
         <div style="display:flex;gap:6px;align-items:flex-start;flex-shrink:0">
           <select onchange="dealMoveStage(${d.id},this.value)"
             style="background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
-            ${['Скрининг','IC Review','Due Diligence','Term Sheet','Переговоры','Закрыта','Отклонена IC'].map(s=>`
+            ${DEAL_STAGES.map(s=>`
               <option value="${s}" ${d.stage===s?'selected':''}>${s}</option>`).join('')}
           </select>
           <button onclick="closeDealDetailModal()"
@@ -1386,6 +1386,18 @@ function dealMoveStage(id, stage) {
   // (castICVote, js/modules.js) only ever sets `ic` — check both.
   if (stage === 'Закрыта' && d.ic !== 'Одобрено' && d.icDecision !== 'Одобрено') {
     showToast(`⛔ Нельзя закрыть сделку без одобрения IC (текущее решение IC: ${d.ic || d.icDecision || 'Не подано'})`, 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
+  // Entering IC Review by hand must respect the same gate as creating a
+  // real IC memo (saveNewICMemo(), js/modules.js) — otherwise the board
+  // could show a deal "at IC Review" that no specialist has actually
+  // signed off on. Moving OUT of IC Review (e.g. back to Due Diligence)
+  // is never blocked here.
+  if (stage === 'IC Review' && d.stage !== 'IC Review' && d.gpConclusionVerdict !== 'Рекомендовано к IC') {
+    showToast('⛔ Сначала подпишите заключение УК со статусом "Рекомендовано к IC" на вкладке Due Diligence', 'red');
     _renderDealModal(d);
     renderPipeline(deals);
     return;

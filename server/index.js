@@ -1079,19 +1079,29 @@ function deriveIcResolution(memo, votes) {
   const allVoted = votes.every(v => v.vote);
   const approveN = votes.filter(v => v.vote === 'approve').length;
   const rejectN = votes.filter(v => v.vote === 'reject').length;
+  const deferN = votes.filter(v => v.vote === 'defer').length;
   // Majority alone must never resolve early — only once everyone has voted,
   // or once quorum (which requires the Independent Member's actual vote per
   // Constitution Section 7) is met, does a decisive majority finalize the
   // memo. Otherwise 3 non-Independent-Member votes could lock the memo
-  // before that mandatory seat ever gets to vote.
+  // before that mandatory seat ever gets to vote. 'defer' (request
+  // additional/external DD before deciding) only resolves via allVoted,
+  // same as reject — no early-exit fast path for it either.
   if (!(allVoted || (quorumMet && approveN > votes.length / 2))) {
     return { quorumMet, status: 'pending', resolution: memo.resolution };
   }
-  const status = approveN >= rejectN ? 'approved' : 'rejected';
   const quorumNote = quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
-  const resolution = (approveN >= rejectN
-    ? `Инвестиция одобрена большинством голосов (${approveN}/${votes.length}). Сумма: $${memo.amount}M.`
-    : `Инвестиция отклонена (${rejectN} против).`) + quorumNote;
+  let status, resolution;
+  if (deferN > approveN && deferN > rejectN) {
+    status = 'deferred';
+    resolution = `Комитет запросил дополнительное due diligence перед повторным рассмотрением (${deferN}/${votes.length}).` + quorumNote;
+  } else if (approveN >= rejectN) {
+    status = 'approved';
+    resolution = `Инвестиция одобрена большинством голосов (${approveN}/${votes.length}). Сумма: $${memo.amount}M.` + quorumNote;
+  } else {
+    status = 'rejected';
+    resolution = `Инвестиция отклонена (${rejectN} против).` + quorumNote;
+  }
   return { quorumMet, status, resolution };
 }
 
@@ -1156,6 +1166,41 @@ app.put('/api/ic-memos/:id', requireAuth, (req, res) => {
   if (isVoteUpdate) {
     const derived = deriveIcResolution(merged, b.votes);
     merged = { ...merged, votes: b.votes, ...derived };
+
+    // Sync the linked deal's IC-facing fields with the server's own
+    // authority, as part of this same request — this can't be left to a
+    // separate client-issued PUT /api/deals/:id the way it used to be:
+    // an IC vote is very often cast by an external seat (Independent
+    // Member, LP Rep — server/rolesSeed.js: internal:false, accessFM:
+    // false) who could never legally call that endpoint themselves, and
+    // a 'deferred' outcome also needs to clear gpConclusion* fields,
+    // gated behind authorICMemo, which those seats don't have either.
+    // Safe to apply directly because every value written below is
+    // derived from the trusted vote tally above, never taken from the
+    // request body.
+    if (existing.status === 'pending' && derived.status !== 'pending' && merged.dealId != null) {
+      const dealRow = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(merged.dealId, req.tenantId);
+      if (dealRow) {
+        const deal = rowToDeal(dealRow);
+        if (derived.status === 'deferred') {
+          // The prior GP conclusion recommended this deal based on DD the
+          // committee just judged insufficient — it no longer stands.
+          // Clear it and drop the deal back into Due Diligence so a fresh
+          // sign-off (and a new memo) is required once the additional DD
+          // is done.
+          deal.ic = deal.icDecision = 'Доп. DD';
+          deal.stage = 'Due Diligence';
+          deal.gpConclusionVerdict = '';
+          deal.gpConclusionSummary = '';
+          deal.gpConclusionSignedBy = '';
+          deal.gpConclusionSignedAt = '';
+        } else {
+          deal.ic = deal.icDecision = derived.status === 'approved' ? 'Одобрено' : 'Отклонено';
+        }
+        const dealParams = dealToParams(deal);
+        db.prepare(DEAL_UPDATE_SQL).run(at({ ...dealParams, id: deal.id, tenantId: req.tenantId }));
+      }
+    }
   }
   if (isRiskUpdate) {
     merged = {
