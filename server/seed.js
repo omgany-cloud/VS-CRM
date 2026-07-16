@@ -18,6 +18,7 @@ const { fundToParams, INSERT_SQL: FUND_INSERT_SQL } = require('./fundMapping');
 const { extractArrayLiteral } = require('./extractFrontendData');
 const { SYSTEM_ROLES } = require('./rolesSeed');
 const { wfInstanceToParams, INSERT_SQL: WF_INSERT_SQL } = require('./workflowMapping');
+const { afsaReportToParams, INSERT_SQL: AFSA_REPORT_INSERT_SQL } = require('./afsaReportMapping');
 const { upsertTenant, upsertRole, upsertUser } = require('./tenantProvisioning');
 
 const SEED_EMAIL = 'admin@turancapital.kz';
@@ -1300,6 +1301,42 @@ function seedWorkflowInstances(tenantId) {
   console.log(`Seeded ${WORKFLOW_INSTANCES.length} workflow instances for tenant ${tenantId}.`);
 }
 
+// Replaces the old js/data.js `reportSchedule` static array (no backend,
+// status could never actually change from the UI). Same quarterly/annual
+// financial-report entries as before, plus the fixed AFSA compliance set
+// (AML/CTF, Annual Compliance) — Breach Notification isn't seeded since
+// it's only ever created ad hoc if a real breach happens.
+const AFSA_REPORTS = [
+  { reportType: 'Quarterly', period: 'Q4 2024', deadline: '2025-02-14', status: 'Отправлен', resp: 'CFO' },
+  { reportType: 'Annual',    period: 'FY 2024',  deadline: '2025-03-31', status: 'В процессе', resp: 'CFO + Аудитор' },
+  { reportType: 'AML/CTF',            period: 'FY 2024', deadline: '2025-03-31', status: 'Отправлен', resp: 'MLRO' },
+  { reportType: 'Annual Compliance',  period: 'FY 2024', deadline: '2025-03-31', status: 'Отправлен', resp: 'CO (Compliance Officer)' },
+  { reportType: 'Quarterly', period: 'Q1 2025', deadline: '2025-05-15', status: 'Ожидается', resp: 'CFO' },
+  { reportType: 'Quarterly', period: 'Q2 2025', deadline: '2025-08-14', status: 'Ожидается', resp: 'CFO' },
+  { reportType: 'Quarterly', period: 'Q3 2025', deadline: '2025-11-14', status: 'Ожидается', resp: 'CFO' },
+  { reportType: 'Annual',    period: 'FY 2025',  deadline: '2026-03-31', status: 'Ожидается', resp: 'CFO + Аудитор' },
+  { reportType: 'AML/CTF',            period: 'FY 2025', deadline: '2026-03-31', status: 'Ожидается', resp: 'MLRO' },
+  { reportType: 'Annual Compliance',  period: 'FY 2025', deadline: '2026-03-31', status: 'Ожидается', resp: 'CO (Compliance Officer)' },
+];
+
+function seedAfsaReports(tenantId, fundId) {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM afsa_reports WHERE tenant_id = ?').get(tenantId).c;
+  if (count > 0) { console.log(`afsa_reports already has ${count} rows for tenant ${tenantId}, skipping seed.`); return; }
+
+  const insert = db.prepare(AFSA_REPORT_INSERT_SQL);
+  db.exec('BEGIN');
+  try {
+    for (const rep of AFSA_REPORTS) {
+      insert.run(at({ tenantId, ...afsaReportToParams({ ...rep, fundId }) }));
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  console.log(`Seeded ${AFSA_REPORTS.length} AFSA reports for tenant ${tenantId}.`);
+}
+
 // NOTE: same lesson as DEALS/PORTFOLIO/IC_MEMOS above — js/documents.js's
 // `docFiles` array has since been emptied out (it's now populated at
 // runtime from the API), so it's hardcoded here from the last-known
@@ -1377,6 +1414,7 @@ seedOnboarding(tenant.id);
 seedConflictApprovals(tenant.id);
 seedIcMemos(tenant.id, fund1Id);
 seedWorkflowInstances(tenant.id);
+seedAfsaReports(tenant.id, fund1Id);
 seedDocuments(tenant.id);
 
 console.log('--- Seed complete ---');

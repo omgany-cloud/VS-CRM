@@ -167,6 +167,23 @@ function collectExternalPendingApprovals() {
     });
   });
 
+  // AFSA regulatory reports — single filer, one-shot, requires the filed
+  // document as evidence (submitAfsaReport(), js/modules.js). "Pending"
+  // here means not yet submitted, same as every other category — no date
+  // filtering, so a report due months out still shows (matches how a
+  // Draft Capital Call or an unsigned GP Conclusion show regardless of
+  // any deadline).
+  (typeof afsaReports !== 'undefined' ? afsaReports : []).forEach(r => {
+    if (r.status === 'Отправлен') return;
+    items.push({
+      category: 'AFSA Отчётность', icon: 'fa-landmark', color: '#3b82f6',
+      title: `${r.period} (${r.reportType})`,
+      meta: `Дедлайн ${r.deadline} · ${r.status}`,
+      permission: 'afsaSubmit',
+      action: () => navigateTo('calendar'),
+    });
+  });
+
   return items;
 }
 

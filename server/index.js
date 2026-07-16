@@ -40,6 +40,7 @@ const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
+const { rowToAfsaReport, afsaReportToParams, INSERT_SQL: AFSA_REPORT_INSERT_SQL, UPDATE_SQL: AFSA_REPORT_UPDATE_SQL } = require('./afsaReportMapping');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -985,6 +986,52 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   const cc = rowToCC(row);
   cc.lineItems = lineItemsStmt.all(call.id, req.tenantId).map(rowToLineItem);
   res.json(cc);
+});
+
+/* ===== AFSA Regulatory Reports — tenant-scoped =====
+   Replaces the old js/data.js `reportSchedule` static array (no backend
+   at all, status could never really change). report_type is one of
+   'Quarterly' | 'Annual' | 'AML/CTF' | 'Breach Notification' |
+   'Annual Compliance' — the fixed set AFSA requires from a licensed
+   fund. Marking a report as actually Отправлен (submitted) is gated
+   behind afsaSubmit and requires a document link (the filed report
+   itself), same evidence-required pattern as Capital Call payment
+   confirmation. */
+app.get('/api/afsa-reports', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = db.prepare('SELECT * FROM afsa_reports WHERE tenant_id = ? ORDER BY deadline').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, afsaReports: rows.map(rowToAfsaReport) });
+});
+
+app.post('/api/afsa-reports', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  if (!b.reportType) return res.status(400).json({ error: 'reportType is required' });
+  if (!b.period) return res.status(400).json({ error: 'period is required' });
+  if (!b.deadline) return res.status(400).json({ error: 'deadline is required' });
+  const params = afsaReportToParams({ ...b, status: 'Ожидается', submittedAt: null, submittedBy: null });
+  const info = db.prepare(AFSA_REPORT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
+  const row = db.prepare('SELECT * FROM afsa_reports WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToAfsaReport(row));
+});
+
+app.put('/api/afsa-reports/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM afsa_reports WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'AFSA report not found in this tenant' });
+  const b = req.body || {};
+  if (b.status === 'Отправлен' && existing.status !== 'Отправлен') {
+    if (!req.user.permissions.afsaSubmit) {
+      return res.status(403).json({ error: 'Forbidden: only CEO/CFO/Compliance Officer/MLRO may mark an AFSA report as submitted' });
+    }
+    if (!b.documentUrl || !b.documentUrl.trim()) {
+      return res.status(400).json({ error: 'documentUrl (the filed report itself) is required to mark as submitted' });
+    }
+    b.submittedAt = new Date().toISOString().slice(0, 10);
+    b.submittedBy = req.user.email;
+  }
+  const merged = Object.assign(rowToAfsaReport(existing), b);
+  const params = afsaReportToParams(merged);
+  db.prepare(AFSA_REPORT_UPDATE_SQL).run(at({ id: existing.id, tenantId: req.tenantId, ...params }));
+  const row = db.prepare('SELECT * FROM afsa_reports WHERE id = ?').get(existing.id);
+  res.json(rowToAfsaReport(row));
 });
 
 /* ===== First Closing Checklist — tenant-scoped, one row per fund =====

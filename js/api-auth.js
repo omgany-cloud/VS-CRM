@@ -428,6 +428,18 @@ function refreshPendingApprovalsBoardIfActive() {
   }
 }
 
+// Same idea as refreshPendingApprovalsBoardIfActive(), for the Compliance
+// Calendar page — its events are built fresh from live arrays every call
+// (buildCalendarEvents(), js/modules.js), so it just needs a re-render
+// whenever a source it reads (lpRegister, obClients, capitalCallsLog,
+// afsaReports) changes while the page happens to be open.
+function refreshComplianceCalendarIfActive() {
+  const page = document.getElementById('page-calendar');
+  if (page && page.classList.contains('active') && typeof renderComplianceCalendar === 'function') {
+    renderComplianceCalendar();
+  }
+}
+
 /* ===== Capital Calls — backed by the real API ===== */
 async function loadCapitalCallsFromApi() {
   try {
@@ -440,9 +452,26 @@ async function loadCapitalCallsFromApi() {
       renderCapitalCallsPage();
     }
     refreshPendingApprovalsBoardIfActive();
+    refreshComplianceCalendarIfActive();
   } catch (err) {
     console.error('Failed to load capital calls from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить Capital Calls из API: ' + err.message, 'red');
+  }
+}
+
+/* ===== AFSA Regulatory Reports — backed by the real API =====
+   Replaces the old static js/data.js `reportSchedule` array. */
+let afsaReports = [];
+async function loadAfsaReportsFromApi() {
+  try {
+    const data = await apiFetch('/api/afsa-reports');
+    afsaReports.length = 0;
+    afsaReports.push(...data.afsaReports);
+    refreshComplianceCalendarIfActive();
+    refreshPendingApprovalsBoardIfActive();
+  } catch (err) {
+    console.error('Failed to load AFSA reports from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить отчётность AFSA из API: ' + err.message, 'red');
   }
 }
 
@@ -663,7 +692,9 @@ async function loadRolesFromApi() {
       loadIcMemosFromApi();
       loadDealsFromApi();
       loadConflictApprovalsFromApi();
+      loadAfsaReportsFromApi();
     }
+    if (page === 'calendar') { loadCapitalCallsFromApi(); loadAfsaReportsFromApi(); }
     if (page === 'documents' || page === 'vault') loadDocumentsFromApi();
     if (page === 'users') loadUsersFromApi();
   };
@@ -680,6 +711,7 @@ async function loadAllApiData() {
   loadConflictApprovalsFromApi();
   loadIcMemosFromApi();
   loadWorkflowFromApi();
+  loadAfsaReportsFromApi();
   loadDocumentsFromApi();
 }
 

@@ -34,6 +34,7 @@ const PERMISSION_DEFS = [
   { key: 'amlClear', label: 'AML/KYC подтверждение', hint: 'Подтверждение AML/SoF по платежам Capital Call' },
   { key: 'ccApprove', label: 'Подтверждение Capital Call', hint: 'Перевод Capital Call из черновика в отправленный' },
   { key: 'paymentConfirm', label: 'Подтверждение платежа LP', hint: 'Подтверждение поступления средств по Capital Call (сверка с банком)' },
+  { key: 'afsaSubmit', label: 'Подача отчёта AFSA', hint: 'Отметить AFSA-отчёт отправленным регулятору' },
   { key: 'readOnly', label: 'Только просмотр', hint: 'Блокирует создание/редактирование/удаление данных для этой роли' },
 ];
 

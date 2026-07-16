@@ -146,12 +146,19 @@ function buildCalendarEvents() {
   const events = [];
   const today  = new Date();
 
-  // AFSA Reporting deadlines
-  reportSchedule.forEach(r => {
+  // AFSA Reporting deadlines — afsaReports (server-backed, see
+  // js/api-auth.js's loadAfsaReportsFromApi()), not the old js/data.js
+  // reportSchedule static array (no backend, status could never change).
+  // Clickable: the actual "mark submitted" action lives in the AFSA
+  // reports table on this same page (renderAfsaReportsTable() below), so
+  // this just gets you to the page — same "navigate, don't auto-act"
+  // convention as the other categories.
+  (typeof afsaReports !== 'undefined' ? afsaReports : []).forEach(r => {
     events.push({
-      date: r.deadline, label: `Отчёт ${r.period} (${r.type})`,
+      date: r.deadline, label: `Отчёт ${r.period} (${r.reportType})`,
       category: 'afsa', status: r.status, resp: r.resp,
       color: r.status === 'Отправлен' ? '#22c55e' : r.status === 'В процессе' ? '#f97316' : '#3b82f6',
+      action: () => navigateTo('calendar'),
     });
   });
 
@@ -238,6 +245,9 @@ function renderComplianceCalendar() {
         </div>`).join('')}
     </div>
 
+    <!-- AFSA report obligations — the actual "mark submitted" action -->
+    ${renderAfsaReportsTable()}
+
     <!-- Overdue -->
     ${overdue.length ? `
     <div class="card" style="margin-bottom:16px;border-color:rgba(239,68,68,0.3)">
@@ -257,6 +267,62 @@ function renderComplianceCalendar() {
           <i class="fas ${v.icon}" style="color:${v.color}"></i> ${v.label}
         </div>`).join('')}
     </div>`;
+}
+
+function renderAfsaReportsTable() {
+  const reports = (typeof afsaReports !== 'undefined' ? afsaReports : []).slice().sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+  if (!reports.length) return '';
+  const statusMap = { 'Отправлен': 'badge-green', 'В процессе': 'badge-orange', 'Ожидается': 'badge-gray' };
+  const canSubmit = typeof currentUserPermission === 'function' && currentUserPermission('afsaSubmit');
+  return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-landmark" style="color:#3b82f6;margin-right:6px"></i>Отчётность AFSA</span>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Период</th><th>Тип</th><th>Дедлайн</th><th>Статус</th><th>Ответственный</th><th>Действие</th></tr></thead>
+          <tbody>
+            ${reports.map(r => `
+              <tr>
+                <td>${r.period}</td>
+                <td style="font-size:12px;color:#8a9bbf">${r.reportType}</td>
+                <td>${formatDate(r.deadline)}</td>
+                <td><span class="badge ${statusMap[r.status] || 'badge-gray'}">${r.status}</span></td>
+                <td style="font-size:12px;color:#8a9bbf">${r.resp || '—'}</td>
+                <td>${
+                  r.status === 'Отправлен'
+                    ? (r.documentUrl
+                        ? `<a href="#" onclick="event.preventDefault();window.open(resolveDocUrl('${r.documentUrl}'),'_blank')" style="font-size:11px;color:#60a5fa">Открыть файл</a>`
+                        : `<span style="font-size:11px;color:#64748b">${r.submittedAt || ''}</span>`)
+                    : (canSubmit
+                        ? `<button onclick="submitAfsaReport(${r.id})" class="btn-ghost" style="font-size:11px;padding:4px 10px"><i class="fas fa-paperclip"></i> Загрузить и отметить</button>`
+                        : '<span style="font-size:11px;color:#64748b">—</span>')
+                }</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// Requires both the file (the actual filed report — evidence, same
+// reasoning as Capital Call payment confirmation's wireConfirmUrl) and
+// the afsaSubmit permission; the server re-checks both independently.
+async function submitAfsaReport(id) {
+  const rep = afsaReports.find(r => r.id === id);
+  if (!rep) return;
+  const file = await pickFile();
+  if (!file) return;
+  try {
+    const uploaded = await uploadFile(file);
+    const updated = await apiFetch(`/api/afsa-reports/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'Отправлен', documentUrl: uploaded.url }) });
+    Object.assign(rep, updated);
+    showToast(`✅ Отчёт «${rep.period} (${rep.reportType})» отмечен отправленным`, 'green');
+    renderComplianceCalendar();
+  } catch (err) {
+    showToast('⚠️ Не удалось отметить отчёт отправленным: ' + err.message, 'red');
+  }
 }
 
 function renderCalendarByMonth(events) {
@@ -286,9 +352,9 @@ function renderCalEvent(e, isOverdue) {
   const d    = new Date(e.date);
   const daysFromNow = Math.ceil((d - new Date()) / 86400000);
   const dStr = d.toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
-  // Only KYC/Capital Call events carry an action (see buildCalendarEvents())
-  // — AFSA events have nowhere real to link to yet (no report-tracking
-  // backend), so they stay plain, non-clickable rows.
+  // Every category now carries an action (see buildCalendarEvents()) —
+  // clicking always just navigates to where the real action happens,
+  // never performs it directly from the calendar row.
   const clickable = !!e.action;
   const idx = clickable ? _calendarEvents.indexOf(e) : -1;
   return `

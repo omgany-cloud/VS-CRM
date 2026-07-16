@@ -639,6 +639,12 @@ CREATE TABLE IF NOT EXISTS roles (
   -- to CFO/CEO by default, same segregation-of-duties reasoning as
   -- cc_approve and aml_clear.
   payment_confirm   INTEGER NOT NULL DEFAULT 0,
+  -- Marking an AFSA filing as actually submitted is a regulatory
+  -- assertion ("this was really filed with the regulator"), same
+  -- reasoning as payment_confirm — restricted by default to the roles
+  -- who'd realistically be the one filing (CFO/CEO for financial
+  -- reports, Compliance Officer/MLRO for the AML/compliance set).
+  afsa_submit       INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -707,6 +713,32 @@ CREATE TABLE IF NOT EXISTS workflow_instances (
   steps_json    TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_workflow_instances_tenant ON workflow_instances(tenant_id);
+
+-- AFSA regulatory filings (quarterly/annual financial reports + the fixed
+-- compliance set: AML/CTF report, breach notifications, annual compliance
+-- report). Replaces the old js/data.js reportSchedule static array —
+-- that had no backend at all, so a report's status could never actually
+-- be updated from the UI. One row per filing obligation; report_type
+-- values are 'Quarterly' | 'Annual' | 'AML/CTF' | 'Breach Notification' |
+-- 'Annual Compliance'. Breach Notification rows aren't on any recurring
+-- schedule (only created ad hoc if an actual breach happens), so none are
+-- seeded by default.
+CREATE TABLE IF NOT EXISTS afsa_reports (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id           INTEGER REFERENCES funds(id),
+  report_type       TEXT NOT NULL,
+  period            TEXT NOT NULL,
+  deadline          TEXT NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'Ожидается',
+  resp              TEXT,
+  submitted_at      TEXT,
+  submitted_by      TEXT,
+  document_url      TEXT,
+  notes             TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_afsa_reports_tenant ON afsa_reports(tenant_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —
@@ -732,6 +764,8 @@ if (!columnExists('roles', 'cc_approve')) db.exec("ALTER TABLE roles ADD COLUMN 
 db.exec("UPDATE roles SET cc_approve = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND cc_approve = 0");
 if (!columnExists('roles', 'payment_confirm')) db.exec("ALTER TABLE roles ADD COLUMN payment_confirm INTEGER NOT NULL DEFAULT 0");
 db.exec("UPDATE roles SET payment_confirm = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND payment_confirm = 0");
+if (!columnExists('roles', 'afsa_submit')) db.exec("ALTER TABLE roles ADD COLUMN afsa_submit INTEGER NOT NULL DEFAULT 0");
+db.exec("UPDATE roles SET afsa_submit = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO', 'COMPLIANCE_OFFICER', 'MLRO') AND afsa_submit = 0");
 if (!columnExists('capital_call_line_items', 'wire_confirm_url')) db.exec("ALTER TABLE capital_call_line_items ADD COLUMN wire_confirm_url TEXT");
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);
