@@ -1403,6 +1403,17 @@ function dealMoveStage(id, stage) {
     return;
   }
 
+  // Term Sheet / Переговоры mean the fund is actively structuring and
+  // negotiating the investment — that can't start before IC has actually
+  // approved the deal, same reasoning as the Закрыта gate above (and the
+  // same two fields, since castICVote only ever sets `ic`).
+  if ((stage === 'Term Sheet' || stage === 'Переговоры') && d.ic !== 'Одобрено' && d.icDecision !== 'Одобрено') {
+    showToast(`⛔ Нельзя перейти к «${stage}» без одобрения IC (текущее решение IC: ${d.ic || d.icDecision || 'Не подано'})`, 'red');
+    _renderDealModal(d);
+    renderPipeline(deals);
+    return;
+  }
+
   d.stage = stage;
   d.updatedAt = today();
   showToast(`✅ ${d.company} → ${stage}`, 'green');
