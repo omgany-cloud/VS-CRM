@@ -15,6 +15,20 @@ function signToken(user, tenant) {
   );
 }
 
+// Portal tokens identify a portfolio company, not an internal user — there
+// is no `sub` pointing at a `users` row, just `portal: true` plus the
+// portfolio row's own id/tenant. Kept structurally close to signToken()
+// (same secret, same 12h expiry) so GET /api/uploads/:id's generic
+// jwt.verify + tenantId check (server/index.js) already works against a
+// portal token with no changes needed there.
+function signPortalToken(portfolioRow) {
+  return jwt.sign(
+    { portal: true, portfolioId: portfolioRow.id, tenantId: portfolioRow.tenant_id, bin: portfolioRow.bin },
+    JWT_SECRET,
+    { expiresIn: '12h' }
+  );
+}
+
 // Any request whose role has the readOnly permission is blocked here,
 // regardless of which other permission flags it holds or which per-route
 // check (permission flag or literal role-code match) would otherwise have
@@ -61,6 +75,30 @@ function requireAuth(req, res, next) {
   }
 }
 
+// Express middleware for the LP/portfolio-company self-service portal
+// (portal.html) — a completely separate identity space from requireAuth's
+// internal users/roles above. Verifies a portal token, then re-reads the
+// portfolio row live (same "never trust the JWT for anything but identity"
+// reasoning as requireAuth re-reading role/active) so a company whose
+// record was deleted mid-session is rejected on its very next request.
+function requirePortalAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Missing bearer token' });
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!payload.portal) return res.status(401).json({ error: 'Not a portal token' });
+    const row = db.prepare('SELECT * FROM portfolio WHERE id = @id AND tenant_id = @tenantId')
+      .get(at({ id: payload.portfolioId, tenantId: payload.tenantId }));
+    if (!row) return res.status(401).json({ error: 'Portfolio company not found' });
+    req.portalCompany = row;
+    req.tenantId = payload.tenantId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 // 403 unless req.user.permissions[key] is truthy.
 function requirePermission(key) {
   return function (req, res, next) {
@@ -76,4 +114,4 @@ function requirePermission(key) {
 // routes that internal GP staff need but external committee members don't.
 const requireInternal = requirePermission('internal');
 
-module.exports = { signToken, requireAuth, requirePermission, requireInternal, JWT_SECRET };
+module.exports = { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET };

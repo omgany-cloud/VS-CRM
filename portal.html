@@ -187,14 +187,14 @@
       <label>Пароль</label>
       <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
     </div>
-    <button class="btn-primary" style="width:100%;padding:12px" onclick="doLogin()">
+    <button class="btn-primary" style="width:100%;padding:12px" id="loginBtn" onclick="doLogin()">
       <i class="fas fa-sign-in-alt" style="margin-right:8px"></i>Войти в систему
     </button>
     <div id="loginError" style="display:none;color:#f87171;font-size:12px;margin-top:10px;text-align:center"></div>
     <div style="margin-top:20px;padding:12px;background:rgba(59,130,246,0.06);border-radius:8px;
       border:1px solid rgba(59,130,246,0.2);font-size:11px;color:#64748b;text-align:center">
       <i class="fas fa-info-circle" style="margin-right:5px;color:#60a5fa"></i>
-      Демо-доступ: BIN <b style="color:#60a5fa">180340021847</b> · Пароль <b style="color:#60a5fa">demo123</b>
+      Демо-доступ: любой реальный BIN портфельной компании · Пароль <b style="color:#60a5fa">PortalDemo2025!</b>
     </div>
   </div>
 </div>
@@ -399,8 +399,13 @@
             <input type="date" id="upl_expiry"/>
           </div>
           <div class="fgroup fg-full">
-            <label>Ссылка на файл (Google Drive / Dropbox)</label>
-            <input type="url" id="upl_url" placeholder="https://drive.google.com/..."/>
+            <label>Файл (с компьютера) или ссылка (Google Drive / Dropbox)</label>
+            <div style="display:flex;gap:8px">
+              <input type="url" id="upl_url" placeholder="https://drive.google.com/..." style="flex:1"/>
+              <button type="button" class="btn-ghost" style="flex-shrink:0" onclick="portalAttachUpload('upl_url')" title="Загрузить с компьютера">
+                <i class="fas fa-paperclip"></i>
+              </button>
+            </div>
           </div>
           <div class="fgroup fg-full">
             <label>Комментарий</label>
@@ -470,8 +475,13 @@
             <input type="text" id="pay_ref" placeholder="PP-2025-0001"/>
           </div>
           <div class="fgroup fg-full">
-            <label>Ссылка на подтверждение (скан / PDF)</label>
-            <input type="url" id="pay_url" placeholder="https://drive.google.com/..."/>
+            <label>Подтверждение (скан / PDF с компьютера) или ссылка</label>
+            <div style="display:flex;gap:8px">
+              <input type="url" id="pay_url" placeholder="https://drive.google.com/..." style="flex:1"/>
+              <button type="button" class="btn-ghost" style="flex-shrink:0" onclick="portalAttachUpload('pay_url')" title="Загрузить с компьютера">
+                <i class="fas fa-paperclip"></i>
+              </button>
+            </div>
           </div>
         </div>
         <div style="margin-top:12px">
@@ -599,111 +609,31 @@ window.addEventListener('resize', () => {
 });
 
 /* ══════════════════════════════════════
-   PORTAL DATA (mirrors CRM portfolio[])
+   PORTAL DATA — real portfolio[] rows fetched from the server (see
+   /api/portal/login, /api/portal/me). There is no local mock company
+   data any more; `currentCompany` below IS the server's row (same
+   shape as the internal CRM's rowToPortfolio()).
 ══════════════════════════════════════ */
-const COMPANIES = {
-  '180340021847': {
-    pass: 'demo123',
-    name: 'TechHub Almaty',
-    sector: 'Технологии',
-    bin: '180340021847',
-    invested: 4,
-    value: 8.2,
-    fundShare: 22.2,
-    moic: 2.05,
-    manager: 'CEO',
-    status: 'Active',
-    nextAction: 'Квартальный Board Meeting',
-    nextActionDate: '2025-07-01',
-    covenants: [
-      { name:'Debt/EBITDA ≤ 4.0x', ok:true },
-      { name:'DSCR ≥ 1.2x', ok:true },
-      { name:'Минимальный Revenue $800K', ok:true },
-      { name:'Ежеквартальная отчётность', ok:true },
-    ],
-    payments: [
-      { date:'2025-07-15', amount:1500000, type:'Основной долг', status:'Предстоит' },
-      { date:'2025-08-15', amount:900000,  type:'Проценты',      status:'Предстоит' },
-      { date:'2025-10-15', amount:1500000, type:'Основной долг', status:'Предстоит' },
-      { date:'2026-01-15', amount:1500000, type:'Основной долг', status:'Предстоит' },
-    ],
-    requiredDocs: [
-      { type:'SHA / Кредитное соглашение', status:'OK',      date:'2024-03-15' },
-      { type:'Залоговые документы',         status:'OK',      date:'2024-03-20' },
-      { type:'Финотчётность Q1 2025',       status:'OK',      date:'2025-05-10' },
-      { type:'Финотчётность Q4 2024',       status:'OK',      date:'2025-02-10' },
-      { type:'Финотчётность Q3 2024',       status:'OK',      date:'2024-11-05' },
-      { type:'Страховой полис 2025',        status:'MISSING', date:'' },
-    ],
-  },
-  '200140023451': {
-    pass: 'medpoint2025',
-    name: 'MedPoint KZ',
-    sector: 'Здравоохранение',
-    bin: '200140023451',
-    invested: 5,
-    value: 9.5,
-    fundShare: 21.7,
-    moic: 1.9,
-    manager: 'Investment Manager',
-    status: 'Active',
-    nextAction: 'Проверка лицензий МЗ РК',
-    nextActionDate: '2025-07-15',
-    covenants: [
-      { name:'Debt/EBITDA ≤ 4.0x', ok:true },
-      { name:'DSCR ≥ 1.2x', ok:true },
-      { name:'Лицензии МЗ актуальны', ok:true },
-    ],
-    payments: [
-      { date:'2025-07-20', amount:2000000, type:'Основной долг', status:'Предстоит' },
-      { date:'2025-09-20', amount:1200000, type:'Проценты',      status:'Предстоит' },
-    ],
-    requiredDocs: [
-      { type:'SHA / Кредитное соглашение', status:'OK',      date:'2024-05-20' },
-      { type:'Залоговые документы',         status:'OK',      date:'2024-05-25' },
-      { type:'Финотчётность Q1 2025',       status:'OK',      date:'2025-05-15' },
-      { type:'Финотчётность Q4 2024',       status:'MISSING', date:'' },
-      { type:'Лицензия МЗ РК',             status:'OK',      date:'2025-02-01' },
-    ],
-  },
-  '190240034562': {
-    pass: 'grain2025',
-    name: 'GrainTech Partners',
-    sector: 'АПК',
-    bin: '190240034562',
-    invested: 6,
-    value: 7.2,
-    fundShare: 21.4,
-    moic: 1.2,
-    manager: 'CEO',
-    status: 'Monitoring',
-    nextAction: 'Предоставить отчёт Q1 2025',
-    nextActionDate: '2025-06-25',
-    covenants: [
-      { name:'Debt/EBITDA ≤ 5.0x', ok:true  },
-      { name:'DSCR ≥ 1.2x',        ok:false },
-      { name:'Ежеквартальная отчётность', ok:false },
-    ],
-    payments: [
-      { date:'2025-06-01', amount:3800000, type:'Основной долг', status:'Просрочен' },
-      { date:'2025-07-01', amount:2200000, type:'Проценты',      status:'Предстоит' },
-    ],
-    requiredDocs: [
-      { type:'SHA / Кредитное соглашение', status:'OK',      date:'2024-07-10' },
-      { type:'Залоговые документы',         status:'OK',      date:'2024-07-15' },
-      { type:'Финотчётность Q1 2025',       status:'MISSING', date:'' },
-      { type:'Финотчётность Q4 2024',       status:'MISSING', date:'' },
-      { type:'Страховой полис (урожай)',    status:'OK',      date:'2025-03-01' },
-    ],
-  },
-};
+const API_BASE = window.location.origin;
+
+// Generic checklist of required document types, same hardcoded list used
+// by the internal CRM's own Portfolio Documents tab (js/app.js) — nothing
+// in the schema models "which doc types are required for company X" as
+// real data yet, so this mirrors that existing convention rather than
+// inventing a second, divergent source of truth.
+const REQUIRED_DOC_TYPES = [
+  'SHA / Кредитное соглашение',
+  'Залоговые документы',
+  'Финотчётность Q1 2025',
+  'Финотчётность Q4 2024',
+  'Финотчётность Q3 2024',
+];
 
 /* ══ State ══ */
+let portalToken = null;
 let currentCompany = null;
 const finReports  = [];
-const uploadedDocs= [];
 const esgReports  = [];
-const payConfirms = [];
 
 /* ══ Helpers ══ */
 // One element per call (appended to the #portalToast container) instead
@@ -749,27 +679,48 @@ function statusBadge(st) {
 }
 
 /* ══ LOGIN ══ */
-function doLogin() {
+async function doLogin() {
   const bin  = document.getElementById('loginBin').value.trim();
   const pass = document.getElementById('loginPass').value;
   const errEl= document.getElementById('loginError');
-  const co   = COMPANIES[bin];
-  if (!co || co.pass !== pass) {
+  const btn  = document.getElementById('loginBtn');
+  errEl.style.display = 'none';
+  if (!bin || !pass) {
     errEl.style.display = 'block';
-    errEl.textContent   = 'Неверный BIN или пароль. Проверьте данные.';
+    errEl.textContent   = 'Введите BIN и пароль.';
     return;
   }
-  errEl.style.display = 'none';
-  currentCompany = co;
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('portalMain').style.display  = 'block';
-  document.getElementById('headerCompany').style.display = 'block';
-  document.getElementById('logoutBtn').style.display     = 'block';
-  document.getElementById('headerCompanyName').textContent = co.name;
-  initPortal();
+  btn.disabled = true;
+  try {
+    const res = await fetch(API_BASE + '/api/portal/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bin, password: pass }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      errEl.style.display = 'block';
+      errEl.textContent   = data.error || 'Неверный BIN или пароль. Проверьте данные.';
+      return;
+    }
+    portalToken = data.token;
+    currentCompany = data.company;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('portalMain').style.display  = 'block';
+    document.getElementById('headerCompany').style.display = 'block';
+    document.getElementById('logoutBtn').style.display     = 'block';
+    document.getElementById('headerCompanyName').textContent = currentCompany.name;
+    initPortal();
+  } catch (err) {
+    errEl.style.display = 'block';
+    errEl.textContent   = 'Не удалось связаться с сервером. Попробуйте ещё раз.';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function doLogout() {
+  portalToken = null;
   currentCompany = null;
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('portalMain').style.display  = 'none';
@@ -779,22 +730,94 @@ function doLogout() {
   document.getElementById('loginPass').value = '';
 }
 
+/* ══ FILE UPLOAD — self-contained (portal.html has no js/api-auth.js
+   include, deliberately: that file's apiFetch/READONLY_GATED_FN_NAMES/
+   version-banner machinery all assume the internal CRM's own login
+   screen and permission model, neither of which exists here). Mirrors
+   pickFile/uploadFile/resolveDocUrl from js/api-auth.js, scoped to
+   portalToken instead of the internal auth store. ══ */
+function portalPickFile(accept) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (accept) input.accept = accept;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    let settled = false;
+    const cleanup = () => { if (input.parentNode) input.parentNode.removeChild(input); };
+    input.addEventListener('change', () => {
+      settled = true;
+      resolve(input.files && input.files[0] ? input.files[0] : null);
+      cleanup();
+    }, { once: true });
+    window.addEventListener('focus', function onFocus() {
+      window.removeEventListener('focus', onFocus);
+      setTimeout(() => { if (!settled) { resolve(null); cleanup(); } }, 300);
+    }, { once: true });
+    input.click();
+  });
+}
+
+async function portalUploadFile(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(API_BASE + '/api/portal/uploads', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + portalToken },
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || ('HTTP ' + res.status));
+  }
+  return res.json(); // { id, url, name }
+}
+
+// GET /api/uploads/:id has no session/cookie to ride on for a bare <a>/
+// window.open — the portal token rides along as a query param instead.
+// External links (Google Drive, Dropbox, ...) pass through unchanged.
+function portalResolveUrl(url) {
+  if (!url || !url.startsWith('/api/uploads/')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 'token=' + encodeURIComponent(portalToken || '');
+}
+
+// Picks + uploads a file and drops its URL into the given <input> — used
+// by the paperclip button next to upl_url/pay_url. Leaves the field as a
+// plain editable URL afterward, so a company can just as well paste an
+// external Drive/Dropbox link instead if it prefers.
+async function portalAttachUpload(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const file = await portalPickFile();
+  if (!file) return;
+  try {
+    const uploaded = await portalUploadFile(file);
+    input.value = uploaded.url;
+    toast(`📎 Файл «${uploaded.name}» загружен`, '#22c55e');
+  } catch (err) {
+    toast('⚠ Не удалось загрузить файл: ' + err.message, '#ef4444');
+  }
+}
+
 /* ══ INIT ══ */
 function initPortal() {
   const c = currentCompany;
+  const fin = c.financials || {};
   document.getElementById('overviewCompanyName').textContent = c.name;
-  document.getElementById('overviewMeta').textContent = `${c.sector} · BIN: ${c.bin} · Доля фонда: ${c.fundShare}%`;
+  document.getElementById('overviewMeta').textContent = `${c.sector||'—'} · BIN: ${c.bin} · Доля фонда: ${c.fundShare||0}%`;
   document.getElementById('overviewStatus').outerHTML =
     `<span id="overviewStatus">${statusBadge(c.status)}</span>`;
-  document.getElementById('overviewManager').textContent = c.manager;
+  document.getElementById('overviewManager').textContent = c.manager || '—';
   document.getElementById('overviewNextAction').textContent = c.nextAction || '—';
   document.getElementById('overviewNextDate').textContent = c.nextActionDate ? `Дедлайн: ${c.nextActionDate}` : '';
 
   // KPI cards
+  const moic = c.moic || 0;
   const kpis = [
-    { label:'Инвестировано',   val:`$${c.invested}M`,  color:'#64748b' },
-    { label:'Текущая стоим.',  val:`$${c.value}M`,     color:'#22c55e' },
-    { label:'MOIC',            val:`${c.moic}x`,       color: c.moic>=2?'#22c55e':c.moic>=1.5?'#60a5fa':'#f97316' },
+    { label:'Инвестировано',   val:`$${c.invested||0}M`,  color:'#64748b' },
+    { label:'Текущая стоим.',  val:`$${c.value||0}M`,     color:'#22c55e' },
+    { label:'MOIC',            val:`${moic}x`,       color: moic>=2?'#22c55e':moic>=1.5?'#60a5fa':'#f97316' },
   ];
   document.getElementById('overviewKPIs').innerHTML = kpis.map(k=>`
     <div class="kpi-card">
@@ -802,17 +825,24 @@ function initPortal() {
       <div class="kpi-label">${k.label}</div>
     </div>`).join('');
 
-  // Covenants
-  document.getElementById('overviewCovenants').innerHTML = (c.covenants||[]).map(cv=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1a2335;font-size:12px">
-      <i class="fas ${cv.ok?'fa-check-circle':'fa-times-circle'}" style="color:${cv.ok?'#22c55e':'#ef4444'};width:16px;font-size:13px"></i>
-      <span style="color:${cv.ok?'#94a3b8':'#fca5a5'}">${cv.name}</span>
-    </div>`).join('');
+  // Covenants — from the same p.financials.covenants[] the internal CRM's
+  // own Portfolio Finance tab reads (js/app.js), so a covenant added there
+  // shows up here identically, no separate data entry.
+  document.getElementById('overviewCovenants').innerHTML = (fin.covenants||[]).length
+    ? fin.covenants.map(cv=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1a2335;font-size:12px">
+        <i class="fas ${cv.ok?'fa-check-circle':'fa-times-circle'}" style="color:${cv.ok?'#22c55e':'#ef4444'};width:16px;font-size:13px"></i>
+        <span style="color:${cv.ok?'#94a3b8':'#fca5a5'}">${cv.name}</span>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:#475569;font-style:italic">Ковенанты не заданы</div>';
 
-  // Payment summary
-  const total   = (c.payments||[]).reduce((s,p)=>s+p.amount,0);
-  const overdue = (c.payments||[]).filter(p=>p.status==='Просрочен').reduce((s,p)=>s+p.amount,0);
-  const next    = (c.payments||[]).find(p=>p.status==='Предстоит');
+  // Payment summary / table — from p.financials.paymentSchedule[] (real
+  // debt schedule, only present for companies with fund debt; empty for
+  // pure-equity deals like NomadTech).
+  const schedule = fin.paymentSchedule || [];
+  const total   = schedule.reduce((s,p)=>s+p.amount,0);
+  const overdue = schedule.filter(p=>p.status==='Просрочен').reduce((s,p)=>s+p.amount,0);
+  const next    = schedule.find(p=>p.status==='Предстоит');
   document.getElementById('paymentSummary').innerHTML = [
     { label:'Общий остаток', val:fmtKZT(total),  color:'#f97316' },
     { label:'Просрочено',    val:fmtKZT(overdue), color: overdue>0?'#ef4444':'#22c55e' },
@@ -820,7 +850,7 @@ function initPortal() {
   ].map(k=>`<div class="kpi-card"><div class="kpi-val" style="color:${k.color}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
 
   // Payment table
-  document.getElementById('paymentTableBody').innerHTML = (c.payments||[]).map(p=>{
+  document.getElementById('paymentTableBody').innerHTML = schedule.length ? schedule.map(p=>{
     const sc = p.status==='Оплачен'?'green':p.status==='Просрочен'?'red':'yellow';
     return `<tr>
       <td>${p.date}</td><td>${p.type}</td>
@@ -830,7 +860,7 @@ function initPortal() {
         ? `<button class="btn-ghost" style="font-size:10px;padding:3px 9px"
              onclick="prefillPayment(${p.amount},'${p.date}')">Оплатить</button>`:''}</td>
     </tr>`;
-  }).join('');
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#475569;font-style:italic;padding:14px">Платёжный график пуст</td></tr>';
 
   // Required docs
   renderRequiredDocs();
@@ -841,35 +871,38 @@ function initPortal() {
 }
 
 function renderRequiredDocs() {
-  const c = currentCompany;
-  document.getElementById('requiredDocsList').innerHTML = (c.requiredDocs||[]).map(d=>`
-    <div class="doc-row ${d.status==='OK'?'ok':'missing'}">
-      <div class="doc-icon" style="background:${d.status==='OK'?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}">
-        <i class="fas fa-file-alt" style="color:${d.status==='OK'?'#4ade80':'#f87171'}"></i>
+  const files = (currentCompany.documents && currentCompany.documents.files) || [];
+  document.getElementById('requiredDocsList').innerHTML = REQUIRED_DOC_TYPES.map(rt=>{
+    const found = files.find(f=>f.type===rt);
+    return `<div class="doc-row ${found?'ok':'missing'}">
+      <div class="doc-icon" style="background:${found?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'}">
+        <i class="fas fa-file-alt" style="color:${found?'#4ade80':'#f87171'}"></i>
       </div>
       <div class="doc-info">
-        <div class="doc-name" style="color:${d.status==='OK'?'#e2e8f0':'#fca5a5'}">${d.type}</div>
-        <div class="doc-meta">${d.status==='OK'?`Загружен: ${d.date}`:'ОТСУТСТВУЕТ — загрузите через форму ниже'}</div>
+        <div class="doc-name" style="color:${found?'#e2e8f0':'#fca5a5'}">${rt}</div>
+        <div class="doc-meta">${found?`Загружен: ${found.date}`:'ОТСУТСТВУЕТ — загрузите через форму ниже'}</div>
       </div>
-      <span class="sbadge ${d.status==='OK'?'green':'red'}">${d.status==='OK'?'✓ OK':'НУЖЕН'}</span>
-    </div>`).join('');
+      <span class="sbadge ${found?'green':'red'}">${found?'✓ OK':'НУЖЕН'}</span>
+    </div>`;
+  }).join('');
 }
 
 function renderUploadedDocs() {
   const el = document.getElementById('uploadedDocsList');
-  if (!uploadedDocs.length) {
+  const files = (currentCompany.documents && currentCompany.documents.files) || [];
+  if (!files.length) {
     el.innerHTML = '<div style="font-size:12px;color:#475569;font-style:italic">Документов ещё не загружено</div>';
     return;
   }
-  el.innerHTML = uploadedDocs.map((d,i)=>`
+  el.innerHTML = files.slice().reverse().map(d=>`
     <div class="doc-row ok">
       <div class="doc-icon" style="background:rgba(34,197,94,0.1)">
         <i class="fas fa-file-check" style="color:#4ade80"></i>
       </div>
       <div class="doc-info">
         <div class="doc-name">${d.name}</div>
-        <div class="doc-meta">${d.type} · ${d.period||'—'} · Загружен: ${d.date}</div>
-        ${d.url?`<a href="${d.url}" target="_blank" style="font-size:10px;color:#60a5fa">Открыть ↗</a>`:''}
+        <div class="doc-meta">${d.type||'—'} · ${d.period||'—'} · Загружен: ${d.date}</div>
+        ${d.url?`<a href="${portalResolveUrl(d.url)}" target="_blank" style="font-size:10px;color:#60a5fa">Открыть ↗</a>`:''}
       </div>
     </div>`).join('');
 }
@@ -941,7 +974,7 @@ function clearFinancialForm() {
 }
 
 /* ══ DOCUMENTS ══ */
-function submitDocument() {
+async function submitDocument() {
   const type   = document.getElementById('upl_type').value;
   const name   = document.getElementById('upl_name').value.trim();
   const period = document.getElementById('upl_period').value.trim();
@@ -950,18 +983,24 @@ function submitDocument() {
   const comment= document.getElementById('upl_comment').value.trim();
   if (!name) { toast('⚠ Введите название файла', '#ef4444'); return; }
 
-  uploadedDocs.push({ type, name, period, expiry, url, comment, date:today(), company:currentCompany.name });
-  renderUploadedDocs();
-
-  // Mark as OK in required docs if matching
-  const c = currentCompany;
-  const rd = c.requiredDocs.find(d => d.status==='MISSING' && (d.type.includes(period)||name.toLowerCase().includes(period.toLowerCase())));
-  if (rd) { rd.status='OK'; rd.date=today(); renderRequiredDocs(); }
-
-  toast(`✅ Документ «${name}» загружен`, '#22c55e');
-  ['upl_name','upl_period','upl_expiry','upl_url','upl_comment'].forEach(id=>{
-    document.getElementById(id).value='';
-  });
+  try {
+    const res = await fetch(API_BASE + '/api/portal/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + portalToken },
+      body: JSON.stringify({ type, name, period, expiry, url, comment }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    currentCompany = data.company;
+    renderUploadedDocs();
+    renderRequiredDocs();
+    toast(`✅ Документ «${name}» загружен`, '#22c55e');
+    ['upl_name','upl_period','upl_expiry','upl_url','upl_comment'].forEach(id=>{
+      document.getElementById(id).value='';
+    });
+  } catch (err) {
+    toast('⚠ Не удалось сохранить документ: ' + err.message, '#ef4444');
+  }
 }
 
 /* ══ PAYMENTS ══ */
@@ -972,7 +1011,7 @@ function prefillPayment(amount, date) {
   document.getElementById('pay_bank').focus();
 }
 
-function submitPaymentConfirm() {
+async function submitPaymentConfirm() {
   const date   = document.getElementById('pay_date').value;
   const amount = parseInt(document.getElementById('pay_amount').value)||0;
   const bank   = document.getElementById('pay_bank').value.trim();
@@ -981,12 +1020,23 @@ function submitPaymentConfirm() {
   if (!amount) { toast('⚠ Введите сумму платежа', '#ef4444'); return; }
   if (!bank)   { toast('⚠ Укажите банк-отправитель', '#ef4444'); return; }
 
-  payConfirms.push({ date, amount, bank, ref, url, company:currentCompany.name });
-  toast(`✅ Подтверждение платежа ${fmtKZT(amount)} от ${date} отправлено в фонд`, '#22c55e');
-  ['pay_date','pay_amount','pay_bank','pay_ref','pay_url'].forEach(id=>{
-    document.getElementById(id).value='';
-  });
-  document.getElementById('pay_date').value = today();
+  try {
+    const res = await fetch(API_BASE + '/api/portal/payment-confirmations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + portalToken },
+      body: JSON.stringify({ date, amount, bank, ref, url }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    currentCompany = data.company;
+    toast(`✅ Подтверждение платежа ${fmtKZT(amount)} от ${date} отправлено в фонд`, '#22c55e');
+    ['pay_date','pay_amount','pay_bank','pay_ref','pay_url'].forEach(id=>{
+      document.getElementById(id).value='';
+    });
+    document.getElementById('pay_date').value = today();
+  } catch (err) {
+    toast('⚠ Не удалось отправить подтверждение: ' + err.message, '#ef4444');
+  }
 }
 
 /* ══ ESG ══ */

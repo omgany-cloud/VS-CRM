@@ -13,7 +13,7 @@ const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db, at } = require('./db');
-const { signToken, requireAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
+const { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
 const { rowToUser } = require('./usersMapping');
@@ -176,6 +176,110 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
     user: { id: req.user.id, email: req.user.email, name: req.user.name, role: req.user.role },
     permissions: req.user.permissions,
   });
+});
+
+/* ===== Portal (portal.html) — LP / portfolio-company self-service =====
+   A separate identity space from the internal users/roles above: a portal
+   "account" is a row in the existing `portfolio` table, not a `users` row.
+   Per explicit product decision, there is no per-company password —
+   every portfolio company authenticates with its own BIN plus this one
+   shared demo password. That's a real limitation (anyone who knows a
+   company's BIN and this password can act as that company), acceptable
+   only because this whole app is a PoC; a production version would need
+   real per-company credentials before going live. */
+const PORTAL_DEMO_PASSWORD = process.env.PORTAL_DEMO_PASSWORD || 'PortalDemo2025!';
+
+app.post('/api/portal/login', (req, res) => {
+  const { bin, password } = req.body || {};
+  if (!bin || !password) return res.status(400).json({ error: 'bin and password are required' });
+  const row = db.prepare('SELECT * FROM portfolio WHERE bin = ?').get(String(bin).trim());
+  if (!row || password !== PORTAL_DEMO_PASSWORD) {
+    return res.status(401).json({ error: 'Неверный BIN или пароль' });
+  }
+  const token = signPortalToken(row);
+  res.json({ token, company: rowToPortfolio(row) });
+});
+
+// Lets an already-logged-in portal session refresh its own company record
+// (e.g. after another tab/device submitted a document) without re-login —
+// same purpose as GET /api/auth/me for internal users.
+app.get('/api/portal/me', requirePortalAuth, (req, res) => {
+  res.json({ company: rowToPortfolio(req.portalCompany) });
+});
+
+// Reuses the same disk-storage multer instance as POST /api/uploads, just
+// behind requirePortalAuth instead of requireAuth+requireInternal — a
+// portal company is never an internal CRM user. GET /api/uploads/:id needs
+// no changes: it already verifies any valid JWT's tenantId generically.
+app.post('/api/portal/uploads', requirePortalAuth, (req, res) => {
+  uploadMiddleware.single('file')(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE' ? `File exceeds the ${MAX_UPLOAD_BYTES / 1024 / 1024}MB limit` : err.message;
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded, or file type not allowed (PDF, image, Word, Excel only)' });
+    }
+    const info = db.prepare(`
+      INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+      VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+    `).run(at({
+      tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
+      mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: 'Портал: ' + req.portalCompany.name,
+    }));
+    res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
+  });
+});
+
+// Persists a portal-submitted document into the same documents.files[]
+// array the internal Portfolio Documents tab already reads (see
+// js/app.js's requiredTypes/renderRequiredDocs equivalent) — a document
+// uploaded here shows up as "present" in the CRM immediately, no separate
+// approval step (documents are evidence, not a workflow gate; contrast
+// with Capital Call payment confirmation, which IS gated, see ccApprove).
+app.post('/api/portal/documents', requirePortalAuth, (req, res) => {
+  const { type, name, period, expiry, url, comment } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const row = req.portalCompany;
+  const documents = JSON.parse(row.documents_json || '{}');
+  documents.files = documents.files || [];
+  documents.files.push({
+    type: type || 'Прочее', name, period: period || '',
+    date: new Date().toISOString().slice(0, 10),
+    uploadedBy: 'Портал: ' + row.name, expiryDate: expiry || '',
+    status: 'OK', url: url || '', comment: comment || '',
+  });
+  db.prepare('UPDATE portfolio SET documents_json = @documentsJson, last_updated = @lastUpdated WHERE id = @id AND tenant_id = @tenantId')
+    .run(at({ documentsJson: JSON.stringify(documents), lastUpdated: new Date().toISOString(), id: row.id, tenantId: req.tenantId }));
+  const fresh = db.prepare('SELECT * FROM portfolio WHERE id = ?').get(row.id);
+  res.status(201).json({ company: rowToPortfolio(fresh) });
+});
+
+// Same evidence-only reasoning as above — recorded under financials for
+// the fund team to review, but deliberately does NOT flip any
+// paymentSchedule[] entry's status to "Оплачен" itself. Auto-trusting an
+// unconfirmed claim from the paying counterparty is exactly the "phantom
+// confirmation" gap Capital Call payment confirmation was built to close
+// this same session (see paymentConfirm permission); a portfolio-company
+// debt payment deserves the same internal-review step, which is a
+// separate, not-yet-built CRM-side feature — this endpoint only makes the
+// claim visible and durable, it doesn't adjudicate it.
+app.post('/api/portal/payment-confirmations', requirePortalAuth, (req, res) => {
+  const { date, amount, bank, ref, url } = req.body || {};
+  if (!amount) return res.status(400).json({ error: 'amount is required' });
+  if (!bank) return res.status(400).json({ error: 'bank is required' });
+  const row = req.portalCompany;
+  const financials = JSON.parse(row.financials_json || '{}');
+  financials.paymentConfirmations = financials.paymentConfirmations || [];
+  financials.paymentConfirmations.push({
+    date: date || new Date().toISOString().slice(0, 10), amount: Number(amount) || 0,
+    bank, ref: ref || '', url: url || '',
+    submittedAt: new Date().toISOString(), submittedBy: 'Портал: ' + row.name,
+  });
+  db.prepare('UPDATE portfolio SET financials_json = @financialsJson, last_updated = @lastUpdated WHERE id = @id AND tenant_id = @tenantId')
+    .run(at({ financialsJson: JSON.stringify(financials), lastUpdated: new Date().toISOString(), id: row.id, tenantId: req.tenantId }));
+  const fresh = db.prepare('SELECT * FROM portfolio WHERE id = ?').get(row.id);
+  res.status(201).json({ company: rowToPortfolio(fresh) });
 });
 
 function slugify(name) {
