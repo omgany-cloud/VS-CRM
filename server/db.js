@@ -16,8 +16,11 @@ const path = require('path');
 const fs = require('fs');
 const { DatabaseSync } = require('node:sqlite');
 
-const DB_PATH = path.join(__dirname, 'data', 'crm.sqlite');
-fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+// Overridable so the test suite (server/test/) can point at a throwaway
+// file instead of the real pilot database — everything else about this
+// module is unchanged either way.
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'crm.sqlite');
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
@@ -826,6 +829,10 @@ for (const col of ['neg_meetings_json', 'neg_disputed_items_json', 'neg_blockers
 if (!columnExists('portfolio', 'archived')) db.exec("ALTER TABLE portfolio ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
 if (!columnExists('portfolio', 'archived_at')) db.exec("ALTER TABLE portfolio ADD COLUMN archived_at TEXT");
 if (!columnExists('portfolio', 'archived_by')) db.exec("ALTER TABLE portfolio ADD COLUMN archived_by TEXT");
+// Nullable: a company with no password set yet simply can't log into the
+// portal (no fallback to anything guessable) until staff generates one —
+// see PUT /api/portfolio/:id/portal-password (server/index.js).
+if (!columnExists('portfolio', 'portal_password_hash')) db.exec("ALTER TABLE portfolio ADD COLUMN portal_password_hash TEXT");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

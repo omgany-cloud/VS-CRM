@@ -250,7 +250,7 @@ const READONLY_GATED_FN_NAMES = [
   'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveIndividualCC', 'approveCC',
   'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
   'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
-  'saveNewConflictApproval', 'decideConflictApproval', 'saveNewUser',
+  'saveNewConflictApproval', 'decideConflictApproval', 'saveNewCoiEntry', 'saveNewUser',
   'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveNewRole',
   'saveRoleEdit', 'deleteRole', 'wfAction', 'withdrawWf', 'startWorkflow',
   'saveNewEngagement', 'updateEngPayment', 'obAddTaskComment',
@@ -263,7 +263,7 @@ const READONLY_GATED_FN_NAMES = [
   'portNestedField',
   'deleteLP', 'setLPStatus', 'deleteCC', 'deleteDeal',
   'deletePortfolioCompany', 'archivePortfolioCompany', 'restorePortfolioCompany',
-  'deleteEngagement', 'deleteObClient',
+  'deleteEngagement', 'deleteObClient', 'generatePortalPassword',
 ];
 const READONLY_GATED_FN_RE = new RegExp('^\\s*(' + READONLY_GATED_FN_NAMES.join('|') + ')\\s*\\(');
 // Triggers that don't call a gated function directly by name (e.g. the

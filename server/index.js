@@ -18,6 +18,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db, at } = require('./db');
 const { runBackup, scheduleBackups } = require('./backup');
+const { logError } = require('./logger');
 const { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
@@ -80,6 +81,20 @@ app.use(helmet({
 }));
 
 app.use(express.json());
+
+// Without these, an exception thrown outside any request handler (e.g. in
+// a setInterval callback, or a rejected promise nobody awaited) used to
+// just crash the process with nothing but whatever happened to be in the
+// terminal at the time — now it's logged first (server/logger.js).
+// Deliberately still exits after logging: swallowing the crash and
+// limping on in a possibly-corrupted state is worse than a clean restart.
+process.on('uncaughtException', (err) => {
+  logError(err, 'uncaughtException');
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  logError(reason instanceof Error ? reason : new Error(String(reason)), 'unhandledRejection');
+});
 
 // Changes on every server restart with zero manual bookkeeping (no build
 // step in this app, so there's no bundle hash to key off) — the client
@@ -205,7 +220,9 @@ app.get('/api/uploads/:id', (req, res) => {
 // email/BIN in the request body, so it can't be bypassed by cycling
 // through different accounts from the same machine.
 const authRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  // Overridable so the test suite (server/test/auth.test.js) can use a
+  // short window instead of waiting out a real 15 minutes.
+  windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
@@ -256,23 +273,38 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 /* ===== Portal (portal.html) — LP / portfolio-company self-service =====
    A separate identity space from the internal users/roles above: a portal
    "account" is a row in the existing `portfolio` table, not a `users` row.
-   Per explicit product decision, there is no per-company password —
-   every portfolio company authenticates with its own BIN plus this one
-   shared demo password. That's a real limitation (anyone who knows a
-   company's BIN and this password can act as that company), acceptable
-   only because this whole app is a PoC; a production version would need
-   real per-company credentials before going live. */
-const PORTAL_DEMO_PASSWORD = process.env.PORTAL_DEMO_PASSWORD || 'PortalDemo2025!';
-
+   Each company now has its own real, hashed password (portal_password_hash)
+   set by internal staff via PUT /api/portfolio/:id/portal-password below —
+   replaces the previous shared-demo-password-for-every-company scheme.
+   Note: the BIN lookup below still isn't tenant-scoped (no tenant is known
+   yet at login time, and the portal login form has no tenant field) — a
+   BIN collision across two different tenants could match the wrong
+   company's row. Real Kazakhstani business registration numbers are
+   globally unique in practice, so this is a low-probability, documented
+   limitation rather than a fix attempted here. */
 app.post('/api/portal/login', authRateLimit, (req, res) => {
   const { bin, password } = req.body || {};
   if (!bin || !password) return res.status(400).json({ error: 'bin and password are required' });
   const row = db.prepare('SELECT * FROM portfolio WHERE bin = ?').get(String(bin).trim());
-  if (!row || password !== PORTAL_DEMO_PASSWORD) {
+  if (!row || !row.portal_password_hash || !bcrypt.compareSync(password, row.portal_password_hash)) {
     return res.status(401).json({ error: 'Неверный BIN или пароль' });
   }
   const token = signPortalToken(row);
   res.json({ token, company: rowToPortfolio(row) });
+});
+
+// Internal-staff action: (re)generates a random password for a portfolio
+// company's portal login, returned ONCE in this response and never
+// persisted or retrievable in plaintext again — matches the "shown once,
+// staff relays it manually" flow (no email infrastructure exists to
+// automate delivery).
+app.put('/api/portfolio/:id/portal-password', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
+  const password = crypto.randomBytes(9).toString('base64url');
+  const hash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE portfolio SET portal_password_hash = ? WHERE id = ? AND tenant_id = ?').run(hash, existing.id, req.tenantId);
+  res.json({ password });
 });
 
 // Reuses the same disk-storage multer instance as POST /api/uploads, just
@@ -2057,6 +2089,19 @@ app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) 
 /* ===== Static frontend ===== */
 const FRONTEND_ROOT = path.join(__dirname, '..');
 app.use(express.static(FRONTEND_ROOT));
+
+// Express only treats a 4-arg function as error-handling middleware, and
+// only reaches it for errors passed to next(err) or thrown inside an
+// async route — most routes above already catch their own errors and
+// return a JSON response directly, so this is a backstop for whatever
+// slips through, not the primary error path. Must be registered after
+// every route (Express error middleware only catches errors from routes
+// registered before it).
+app.use((err, req, res, next) => {
+  logError(err, `${req.method} ${req.path}`);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // Immediate snapshot on every startup, then a recurring one for as long
 // as the process stays up — see server/backup.js.

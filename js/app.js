@@ -2483,6 +2483,42 @@ async function restorePortfolioCompany(id) {
   }
 }
 
+// No email infrastructure exists to automate delivery — the generated
+// password is shown once in a dialog that stays open until staff
+// dismisses it (unlike a toast, which auto-disappears before anyone
+// could copy it down), then relayed to the LP manually. It is never
+// retrievable again after this — server/index.js never stores or logs
+// the plaintext, only its bcrypt hash.
+async function generatePortalPassword(id) {
+  const p = portfolio.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Сгенерировать новый пароль портала для «${p.name}»? Старый пароль (если был) перестанет работать.`)) return;
+  let password;
+  try {
+    const res = await apiFetch(`/api/portfolio/${id}/portal-password`, { method: 'PUT' });
+    password = res.password;
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'genPortalPwOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#1c2333;border:1px solid #2a3448;border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-bottom:6px"><i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>Пароль портала — ${escapeHtml(p.name)}</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">BIN для входа: <b>${escapeHtml(p.bin || '—')}</b>. Пароль показывается один раз — сообщите его LP лично, повторно посмотреть будет нельзя.</div>
+      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 12px;margin-bottom:16px">
+        <code id="genPortalPw" style="flex:1;font-size:15px;color:#22c55e;font-weight:700;letter-spacing:0.5px;user-select:all">${escapeHtml(password)}</code>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('genPortalPw').textContent).then(()=>showToast('📋 Скопировано','green'))"
+          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-copy"></i></button>
+      </div>
+      <button onclick="document.getElementById('genPortalPwOverlay').remove()"
+        style="width:100%;background:#3b82f6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил пароль</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
 /* ── Auto-status calculation ── */
 function portAutoStatus(p) {
   if (!p.financials) return p.status || 'Active';
@@ -2856,6 +2892,9 @@ function _renderPortfolioModal(p) {
             style="background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
             ${['Active','Monitoring','Problem'].map(s=>`<option value="${s}" ${p.status===s?'selected':''}>${portStatusLabel(s)}</option>`).join('')}
           </select>
+          <button onclick="generatePortalPassword(${p.id})" title="Сгенерировать пароль портала"
+            style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.3);color:#eab308;width:32px;height:32px;
+              border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-key"></i></button>
           ${p.archived
             ? `<button onclick="restorePortfolioCompany(${p.id})" title="Восстановить из архива"
                 style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;width:32px;height:32px;

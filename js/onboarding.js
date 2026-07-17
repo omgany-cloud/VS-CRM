@@ -106,7 +106,7 @@ async function createObClient(data) {
     showToast('⚠️ Клиент создан, но задачи не удалось сохранить: ' + err.message, 'red');
   }
 
-  if (checkRestrictedList(client)) {     // auto-check
+  if (await checkRestrictedList(client)) {     // auto-check
     apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify({ restrictedMatch: true }) })
       .catch(err => showToast('⚠️ Не удалось сохранить признак Restricted List: ' + err.message, 'orange'));
   }
@@ -211,15 +211,18 @@ function updateClientPhase(clientId) {
    RESTRICTED LIST CHECK
 ═══════════════════════════════════════════════════ */
 
-function checkRestrictedList(client) {
+async function checkRestrictedList(client) {
   const nameL = client.name.toLowerCase();
   const match = restrictedList.find(r => nameL.includes(r.company.toLowerCase()) || r.company.toLowerCase().includes(nameL));
   if (match) {
     client.restrictedMatch = true;
-    // Auto-create COI
+    // Auto-create COI — persisted via the API (previously this only ever
+    // pushed to the local coiRegistry array and never called the server,
+    // so the toast below claiming "COI создан" was a lie: the record
+    // silently vanished on the next page reload. POST /api/coi-registry
+    // already existed and was correctly built, nothing here called it.
     const coiId = `COI-${new Date().getFullYear()}-${String(++obCoiIdCounter).padStart(3,'0')}`;
-    coiRegistry.push({
-      id:            obCoiIdCounter,
+    const payload = {
       coiId,
       date:          new Date().toISOString().slice(0,10),
       conflictType:  'Restricted List Match',
@@ -232,8 +235,14 @@ function checkRestrictedList(client) {
       reviewDate:    obAddBizDays(new Date(), 90).toISOString().slice(0,10),
       resolution:    '',
       linkedClientId: client.id,
-    });
-    showToast(`⚠️ Клиент "${client.name}" найден в Restricted List! COI создан.`, 'red');
+    };
+    try {
+      const created = await apiFetch('/api/coi-registry', { method: 'POST', body: JSON.stringify(payload) });
+      coiRegistry.push(created);
+      showToast(`⚠️ Клиент "${client.name}" найден в Restricted List! COI создан.`, 'red');
+    } catch (err) {
+      showToast(`⚠️ Клиент "${client.name}" найден в Restricted List, но COI не удалось сохранить: ` + err.message, 'red');
+    }
     return true;
   }
   return false;
@@ -2642,7 +2651,7 @@ async function submitObTask(taskId) {
       task.status = 'escalated';
       showToast('🟡 Эскалация к CO', 'orange');
     }
-    if (fd.f_restrictedMatch === 'Да') checkRestrictedList(client);
+    if (fd.f_restrictedMatch === 'Да') await checkRestrictedList(client);
   }
 
   if (task.formKey === 'dd_outcome') {
@@ -5106,7 +5115,7 @@ function renderRestrictedListPage() {
             ${restrictedList.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-ban" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4"></i>Restricted List пуст</td></tr>` :
             restrictedList.map(r => `
               <tr>
-                <td style="font-weight:700;color:#ef4444">${r.company}</td>
+                <td style="font-weight:700;color:#ef4444">${escapeHtml(r.company)}</td>
                 <td style="font-size:12px">${r.sector}</td>
                 <td style="font-size:12px;color:#3b82f6">${r.fund}</td>
                 <td style="font-weight:700">${r.ownershipPct}%</td>
@@ -5127,7 +5136,13 @@ function renderRestrictedListPage() {
     <div class="card">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-exclamation-triangle" style="color:#f97316;margin-right:6px"></i>Реестр конфликтов интересов (COI)</span>
-        <span style="font-size:12px;color:#8a9bbf">${coiRegistry.length} записей</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;color:#8a9bbf">${coiRegistry.length} записей</span>
+          <button onclick="openAddCoiModal()"
+            style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);color:#fb923c;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+            <i class="fas fa-plus"></i> Добавить запись
+          </button>
+        </div>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -5141,7 +5156,7 @@ function renderRestrictedListPage() {
                   <td style="font-size:11px;color:#8b5cf6;font-weight:700">${r.coiId}</td>
                   <td style="font-size:12px">${r.date}</td>
                   <td style="font-size:12px">${r.conflictType}</td>
-                  <td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.parties}">${r.parties}</td>
+                  <td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.parties)}">${escapeHtml(r.parties)}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${sevCfg.bg};color:${sevCfg.c}">${r.severity}</span></td>
                   <td><span style="font-size:11px;font-weight:700;color:${r.status==='Resolved'?'#22c55e':'#f97316'}">${r.status}</span></td>
                   <td style="font-size:12px">${r.responsible}</td>
@@ -5254,6 +5269,107 @@ async function saveNewRestrictedEntry() {
     closeAddRestrictedModal();
     renderRestrictedListPage();
     showToast(`✅ "${created.company}" добавлена в Restricted List`, 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
+}
+
+/* ── COI Registry: manual Add Entry Modal ──────────────────
+   For conflicts identified by means other than the Restricted-List
+   name-matching auto-detector in checkRestrictedList() above (e.g. a
+   personal relationship, insider knowledge) — same POST /api/coi-registry
+   endpoint either way. */
+function openAddCoiModal() {
+  const modal   = document.getElementById('modal-coi-add');
+  const overlay = document.getElementById('coiAddOverlay');
+  if (!modal) return;
+  if (overlay) overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+
+  const inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
+  const labelStyle = 'font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase';
+
+  document.getElementById('coiAddModalContent').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="grid-column:1/-1">
+        <label style="${labelStyle}">Стороны конфликта *</label>
+        <input type="text" id="coi_parties" placeholder="ФИО / компания А / компания Б..." style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Тип конфликта</label>
+        <input type="text" id="coi_conflictType" placeholder="Personal Relationship, Insider Info..." style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Severity</label>
+        <select id="coi_severity" style="${inputStyle}">
+          <option value="Low">Low</option>
+          <option value="Medium" selected>Medium</option>
+          <option value="High">High</option>
+          <option value="Critical">Critical</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="${labelStyle}">Описание *</label>
+        <input type="text" id="coi_description" placeholder="Что именно за конфликт..." style="${inputStyle}" />
+      </div>
+      <div style="grid-column:1/-1">
+        <label style="${labelStyle}">Меры / ограничения</label>
+        <input type="text" id="coi_measures" placeholder="Какие меры приняты..." style="${inputStyle}" />
+      </div>
+      <div>
+        <label style="${labelStyle}">Ответственный</label>
+        <input type="text" id="coi_responsible" value="CO" style="${inputStyle}" />
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button type="button" onclick="closeAddCoiModal()"
+        style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
+        Отмена
+      </button>
+      <button type="button" onclick="saveNewCoiEntry()"
+        style="background:linear-gradient(135deg,#f97316,#dc2626);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-plus" style="margin-right:6px"></i>Добавить
+      </button>
+    </div>`;
+
+  modal.style.display = 'flex';
+}
+
+function closeAddCoiModal() {
+  const modal   = document.getElementById('modal-coi-add');
+  const overlay = document.getElementById('coiAddOverlay');
+  if (modal)   modal.style.display   = 'none';
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function saveNewCoiEntry() {
+  const parties = document.getElementById('coi_parties')?.value?.trim();
+  const description = document.getElementById('coi_description')?.value?.trim();
+  if (!parties)     { showToast('⚠️ Укажите стороны конфликта', 'red'); return; }
+  if (!description) { showToast('⚠️ Укажите описание', 'red'); return; }
+
+  const entry = {
+    coiId:        `COI-${new Date().getFullYear()}-${String(++obCoiIdCounter).padStart(3,'0')}`,
+    date:         new Date().toISOString().slice(0,10),
+    conflictType: document.getElementById('coi_conflictType')?.value?.trim() || 'Other',
+    parties,
+    severity:     document.getElementById('coi_severity')?.value || 'Medium',
+    status:       'Open',
+    description,
+    measures:     document.getElementById('coi_measures')?.value?.trim() || '',
+    responsible:  document.getElementById('coi_responsible')?.value?.trim() || 'CO',
+    reviewDate:   obAddBizDays(new Date(), 90).toISOString().slice(0,10),
+    resolution:   '',
+    linkedClientId: null,
+  };
+
+  try {
+    const created = await apiFetch('/api/coi-registry', { method: 'POST', body: JSON.stringify(entry) });
+    coiRegistry.push(created);
+    closeAddCoiModal();
+    renderRestrictedListPage();
+    showToast(`✅ Запись COI ${created.coiId} добавлена`, 'green');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
   }

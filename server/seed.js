@@ -1070,7 +1070,13 @@ function seedOnboarding(tenantId) {
 
     for (const e of engagements) {
       const mappedClientId = e.clientId != null ? clientIdMap[e.clientId] : null;
-      insertEngagement.run(at({ tenantId, ...engagementToParams({ ...e, clientId: mappedClientId }) }));
+      // currency has NOT NULL DEFAULT 'USD' at the schema level, but
+      // engagementToParams() binds an explicit NULL for any field the
+      // caller omits, which overrides that SQL-level default — same
+      // gotcha POST /api/engagements (server/index.js) already works
+      // around. Went unnoticed here because the real dev database
+      // predates the currency column; a truly fresh DB hits it immediately.
+      insertEngagement.run(at({ tenantId, ...engagementToParams({ currency: 'USD', ...e, clientId: mappedClientId }) }));
     }
 
     db.exec('COMMIT');
@@ -1126,7 +1132,8 @@ function seedConflictApprovals(tenantId) {
   db.exec('BEGIN');
   try {
     for (const a of CONFLICT_APPROVALS) {
-      insert.run(at({ tenantId, ...conflictApprovalToParams(a) }));
+      // Same currency NOT NULL DEFAULT 'USD' gotcha as engagements above.
+      insert.run(at({ tenantId, ...conflictApprovalToParams({ currency: 'USD', ...a }) }));
     }
     db.exec('COMMIT');
   } catch (err) {
