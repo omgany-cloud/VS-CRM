@@ -793,6 +793,25 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
   res.json(rowToLp(row));
 });
 
+// Hybrid delete (same shape as DELETE /api/users/:id): hard-delete only if
+// no capital call has ever named this LP in a line item — once real money
+// has moved, the record must survive for AFSA's 6-year retention rule
+// (lp_register table comment), so the caller is told to mark the LP
+// Exited (PUT above) instead.
+app.delete('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
+  const lineItems = db.prepare('SELECT id FROM capital_call_line_items WHERE tenant_id = ? AND lp_id = ?').all(req.tenantId, existing.id);
+  if (lineItems.length) {
+    return res.status(409).json({
+      error: `Cannot delete: LP has ${lineItems.length} capital call line item(s). Set status to 'Exited' instead.`,
+      footprint: [{ table: 'capital_call_line_items', column: 'lp_id', count: lineItems.length }],
+    });
+  }
+  db.prepare('DELETE FROM lp_register WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
 /* ===== Capital Calls API — tenant-scoped ===== */
 function rowToCC(r) {
   return {
@@ -947,6 +966,35 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
   const cc = rowToCC(row);
   cc.lineItems = lineItemsStmt.all(existing.id, req.tenantId).map(rowToLineItem);
   res.json(cc);
+});
+
+// Delete: unlike the other hybrid-delete routes, this isn't a cross-table
+// footprint check — every Capital Call has line items by design (created
+// together), so "has line items" is meaningless as a signal. What matters
+// is whether it's still a Draft (never sent to any LP) and nothing has
+// been paid yet. Once Pending/Approved/Completed, it's a permanent
+// regulatory record (capitalCallDays/recordRetention, FUND_PARAMS) — there
+// is no soft alternative to offer, it simply cannot be removed.
+app.delete('/api/capital-calls/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Capital call not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot delete: call is ${existing.status}, not Draft. A sent Capital Call Notice is a permanent record.` });
+  }
+  const paidItems = db.prepare('SELECT id FROM capital_call_line_items WHERE tenant_id = ? AND call_id = ? AND paid > 0').all(req.tenantId, existing.id);
+  if (paidItems.length) {
+    return res.status(409).json({ error: `Cannot delete: ${paidItems.length} line item(s) already have payments recorded.`, footprint: [{ table: 'capital_call_line_items', column: 'paid', count: paidItems.length }] });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM capital_call_line_items WHERE tenant_id = ? AND call_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM capital_calls WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  res.json({ ok: true, deleted: true });
 });
 
 // Record a payment against one LP's line item within a call (the common day-to-day action).
@@ -1184,6 +1232,25 @@ app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('acces
   res.json(rowToDeal(row));
 });
 
+// Hybrid delete (same shape as DELETE /api/users/:id): hard-delete only if
+// no IC memo was ever created for this deal — once the Investment
+// Committee has a formal record tied to it, the deal itself must survive
+// as governance history. Caller is told to move it to the Отклонена stage
+// instead (validateStageTransition/dealMoveStage already support that).
+app.delete('/api/deals/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Deal not found in this tenant' });
+  const memos = db.prepare('SELECT id FROM ic_memos WHERE tenant_id = ? AND deal_id = ?').all(req.tenantId, existing.id);
+  if (memos.length) {
+    return res.status(409).json({
+      error: `Cannot delete: deal has ${memos.length} IC memo(s). Move it to the "Отклонена" stage instead.`,
+      footprint: [{ table: 'ic_memos', column: 'deal_id', count: memos.length }],
+    });
+  }
+  db.prepare('DELETE FROM deals WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
 /* ===== Portfolio API — tenant-scoped ===== */
 app.get('/api/portfolio', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM portfolio WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
@@ -1202,11 +1269,50 @@ app.post('/api/portfolio', requireAuth, requireInternal, requirePermission('acce
 app.put('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
-  const merged = Object.assign(rowToPortfolio(existing), req.body || {});
+  const existingCo = rowToPortfolio(existing);
+  const b = req.body || {};
+  // Snapshot pre-merge state — Object.assign below mutates existingCo in
+  // place, so the "did archived actually change" check has to use this,
+  // not existingCo, or it'd compare the new value against itself (same
+  // bug class fixed for documents' archived_by/archived_at earlier).
+  const wasArchived = existingCo.archived;
+  const merged = Object.assign(existingCo, b);
+  // archived_by/archived_at are stamped from the authenticated user on
+  // every real transition, not trusted from the client — same reasoning
+  // as PUT /api/documents/:id above.
+  if (b.archived !== undefined && !!b.archived !== !!wasArchived) {
+    if (b.archived) {
+      merged.archivedAt = new Date().toISOString().slice(0, 10);
+      merged.archivedBy = req.user.name || req.user.email;
+    } else {
+      merged.archivedAt = null;
+      merged.archivedBy = null;
+    }
+  }
   const params = portfolioToParams(merged);
   db.prepare(PORTFOLIO_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToPortfolio(row));
+});
+
+// Hybrid delete (same shape as DELETE /api/users/:id): hard-delete only if
+// the company has zero real footprint — no onboarding client links to it,
+// and no capital has actually been invested/marked. Anything with real
+// financial or onboarding activity must be archived instead (PUT above),
+// which preserves the record for AFSA retention.
+app.delete('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
+  const linkedClients = db.prepare('SELECT id FROM ob_clients WHERE tenant_id = ? AND internal_portfolio_id = ?').all(req.tenantId, existing.id);
+  const footprint = [];
+  if (linkedClients.length) footprint.push({ table: 'ob_clients', column: 'internal_portfolio_id', count: linkedClients.length });
+  if (Number(existing.invested) > 0 || Number(existing.value) > 0) footprint.push({ table: 'portfolio', column: 'invested/value', count: 1 });
+  if (footprint.length) {
+    const summary = footprint.map(f => `${f.table}.${f.column} ×${f.count}`).join(', ');
+    return res.status(409).json({ error: `Cannot delete: company has real activity (${summary}). Archive instead.`, footprint });
+  }
+  db.prepare('DELETE FROM portfolio WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
 });
 
 /* ===== Onboarding / KYC-AML API — tenant-scoped =====
@@ -1273,6 +1379,36 @@ app.put('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
   db.prepare(OB_CLIENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToObClient(row));
+});
+
+// Only a never-activated client can be deleted — once activated, an LP
+// register entry exists on its behalf (registerLPFromOnboarding,
+// js/lp-register.js) and the onboarding record becomes governance history.
+// Re-checked here server-side rather than trusted from the client-side
+// !c.activated gate (js/onboarding.js). Cascades to its own owned rows
+// (ob_tasks/ob_task_comments) — nothing else ever references an
+// unactivated client, so this is always safe.
+app.delete('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
+  const existing = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
+  if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  if (existing.activated) {
+    return res.status(409).json({ error: 'Cannot delete: client is already activated (has an LP register entry).' });
+  }
+  db.exec('BEGIN');
+  try {
+    const taskIds = db.prepare('SELECT id FROM ob_tasks WHERE tenant_id = ? AND client_id = ?').all(req.tenantId, existing.id).map(t => t.id);
+    for (const taskId of taskIds) {
+      db.prepare('DELETE FROM ob_task_comments WHERE tenant_id = ? AND task_id = ?').run(req.tenantId, taskId);
+    }
+    db.prepare('DELETE FROM ob_tasks WHERE tenant_id = ? AND client_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM ob_clients WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  res.json({ ok: true, deleted: true });
 });
 
 // The common day-to-day write: update a task's status/formData as the
@@ -1404,6 +1540,26 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToEngagement(row));
+});
+
+// Hybrid delete (same shape as DELETE /api/users/:id): hard-delete only if
+// no conflict-approval record references this engagement and no money has
+// actually moved on it. Anything with real activity must be set to status
+// 'Terminated' instead (already an editable field on this entity).
+app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
+  const existing = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Engagement not found in this tenant' });
+  if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
+  const linked = db.prepare('SELECT id FROM conflict_approvals WHERE tenant_id = ? AND engagement_id = ?').all(req.tenantId, existing.id);
+  const footprint = [];
+  if (linked.length) footprint.push({ table: 'conflict_approvals', column: 'engagement_id', count: linked.length });
+  if (Number(existing.paid) > 0 || Number(existing.invoiced) > 0) footprint.push({ table: 'engagements', column: 'paid/invoiced', count: 1 });
+  if (footprint.length) {
+    const summary = footprint.map(f => `${f.table}.${f.column} ×${f.count}`).join(', ');
+    return res.status(409).json({ error: `Cannot delete: engagement has real activity (${summary}). Set status to 'Terminated' instead.`, footprint });
+  }
+  db.prepare('DELETE FROM engagements WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
 });
 
 /* ===== Conflict Approvals API — tenant-scoped

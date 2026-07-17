@@ -19,6 +19,9 @@ const JSON_SECTIONS = ['financials', 'monitoring', 'documents', 'compliance', 'e
 function portfolioToParams(p) {
   const out = {};
   for (const f of SCALAR_FIELDS) out[f] = p[f] != null ? p[f] : null;
+  out.archived = p.archived ? 1 : 0;
+  out.archivedAt = p.archivedAt || null;
+  out.archivedBy = p.archivedBy || null;
   out.financialsJson = JSON.stringify(p.financials || {});
   out.monitoringJson = JSON.stringify(p.monitoring || {});
   out.documentsJson = JSON.stringify(p.documents || {});
@@ -37,6 +40,9 @@ function rowToPortfolio(r) {
     exitStrategy: r.exit_strategy, exitYear: r.exit_year, moic: r.moic, fundShare: r.fund_share,
     manager: r.manager, status: r.status, nextAction: r.next_action, nextActionDate: r.next_action_date,
     lastUpdated: r.last_updated,
+    archived: !!r.archived,
+    archivedAt: r.archived_at,
+    archivedBy: r.archived_by,
     financials: JSON.parse(r.financials_json || '{}'),
     monitoring: JSON.parse(r.monitoring_json || '{}'),
     documents: JSON.parse(r.documents_json || '{}'),
@@ -49,11 +55,11 @@ function rowToPortfolio(r) {
 const INSERT_SQL = `
   INSERT INTO portfolio
     (tenant_id, fund_id, name, sector, stage, bin, invested, value, date, exit_strategy, exit_year, moic, fund_share,
-     manager, status, next_action, next_action_date, last_updated,
+     manager, status, next_action, next_action_date, last_updated, archived, archived_at, archived_by,
      financials_json, monitoring_json, documents_json, compliance_json, exit_json, history_json)
   VALUES
     (@tenantId, @fundId, @name, @sector, @stage, @bin, @invested, @value, @date, @exitStrategy, @exitYear, @moic, @fundShare,
-     @manager, @status, @nextAction, @nextActionDate, @lastUpdated,
+     @manager, @status, @nextAction, @nextActionDate, @lastUpdated, @archived, @archivedAt, @archivedBy,
      @financialsJson, @monitoringJson, @documentsJson, @complianceJson, @exitJson, @historyJson)
 `;
 
@@ -62,7 +68,8 @@ const UPDATE_SQL = `
     fund_id=@fundId, name=@name, sector=@sector, stage=@stage, bin=@bin, invested=@invested, value=@value, date=@date,
     exit_strategy=@exitStrategy, exit_year=@exitYear, moic=@moic, fund_share=@fundShare,
     manager=@manager, status=@status, next_action=@nextAction, next_action_date=@nextActionDate,
-    last_updated=@lastUpdated, financials_json=@financialsJson, monitoring_json=@monitoringJson,
+    last_updated=@lastUpdated, archived=@archived, archived_at=@archivedAt, archived_by=@archivedBy,
+    financials_json=@financialsJson, monitoring_json=@monitoringJson,
     documents_json=@documentsJson, compliance_json=@complianceJson, exit_json=@exitJson, history_json=@historyJson
   WHERE id=@id AND tenant_id=@tenantId
 `;

@@ -304,6 +304,9 @@ CREATE TABLE IF NOT EXISTS portfolio (
   compliance_json   TEXT NOT NULL DEFAULT '{}',
   exit_json         TEXT NOT NULL DEFAULT '{}',
   history_json      TEXT NOT NULL DEFAULT '[]',
+  archived          INTEGER NOT NULL DEFAULT 0,
+  archived_at       TEXT,
+  archived_by       TEXT,
   created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -816,6 +819,13 @@ for (const col of ['ts_pre_money', 'ts_post_money', 'ts_fund_share', 'closed_amo
 for (const col of ['neg_meetings_json', 'neg_disputed_items_json', 'neg_blockers_json']) {
   if (!columnExists('deals', col)) db.exec(`ALTER TABLE deals ADD COLUMN ${col} TEXT NOT NULL DEFAULT '[]'`);
 }
+// Portfolio has no existing "closed" status concept (unlike LP's 'Exited' or
+// engagements' 'Terminated'), so DELETE /api/portfolio/:id offers this as
+// its soft alternative when hard-delete is blocked — same archive-not-delete
+// shape as documents.archived* above.
+if (!columnExists('portfolio', 'archived')) db.exec("ALTER TABLE portfolio ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+if (!columnExists('portfolio', 'archived_at')) db.exec("ALTER TABLE portfolio ADD COLUMN archived_at TEXT");
+if (!columnExists('portfolio', 'archived_by')) db.exec("ALTER TABLE portfolio ADD COLUMN archived_by TEXT");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

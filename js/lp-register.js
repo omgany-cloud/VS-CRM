@@ -519,6 +519,15 @@ function openLPDetail(lpId) {
           style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.3);color:#eab308;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-bell"></i> Отметить AFSA уведомлён
         </button>` : ''}
+        ${lp.status === 'Active' ? `
+        <button onclick="setLPStatus(${lp.id},'Exited')"
+          style="background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.3);color:#94a3b8;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-sign-out-alt"></i> Отметить как вышедшего
+        </button>` : ''}
+        <button onclick="deleteLP(${lp.id})"
+          style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-trash"></i> Удалить
+        </button>
       </div>
       <button onclick="closeLPDetail()"
         style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
@@ -550,6 +559,38 @@ async function markAfsaNotified(lpId) {
   }
   openLPDetail(lpId);
   renderLPRegisterPage();
+}
+
+async function setLPStatus(lpId, status) {
+  const lp = lpRegister.find(l => l.id === lpId);
+  if (!lp) return;
+  if (!confirm(`Отметить «${lp.name}» как вышедшего из фонда?`)) return;
+  const prevStatus = lp.status;
+  lp.status = status;
+  try {
+    await apiFetch(`/api/lp/${lpId}`, { method: 'PUT', body: JSON.stringify({ status }) });
+    showToast(`✅ ${lp.name} отмечен как вышедший`, 'green');
+  } catch (err) {
+    lp.status = prevStatus;
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
+  }
+  openLPDetail(lpId);
+  renderLPRegisterPage();
+}
+
+async function deleteLP(id) {
+  const lp = lpRegister.find(l => l.id === id);
+  if (!lp) return;
+  if (!confirm(`Удалить «${lp.name}» (${lp.registerId}) из реестра без возможности восстановления? Возможно только если по этому LP не было ни одного capital call.`)) return;
+  try {
+    await apiFetch(`/api/lp/${id}`, { method: 'DELETE' });
+    lpRegister = lpRegister.filter(l => l.id !== id);
+    closeLPDetail();
+    renderLPRegisterPage();
+    showToast('✅ LP удалён из реестра', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1810,6 +1851,13 @@ function openCCDetail(ccId) {
 
     <!-- Footer -->
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a3448">
+      <div>
+        ${cc.status === 'Draft' ? `
+        <button onclick="deleteCC(${ccId})"
+          style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-trash"></i> Удалить черновик
+        </button>` : ''}
+      </div>
       <button onclick="closeCCDetail()"
         style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
     </div>`;
@@ -1823,6 +1871,21 @@ function closeCCDetail() {
   if (modal)   modal.style.display   = 'none';
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+async function deleteCC(ccId) {
+  const cc = capitalCallsLog.find(c => c.id === ccId);
+  if (!cc) return;
+  if (!confirm(`Удалить черновик Capital Call ${cc.ccNumber}? Возможно только для черновиков, ещё не отправленных LP.`)) return;
+  try {
+    await apiFetch(`/api/capital-calls/${ccId}`, { method: 'DELETE' });
+    capitalCallsLog = capitalCallsLog.filter(c => c.id !== ccId);
+    closeCCDetail();
+    renderCapitalCallsPage();
+    showToast('✅ Черновик Capital Call удалён', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 // Draft -> Pending is the moment a Capital Call becomes a real cash call

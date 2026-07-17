@@ -1140,6 +1140,22 @@ function closeDealDetailModal() {
   document.body.style.overflow = '';
 }
 
+async function deleteDeal(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  if (!confirm(`Удалить сделку «${d.company}» без возможности восстановления? Возможно только если по сделке ещё нет меморандума IC.`)) return;
+  try {
+    await apiFetch(`/api/deals/${id}`, { method: 'DELETE' });
+    deals = deals.filter(x => x.id !== id);
+    closeDealDetailModal();
+    renderPipeline(deals);
+    updateBadges();
+    showToast('✅ Сделка удалена', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
 function switchDealTab(tab, dealId) {
   _activeDealTab = tab;
   const d = deals.find(x => x.id === dealId);
@@ -1513,6 +1529,9 @@ function _renderDealModal(d) {
             ${DEAL_STAGES.map(s=>`
               <option value="${s}" ${d.stage===s?'selected':''}>${s}</option>`).join('')}
           </select>
+          <button onclick="deleteDeal(${d.id})" title="Удалить безвозвратно"
+            style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;width:32px;height:32px;
+              border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-trash"></i></button>
           <button onclick="closeDealDetailModal()"
             style="background:#1c2333;border:1px solid #2a3448;color:#64748b;width:32px;height:32px;
               border-radius:7px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
@@ -2390,6 +2409,7 @@ async function savePortfolio() {
 }
 
 let portfolioView = 'grid';
+let portShowArchived = false;
 
 function setPortfolioView(view, btnEl) {
   portfolioView = view;
@@ -2397,6 +2417,13 @@ function setPortfolioView(view, btnEl) {
     const group = btnEl.parentElement;
     if (group) group.querySelectorAll('.vt-btn').forEach(b => b.classList.toggle('active', b === btnEl));
   }
+  renderPortfolio(portfolio);
+}
+
+function togglePortShowArchived() {
+  portShowArchived = !portShowArchived;
+  const btn = document.getElementById('portArchiveToggle');
+  if (btn) btn.classList.toggle('active', portShowArchived);
   renderPortfolio(portfolio);
 }
 
@@ -2411,12 +2438,49 @@ function filterPortfolio(search) {
   renderPortfolio(filtered);
 }
 
-function deletePortfolioItem(id) {
-  if (!confirm('Удалить компанию из портфеля?')) return;
-  portfolio = portfolio.filter(p => p.id !== id);
-  renderPortfolio(portfolio);
-  updateBadges();
-  showToast('🗑️ Компания удалена из портфеля', 'red');
+async function deletePortfolioCompany(id) {
+  const p = portfolio.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Удалить «${p.name}» из портфеля без возможности восстановления? Возможно только если по компании нет реальных инвестиций и она не связана с клиентом онбординга.`)) return;
+  try {
+    await apiFetch(`/api/portfolio/${id}`, { method: 'DELETE' });
+    portfolio = portfolio.filter(x => x.id !== id);
+    closePortfolioModal();
+    renderPortfolio(portfolio);
+    updateBadges();
+    showToast('✅ Компания удалена из портфеля', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
+async function archivePortfolioCompany(id) {
+  const p = portfolio.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Отправить «${p.name}» в архив?`)) return;
+  try {
+    const updated = await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ archived: true }) });
+    Object.assign(p, updated);
+    if (document.getElementById('modal-port-detail').style.display !== 'none') _renderPortfolioModal(p);
+    renderPortfolio(portfolio);
+    showToast('📦 Компания отправлена в архив', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
+async function restorePortfolioCompany(id) {
+  const p = portfolio.find(x => x.id === id);
+  if (!p) return;
+  try {
+    const updated = await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ archived: false }) });
+    Object.assign(p, updated);
+    if (document.getElementById('modal-port-detail').style.display !== 'none') _renderPortfolioModal(p);
+    renderPortfolio(portfolio);
+    showToast('📤 Компания восстановлена из архива', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 /* ── Auto-status calculation ── */
@@ -2465,6 +2529,7 @@ function renderPortfolio(data) {
   if (typeof activeFundId !== 'undefined' && activeFundId != null) {
     data = data.filter(p => p.fundId === activeFundId);
   }
+  data = data.filter(p => portShowArchived ? p.archived : !p.archived);
   if (data.length === 0) {
     container.className = portfolioView === 'grid' ? 'portfolio-grid' : 'portfolio-list';
     container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#4a5568">
@@ -2567,7 +2632,9 @@ function renderPortfolio(data) {
         <div style="color:#60a5fa;font-weight:800">${moic}x</div>
         <div>${p.exitStrategy} · ${p.exitYear}</div>
         <div class="action-btns">
-          <button class="act-btn del" onclick="event.stopPropagation();deletePortfolioItem(${p.id})"><i class="fas fa-trash"></i></button>
+          ${p.archived
+            ? `<button class="act-btn" onclick="event.stopPropagation();restorePortfolioCompany(${p.id})"><i class="fas fa-box-open"></i></button>`
+            : `<button class="act-btn del" onclick="event.stopPropagation();archivePortfolioCompany(${p.id})"><i class="fas fa-box-archive"></i></button>`}
         </div>
       </div>`;
     }).join('');
@@ -2789,11 +2856,24 @@ function _renderPortfolioModal(p) {
             style="background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
             ${['Active','Monitoring','Problem'].map(s=>`<option value="${s}" ${p.status===s?'selected':''}>${portStatusLabel(s)}</option>`).join('')}
           </select>
+          ${p.archived
+            ? `<button onclick="restorePortfolioCompany(${p.id})" title="Восстановить из архива"
+                style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;width:32px;height:32px;
+                  border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-box-open"></i></button>`
+            : `<button onclick="archivePortfolioCompany(${p.id})" title="В архив"
+                style="background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.3);color:#94a3b8;width:32px;height:32px;
+                  border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-box-archive"></i></button>`}
+          <button onclick="deletePortfolioCompany(${p.id})" title="Удалить безвозвратно"
+            style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;width:32px;height:32px;
+              border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-trash"></i></button>
           <button onclick="closePortfolioModal()"
             style="background:#1c2333;border:1px solid #2a3448;color:#64748b;width:32px;height:32px;
               border-radius:7px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
       </div>
+      ${p.archived ? `<div style="margin:0 24px 12px;padding:8px 12px;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);border-radius:8px;font-size:11px;color:#94a3b8">
+        <i class="fas fa-box-archive" style="margin-right:6px"></i>В архиве${p.archivedBy ? ` · ${p.archivedBy} · ${formatDate(p.archivedAt)}` : ''}
+      </div>` : ''}
     </div>
 
     <!-- ── DOCUMENTS ── -->

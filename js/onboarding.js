@@ -5065,15 +5065,21 @@ function saveObClientEdit(id) {
   showToast(`✅ Клиент "${c.name}" обновлён`, 'green');
 }
 
-function deleteObClient(id) {
-  if (!confirm('Удалить клиента и все его задачи онбординга?')) return;
+async function deleteObClient(id) {
   const c = obClients.find(x => x.id === id);
-  obClients = obClients.filter(x => x.id !== id);
-  obTasks   = obTasks.filter(t => t.clientId !== id);
-  closeObClientModal();
-  renderObContent();
-  updateBadges();
-  showToast(`🗑️ Клиент "${c?.name}" удалён`, 'red');
+  if (!c) return;
+  if (!confirm(`Удалить клиента "${c.name}" и все его задачи онбординга без возможности восстановления?`)) return;
+  try {
+    await apiFetch(`/api/ob-clients/${id}`, { method: 'DELETE' });
+    obClients = obClients.filter(x => x.id !== id);
+    obTasks   = obTasks.filter(t => t.clientId !== id);
+    closeObClientModal();
+    renderObContent();
+    updateBadges();
+    showToast(`✅ Клиент "${c.name}" удалён`, 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -5568,7 +5574,11 @@ function openEngagementModal(engId) {
 
     ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c2333;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${e.notes}</div>` : ''}
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:12px;border-top:1px solid #2a3448">
+      <button onclick="deleteEngagement(${e.id})"
+        style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+        <i class="fas fa-trash"></i> Удалить
+      </button>
       <button onclick="closeEngagementModal()"
         style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         Закрыть
@@ -5585,6 +5595,21 @@ function closeEngagementModal() {
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
   activeEngId = null;
+}
+
+async function deleteEngagement(id) {
+  const e = engagements.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm(`Удалить договор с «${e.clientName}» без возможности восстановления? Возможно только если по нему нет платежей и нет связанных записей COI.`)) return;
+  try {
+    await apiFetch(`/api/engagements/${id}`, { method: 'DELETE' });
+    engagements = engagements.filter(x => x.id !== id);
+    closeEngagementModal();
+    renderEngagementsPage();
+    showToast('✅ Договор удалён', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 async function updateEngPayment(engId) {
