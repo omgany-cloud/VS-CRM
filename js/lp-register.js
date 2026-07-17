@@ -2388,7 +2388,7 @@ function renderDashboardLPWidget() {
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
       ${[
-        { label:'Активных LP',    val:activeLP.length, color:'#3b82f6', sub:`из ${lpRegister.length} в реестре`  },
+        { label:'Активных LP',    val:activeLP.length, color:'#3b82f6', sub:`из ${lpRegister.filter(l=>l.fundId===activeFundId).length} в реестре`  },
         { label:'Total Commit',   val:fmtUSD(totalC),  color:'#22c55e', sub:`Unfunded: ${fmtUSD(totalUnfund)}`   },
         { label:'Pending CC',     val:pendingCC,        color:overdueCC>0?'#ef4444':'#f97316', sub:overdueCC>0?`${overdueCC} просрочено`:'Ожидают оплаты' },
       ].map(k => `

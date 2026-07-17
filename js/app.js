@@ -322,6 +322,43 @@ function renderDashboard() {
   const portCountEl = document.getElementById('kpiPortCount');
   if (portCountEl) portCountEl.textContent = scopedPortfolio.length;
 
+  // AUM — real total LP commitments for this fund, not the fund's target
+  // size (updateFundBranding()/js/funds.js sets kpiAum to targetSize as a
+  // placeholder before this data is loaded; this overwrites it with the
+  // real figure once lpRegister is available).
+  const fund = (typeof funds !== 'undefined' && fundScoped) ? funds.find(f => f.id === activeFundId) : null;
+  const curr = typeof currencyForFundId === 'function' ? currencyForFundId(activeFundId) : 'USD';
+  const totalCommitted = scopedLps.reduce((s, l) => s + (l.commitment || 0), 0);
+  const aumEl = document.getElementById('kpiAum');
+  if (aumEl && totalCommitted > 0) {
+    aumEl.textContent = typeof fmtCurrency === 'function' ? fmtCurrency(totalCommitted, curr) : `$${(totalCommitted/1e6).toFixed(1)}M`;
+  }
+  const aumDeltaEl = document.getElementById('kpiAumDelta');
+  if (aumDeltaEl && fund && fund.targetSize) {
+    const pctOfTarget = Math.round((totalCommitted / 1e6 / fund.targetSize) * 100);
+    aumDeltaEl.textContent = totalCommitted > 0
+      ? `Цель: $${fund.targetSize}M · Committed: ${pctOfTarget}%`
+      : `Цель: $${fund.targetSize}M · Min: $5M`;
+  }
+
+  // MOIC "Текущий" — real, computed from portfolio current value / invested
+  // for this fund. IRR "Текущий" stays honest instead of a frozen fake
+  // number: a real annualized IRR needs dated cash-flow-in/out timing
+  // (calls + distributions), and this app has no real distributions data
+  // at all (the Distributions module was removed) — showing a made-up
+  // percentage would be worse than admitting it can't be computed yet.
+  const totalInvested = scopedPortfolio.reduce((s, p) => s + (p.invested || 0), 0);
+  const totalValue    = scopedPortfolio.reduce((s, p) => s + (p.value || 0), 0);
+  const moicCurrentEl = document.getElementById('kpiMoicCurrent');
+  if (moicCurrentEl) {
+    moicCurrentEl.textContent = totalInvested > 0 ? `Текущий: ${(totalValue / totalInvested).toFixed(2)}x` : 'Текущий: нет данных';
+  }
+  const irrCurrentEl = document.getElementById('kpiIrrCurrent');
+  if (irrCurrentEl) irrCurrentEl.textContent = 'Расчёт недоступен — нет данных о распределениях';
+
+  if (typeof renderKYCStatus === 'function') renderKYCStatus();
+  if (typeof updateLifecycleBar === 'function') updateLifecycleBar();
+
   // Onboarding TZ widgets
   if (typeof renderDashboardObWidget === 'function')  renderDashboardObWidget();
   if (typeof renderDashboardCoiWidget === 'function') renderDashboardCoiWidget();
@@ -330,13 +367,45 @@ function renderDashboard() {
   setTimeout(renderDashboardCharts, 150);
 }
 
-function toggleTask(id) { /* legacy stub — not used */ }
+// Real milestones instead of a hardcoded completed/active state: no LPs
+// yet -> Онбординг is the active stage; LPs exist but no closing_date on
+// this fund's first_closing row -> First Closing active; closed but no
+// portfolio companies yet -> Инвестирование active; portfolio companies
+// exist -> Создание стоимости active. Sequential, so every earlier stage
+// shows completed.
+function updateLifecycleBar() {
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const scopedLps = typeof lpRegister !== 'undefined' ? (fundScoped ? lpRegister.filter(l => l.fundId === activeFundId) : lpRegister) : [];
+  const scopedPortfolio = typeof portfolio !== 'undefined' ? (fundScoped ? portfolio.filter(p => p.fundId === activeFundId) : portfolio) : [];
+  const hasClosing = typeof firstClosingList !== 'undefined' && firstClosingList.some(fc => fc.fundId === activeFundId && fc.closingDate);
+
+  const stageIdx = scopedPortfolio.length > 0 ? 3 : hasClosing ? 2 : scopedLps.length > 0 ? 1 : 0;
+  const stageIds = ['lcStageOnboarding', 'lcStageClosing', 'lcStageInvesting', 'lcStageValueCreation'];
+  const connectorIds = ['lcConnector1', 'lcConnector2', 'lcConnector3'];
+
+  stageIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('completed', 'active');
+    const dot = el.querySelector('.lc-dot');
+    if (i < stageIdx) { el.classList.add('completed'); if (dot) dot.innerHTML = '<i class="fas fa-check"></i>'; }
+    else if (i === stageIdx) { el.classList.add('active'); if (dot) dot.innerHTML = '<i class="fas fa-play"></i>'; }
+    else if (dot) dot.textContent = String(i + 1);
+  });
+  connectorIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('completed', 'active');
+    if (i < stageIdx) el.classList.add('completed');
+    else if (i === stageIdx) el.classList.add('active');
+  });
+}
 
 function renderKYCStatus() {
   const container = document.getElementById('kycStatusList');
   if (!container) return;
-  // Use lpRegister (new) if available
-  const list = typeof lpRegister !== 'undefined' ? lpRegister : [];
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const list = typeof lpRegister !== 'undefined' ? (fundScoped ? lpRegister.filter(l => l.fundId === activeFundId) : lpRegister) : [];
   container.innerHTML = list.slice(0,6).map(lp => `
     <div class="kyc-mini-row">
       <div class="cell-avatar" style="background:${getColor(lp.id)};width:30px;height:30px;font-size:11px;flex-shrink:0">${(lp.name||'?').charAt(0)}</div>
@@ -346,27 +415,70 @@ function renderKYCStatus() {
   `).join('') || '<div style="color:#4a5568;font-size:12px;padding:8px">Нет активных LP</div>';
 }
 
+// Real per-year net cash flow from capitalCallsLog (money called = out,
+// negated) for this fund — replaces the old hardcoded js/data.js
+// chartData.jcurve series. There's deliberately no positive (inflow) side
+// yet: this app has no real distributions data (that module was removed),
+// so the chart is honestly just the downward leg of the "J" for a fund
+// still in its investment period, not a fabricated eventual upturn.
+function buildRealJCurveData() {
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const calls = typeof capitalCallsLog !== 'undefined'
+    ? (fundScoped ? capitalCallsLog.filter(cc => cc.fundId === activeFundId) : capitalCallsLog)
+    : [];
+  const byYear = {};
+  calls.forEach(cc => {
+    if (!cc.noticeDate) return;
+    const year = cc.noticeDate.slice(0, 4);
+    byYear[year] = (byYear[year] || 0) - (cc.totalAmount || 0) / 1e6;
+  });
+  const years = Object.keys(byYear).sort();
+  if (!years.length) return { labels: [String(new Date().getFullYear())], cashflow: [0] };
+  return { labels: years, cashflow: years.map(y => Math.round(byYear[y] * 100) / 100) };
+}
+
+// Real commitment-by-lpType breakdown for this fund — replaces the old
+// hardcoded js/data.js chartData.lpTypes, which used a fictional label
+// set that didn't match the real lpType values (Institution/Family
+// Office/HNWI) at all.
+const LP_TYPE_LABELS = { Institution: 'Институциональный', 'Family Office': 'Семейный офис', HNWI: 'Состоятельное частное лицо (HNWI)' };
+function buildRealLpTypesData() {
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const lps = typeof lpRegister !== 'undefined'
+    ? (fundScoped ? lpRegister.filter(l => l.fundId === activeFundId) : lpRegister)
+    : [];
+  const byType = {};
+  lps.forEach(lp => {
+    const key = lp.lpType || lp.type || 'Другое';
+    byType[key] = (byType[key] || 0) + (lp.commitment || 0) / 1e6;
+  });
+  const keys = Object.keys(byType);
+  if (!keys.length) return { labels: ['Нет данных'], data: [1] };
+  return { labels: keys.map(k => LP_TYPE_LABELS[k] || k), data: keys.map(k => Math.round(byType[k] * 100) / 100) };
+}
+
 function renderDashboardCharts() {
   // J-Curve
   const jCtx = document.getElementById('chartJCurve');
   if (jCtx) {
     if (jcChart) jcChart.destroy();
+    const jc = buildRealJCurveData();
     jcChart = new Chart(jCtx, {
       type: 'bar',
       data: {
-        labels: chartData.jcurve.labels,
+        labels: jc.labels,
         datasets: [
           {
             label: 'Денежный поток ($M)',
-            data: chartData.jcurve.cashflow,
-            backgroundColor: chartData.jcurve.cashflow.map(v => v < 0 ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)'),
-            borderColor:     chartData.jcurve.cashflow.map(v => v < 0 ? '#ef4444' : '#22c55e'),
+            data: jc.cashflow,
+            backgroundColor: jc.cashflow.map(v => v < 0 ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)'),
+            borderColor:     jc.cashflow.map(v => v < 0 ? '#ef4444' : '#22c55e'),
             borderWidth: 1.5,
             borderRadius: 4,
           },
           {
             label: 'Накопленный ($M)',
-            data: chartData.jcurve.cashflow.reduce((acc, v, i) => { acc.push((acc[i-1]||0)+v); return acc; }, []),
+            data: jc.cashflow.reduce((acc, v, i) => { acc.push((acc[i-1]||0)+v); return acc; }, []),
             type: 'line',
             borderColor: '#3b82f6',
             backgroundColor: 'transparent',
@@ -382,9 +494,6 @@ function renderDashboardCharts() {
         plugins: { legend: { labels: { color: '#8a9bbf', font:{size:11} } } },
         scales: {
           x: { ticks:{color:'#5a6b8a'}, grid:{color:'#2a3448'} },
-          // Axis symbol follows activeFundId; underlying series is still
-          // static mock data (js/data.js chartData) — pre-existing
-          // limitation, out of scope for this currency-honesty sweep.
           y: { ticks:{color:'#5a6b8a', callback: v=>currencySymbol(currencyForFundId(activeFundId))+v+'M'}, grid:{color:'#2a3448'} }
         }
       }
@@ -395,11 +504,12 @@ function renderDashboardCharts() {
   const lpCtx = document.getElementById('chartLPTypes');
   if (lpCtx) {
     if (lpTypeChart) lpTypeChart.destroy();
+    const lt = buildRealLpTypesData();
     lpTypeChart = new Chart(lpCtx, {
       type: 'doughnut',
       data: {
-        labels: chartData.lpTypes.labels,
-        datasets: [{ data: chartData.lpTypes.data, backgroundColor: COLORS, borderColor:'#1c2333', borderWidth:2, hoverOffset:6 }]
+        labels: lt.labels,
+        datasets: [{ data: lt.data, backgroundColor: COLORS, borderColor:'#1c2333', borderWidth:2, hoverOffset:6 }]
       },
       options: {
         responsive: true, maintainAspectRatio: false, cutout:'62%',

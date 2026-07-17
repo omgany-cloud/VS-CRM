@@ -145,20 +145,13 @@ const reportSchedule = [
   { period: 'FY 2025',   deadline: '2026-03-31', type: 'Годовой',      status: 'Ожидается',  resp: 'CFO + Аудитор' },
 ];
 
-/* ===== TODAY'S TASKS ===== */
-let todayTasks = [
-  { id: 1, text: 'Продлить KYC для Silk Steppe Capital LLP (истекает через 45 дней)', priority: 'Средний',  done: false, page: 'kyc' },
-  { id: 2, text: 'Загрузить финотчётность Q2 2025 — NomadTech Solutions',              priority: 'Высокий',  done: false, page: 'portfolio' },
-  { id: 3, text: 'Подготовить Capital Call Notice №4 к рассылке LP',                   priority: 'Высокий',  done: false, page: 'lp' },
-];
-
-
-/* ===== CHART DATA ===== */
+/* ===== CHART DATA =====
+   jcurve/lpTypes used to live here as static mock series for the
+   Dashboard's two charts — both are now computed live from real data
+   (buildRealJCurveData()/buildRealLpTypesData(), js/app.js). nav/sectors
+   remain: they only ever fed the 'reports' page, which has no nav item
+   or route in this app (dead, pre-existing, out of scope here). */
 const chartData = {
-  jcurve: {
-    labels: ['2024','2025','2026','2027','2028','2029','2030','2031','2032','2033'],
-    cashflow: [-4.5, -13, -10, -5, 6, 18, 38, 65, 92, 120],
-  },
   nav: {
     labels: ['Q4\'24','Q1\'25','Q2\'25','Q3\'25','Q4\'25','Q1\'26','Q2\'26'],
     nav:    [4.5, 9.5, 15.9, 17.0, 19.0, 21.5, 24.0],
@@ -167,8 +160,4 @@ const chartData = {
     labels: ['Технологии','Здравоохранение','АПК','Энергетика','Финансы'],
     data:   [4.5, 5, 6, 0, 0],
   },
-  lpTypes: {
-    labels: ['Юридическое лицо','Семейный офис','Физическое лицо','Институциональный'],
-    data:   [0, 6, 1.95, 25.5],
-  }
 };

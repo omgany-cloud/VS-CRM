@@ -250,26 +250,27 @@
         <p>Сводная информация · Golden Leaves Ltd (GP) · Лицензия AFSA-A-LA-2024-0038</p>
       </div>
 
-      <!-- LIFECYCLE PROGRESS BAR -->
+      <!-- LIFECYCLE PROGRESS BAR — completed/active state computed from
+           real data by updateLifecycleBar() (js/app.js), not hardcoded. -->
       <div class="lifecycle-bar">
         <div class="lc-title">Жизненный цикл фонда (10 лет)</div>
         <div class="lc-stages">
-          <div class="lc-stage completed" data-page="ob-clients">
-            <div class="lc-dot"><i class="fas fa-check"></i></div>
+          <div class="lc-stage" id="lcStageOnboarding" data-page="ob-clients">
+            <div class="lc-dot">1</div>
             <span>Онбординг</span>
           </div>
-          <div class="lc-connector completed"></div>
-          <div class="lc-stage completed" data-page="closing">
-            <div class="lc-dot"><i class="fas fa-check"></i></div>
+          <div class="lc-connector" id="lcConnector1"></div>
+          <div class="lc-stage" id="lcStageClosing" data-page="closing">
+            <div class="lc-dot">2</div>
             <span>First Closing</span>
           </div>
-          <div class="lc-connector active"></div>
-          <div class="lc-stage active" data-page="deals">
-            <div class="lc-dot"><i class="fas fa-play"></i></div>
+          <div class="lc-connector" id="lcConnector2"></div>
+          <div class="lc-stage" id="lcStageInvesting" data-page="deals">
+            <div class="lc-dot">3</div>
             <span>Инвестирование</span>
           </div>
-          <div class="lc-connector"></div>
-          <div class="lc-stage" data-page="portfolio">
+          <div class="lc-connector" id="lcConnector3"></div>
+          <div class="lc-stage" id="lcStageValueCreation" data-page="portfolio">
             <div class="lc-dot">4</div>
             <span>Создание стоимости</span>
           </div>
@@ -291,7 +292,7 @@
           <div class="kpi-body">
             <span class="kpi-label">Целевой IRR</span>
             <span class="kpi-value" id="kpiIrr">20–25%</span>
-            <span class="kpi-delta up"><i class="fas fa-arrow-up"></i> Текущий: 18.7%</span>
+            <span class="kpi-delta neutral" id="kpiIrrCurrent">—</span>
           </div>
         </div>
         <div class="kpi-card">
@@ -299,7 +300,7 @@
           <div class="kpi-body">
             <span class="kpi-label">Целевой MOIC</span>
             <span class="kpi-value" id="kpiMoic">2.5–3.5x</span>
-            <span class="kpi-delta up">Текущий: 2.1x</span>
+            <span class="kpi-delta up" id="kpiMoicCurrent">—</span>
           </div>
         </div>
         <div class="kpi-card">

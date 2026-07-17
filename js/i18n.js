@@ -37,7 +37,6 @@ const i18n = {
     kpi_port_target: 'Цель: 8–12 компаний',
     chart_jcurve: 'J-Curve — Денежный поток фонда',
     chart_lp_types: 'Структура LP',
-    tasks_title: 'Задачи на сегодня',
     kyc_title: 'KYC Статус LP',
     // Onboarding
     onb_title: 'Онбординг LP',
@@ -145,7 +144,6 @@ const i18n = {
     kpi_port_target: 'Target: 8–12 companies',
     chart_jcurve: 'J-Curve — Fund Cash Flow',
     chart_lp_types: 'LP Structure',
-    tasks_title: "Today's Tasks",
     kyc_title: 'LP KYC Status',
     onb_title: 'LP Onboarding',
     onb_step: 'Step 1 of 4',
