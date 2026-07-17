@@ -81,17 +81,17 @@ function renderDocList(data) {
       <div class="dfc-header">
         <div class="dfc-icon ${getDocIconClass(doc.name)}"><i class="${getDocIcon(doc.name)}"></i></div>
         <div class="dfc-meta">
-          <div class="dfc-name">${doc.name}${doc.archived ? ` <span class="badge badge-gray" style="font-size:9px">${currentLang === 'ru' ? 'В архиве' : 'Archived'}</span>` : ''}</div>
+          <div class="dfc-name">${escapeHtml(doc.name)}${doc.archived ? ` <span class="badge badge-gray" style="font-size:9px">${currentLang === 'ru' ? 'В архиве' : 'Archived'}</span>` : ''}</div>
           <div class="dfc-info">
             <span class="badge badge-blue" style="font-size:10px">${doc.category}</span>
             <span>${doc.size}</span>
             <span>${formatDate(doc.date)}</span>
-            <span>${currentLang === 'ru' ? 'Загрузил' : 'By'}: <strong>${doc.uploader}</strong></span>
-            ${doc.archived ? `<span>${currentLang === 'ru' ? 'Архивировал' : 'Archived by'}: <strong>${doc.archivedBy || '—'}</strong> · ${formatDate(doc.archivedAt)}</span>` : ''}
+            <span>${currentLang === 'ru' ? 'Загрузил' : 'By'}: <strong>${escapeHtml(doc.uploader)}</strong></span>
+            ${doc.archived ? `<span>${currentLang === 'ru' ? 'Архивировал' : 'Archived by'}: <strong>${escapeHtml(doc.archivedBy) || '—'}</strong> · ${formatDate(doc.archivedAt)}</span>` : ''}
           </div>
         </div>
         <div class="dfc-actions">
-          ${doc.documentUrl ? `<button class="act-btn" title="${currentLang === 'ru' ? 'Скачать' : 'Download'}" onclick="window.open(resolveDocUrl('${doc.documentUrl}'),'_blank')"><i class="fas fa-download"></i></button>` : ''}
+          ${doc.documentUrl ? `<button class="act-btn" title="${currentLang === 'ru' ? 'Скачать' : 'Download'}" onclick="window.open(resolveDocUrl('${escapeAttr(doc.documentUrl)}'),'_blank')"><i class="fas fa-download"></i></button>` : ''}
           ${doc.archived
             ? `<button class="act-btn" title="${currentLang === 'ru' ? 'Восстановить' : 'Restore'}" onclick="restoreDoc(${doc.id})"><i class="fas fa-box-open"></i></button>`
             : `<button class="act-btn del" title="${currentLang === 'ru' ? 'В архив' : 'Archive'}" onclick="archiveDoc(${doc.id})"><i class="fas fa-box-archive"></i></button>`}
@@ -101,10 +101,10 @@ function renderDocList(data) {
       <div class="dfc-comments">
         ${doc.comments.map(c => `
           <div class="comment-item">
-            <div class="comment-avatar">${c.author.charAt(0)}</div>
+            <div class="comment-avatar">${escapeHtml((c.author||'?').charAt(0))}</div>
             <div class="comment-body">
-              <div class="comment-meta"><strong>${c.author}</strong> · ${formatDate(c.date)}</div>
-              <div class="comment-text">${c.text}</div>
+              <div class="comment-meta"><strong>${escapeHtml(c.author)}</strong> · ${formatDate(c.date)}</div>
+              <div class="comment-text">${escapeHtml(c.text)}</div>
             </div>
           </div>
         `).join('')}
@@ -123,9 +123,9 @@ function renderDocList(data) {
         ${doc.history.slice().reverse().map(h => `
           <div class="dfc-history-row">
             <span>${(HISTORY_LABELS[h.action] || { ru: h.action, en: h.action })[currentLang]}</span>
-            <span><strong>${h.by}</strong></span>
+            <span><strong>${escapeHtml(h.by)}</strong></span>
             <span>${new Date(h.at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span>
-            ${h.detail ? `<span class="dfc-history-detail">${h.detail}</span>` : ''}
+            ${h.detail ? `<span class="dfc-history-detail">${escapeHtml(h.detail)}</span>` : ''}
           </div>`).join('')}
       </details>` : ''}
     </div>

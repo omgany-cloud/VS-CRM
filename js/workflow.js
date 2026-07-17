@@ -227,13 +227,13 @@ function renderPendingApprovalsBoard() {
         </div>
         <div class="wf-row-main">
           <div class="wf-row-title">
-            <span class="wf-entity-name">${it.title}</span>
+            <span class="wf-entity-name">${escapeHtml(it.title)}</span>
             ${canAct ? '<span class="wf-my-badge"><i class="fas fa-bell"></i> Ваша роль может решить</span>' : ''}
           </div>
           <div class="wf-row-meta">
             <span style="color:${it.color};font-size:11px;font-weight:700">${it.category}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">${it.meta}</span>
+            <span style="font-size:11px;color:#8a9bbf">${escapeHtml(it.meta)}</span>
           </div>
         </div>
       </div>`;
@@ -321,7 +321,7 @@ function renderWfList() {
         </div>
         <div class="wf-row-main">
           <div class="wf-row-title">
-            <span class="wf-entity-name">${w.entityName}</span>
+            <span class="wf-entity-name">${escapeHtml(w.entityName)}</span>
             ${isMyTurn ? '<span class="wf-my-badge"><i class="fas fa-bell"></i> Требуется ваше действие</span>' : ''}
           </div>
           <div class="wf-row-meta">
@@ -397,8 +397,8 @@ function renderWfModalContent(w) {
               <span style="color:${s.decision==='approved'?'#22c55e':'#ef4444'};font-weight:700;font-size:11px">
                 ${s.decision==='approved'?'✓ Одобрено':'✗ Отклонено'}
               </span>
-              <span style="color:#8a9bbf;font-size:11px"> · ${s.completedBy} · ${new Date(s.completedAt).toLocaleDateString('ru-RU')}</span>
-              ${s.comment ? `<div style="color:#94a3b8;font-size:11px;margin-top:3px;font-style:italic">"${s.comment}"</div>` : ''}
+              <span style="color:#8a9bbf;font-size:11px"> · ${escapeHtml(s.completedBy)} · ${new Date(s.completedAt).toLocaleDateString('ru-RU')}</span>
+              ${s.comment ? `<div style="color:#94a3b8;font-size:11px;margin-top:3px;font-style:italic">"${escapeHtml(s.comment)}"</div>` : ''}
             </div>` : isCurrent ? `<div style="font-size:11px;color:${def.color};font-weight:600">⏳ Ожидает действия</div>` : ''}
         </div>
       </div>`;
@@ -433,7 +433,7 @@ function renderWfModalContent(w) {
         <i class="fas ${def.icon}"></i>
       </div>
       <div>
-        <div style="font-size:16px;font-weight:800;color:#f1f5f9">${w.entityName}</div>
+        <div style="font-size:16px;font-weight:800;color:#f1f5f9">${escapeHtml(w.entityName)}</div>
         <div style="font-size:12px;color:${def.color};font-weight:600">${def.label} · ${w.entityType}</div>
       </div>
     </div>

@@ -5,14 +5,19 @@
 //  original in-memory demo data — see README-VERTICAL-SLICE.md).
 // ============================================================
 
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const crypto = require('crypto');
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db, at } = require('./db');
+const { runBackup, scheduleBackups } = require('./backup');
 const { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
@@ -44,6 +49,35 @@ const { rowToAfsaReport, afsaReportToParams, INSERT_SQL: AFSA_REPORT_INSERT_SQL,
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+
+// This app renders everything via inline onclick="..." handlers and
+// inline style="..." attributes (its whole rendering architecture, no
+// build step) — helmet's default CSP would block all of that and break
+// the entire UI. Scoped down to what's actually needed: 'unsafe-inline'
+// for script/style (structural requirement, not fixable without a much
+// larger refactor away from inline handlers), everything else locked to
+// 'self' plus the specific CDNs index.html/portal.html actually load
+// from. Still gets the non-CSP protections (clickjacking via
+// frame-ancestors, MIME-sniffing, etc.) for free.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+      // helmet defaults scriptSrcAttr to 'none' independently of scriptSrc
+      // above (CSP3 treats them as separate directives) — without this
+      // override every onclick="..." attribute in the app (its entire
+      // interaction model) would silently stop firing in any browser that
+      // enforces script-src-attr.
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
+}));
 
 app.use(express.json());
 
@@ -166,7 +200,19 @@ app.get('/api/uploads/:id', (req, res) => {
 });
 
 /* ===== Auth ===== */
-app.post('/api/auth/login', (req, res) => {
+// Applied to every route that checks or sets a password — the brute-force
+// surface. Keyed by IP (express-rate-limit's default), not by the
+// email/BIN in the request body, so it can't be bypassed by cycling
+// through different accounts from the same machine.
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Try again later.' },
+});
+
+app.post('/api/auth/login', authRateLimit, (req, res) => {
   const { email, password, tenant } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
@@ -218,7 +264,7 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
    real per-company credentials before going live. */
 const PORTAL_DEMO_PASSWORD = process.env.PORTAL_DEMO_PASSWORD || 'PortalDemo2025!';
 
-app.post('/api/portal/login', (req, res) => {
+app.post('/api/portal/login', authRateLimit, (req, res) => {
   const { bin, password } = req.body || {};
   if (!bin || !password) return res.status(400).json({ error: 'bin and password are required' });
   const row = db.prepare('SELECT * FROM portfolio WHERE bin = ?').get(String(bin).trim());
@@ -442,7 +488,7 @@ app.put('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req, r
 // permission required (this only ever touches the caller's own row).
 // Registered before /api/users/:id/password so 'me' never falls through
 // to the :id route and gets treated as a numeric user id.
-app.put('/api/users/me/password', requireAuth, (req, res) => {
+app.put('/api/users/me/password', authRateLimit, requireAuth, (req, res) => {
   const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.user.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
   const { currentPassword, newPassword } = req.body || {};
@@ -457,7 +503,7 @@ app.put('/api/users/me/password', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.put('/api/users/:id/password', requireAuth, requirePermission('manageUsers'), (req, res) => {
+app.put('/api/users/:id/password', authRateLimit, requireAuth, requirePermission('manageUsers'), (req, res) => {
   const existing = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
   const { password } = req.body || {};
@@ -2012,6 +2058,25 @@ app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) 
 const FRONTEND_ROOT = path.join(__dirname, '..');
 app.use(express.static(FRONTEND_ROOT));
 
-app.listen(PORT, () => {
-  console.log(`Turan CRM vertical-slice server listening on http://localhost:${PORT}`);
-});
+// Immediate snapshot on every startup, then a recurring one for as long
+// as the process stays up — see server/backup.js.
+try { runBackup(); } catch (err) { console.error('[backup] startup backup failed:', err.message); }
+scheduleBackups();
+
+// Plain HTTP unless TLS_CERT_PATH/TLS_KEY_PATH are both set (see
+// .env.example / DEPLOYMENT.md) — there's no domain to get a real
+// certificate for yet, so this just makes going live later a config
+// change, not a code change, once one exists.
+if (process.env.TLS_CERT_PATH && process.env.TLS_KEY_PATH) {
+  const options = {
+    cert: fs.readFileSync(process.env.TLS_CERT_PATH),
+    key: fs.readFileSync(process.env.TLS_KEY_PATH),
+  };
+  https.createServer(options, app).listen(PORT, () => {
+    console.log(`Turan CRM server listening on https://localhost:${PORT}`);
+  });
+} else {
+  app.listen(PORT, () => {
+    console.log(`Turan CRM vertical-slice server listening on http://localhost:${PORT}`);
+  });
+}

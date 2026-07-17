@@ -1,11 +1,32 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { db, at } = require('./db');
 const { getRoleRowByCode } = require('./rolesRepo');
 const { rowToPermissions, NO_PERMISSIONS } = require('./rolesMapping');
 
-// PoC only — in production this must come from a real secret manager,
-// be per-environment, and be rotated.
-const JWT_SECRET = process.env.JWT_SECRET || 'poc-dev-secret-do-not-use-in-production';
+// Resolution order: explicit env var (real deployments should set this,
+// e.g. from a secret manager) > a secret persisted on first run at
+// server/data/.jwt_secret (gitignored, same as crm.sqlite) > generated
+// here and persisted for next time. This used to fall back to a literal
+// hardcoded string ('poc-dev-secret-do-not-use-in-production') baked
+// into this file — meaning anyone reading the (public) source knew the
+// default and could forge a token for any tenant if the env var was ever
+// left unset. Auto-generating + persisting a random secret keeps the
+// zero-setup `node server/index.js` experience while making every
+// install's secret unique and unguessable.
+function resolveJwtSecret() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  const secretPath = path.join(__dirname, 'data', '.jwt_secret');
+  fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+  if (fs.existsSync(secretPath)) return fs.readFileSync(secretPath, 'utf8').trim();
+  const generated = crypto.randomBytes(64).toString('hex');
+  fs.writeFileSync(secretPath, generated, { mode: 0o600 });
+  console.log(`[auth] No JWT_SECRET set — generated and persisted a new one at ${secretPath}`);
+  return generated;
+}
+const JWT_SECRET = resolveJwtSecret();
 
 function signToken(user, tenant) {
   return jwt.sign(

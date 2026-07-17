@@ -469,7 +469,7 @@ function renderICList() {
         </div>
         <div class="wf-row-main">
           <div class="wf-row-title">
-            <span class="wf-entity-name">${m.company}</span>
+            <span class="wf-entity-name">${escapeHtml(m.company)}</span>
             ${m.status==='pending'?'<span class="wf-my-badge"><i class="fas fa-vote-yea"></i> Голосование открыто</span>':''}
           </div>
           <div class="wf-row-meta">
@@ -539,11 +539,11 @@ function renderICModalContent(m) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="color:#e2e8f0;font-weight:600">${v.role}</div>
-        <div style="color:#5a6b8a;font-size:10px">${v.name||''}</div>
+        <div style="color:#5a6b8a;font-size:10px">${escapeHtml(v.name)}</div>
       </div>
       ${v.vote ? `
         <span style="color:${IC_VOTES[v.vote]?.color};font-weight:700">${IC_VOTES[v.vote]?.label}</span>
-        ${v.comment ? `<span style="color:#8a9bbf;font-style:italic;font-size:11px;max-width:160px">"${v.comment}"</span>` : ''}
+        ${v.comment ? `<span style="color:#8a9bbf;font-style:italic;font-size:11px;max-width:160px">"${escapeHtml(v.comment)}"</span>` : ''}
       ` : canCastVote(v) ? `
         <div style="display:flex;gap:4px">
           ${Object.entries(IC_VOTES).map(([k,cfg]) => `
@@ -561,7 +561,7 @@ function renderICModalContent(m) {
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div class="kpi-icon orange" style="width:46px;height:46px;font-size:18px;border-radius:12px"><i class="fas fa-handshake"></i></div>
       <div style="flex:1">
-        <div style="font-size:16px;font-weight:800;color:#f1f5f9">${m.company}</div>
+        <div style="font-size:16px;font-weight:800;color:#f1f5f9">${escapeHtml(m.company)}</div>
         <div style="font-size:12px;color:#f97316;font-weight:600">$${m.amount}M ${m.type} · ${m.sector}</div>
       </div>
       <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;background:${quorum?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)'};color:${quorum?'#22c55e':'#ef4444'}">
@@ -580,7 +580,7 @@ function renderICModalContent(m) {
         <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
           <i class="fas ${icon}" style="margin-right:5px"></i>${title}
         </div>
-        <div style="font-size:13px;color:#94a3b8;line-height:1.55">${text||'—'}</div>
+        <div style="font-size:13px;color:#94a3b8;line-height:1.55">${escapeHtml(text)||'—'}</div>
       </div>`).join('')}
 
     <!-- Risk Manager conclusion (independent of the IC vote — Constitution Section 7.7) -->
@@ -676,9 +676,9 @@ function printICMemo(id) {
   const votesRows = m.votes.map(v => `
     <tr>
       <td>${v.role}</td>
-      <td>${v.name || '—'}</td>
+      <td>${escapeHtml(v.name) || '—'}</td>
       <td>${v.vote ? (IC_VOTES[v.vote]?.label || v.vote) : 'Ожидает'}</td>
-      <td>${v.comment || '—'}</td>
+      <td>${escapeHtml(v.comment) || '—'}</td>
     </tr>`).join('');
 
   const body = `
@@ -699,7 +699,7 @@ function printICMemo(id) {
   <div class="subtitle">Инвестиционный меморандум для Investment Committee (Constitution Section 7)</div>
 
   <table class="deal-table">
-    <tr><td>Компания</td><td><b>${m.company}</b></td></tr>
+    <tr><td>Компания</td><td><b>${escapeHtml(m.company)}</b></td></tr>
     <tr><td>Сектор</td><td>${m.sector || '—'}</td></tr>
     <tr><td>Сумма инвестиций</td><td><b>$${m.amount}M</b></td></tr>
     <tr><td>Тип сделки</td><td>${m.type || '—'}</td></tr>
@@ -717,7 +717,7 @@ function printICMemo(id) {
   ].map(([title, text]) => `
     <div class="section">
       <div class="section-title">${title}</div>
-      <div class="section-text">${text || '—'}</div>
+      <div class="section-text">${escapeHtml(text) || '—'}</div>
     </div>`).join('')}
 
   <div class="risk-box ${m.riskVeto ? 'veto' : ''}">
@@ -762,11 +762,11 @@ function printICMemo(id) {
   `;
 
   const win = openPrintableDocument(body, {
-    title: `IC Memorandum — ${m.company}`,
+    title: `IC Memorandum — ${escapeHtml(m.company)}`,
     features: 'width=900,height=800',
     extraStyle: docStyle,
   });
-  if (win) showToast(`🖨️ Меморандум по сделке «${m.company}» сформирован`, 'green');
+  if (win) showToast(`🖨️ Меморандум по сделке «${escapeHtml(m.company)}» сформирован`, 'green');
 }
 
 async function castICVote(memoId, voteIdx, vote) {
@@ -879,7 +879,7 @@ function openNewICMemo() {
   // Build deal options from deals[] array
   const dealOptions = (typeof deals !== 'undefined' ? deals : [])
     .filter(d => d.stage !== 'Закрыта')
-    .map(d => `<option value="${d.id}">${d.company} — $${d.amount}M (${d.stage})</option>`)
+    .map(d => `<option value="${d.id}">${escapeHtml(d.company)} — $${d.amount}M (${d.stage})</option>`)
     .join('');
 
   const SECTORS = ['Технологии','Финансы','Промышленность','Здравоохранение','Недвижимость','Энергетика','Потребительский','Другое'];

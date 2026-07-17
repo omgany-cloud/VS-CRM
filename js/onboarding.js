@@ -482,7 +482,7 @@ function renderObPhaseBoard(clients) {
               style="background:#0f1623;border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;
                      border:1px solid ${c.activated ? 'rgba(34,197,94,0.3)' : '#2a3448'};transition:border-color 0.2s"
               onmouseover="this.style.borderColor='${p.color}'" onmouseout="this.style.borderColor='${c.activated ? 'rgba(34,197,94,0.3)' : '#2a3448'}'">
-              <div style="font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</div>
+              <div style="font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</div>
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <span style="font-size:10px;color:#8a9bbf">${c.clientId}</span>
                 ${c.activated
@@ -528,7 +528,7 @@ function renderObClientTable(clients) {
               <tr onclick="openObClientModal(${c.id})" style="cursor:pointer">
                 <td style="font-size:11px;color:#8b5cf6;font-weight:700">${c.clientId}</td>
                 <td>
-                  <div style="font-weight:700;color:#e2e8f0;font-size:13px">${c.name}</div>
+                  <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(c.name)}</div>
                   ${detailLine}
                   ${c.restrictedMatch ? '<div style="font-size:10px;color:#ef4444;font-weight:700">⚠ Restricted List</div>' : ''}
                 </td>
@@ -625,7 +625,7 @@ function renderObClientModal(clientId) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <span style="font-size:17px;font-weight:800;color:#f1f5f9">${c.name}</span>
+          <span style="font-size:17px;font-weight:800;color:#f1f5f9">${escapeHtml(c.name)}</span>
           ${c.restrictedMatch ? '<span style="font-size:11px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:2px 8px;font-weight:700">⚠ Restricted List</span>' : ''}
           ${c.activated ? '<span style="font-size:11px;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:2px 8px;font-weight:700">✅ Активен</span>' : ''}
         </div>
@@ -662,7 +662,7 @@ function renderObClientModal(clientId) {
       ].map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k}</div>
-          <div style="font-size:13px;color:#e2e8f0;font-weight:600">${v||'—'}</div>
+          <div style="font-size:13px;color:#e2e8f0;font-weight:600">${escapeHtml(v)||'—'}</div>
         </div>`).join('') : [
         ['RM', c.rm.split('(')[0].trim()],
         ['Тип услуги', c.serviceType],
@@ -675,12 +675,12 @@ function renderObClientModal(clientId) {
       ].map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:10px 12px">
           <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k}</div>
-          <div style="font-size:13px;color:#e2e8f0;font-weight:600">${v||'—'}</div>
+          <div style="font-size:13px;color:#e2e8f0;font-weight:600">${escapeHtml(v)||'—'}</div>
         </div>`).join('')}
     </div>
 
     <!-- Notes -->
-    ${c.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6">${c.notes}</div>` : ''}
+    ${c.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6">${escapeHtml(c.notes)}</div>` : ''}
 
     <!-- KYC Checklist (Onboarding Templates package: Identity/SOF/SOW/PEP/
          Sanctions/Professional Client/CRS) — summary projected from the
@@ -3153,12 +3153,12 @@ function _obRenderSavedAmendments(arr, isCompleted) {
     return '<div style="font-size:12px;color:#4a5568;padding:8px;text-align:center">Доп. соглашений нет</div>';
   }
   return arr.map(function(am, i) {
-    var urlCell = am.url ? '<a href="' + resolveDocUrl(am.url) + '" target="_blank" style="color:#60a5fa">' + am.url + '</a>' : '—';
+    var urlCell = am.url ? '<a href="' + escapeAttr(resolveDocUrl(am.url)) + '" target="_blank" style="color:#60a5fa">' + escapeHtml(am.url) + '</a>' : '—';
     var delBtn  = isCompleted ? '' : '<button type="button" onclick="obRemoveAmendment(' + i + ')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px">🗑</button>';
     return '<div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c2333;border-radius:8px;padding:8px 10px" data-amend-idx="' + i + '">'
-      + '<div style="font-size:11px;font-weight:700;color:#c4b5fd">' + (am.num || '—') + '</div>'
+      + '<div style="font-size:11px;font-weight:700;color:#c4b5fd">' + escapeHtml(am.num || '—') + '</div>'
       + '<div style="font-size:11px;color:#94a3b8">' + (am.date || '—') + '</div>'
-      + '<div style="font-size:11px;color:#e2e8f0">' + (am.description || '—') + '</div>'
+      + '<div style="font-size:11px;color:#e2e8f0">' + (escapeHtml(am.description) || '—') + '</div>'
       + '<div style="font-size:11px;color:#60a5fa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + urlCell + '</div>'
       + delBtn + '</div>';
   }).join('');
@@ -3277,11 +3277,11 @@ function _obRenderAmendments(taskId) {
   }
   list.innerHTML = ams.map((am, i) => `
     <div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c2333;border-radius:8px;padding:8px 10px" data-amend-idx="${i}">
-      <div style="font-size:11px;font-weight:700;color:#c4b5fd">${am.num||'—'}</div>
+      <div style="font-size:11px;font-weight:700;color:#c4b5fd">${escapeHtml(am.num)||'—'}</div>
       <div style="font-size:11px;color:#94a3b8">${am.date||'—'}</div>
-      <div style="font-size:11px;color:#e2e8f0">${am.description||'—'}</div>
+      <div style="font-size:11px;color:#e2e8f0">${escapeHtml(am.description)||'—'}</div>
       <div style="font-size:11px;color:#60a5fa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        ${am.url ? `<a href="${am.url}" target="_blank" style="color:#60a5fa">${am.url}</a>` : '—'}
+        ${am.url ? `<a href="${escapeAttr(am.url)}" target="_blank" style="color:#60a5fa">${escapeHtml(am.url)}</a>` : '—'}
       </div>
       <button type="button" onclick="obRemoveAmendment(${i})" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px">🗑</button>
     </div>`).join('');
@@ -5411,7 +5411,7 @@ function renderEngagementsPage() {
                     <div style="font-size:10px;color:#5a6b8a">${e.contractNum}</div>
                   </td>
                   <td>
-                    <div style="font-weight:700;color:#e2e8f0;font-size:13px">${e.clientName}</div>
+                    <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(e.clientName)}</div>
                     <div style="font-size:10px;color:#8a9bbf">${e.rm.split('(')[0].trim()}</div>
                   </td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${dirBg};color:${dirColor}">${dirLabel}</span>
@@ -5488,7 +5488,7 @@ function openEngagementModal(engId) {
       ${infoRows.map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:9px 12px">
           <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
-          <div style="font-size:13px;color:#e2e8f0;font-weight:600">${v}</div>
+          <div style="font-size:13px;color:#e2e8f0;font-weight:600">${escapeHtml(v)}</div>
         </div>`).join('')}
     </div>
 
@@ -5496,9 +5496,9 @@ function openEngagementModal(engId) {
     <div style="background:#0f1623;border-radius:8px;padding:9px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-left:3px solid #8b5cf6">
       <div style="min-width:0">
         <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${isFM ? 'LP Agreement (LPA)' : 'Ссылка на договор'}</div>
-        <div style="font-size:11px;color:#a78bfa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${docUrl.length>65 ? docUrl.slice(0,65)+'…' : docUrl}</div>
+        <div style="font-size:11px;color:#a78bfa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(docUrl.length>65 ? docUrl.slice(0,65)+'…' : docUrl)}</div>
       </div>
-      <button onclick="_obOpenPreviewModal('${docUrl.replace(/'/g,"\\'")}','${docUrl.replace(/'/g,"\\'")}')"
+      <button onclick="_obOpenPreviewModal('${escapeAttr(docUrl)}','${escapeAttr(docUrl)}')"
         style="flex-shrink:0;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);color:#c4b5fd;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">
         <i class="fas fa-eye"></i> Открыть
       </button>
@@ -5511,7 +5511,7 @@ function openEngagementModal(engId) {
         <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px">
           <span style="color:#c4b5fd;font-weight:700;min-width:55px">${a.num||'—'}</span>
           <span style="color:#94a3b8;min-width:95px">${a.date||'—'}</span>
-          <span style="color:#e2e8f0;flex:1">${a.description||'—'}</span>
+          <span style="color:#e2e8f0;flex:1">${escapeHtml(a.description)||'—'}</span>
           ${a.url ? `<a href="${a.url}" target="_blank" style="color:#60a5fa;font-size:10px"><i class="fas fa-external-link-alt"></i></a>` : ''}
         </div>`).join('')}
     </div>` : ''}
@@ -5572,7 +5572,7 @@ function openEngagementModal(engId) {
         </div>`).join('')}
     </div>` : ''}
 
-    ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c2333;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${e.notes}</div>` : ''}
+    ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c2333;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${escapeHtml(e.notes)}</div>` : ''}
 
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:12px;border-top:1px solid #2a3448">
       <button onclick="deleteEngagement(${e.id})"
@@ -5662,7 +5662,7 @@ function openNewEngagementModal() {
   // always creates a CF&A engagement, so only CF&A clients are offered
   // here to avoid mislabeling an FM client's contract as CF&A.
   const clientOptions = obClients.filter(c => c.activated && c.direction !== 'FM').map(c =>
-    `<option value="${c.id}">${c.name} (${c.clientId})</option>`).join('');
+    `<option value="${c.id}">${escapeHtml(c.name)} (${c.clientId})</option>`).join('');
 
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="font-size:14px;font-weight:800;color:#f1f5f9;margin-bottom:16px">
@@ -5906,8 +5906,8 @@ function openNewConflictApprovalModal() {
   if (!modal) return;
   document.body.style.overflow = 'hidden';
 
-  const clientOptions = obClients.map(c => `<option value="${c.id}">${c.name} (${c.clientId})</option>`).join('');
-  const engOptions = engagements.map(e => `<option value="${e.id}" data-currency="${e.currency||'USD'}">${e.clientName} — ${e.engId}${e.dealRef ? ' [' + e.dealRef + ']' : ''}</option>`).join('');
+  const clientOptions = obClients.map(c => `<option value="${c.id}">${escapeHtml(c.name)} (${c.clientId})</option>`).join('');
+  const engOptions = engagements.map(e => `<option value="${e.id}" data-currency="${e.currency||'USD'}">${escapeHtml(e.clientName)} — ${e.engId}${e.dealRef ? ' [' + escapeHtml(e.dealRef) + ']' : ''}</option>`).join('');
 
   document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>Новое решение по конфликту';
   document.getElementById('obNewModalContent').innerHTML = `
@@ -6026,8 +6026,8 @@ function openConflictApprovalDetail(id) {
       <div><b style="color:#8a9bbf">Дата решения:</b> ${a.decidedAt || '—'}</div>
       <div><b style="color:#8a9bbf">Кто решил:</b> ${a.decidedBy || '—'}</div>
     </div>
-    ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${a.description}</p></div>` : ''}
-    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${a.rationale}</p></div>` : ''}
+    ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.description)}</p></div>` : ''}
+    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.rationale)}</p></div>` : ''}
     ${canDecide ? `
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
       <button onclick="decideConflictApproval(${a.id},'Rejected')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-xmark"></i> Отклонить</button>
@@ -6155,7 +6155,7 @@ function renderDashboardObWidget() {
               <div style="width:22px;height:22px;border-radius:6px;background:${c.direction==='FM'?'rgba(59,130,246,0.15)':'rgba(139,92,246,0.15)'};
                 display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;
                 color:${c.direction==='FM'?'#3b82f6':'#8b5cf6'};flex-shrink:0">${c.name.slice(0,2).toUpperCase()}</div>
-              <span style="flex:1;font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
+              <span style="flex:1;font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</span>
               <span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;background:${sCfg.bg};color:${sCfg.c};flex-shrink:0">${c.onboardingStatus}</span>
               <span style="font-size:10px;color:${daysLeft<0?'#ef4444':daysLeft<3?'#f97316':'#5a6b8a'};flex-shrink:0;min-width:40px;text-align:right">
                 ${daysLeft<0?`⚠${Math.abs(daysLeft)}д`:daysLeft===0?'Сегодня':`${daysLeft}д`}

@@ -408,7 +408,7 @@ function renderKYCStatus() {
   container.innerHTML = list.slice(0,6).map(lp => `
     <div class="kyc-mini-row">
       <div class="cell-avatar" style="background:${getColor(lp.id)};width:30px;height:30px;font-size:11px;flex-shrink:0">${(lp.name||'?').charAt(0)}</div>
-      <span class="kyc-mini-name">${lp.name}</span>
+      <span class="kyc-mini-name">${escapeHtml(lp.name)}</span>
       ${kycStatusBadge(lp.kycStatus || 'Active')}
     </div>
   `).join('') || '<div style="color:#4a5568;font-size:12px;padding:8px">Нет активных LP</div>';
@@ -640,11 +640,11 @@ function renderClosing() {
           <i class="fas fa-${lp.saNumber?'check':'times'}" style="font-size:9px;color:${lp.saNumber?'#22c55e':'#64748b'}"></i>
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lp.name}</div>
+          <div style="font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(lp.name)}</div>
           <div style="font-size:10px;color:#64748b">${lp.saNumber || '— SA не указан'} · KYC: <span style="color:${lp.kycStatus==='Одобрен'?'#22c55e':'#f97316'}">${lp.kycStatus}</span></div>
         </div>
         ${lp.lpaUrl ? `
-          <button onclick="_obOpenPreviewModal('${lp.lpaUrl.replace(/'/g,"\\'")}','${lp.lpaUrl.replace(/'/g,"\\'")}')"
+          <button onclick="_obOpenPreviewModal('${escapeAttr(lp.lpaUrl)}','${escapeAttr(lp.lpaUrl)}')"
             style="${prevBtnS}"><i class="fas fa-eye" style="margin-right:4px"></i>LPA</button>` : ''}
         <button onclick="navigateTo('lp-register')"
           style="${navBtnS}"><i class="fas fa-external-link-alt" style="margin-right:4px"></i>LP</button>
@@ -664,7 +664,7 @@ function renderClosing() {
             <i class="fas fa-${sent?'check':'clock'}" style="font-size:9px;color:${sent?'#22c55e':'#eab308'}"></i>
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;color:#e2e8f0">${lp.name}</div>
+            <div style="font-size:12px;font-weight:600;color:#e2e8f0">${escapeHtml(lp.name)}</div>
             <div style="font-size:10px;color:#64748b">${lp.registerId} · ${sent?'<span style="color:#22c55e">Letter отправлен</span>':'<span style="color:#eab308">Ожидает</span>'}</div>
           </div>
           <button onclick="fcGenerateWelcomeLetter(${lp.id})"
@@ -1084,14 +1084,14 @@ function dealCard(d) {
   const nextActionHtml = d.nextAction ? `
     <div style="display:flex;align-items:center;gap:5px;margin-top:6px;padding:5px 7px;background:#0f1623;border-radius:6px">
       <i class="fas fa-bolt" style="color:#eab308;font-size:9px"></i>
-      <span style="font-size:10px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.nextAction}</span>
+      <span style="font-size:10px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.nextAction)}</span>
       ${d.nextActionDate ? `<span style="font-size:9px;color:#64748b;margin-left:auto;white-space:nowrap">${d.nextActionDate}</span>` : ''}
     </div>` : '';
 
   return `
     <div class="deal-card" onclick="openDealDetailModal(${d.id})" style="cursor:pointer">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:700;color:#f1f5f9;line-height:1.3">${d.company}</div>
+        <div style="font-size:13px;font-weight:700;color:#f1f5f9;line-height:1.3">${escapeHtml(d.company)}</div>
         <div style="width:8px;height:8px;border-radius:50%;background:${prioColor};flex-shrink:0;margin-top:3px"
           title="Приоритет: ${d.priority}"></div>
       </div>
@@ -1223,7 +1223,7 @@ function _renderDealModal(d) {
         </div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
           <div><label style="${lS}">Описание действия</label>
-            <input style="${iS}" value="${d.nextAction||''}"
+            <input style="${iS}" value="${escapeHtml(d.nextAction)}"
               onchange="dealField(${d.id},'nextAction',this.value)" placeholder="Следующий шаг..." /></div>
           <div><label style="${lS}">Дедлайн</label>
             <input type="date" style="${iS};width:150px" value="${d.nextActionDate||''}"
@@ -1499,7 +1499,7 @@ function _renderDealModal(d) {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <h2 style="font-size:18px;font-weight:800;color:#f1f5f9;margin:0">${d.company}</h2>
+            <h2 style="font-size:18px;font-weight:800;color:#f1f5f9;margin:0">${escapeHtml(d.company)}</h2>
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;
               background:${stageColor}22;color:${stageColor};border:1px solid ${stageColor}44">
               ${d.stage}
@@ -1961,7 +1961,7 @@ function openGpConclusionDocument(id) {
     </div>
     <div class="ref-block">
       <div><b>Фонд:</b> ${fund ? fund.shortName : '—'}</div>
-      <div><b>Deal:</b> ${d.company}</div>
+      <div><b>Deal:</b> ${escapeHtml(d.company)}</div>
       <div><b>Дата:</b> ${today()}</div>
       <div><b>STRICTLY CONFIDENTIAL</b></div>
     </div>
@@ -1972,7 +1972,7 @@ function openGpConclusionDocument(id) {
 
   <table class="deal-table">
     <tr><td>Фонд</td><td><b>${fund ? escapeHtml(fund.name || fund.shortName) : 'Не привязан к фонду'}</b></td></tr>
-    <tr><td>Компания</td><td><b>${d.company}</b></td></tr>
+    <tr><td>Компания</td><td><b>${escapeHtml(d.company)}</b></td></tr>
     <tr><td>Сектор</td><td>${d.sector||'—'}</td></tr>
     <tr><td>Сумма инвестиций</td><td><b>${currencySymbol(currencyForEntity(d))}${d.amount}M</b></td></tr>
     <tr><td>Стадия</td><td>${d.stage||'—'}</td></tr>
@@ -2012,7 +2012,7 @@ function openGpConclusionDocument(id) {
   `;
 
   const win = openPrintableDocument(body, {
-    title: `Заключение УК — ${d.company}`,
+    title: `Заключение УК — ${escapeHtml(d.company)}`,
     features: 'width=900,height=800',
     extraStyle: docStyle,
   });
@@ -2561,7 +2561,7 @@ function renderPortfolio(data) {
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                 <div class="port-card-logo" style="background:${getColor(idx)};flex-shrink:0">${p.name.charAt(0)}</div>
                 <div>
-                  <div class="port-card-name">${p.name}</div>
+                  <div class="port-card-name">${escapeHtml(p.name)}</div>
                   <div style="font-size:10px;color:#64748b">BIN: ${p.bin||'—'} · ${p.sector}</div>
                 </div>
               </div>
@@ -2625,7 +2625,7 @@ function renderPortfolio(data) {
       return `
       <div class="portfolio-list-item" onclick="openPortfolioModal(${p.id})" style="cursor:pointer">
         <div style="width:34px;height:34px;border-radius:8px;background:${getColor(idx)};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${p.name.charAt(0)}</div>
-        <div><strong>${p.name}</strong><div style="font-size:11px;color:var(--text-muted)">${p.sector}</div></div>
+        <div><strong>${escapeHtml(p.name)}</strong><div style="font-size:11px;color:var(--text-muted)">${p.sector}</div></div>
         <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${stCol}22;color:${stCol}">${portStatusLabel(st)}</span>
         <div style="font-weight:700">${currencySymbol(currencyForEntity(p))}${p.invested}M</div>
         <div style="color:#22c55e;font-weight:700">${currencySymbol(currencyForEntity(p))}${p.value}M</div>
@@ -2836,7 +2836,7 @@ function _renderPortfolioModal(p) {
               display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">
               ${p.name.charAt(0)}</div>
             <div>
-              <h2 style="font-size:18px;font-weight:800;color:#f1f5f9;margin:0">${p.name}</h2>
+              <h2 style="font-size:18px;font-weight:800;color:#f1f5f9;margin:0">${escapeHtml(p.name)}</h2>
               <div style="font-size:11px;color:#64748b">BIN: ${p.bin||'—'} · ${p.sector} · Доля фонда: ${p.fundShare||'—'}%</div>
             </div>
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;

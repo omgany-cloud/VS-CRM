@@ -288,7 +288,7 @@ function renderLPRegisterPage() {
                 <tr onclick="openLPDetail(${lp.id})" style="cursor:pointer" data-lp-id="${lp.id}">
                   <td style="font-size:11px;color:#8b5cf6;font-weight:700">${lp.registerId}</td>
                   <td>
-                    <div style="font-weight:700;color:#e2e8f0;font-size:13px">${lp.name}</div>
+                    <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(lp.name)}</div>
                     <div style="font-size:10px;color:${lp.type==='Corporate'?'#3b82f6':'#f97316'}">${lp.lpType||lp.type}</div>
                     ${lp.lpacMember ? '<div style="font-size:9px;color:#8b5cf6;font-weight:700">★ LPAC</div>' : ''}
                     ${lp.saNumber ? `<div style="font-size:10px;color:#64748b">${lp.saNumber}</div>` : ''}
@@ -386,7 +386,7 @@ function openLPDetail(lpId) {
       </div>
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <span style="font-size:17px;font-weight:800;color:#f1f5f9">${lp.name}</span>
+          <span style="font-size:17px;font-weight:800;color:#f1f5f9">${escapeHtml(lp.name)}</span>
           ${lpRegStatusBadge(lp.status)}
           ${lp.lpacMember ? '<span style="font-size:11px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);border-radius:6px;padding:2px 8px;font-weight:700">★ LPAC Member</span>' : ''}
           ${lp.afsaNotified ? '<span style="font-size:11px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:2px 8px">AFSA ✓</span>' : ''}
@@ -497,7 +497,7 @@ function openLPDetail(lpId) {
       </table>
     </div>`}
 
-    ${lp.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6"><i class="fas fa-sticky-note" style="margin-right:6px;color:#3b82f6"></i>${lp.notes}</div>` : ''}
+    ${lp.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6"><i class="fas fa-sticky-note" style="margin-right:6px;color:#3b82f6"></i>${escapeHtml(lp.notes)}</div>` : ''}
 
     <!-- Footer actions -->
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a3448">
@@ -651,7 +651,7 @@ function openCapitalAccountStatement(lpId) {
         ].map(([k,v]) => `
           <div>
             <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
-            <div style="font-size:12px;color:#e2e8f0;font-weight:600">${v||'—'}</div>
+            <div style="font-size:12px;color:#e2e8f0;font-weight:600">${escapeHtml(v)||'—'}</div>
           </div>`).join('')}
       </div>
     </div>
@@ -851,15 +851,15 @@ function generateLPWelcomeLetter(lpId) {
   </div>
 
   <p>
-    <b>${lp.contact || lp.name}</b><br>
-    ${lp.address ? lp.address + '<br>' : ''}
-    ${lp.email ? lp.email : ''}
+    <b>${escapeHtml(lp.contact || lp.name)}</b><br>
+    ${lp.address ? escapeHtml(lp.address) + '<br>' : ''}
+    ${lp.email ? escapeHtml(lp.email) : ''}
   </p>
 
   <h1>Notice of Admission as Limited Partner<br>
   <span style="font-size:11pt;font-weight:400;text-transform:none">(Уведомление о принятии в качестве Ограниченного Партнёра)</span></h1>
 
-  <p class="salutation">Dear ${lp.contact || lp.name},</p>
+  <p class="salutation">Dear ${escapeHtml(lp.contact || lp.name)},</p>
 
   <p>We are pleased to confirm that <b>${fp.gp}</b>, acting as General Partner of <b>${fp.name}</b> (the <b>"Fund"</b>), has formally admitted you as a <b>Limited Partner</b> of the Fund, effective <b>${lp.admissionDate || dt}</b>, pursuant to the terms of the Limited Partnership Agreement and your executed Subscription Agreement.</p>
 
@@ -930,7 +930,7 @@ function generateLPWelcomeLetter(lpId) {
   `;
 
   const win = openPrintableDocument(body, {
-    title: `LP Admission Letter — ${lp.name}`,
+    title: `LP Admission Letter — ${escapeHtml(lp.name)}`,
     features: 'width=900,height=700',
     extraStyle: docStyle,
   });
@@ -995,15 +995,15 @@ function generateCCNotice(ccId, lpId) {
   </div>
 
   <p>
-    <b>${lp ? (lp.contact || lp.name) : li.lpName}</b><br>
-    ${lp && lp.address ? lp.address + '<br>' : ''}
-    ${lp && lp.email ? lp.email : ''}
+    <b>${escapeHtml(lp ? (lp.contact || lp.name) : li.lpName)}</b><br>
+    ${lp && lp.address ? escapeHtml(lp.address) + '<br>' : ''}
+    ${lp && lp.email ? escapeHtml(lp.email) : ''}
   </p>
 
   <h1>Capital Call Notice № ${cc.ccNumber}<br>
   <span style="font-size:10pt;font-weight:400;text-transform:none">(Уведомление о Capital Call)</span></h1>
 
-  <p>Dear ${lp ? (lp.contact || lp.name) : li.lpName},</p>
+  <p>Dear ${escapeHtml(lp ? (lp.contact || lp.name) : li.lpName)},</p>
 
   <p>Pursuant to Section 3.9 of the <b>${fp.name}</b> Constitution and your Subscription Agreement, <b>${fp.gp}</b>, as General Partner, hereby issues this Capital Call Notice requiring your pro-rata contribution to the Fund.</p>
 
@@ -1027,7 +1027,7 @@ function generateCCNotice(ccId, lpId) {
       <tr><td>Fund Class</td><td>${lp ? 'Class ' + (lp.fundClass || '—') : '—'}</td></tr>
       <tr><td>Your LP Register №</td><td>${lp ? lp.registerId : '—'}</td></tr>
       ${cc.bankRef ? `<tr><td>Fund Bank Reference</td><td><b>${cc.bankRef}</b></td></tr>` : ''}
-      ${cc.notes   ? `<tr><td>Notes</td><td>${cc.notes}</td></tr>` : ''}
+      ${cc.notes   ? `<tr><td>Notes</td><td>${escapeHtml(cc.notes)}</td></tr>` : ''}
     </tbody>
   </table>
 
@@ -1258,7 +1258,7 @@ function printCapitalAccountStatement(lpId) {
   <div class="id-grid">
     <div class="id-cell full">
       <label>Полное наименование / Full Name</label>
-      <span style="font-size:11pt;color:#1a365d">${lp.name}</span>
+      <span style="font-size:11pt;color:#1a365d">${escapeHtml(lp.name)}</span>
     </div>
     <div class="id-cell"><label>Тип</label><span>${lp.type}</span></div>
     <div class="id-cell"><label>Категория LP</label><span>${lp.lpType || '—'}</span></div>
@@ -1423,7 +1423,7 @@ function printCapitalAccountStatement(lpId) {
   `;
 
   const win = openPrintableDocument(body, {
-    title: `Capital Account Statement — ${lp.name}`,
+    title: `Capital Account Statement — ${escapeHtml(lp.name)}`,
     features: 'width=1020,height=820',
     extraStyle: docStyle,
   });
@@ -1670,7 +1670,7 @@ function renderUnfundedSummaryTable() {
               <tr onclick="openLPDetail(${lp.id})" style="cursor:pointer">
                 <td style="font-size:11px;color:#8b5cf6;font-weight:700">${lp.registerId}</td>
                 <td>
-                  <div style="font-weight:700;color:#e2e8f0;font-size:13px">${lp.name}</div>
+                  <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(lp.name)}</div>
                   <div style="font-size:10px;color:#64748b">${lp.type} · ${lp.country}</div>
                 </td>
                 <td style="font-size:12px;color:#e2e8f0;text-align:center">Class ${lp.fundClass||'—'}</td>
@@ -1847,7 +1847,7 @@ function openCCDetail(ccId) {
       </table>
     </div>
 
-    ${cc.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #f97316"><i class="fas fa-sticky-note" style="margin-right:6px;color:#f97316"></i>${cc.notes}</div>` : ''}
+    ${cc.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #f97316"><i class="fas fa-sticky-note" style="margin-right:6px;color:#f97316"></i>${escapeHtml(cc.notes)}</div>` : ''}
 
     <!-- Footer -->
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a3448">
@@ -2070,7 +2070,7 @@ function openIndividualCCModal(lpId) {
     </div>
     <div style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.25);border-radius:8px;padding:10px 14px;margin-bottom:18px">
       <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px">
-        <i class="fas fa-user" style="margin-right:6px"></i>${lp.name}
+        <i class="fas fa-user" style="margin-right:6px"></i>${escapeHtml(lp.name)}
         <span style="background:rgba(249,115,22,0.15);border-radius:5px;padding:1px 8px;font-size:10px;margin-left:8px">${lp.registerId}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">
@@ -2277,7 +2277,7 @@ function renderDashboardLPWidget() {
           onclick="navigateTo('lp-register');setTimeout(()=>openLPDetail(${lp.id}),200)">
           <div style="width:28px;height:28px;background:rgba(59,130,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#3b82f6;flex-shrink:0">${lp.name.slice(0,2).toUpperCase()}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lp.name}</div>
+            <div style="font-size:12px;font-weight:700;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(lp.name)}</div>
             <div style="font-size:10px;color:#64748b">${fmtUSD(lp.commitment)} · ${lp.lpType}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
