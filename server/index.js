@@ -229,13 +229,6 @@ app.post('/api/portal/login', (req, res) => {
   res.json({ token, company: rowToPortfolio(row) });
 });
 
-// Lets an already-logged-in portal session refresh its own company record
-// (e.g. after another tab/device submitted a document) without re-login —
-// same purpose as GET /api/auth/me for internal users.
-app.get('/api/portal/me', requirePortalAuth, (req, res) => {
-  res.json({ company: rowToPortfolio(req.portalCompany) });
-});
-
 // Reuses the same disk-storage multer instance as POST /api/uploads, just
 // behind requirePortalAuth instead of requireAuth+requireInternal — a
 // portal company is never an internal CRM user. GET /api/uploads/:id needs
@@ -1762,10 +1755,16 @@ app.get('/api/workflow', requireAuth, requireInternal, (req, res) => {
   res.json({ tenant: req.tenantSlug, workflowInstances: rows.map(rowToWfInstance) });
 });
 
+// deal_ic is excluded here even though it's still a real key in
+// WF_DEFINITIONS (see server/wfDefinitions.js — kept so the 5 historically
+// seeded deal_ic rows still render correctly). No UI path creates new
+// deal_ic instances; this blocks a direct API call from doing so either.
+const CREATABLE_WF_TYPES = Object.keys(WF_DEFINITIONS).filter(t => t !== 'deal_ic');
+
 app.post('/api/workflow', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
-  if (!b.type || !WF_DEFINITIONS[b.type]) {
-    return res.status(400).json({ error: 'type must be one of: ' + Object.keys(WF_DEFINITIONS).join(', ') });
+  if (!b.type || !CREATABLE_WF_TYPES.includes(b.type)) {
+    return res.status(400).json({ error: 'type must be one of: ' + CREATABLE_WF_TYPES.join(', ') });
   }
   // Dedup: an active instance for the same type+entity already exists — hand it back instead of creating a duplicate.
   const existing = db.prepare(`

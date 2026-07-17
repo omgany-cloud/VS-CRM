@@ -17,7 +17,6 @@
  * Retention: 6 years after LP exit.
  */
 let lpRegister = [];  // populated at runtime by js/api-auth.js via GET /api/lp (see server/index.js)
-let lpRegisterIdCounter = 7;
 
 /**
  * capitalCallsLog[] — Capital Call Journal
@@ -115,10 +114,6 @@ function getTotalCalled(fundId) {
 
 function getTotalUnfunded(fundId) {
   return lpRegister.filter(l => l.status === 'Active' && l.fundId === fundId).reduce((s, l) => s + getLPUnfunded(l), 0);
-}
-
-function getTotalDistributions(fundId) {
-  return lpRegister.filter(l => l.status === 'Active' && l.fundId === fundId).reduce((s, l) => s + (l.distributions||0), 0);
 }
 
 /** Compute pro-rata called amount for a given LP and pct */
@@ -1398,23 +1393,6 @@ function printCapitalAccountStatement(lpId) {
    ADD NEW LP (simple modal form)
 ═══════════════════════════════════════════════════════════ */
 
-/** Удалена ручная форма добавления LP.
- *  LP попадает в реестр автоматически через:
- *  Онбординг (FM) → Задача 5.1 LP Activation → registerLPFromOnboarding()
- *  Навигация: navigateTo('ob-clients')
- */
-function openNewLPModal() {
-  showToast('LP добавляется через Онбординг → Задача 5.1 (LP Activation)', 'blue');
-  navigateTo('ob-clients');
-}
-
-function closeNewLPModal() {
-  const modal   = document.getElementById('modal-lp-new');
-  const overlay = document.getElementById('lpNewOverlay');
-  if (modal)   modal.style.display   = 'none';
-  if (overlay) overlay.style.display = 'none';
-  document.body.style.overflow = '';
-}
 // fundId required — ownership % is only meaningful relative to LPs of the
 // SAME fund. This was previously unscoped (recalculated every LP in every
 // fund off one grand total), which would have silently corrupted other
@@ -1985,196 +1963,12 @@ async function markLpAmlOk(ccId, lpId) {
   renderCapitalCallsPage();
 }
 
-function completeCCIfAllPaid(ccId) {
-  const cc = capitalCallsLog.find(c => c.id === ccId);
-  if (!cc) return;
-  const allPaid = cc.lineItems.every(li => li.status === 'Paid');
-  if (!allPaid) {
-    const pending = cc.lineItems.filter(li => li.status !== 'Paid').map(li => li.lpName).join(', ');
-    showToast(`⚠ Ещё не оплатили: ${pending}`, 'red'); return;
-  }
-  cc.status = 'Completed';
-  showToast(`✅ Capital Call ${cc.ccNumber} закрыт — все платежи получены`, 'green');
-  closeCCDetail();
-  renderCapitalCallsPage();
-}
-
-/* ═══════════════════════════════════════════════════════════
-   NEW CAPITAL CALL MODAL
-═══════════════════════════════════════════════════════════ */
-
-function openNewCCModal() {
-  const modal   = document.getElementById('modal-cc-new');
-  const overlay = document.getElementById('ccNewOverlay');
-  if (!modal) return;
-  if (overlay) overlay.style.display = 'block';
-  document.body.style.overflow = 'hidden';
-
-  const activeLP = lpRegister.filter(lp => lp.status === 'Active' && lp.fundId === activeFundId);
-  const totalC   = getTotalCommitments(activeFundId);
-  const inpStyle = `width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box`;
-  const lblStyle = `font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase`;
-  const grpStyle = `margin-bottom:14px`;
-  const noticeDate = today();
-  const payDate  = addBusinessDays(noticeDate, 10);
-
-  document.getElementById('ccNewContent').innerHTML = `
-    <div style="font-size:16px;font-weight:800;color:#f1f5f9;margin-bottom:20px;display:flex;align-items:center;gap:10px">
-      <i class="fas fa-coins" style="color:#f97316"></i> Новый Capital Call Notice
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div style="${grpStyle}"><label style="${lblStyle}">Дата уведомления *</label>
-        <input type="date" id="cc_noticeDate" value="${noticeDate}" style="${inpStyle}" onchange="updateCCPayDate()" /></div>
-
-      <div style="${grpStyle}"><label style="${lblStyle}">Дата платежа (+10 р.д.) *</label>
-        <input type="date" id="cc_payDate" value="${payDate}" style="${inpStyle}" /></div>
-
-      <div style="${grpStyle}"><label style="${lblStyle}">% от Commitment (pro-rata) *</label>
-        <input type="number" id="cc_pct" min="0.1" max="100" step="0.5" value="5" style="${inpStyle}"
-          oninput="updateCCProRata()" /></div>
-
-      <div style="${grpStyle}"><label style="${lblStyle}">Тип</label>
-        <select id="cc_type" style="${inpStyle}" onchange="updateCCType()">
-          <option value="Investment">Investment</option>
-          <option value="Management Fee">Management Fee</option>
-        </select></div>
-
-      <div style="${grpStyle};grid-column:1/-1"><label style="${lblStyle}">Цель / Назначение *</label>
-        <input type="text" id="cc_purpose" style="${inpStyle}" placeholder="Инвестиция в PortCo X / Management Fee H1 2026" /></div>
-
-      <div style="${grpStyle}"><label style="${lblStyle}">Bank Reference</label>
-        <input type="text" id="cc_bankRef" style="${inpStyle}" placeholder="CC-2026-XXX-TCF" /></div>
-
-      <div style="${grpStyle}"><label style="${lblStyle}">Примечание</label>
-        <input type="text" id="cc_notes" style="${inpStyle}" placeholder="Доп. информация..." /></div>
-    </div>
-
-    <!-- Pro-Rata Preview -->
-    <div style="background:#0f1623;border-radius:10px;padding:14px;margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;color:#f97316;text-transform:uppercase;margin-bottom:10px">
-        <i class="fas fa-calculator" style="margin-right:5px"></i>Pro-Rata распределение по LP (${activeLP.length} участников)
-      </div>
-      <div id="cc_proRataPreview">
-        ${renderCCProRataPreview(5, activeLP)}
-      </div>
-    </div>
-
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="closeNewCCModal()"
-        style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
-      <button onclick="saveNewCC()"
-        style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-        <i class="fas fa-file-signature" style="margin-right:6px"></i>Сохранить как черновик
-      </button>
-    </div>`;
-
-  modal.style.display = 'flex';
-}
-
-function renderCCProRataPreview(pct, activeLP) {
-  if (!activeLP || !activeLP.length) return '<div style="color:#64748b;font-size:12px">Нет активных LP</div>';
-  const total = activeLP.reduce((s, lp) => s + proRata(lp, pct), 0);
-  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
-  return `
-    <div style="font-size:11px;color:#22c55e;font-weight:700;margin-bottom:8px">Итого: ${fmtUSD(total)} (${pct}% от ${fmtUSD(getTotalCommitments(activeFundId))})</div>
-    ${activeLP.map(lp => `
-      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px">
-        <span style="color:#94a3b8">${lp.name}</span>
-        <span style="color:#f97316;font-weight:700">${fmtUSD(proRata(lp, pct))}</span>
-      </div>`).join('')}`;
-}
-
-function updateCCProRata() {
-  const pct = parseFloat(document.getElementById('cc_pct')?.value || 5);
-  const el  = document.getElementById('cc_proRataPreview');
-  if (el) el.innerHTML = renderCCProRataPreview(pct, lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId));
-}
-
-function updateCCPayDate() {
-  const nd = document.getElementById('cc_noticeDate')?.value;
-  if (nd) {
-    const pd = addBusinessDays(nd, 10);
-    const el = document.getElementById('cc_payDate');
-    if (el) el.value = pd;
-  }
-}
-
-function updateCCType() {
-  const type = document.getElementById('cc_type')?.value;
-  const purposeEl = document.getElementById('cc_purpose');
-  if (type === 'Management Fee' && purposeEl && !purposeEl.value) {
-    const year = new Date().getFullYear();
-    const half = new Date().getMonth() < 6 ? 'H1' : 'H2';
-    purposeEl.value = `Management Fee ${half} ${year} (2% p.a. от AUM × 0.5)`;
-  }
-}
-
 function closeNewCCModal() {
   const modal   = document.getElementById('modal-cc-new');
   const overlay = document.getElementById('ccNewOverlay');
   if (modal)   modal.style.display   = 'none';
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
-}
-
-async function saveNewCC() {
-  const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
-  const pct     = parseFloat(document.getElementById('cc_pct')?.value);
-  const purpose = document.getElementById('cc_purpose')?.value?.trim();
-  if (!purpose)           { showToast('⚠ Укажите цель Capital Call', 'red'); return; }
-  if (!pct || pct <= 0)  { showToast('⚠ Укажите % от Commitment', 'red'); return; }
-
-  const noticeDate = document.getElementById('cc_noticeDate')?.value || today();
-  const payDate    = document.getElementById('cc_payDate')?.value || addBusinessDays(noticeDate, 10);
-  const ccType     = document.getElementById('cc_type')?.value || 'Investment';
-  const bankRef    = document.getElementById('cc_bankRef')?.value || '';
-  const notes      = document.getElementById('cc_notes')?.value || '';
-
-  const activeLP   = lpRegister.filter(l => l.status === 'Active' && l.fundId === activeFundId);
-  const lineItems  = activeLP.map(lp => ({
-    lpId:        lp.id,
-    lpName:      lp.name,
-    commitment:  lp.commitment,
-    pct,
-    called:      proRata(lp, pct),
-    paid:        0,
-    paymentDate: payDate,
-    status:      'Pending',
-    wireRef:     '',
-    amlOk:       null,
-  }));
-  const totalAmount = lineItems.reduce((s, li) => s + li.called, 0);
-
-  // status is deliberately omitted — POST /api/capital-calls always
-  // forces Draft regardless of what's sent, so a call can never be
-  // created pre-approved. LPs' calledAmount is NOT touched here either:
-  // a draft isn't a real cash call yet, so it shouldn't count against
-  // anyone's called total until approveCC() actually sends it.
-  const newCC = {
-    fundId:       typeof activeFundId !== 'undefined' ? activeFundId : null,
-    noticeDate,
-    paymentDate:  payDate,
-    totalAmount,
-    pctOfCommit:  pct,
-    purpose,
-    purposeType:  ccType,
-    managementFee: ccType === 'Management Fee',
-    bankRef,
-    createdBy:    currentUserDisplayName(),
-    notes,
-    lineItems,
-  };
-
-  try {
-    const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
-    capitalCallsLog.push(created);
-    closeNewCCModal();
-    showToast(`📝 Capital Call ${created.ccNumber} сохранён как черновик · ${fmtUSD(created.totalAmount)} — требует подтверждения CFO/CEO`, 'blue');
-    renderCapitalCallsPage();
-  } catch (err) {
-    showToast('⚠️ Не удалось создать Capital Call: ' + err.message, 'red');
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════

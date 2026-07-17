@@ -735,16 +735,6 @@
   <div class="modal-body" id="obClientModalContent"></div>
 </div>
 
-<!-- ===== ONBOARDING: TASK FORM MODAL ===== -->
-<div class="task-overlay" id="obTaskOverlay" onclick="closeObTaskModal()" style="display:none"></div>
-<div class="task-modal-wide" id="modal-ob-task" style="display:none;max-width:760px">
-  <div class="modal-header">
-    <h3><i class="fas fa-clipboard-list" style="color:#f97316;margin-right:8px"></i>Форма задачи</h3>
-    <button class="modal-close" onclick="closeObTaskModal()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body" id="obTaskFormContent"></div>
-</div>
-
 <!-- ===== ONBOARDING: NEW CLIENT MODAL ===== -->
 <!-- Fullscreen wrapper: click on dark area = close; inner card = modal content -->
 <div id="modal-ob-new" onclick="closeObNewModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10200;align-items:center;justify-content:center;padding:20px;box-sizing:border-box">
@@ -793,16 +783,6 @@
   <div class="modal-body" id="vaultPreviewBody" style="overflow:auto;padding:16px"></div>
 </div>
 
-<!-- ===== LP REPORT MODAL ===== -->
-<div class="task-overlay" id="lpReportOverlay" onclick="closeLPReport()" style="display:none"></div>
-<div class="task-modal-wide" id="modal-lpreport" style="display:none;max-width:760px">
-  <div class="modal-header">
-    <h3><i class="fas fa-file-invoice-dollar"></i> Capital Account Statement</h3>
-    <button class="modal-close" onclick="closeLPReport()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body" id="lpReportModalContent"></div>
-</div>
-
 <!-- ===== LP REGISTER MODALS ===== -->
 
 <!-- LP Detail Modal -->
@@ -823,16 +803,6 @@
     <button class="modal-close" onclick="closeCapitalAccountStatement()"><i class="fas fa-times"></i></button>
   </div>
   <div class="modal-body" id="capitalStatementContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
-</div>
-
-<!-- New LP Modal -->
-<div class="task-overlay" id="lpNewOverlay" onclick="closeNewLPModal()" style="display:none"></div>
-<div class="task-modal-wide" id="modal-lp-new" style="display:none;max-width:660px">
-  <div class="modal-header">
-    <h3><i class="fas fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>Добавить LP в реестр</h3>
-    <button class="modal-close" onclick="closeNewLPModal()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body" id="lpNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
 </div>
 
 <!-- Capital Call Detail Modal -->
@@ -1001,44 +971,6 @@
   </div>
 </div>
 
-<!-- Modal: Capital Call -->
-<div class="modal" id="modal-addCapCall">
-  <div class="modal-header">
-    <h3><i class="fas fa-coins"></i> Новый Capital Call</h3>
-    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-  </div>
-  <div class="modal-body">
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Дата уведомления</label>
-        <input type="date" id="cc_notice_date" />
-      </div>
-      <div class="form-group">
-        <label>Сумма ($)</label>
-        <input type="number" id="cc_amount" placeholder="500000" />
-      </div>
-      <div class="form-group">
-        <label>% от commitment</label>
-        <input type="number" id="cc_pct" placeholder="10" max="100" />
-      </div>
-      <div class="form-group">
-        <label>Цель использования</label>
-        <select id="cc_purpose">
-          <option>Инвестиция в портфельную компанию</option>
-          <option>Management Fee</option>
-          <option>Операционные расходы</option>
-          <option>Follow-on инвестиция</option>
-        </select>
-      </div>
-    </div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn-ghost" onclick="closeModal()">Отмена</button>
-    <button class="btn-primary" onclick="saveCapCall()"><i class="fas fa-save"></i> Создать</button>
-  </div>
-</div>
-
-<!-- Modal: Distribution -->
 <!-- Toasts — showToast() (js/app.js) appends one element per call so
      several messages can stack and each stays visible for its own full
      duration, instead of a second message cutting off the first. -->

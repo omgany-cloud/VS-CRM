@@ -247,7 +247,7 @@ function docUploadBtn(inputId, saveCallExpr) {
 // disabled ahead of the click.
 const READONLY_GATED_FN_NAMES = [
   'saveChangePassword', 'saveDeal', 'savePortfolio', 'handleFileUpload',
-  'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveNewCC', 'saveIndividualCC', 'approveCC',
+  'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveIndividualCC', 'approveCC',
   'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
   'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewUser',
@@ -598,9 +598,6 @@ async function loadDocumentsFromApi() {
     if (typeof docFiles === 'undefined') return;
     docFiles.length = 0;
     docFiles.push(...data.documents);
-    if (typeof docNextId !== 'undefined' && docFiles.length) {
-      docNextId = Math.max(...docFiles.map(d => d.id)) + 1;
-    }
     const docsPage = document.getElementById('page-documents');
     if (docsPage && docsPage.classList.contains('active') && typeof renderDocumentsPage === 'function') renderDocumentsPage();
     const vaultPage = document.getElementById('page-vault');

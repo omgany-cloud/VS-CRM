@@ -91,30 +91,6 @@ let dealIdCounter = 8;
 let portfolio = [];  // populated at runtime by js/api-auth.js via GET /api/portfolio (see server/index.js)
 let portfolioIdCounter = 4;
 
-/* ===== CAPITAL CALLS ===== */
-let capitalCalls = [
-  { id: 1, noticeDate: '2024-11-15', payDate: '2024-12-02', amount: 4500000, pct: 13.5, purpose: 'Инвестиция в NomadTech Solutions',  status: 'Завершён', received: 4500000 },
-  { id: 2, noticeDate: '2025-02-10', payDate: '2025-02-28', amount: 5000000, pct: 15,   purpose: 'Инвестиция в VitaMed Astana',        status: 'Завершён', received: 5000000 },
-  { id: 3, noticeDate: '2025-05-05', payDate: '2025-05-22', amount: 6000000, pct: 18,   purpose: 'Инвестиция в Dala Agro Holding',      status: 'Завершён', received: 6000000 },
-  { id: 4, noticeDate: '2025-07-01', payDate: '2025-07-21', amount: 2000000, pct: 6,    purpose: 'Пополнение операционного резерва фонда', status: 'Ожидается', received: 0 },
-];
-
-/* ===== CLOSING CHECKLIST ===== */
-const closingChecklist = [
-  { id: 'cl1',  done: true,  text: 'Минимальные обязательства >$5M подтверждены',          resp: 'CEO' },
-  { id: 'cl2',  done: true,  text: 'KYC/AML завершён для всех LP',                          resp: 'CCO' },
-  { id: 'cl3',  done: true,  text: 'Subscription Agreements подписаны LP',                  resp: 'CCO' },
-  { id: 'cl4',  done: true,  text: 'Board Resolution подготовлен',                           resp: 'CFO + CEO' },
-  { id: 'cl5',  done: true,  text: 'Closing Certificates подготовлены',                      resp: 'CFO' },
-  { id: 'cl6',  done: true,  text: 'Банк уведомлён о First Closing',                         resp: 'CFO' },
-  { id: 'cl7',  done: true,  text: 'Board Meeting проведён (День 0)',                         resp: 'GP Board' },
-  { id: 'cl8',  done: true,  text: 'Closing Certificates подписаны GP',                      resp: 'GP Board' },
-  { id: 'cl9',  done: true,  text: 'Capital Call Notice отправлен (+7 дней)',                 resp: 'CFO' },
-  { id: 'cl10', done: true,  text: 'Средства получены на счёт фонда',                        resp: 'CFO' },
-  { id: 'cl11', done: false, text: 'Welcome Letter отправлен всем LP',                       resp: 'CEO' },
-  { id: 'cl12', done: false, text: 'LP Register обновлён, Reg.Agent уведомлён',              resp: 'CEO + Reg.Agent' },
-];
-
 /* ===== FIRST CLOSING STATE =====
    One row per fund (GET /api/first-closing, server/index.js) — used to be
    a single hardcoded object here with no backing store and no fund
@@ -123,41 +99,3 @@ const closingChecklist = [
    current fund's row, defaulting to a blank (never-yet-saved) state.
 ================================================================ */
 let firstClosingList = [];
-
-
-const closingDocuments = [
-  { name: 'Board Resolution (First Closing)',        status: 'Подписан',   template: 'Template 2' },
-  { name: 'Closing Certificate',                     status: 'Подписан',   template: 'Template 3' },
-  { name: 'Capital Call Notice #1',                  status: 'Отправлен',  template: 'Template 4' },
-  { name: 'Welcome Letter LP',                       status: 'В процессе', template: 'Template 5' },
-  { name: 'LP Register (обновлённый)',                status: 'В процессе', template: 'Template 6' },
-  { name: 'AFSA Notification (First Closing)',        status: 'Подготовлен',template: 'Template 8' },
-  { name: 'Subscription Agreement (все LP)',          status: 'Подписан',   template: 'Template 1' },
-];
-
-/* ===== REPORT SCHEDULE ===== */
-const reportSchedule = [
-  { period: 'Q4 2024',   deadline: '2025-02-14', type: 'Квартальный',  status: 'Отправлен',  resp: 'CFO' },
-  { period: 'FY 2024',   deadline: '2025-03-31', type: 'Годовой',      status: 'В процессе', resp: 'CFO + Аудитор' },
-  { period: 'Q1 2025',   deadline: '2025-05-15', type: 'Квартальный',  status: 'Ожидается',  resp: 'CFO' },
-  { period: 'Q2 2025',   deadline: '2025-08-14', type: 'Квартальный',  status: 'Ожидается',  resp: 'CFO' },
-  { period: 'Q3 2025',   deadline: '2025-11-14', type: 'Квартальный',  status: 'Ожидается',  resp: 'CFO' },
-  { period: 'FY 2025',   deadline: '2026-03-31', type: 'Годовой',      status: 'Ожидается',  resp: 'CFO + Аудитор' },
-];
-
-/* ===== CHART DATA =====
-   jcurve/lpTypes used to live here as static mock series for the
-   Dashboard's two charts — both are now computed live from real data
-   (buildRealJCurveData()/buildRealLpTypesData(), js/app.js). nav/sectors
-   remain: they only ever fed the 'reports' page, which has no nav item
-   or route in this app (dead, pre-existing, out of scope here). */
-const chartData = {
-  nav: {
-    labels: ['Q4\'24','Q1\'25','Q2\'25','Q3\'25','Q4\'25','Q1\'26','Q2\'26'],
-    nav:    [4.5, 9.5, 15.9, 17.0, 19.0, 21.5, 24.0],
-  },
-  sectors: {
-    labels: ['Технологии','Здравоохранение','АПК','Энергетика','Финансы'],
-    data:   [4.5, 5, 6, 0, 0],
-  },
-};

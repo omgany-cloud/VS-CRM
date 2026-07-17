@@ -9,8 +9,6 @@
 // ============================================================
 
 /* ── File-preview modal (inline lightbox) ──────────────────── */
-let vaultPreviewUrl   = null;
-let vaultPreviewName  = '';
 let vaultFilterModule = '';
 let vaultFilterType   = '';
 let vaultSearch       = '';

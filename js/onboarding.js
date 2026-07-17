@@ -905,11 +905,6 @@ function closeObTaskForm() {
   }
 }
 
-/** Stub для обратной совместимости (modal-ob-task больше не используется) */
-function closeObTaskModal() {
-  closeObTaskForm();
-}
-
 // Free-text comment thread on a task — separate from the wizard's own
 // structured form fields (task.formData), persisted via POST
 // /api/ob-tasks/:id/comments (server/index.js). Available regardless of

@@ -43,9 +43,9 @@
 
 const MODAL_OVERLAY_IDS = [
   'modalOverlay', 'wfModalOverlay', 'icModalOverlay', 'obClientOverlay',
-  'obTaskOverlay', 'modal-ob-new', 'engagementOverlay', 'restrictedAddOverlay',
-  'vaultPreviewOverlay', 'lpReportOverlay', 'lpDetailOverlay',
-  'capitalStatementOverlay', 'lpNewOverlay', 'ccDetailOverlay', 'ccNewOverlay',
+  'modal-ob-new', 'engagementOverlay', 'restrictedAddOverlay',
+  'vaultPreviewOverlay', 'lpDetailOverlay',
+  'capitalStatementOverlay', 'ccDetailOverlay', 'ccNewOverlay',
   'dealDetailOverlay', 'portDetailOverlay',
 ];
 

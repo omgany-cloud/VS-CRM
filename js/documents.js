@@ -2,17 +2,9 @@
 //  documents.js — File Upload & Comments Module
 // ============================================================
 
-// Document categories
-const DOC_CATEGORIES = {
-  ru: ['KYC/AML', 'First Closing', 'Сделки', 'Портфель', 'Capital Calls', 'Distributions', 'Отчёты', 'Прочее'],
-  en: ['KYC/AML', 'First Closing', 'Deals', 'Portfolio', 'Capital Calls', 'Distributions', 'Reports', 'Other'],
-};
-
-// In-memory storage for uploaded files (metadata only, no actual binary storage)
 let docFiles = [];  // populated at runtime by js/api-auth.js via GET /api/documents (see server/index.js)
 
 let docFilterCategory = '';
-let docNextId = 100;
 
 let docShowArchived = false;
 

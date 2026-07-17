@@ -3,7 +3,7 @@
 //  GP: Golden Leaves Ltd | License: AFSA-A-LA-2024-0038
 // ============================================================
 
-let jcChart = null, lpTypeChart = null, navChart = null, sectorChart = null;
+let jcChart = null, lpTypeChart = null;
 
 /* ===== CURRENT USER =====
    Backed by the real logged-in account (js/api-auth.js's getAuth()), not a
@@ -285,7 +285,6 @@ function navigateTo(page) {
   const dd = document.getElementById('fundSwitcherDropdown');
   if (dd) dd.classList.remove('open');
   if (page === 'dashboard')    { renderDashboardCharts(); }
-  if (page === 'reports')      { renderReportCharts(); }
   if (page === 'documents')    { renderDocumentsPage(); }
   if (page === 'subscription') { renderSubscriptionPage(); }
   if (page === 'export')       { renderExportPage(); }
@@ -1026,11 +1025,6 @@ async function fcGenerateAllWelcomeLetters() {
     }, i * 500);
   });
 }
-
-/* ── Legacy stubs (старые функции оставлены чтобы не сломать возможные внешние вызовы) ── */
-function renderClosingChecklist() {}
-function renderClosingDocs()      {}
-function toggleClosingItem()      {}
 
 /* ===== PIPELINE (KANBAN) ===== */
 // 'Отклонена' и 'Отклонена IC' are deliberately two different terminal
@@ -2598,11 +2592,6 @@ function closePortfolioModal() {
   document.body.style.overflow = '';
 }
 
-function portField(id, field, value) {
-  const p = portfolio.find(x => x.id === id);
-  if (p) { p[field] = value; p.lastUpdated = today(); renderPortfolio(portfolio); }
-}
-
 function _renderPortfolioModal(p) {
   const st = portAutoStatus(p);
   const stCol = portStatusColor(st);
@@ -2880,26 +2869,6 @@ async function portNestedField(id, section, field, value) {
   }
 }
 
-async function portNestedNestedField(id, section, subsection, field, value) {
-  const p = portfolio.find(x=>x.id===id);
-  if (!p) return;
-  if (!p[section]) p[section] = {};
-  if (!p[section][subsection]) p[section][subsection] = {};
-  const prevSection = JSON.parse(JSON.stringify(p[section]));
-  const prevLastUpdated = p.lastUpdated;
-  p[section][subsection][field] = value;
-  p.lastUpdated = today();
-  try {
-    await apiFetch(`/api/portfolio/${id}`, { method: 'PUT', body: JSON.stringify({ [section]: p[section], lastUpdated: p.lastUpdated }) });
-    renderPortfolio(portfolio);
-  } catch (err) {
-    p[section] = prevSection;
-    p.lastUpdated = prevLastUpdated;
-    _renderPortfolioModal(p);
-    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
-  }
-}
-
 async function addPortDoc(id) {
   const p = portfolio.find(x=>x.id===id);
   if (!p) return;
@@ -3023,112 +2992,6 @@ async function saveMonitoringConclusion(id) {
   await portNestedField(id, 'monitoring', 'conclusions', conclusions);
   showToast(`✅ Заключение мониторинга за ${quarter} сохранено`, 'green');
   _renderPortfolioModal(p);
-}
-
-/* ===== CAPITAL CALLS ===== */
-function renderCapitalCalls() {
-  const tbody = document.getElementById('capCallsTableBody');
-  if (!tbody) return;
-  tbody.innerHTML = capitalCalls.map((cc, idx) => `
-    <tr>
-      <td><strong>Capital Call #${idx + 1}</strong></td>
-      <td>${formatDate(cc.noticeDate)}</td>
-      <td>${formatDate(cc.payDate)}</td>
-      <td><strong>$${(cc.amount/1e6).toFixed(2)}M</strong></td>
-      <td>${cc.pct}%</td>
-      <td style="font-size:12px;color:var(--text-muted)">${cc.purpose}</td>
-      <td>${cc.status === 'Завершён'
-            ? '<span class="badge badge-green">Завершён</span>'
-            : '<span class="badge badge-orange">Ожидается</span>'}</td>
-      <td>${cc.received > 0 ? `<span style="color:var(--accent-green);font-weight:700">$${(cc.received/1e6).toFixed(2)}M</span>` : '—'}</td>
-    </tr>`).join('');
-}
-
-function saveCapCall() {
-  const notice = document.getElementById('cc_notice_date').value || new Date().toISOString().split('T')[0];
-  const amount = parseFloat(document.getElementById('cc_amount').value) || 0;
-  const pct    = parseFloat(document.getElementById('cc_pct').value) || 0;
-  const purpose = document.getElementById('cc_purpose').value;
-
-  // Pay date = notice date + 10 business days (approx 14 calendar days)
-  const payDateObj = new Date(notice);
-  payDateObj.setDate(payDateObj.getDate() + 14);
-  const payDate = payDateObj.toISOString().split('T')[0];
-
-  capitalCalls.push({ id: Date.now(), noticeDate: notice, payDate, amount: amount * 1e6, pct, purpose, status: 'Ожидается', received: 0 });
-  renderCapitalCalls();
-  closeModalSilent();
-  showToast('✅ Capital Call создан');
-}
-
-/* ===== REPORTS ===== */
-function renderReports() {
-  renderReportSchedule();
-  setTimeout(renderReportCharts, 150);
-}
-
-function renderReportSchedule() {
-  const container = document.getElementById('reportSchedule');
-  if (!container) return;
-  const statusMap = { 'Отправлен':'badge-green','В процессе':'badge-orange','Ожидается':'badge-gray' };
-  container.innerHTML = reportSchedule.map(r => `
-    <div class="report-row">
-      <span class="rr-period">${r.period}</span>
-      <span class="badge ${r.type === 'Годовой' ? 'badge-purple' : 'badge-blue'}">${r.type}</span>
-      <span class="rr-deadline"><i class="fas fa-clock"></i> ${formatDate(r.deadline)}</span>
-      <span class="badge ${statusMap[r.status]}">${r.status}</span>
-      <span class="rr-resp">${r.resp}</span>
-    </div>`).join('');
-}
-
-function renderReportCharts() {
-  // NAV chart
-  const navCtx = document.getElementById('chartNAV');
-  if (navCtx) {
-    if (navChart) navChart.destroy();
-    navChart = new Chart(navCtx, {
-      type: 'line',
-      data: {
-        labels: chartData.nav.labels,
-        datasets: [{
-          label: 'NAV ($M)',
-          data: chartData.nav.nav,
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59,130,246,0.1)',
-          fill: true, tension: 0.4, pointRadius: 4,
-          pointBackgroundColor: '#3b82f6', borderWidth: 2.5,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color:'#8a9bbf' } } },
-        scales: {
-          x: { ticks:{color:'#5a6b8a'}, grid:{color:'#2a3448'} },
-          // Axis symbol follows activeFundId; underlying series is still
-          // static mock data (js/data.js chartData) — pre-existing
-          // limitation, out of scope for this currency-honesty sweep.
-          y: { ticks:{color:'#5a6b8a', callback: v=>currencySymbol(currencyForFundId(activeFundId))+v+'M'}, grid:{color:'#2a3448'} }
-        }
-      }
-    });
-  }
-
-  // Sector chart
-  const secCtx = document.getElementById('chartSectors');
-  if (secCtx) {
-    if (sectorChart) sectorChart.destroy();
-    sectorChart = new Chart(secCtx, {
-      type: 'doughnut',
-      data: {
-        labels: chartData.sectors.labels,
-        datasets: [{ data: chartData.sectors.data, backgroundColor: COLORS, borderColor:'#1c2333', borderWidth:2 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout:'60%',
-        plugins: { legend: { position:'bottom', labels:{color:'#8a9bbf',font:{size:10},padding:10} } }
-      }
-    });
-  }
 }
 
 /* ===== MODALS ===== */
@@ -3255,11 +3118,6 @@ function formatDate(s) {
 
 function kycStatusBadge(s) {
   const m = { 'Одобрен':'badge-green','В процессе':'badge-orange','На проверке':'badge-blue','Отклонён':'badge-red','Не начат':'badge-gray' };
-  return `<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;
-}
-
-function stageBadgePort(s) {
-  const m = { 'Активная':'badge-green','Value Creation':'badge-blue','Мониторинг':'badge-orange','На выходе':'badge-purple' };
   return `<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;
 }
 
