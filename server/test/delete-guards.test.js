@@ -120,3 +120,24 @@ test('Onboarding client: clean (unactivated) delete succeeds; activated is block
   const del = await server.apiFetch(`/api/ob-clients/${activated.id}`, { method: 'DELETE' });
   assert.equal(del.status, 409);
 });
+
+test('Fund: clean delete succeeds; blocked once an LP is attached, "closed" status works as the alternative', async () => {
+  const clean = await (await server.apiFetch('/api/funds', {
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND_CLEAN', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+  })).json();
+  assert.equal((await server.apiFetch(`/api/funds/${clean.id}`, { method: 'DELETE' })).status, 200);
+
+  // fundId (module-scoped) is the main seeded fund used by every other
+  // test in this file — guaranteed to have real LP/deal/portfolio
+  // footprint by now, so it's already a real "blocked" case rather than
+  // needing a fresh fixture.
+  const del = await server.apiFetch(`/api/funds/${fundId}`, { method: 'DELETE' });
+  assert.equal(del.status, 409);
+  const body = await del.json();
+  assert.match(body.error, /closed/);
+
+  const closed = await (await server.apiFetch(`/api/funds/${fundId}`, { method: 'PUT', body: JSON.stringify({ status: 'closed' }) })).json();
+  assert.equal(closed.status, 'closed');
+  // revert so later-running test files (if any share seed data assumptions) aren't affected
+  await server.apiFetch(`/api/funds/${fundId}`, { method: 'PUT', body: JSON.stringify({ status: 'active' }) });
+});

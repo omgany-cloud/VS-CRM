@@ -53,18 +53,18 @@ function renderDocStats() {
   const totalComments = active.reduce((s, d) => s + d.comments.length, 0);
   const el = document.getElementById('docStats');
   if (el) el.innerHTML = `
-    <div class="doc-stat-pill"><i class="fas fa-file"></i> ${active.length} ${currentLang === 'ru' ? 'файлов' : 'files'}</div>
-    <div class="doc-stat-pill"><i class="fas fa-comment"></i> ${totalComments} ${currentLang === 'ru' ? 'комментариев' : 'comments'}</div>
+    <div class="doc-stat-pill"><i class="fas fa-file"></i> ${active.length} файлов</div>
+    <div class="doc-stat-pill"><i class="fas fa-comment"></i> ${totalComments} комментариев</div>
     <button id="docArchiveToggle" class="doc-stat-pill ${docShowArchived ? 'active' : ''}" style="cursor:pointer;border:none"
-      onclick="toggleDocShowArchived()"><i class="fas fa-box-archive"></i> ${archived.length} ${currentLang === 'ru' ? 'в архиве' : 'archived'}</button>
+      onclick="toggleDocShowArchived()"><i class="fas fa-box-archive"></i> ${archived.length} в архиве</button>
   `;
 }
 
 const HISTORY_LABELS = {
-  uploaded:  { ru: 'Загружен',    en: 'Uploaded' },
-  commented: { ru: 'Комментарий', en: 'Commented' },
-  archived:  { ru: 'В архив',     en: 'Archived' },
-  restored:  { ru: 'Восстановлен', en: 'Restored' },
+  uploaded:  'Загружен',
+  commented: 'Комментарий',
+  archived:  'В архив',
+  restored:  'Восстановлен',
 };
 
 function renderDocList(data) {
@@ -72,7 +72,7 @@ function renderDocList(data) {
   if (!container) return;
 
   if (!data.length) {
-    container.innerHTML = `<div class="doc-empty"><i class="fas fa-folder-open"></i><p>${currentLang === 'ru' ? 'Нет загруженных файлов' : 'No uploaded files'}</p></div>`;
+    container.innerHTML = `<div class="doc-empty"><i class="fas fa-folder-open"></i><p>Нет загруженных файлов</p></div>`;
     return;
   }
 
@@ -81,20 +81,20 @@ function renderDocList(data) {
       <div class="dfc-header">
         <div class="dfc-icon ${getDocIconClass(doc.name)}"><i class="${getDocIcon(doc.name)}"></i></div>
         <div class="dfc-meta">
-          <div class="dfc-name">${escapeHtml(doc.name)}${doc.archived ? ` <span class="badge badge-gray" style="font-size:9px">${currentLang === 'ru' ? 'В архиве' : 'Archived'}</span>` : ''}</div>
+          <div class="dfc-name">${escapeHtml(doc.name)}${doc.archived ? ` <span class="badge badge-gray" style="font-size:9px">В архиве</span>` : ''}</div>
           <div class="dfc-info">
             <span class="badge badge-blue" style="font-size:10px">${doc.category}</span>
             <span>${doc.size}</span>
             <span>${formatDate(doc.date)}</span>
-            <span>${currentLang === 'ru' ? 'Загрузил' : 'By'}: <strong>${escapeHtml(doc.uploader)}</strong></span>
-            ${doc.archived ? `<span>${currentLang === 'ru' ? 'Архивировал' : 'Archived by'}: <strong>${escapeHtml(doc.archivedBy) || '—'}</strong> · ${formatDate(doc.archivedAt)}</span>` : ''}
+            <span>Загрузил: <strong>${escapeHtml(doc.uploader)}</strong></span>
+            ${doc.archived ? `<span>Архивировал: <strong>${escapeHtml(doc.archivedBy) || '—'}</strong> · ${formatDate(doc.archivedAt)}</span>` : ''}
           </div>
         </div>
         <div class="dfc-actions">
-          ${doc.documentUrl ? `<button class="act-btn" title="${currentLang === 'ru' ? 'Скачать' : 'Download'}" onclick="window.open(resolveDocUrl('${escapeAttr(doc.documentUrl)}'),'_blank')"><i class="fas fa-download"></i></button>` : ''}
+          ${doc.documentUrl ? `<button class="act-btn" title="Скачать" onclick="window.open(resolveDocUrl('${escapeAttr(doc.documentUrl)}'),'_blank')"><i class="fas fa-download"></i></button>` : ''}
           ${doc.archived
-            ? `<button class="act-btn" title="${currentLang === 'ru' ? 'Восстановить' : 'Restore'}" onclick="restoreDoc(${doc.id})"><i class="fas fa-box-open"></i></button>`
-            : `<button class="act-btn del" title="${currentLang === 'ru' ? 'В архив' : 'Archive'}" onclick="archiveDoc(${doc.id})"><i class="fas fa-box-archive"></i></button>`}
+            ? `<button class="act-btn" title="Восстановить" onclick="restoreDoc(${doc.id})"><i class="fas fa-box-open"></i></button>`
+            : `<button class="act-btn del" title="В архив" onclick="archiveDoc(${doc.id})"><i class="fas fa-box-archive"></i></button>`}
         </div>
       </div>
       <!-- Comments -->
@@ -111,20 +111,20 @@ function renderDocList(data) {
         ${!doc.archived ? `
         <div class="comment-input-row">
           <input type="text" class="comment-input" id="commentInput_${doc.id}"
-            placeholder="${t('doc_comment_ph')}"
+            placeholder="Оставить комментарий..."
             onkeydown="if(event.key==='Enter') addComment(${doc.id})" />
-          <button class="btn-primary" style="padding:6px 12px;font-size:12px" onclick="addComment(${doc.id})">${t('doc_add_comment')}</button>
+          <button class="btn-primary" style="padding:6px 12px;font-size:12px" onclick="addComment(${doc.id})">Добавить</button>
         </div>` : ''}
       </div>
       <!-- Audit trail -->
       ${(doc.history || []).length ? `
       <details class="dfc-history">
-        <summary>${currentLang === 'ru' ? 'История' : 'History'} (${doc.history.length})</summary>
+        <summary>История (${doc.history.length})</summary>
         ${doc.history.slice().reverse().map(h => `
           <div class="dfc-history-row">
-            <span>${(HISTORY_LABELS[h.action] || { ru: h.action, en: h.action })[currentLang]}</span>
+            <span>${HISTORY_LABELS[h.action] || h.action}</span>
             <span><strong>${escapeHtml(h.by)}</strong></span>
-            <span>${new Date(h.at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span>
+            <span>${new Date(h.at).toLocaleString('ru-RU')}</span>
             ${h.detail ? `<span class="dfc-history-detail">${escapeHtml(h.detail)}</span>` : ''}
           </div>`).join('')}
       </details>` : ''}
@@ -152,11 +152,11 @@ async function addComment(docId) {
     const updated = await apiFetch(`/api/documents/${docId}`, { method: 'PUT', body: JSON.stringify({ comments: doc.comments }) });
     Object.assign(doc, updated);
     renderDocumentsPage();
-    showToast(currentLang === 'ru' ? '💬 Комментарий добавлен' : '💬 Comment added');
+    showToast('💬 Комментарий добавлен');
   } catch (err) {
     doc.comments = prevComments;
     renderDocumentsPage();
-    showToast('⚠️ ' + (currentLang === 'ru' ? 'Не удалось сохранить комментарий: ' : 'Failed to save comment: ') + err.message, 'red');
+    showToast('⚠️ Не удалось сохранить комментарий: ' + err.message, 'red');
   }
 }
 
@@ -168,15 +168,14 @@ async function addComment(docId) {
 async function archiveDoc(docId) {
   const doc = docFiles.find(d => d.id === docId);
   if (!doc) return;
-  const msg = currentLang === 'ru' ? `Отправить «${doc.name}» в архив?` : `Archive "${doc.name}"?`;
-  if (!confirm(msg)) return;
+  if (!confirm(`Отправить «${doc.name}» в архив?`)) return;
   try {
     const updated = await apiFetch(`/api/documents/${docId}`, { method: 'PUT', body: JSON.stringify({ archived: true }) });
     Object.assign(doc, updated);
     renderDocumentsPage();
-    showToast(currentLang === 'ru' ? '📦 Файл отправлен в архив' : '📦 File archived');
+    showToast('📦 Файл отправлен в архив');
   } catch (err) {
-    showToast('⚠️ ' + (currentLang === 'ru' ? 'Не удалось архивировать: ' : 'Failed to archive: ') + err.message, 'red');
+    showToast('⚠️ Не удалось архивировать: ' + err.message, 'red');
   }
 }
 
@@ -187,9 +186,9 @@ async function restoreDoc(docId) {
     const updated = await apiFetch(`/api/documents/${docId}`, { method: 'PUT', body: JSON.stringify({ archived: false }) });
     Object.assign(doc, updated);
     renderDocumentsPage();
-    showToast(currentLang === 'ru' ? '📤 Файл восстановлен из архива' : '📤 File restored');
+    showToast('📤 Файл восстановлен из архива');
   } catch (err) {
-    showToast('⚠️ ' + (currentLang === 'ru' ? 'Не удалось восстановить: ' : 'Failed to restore: ') + err.message, 'red');
+    showToast('⚠️ Не удалось восстановить: ' + err.message, 'red');
   }
 }
 
@@ -233,7 +232,7 @@ async function handleFileUpload(input) {
     document.querySelectorAll('.doc-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === category));
   }
   renderDocumentsPage();
-  if (uploaded) showToast(`✅ ${currentLang === 'ru' ? 'Загружено' : 'Uploaded'}: ${uploaded} ${currentLang === 'ru' ? 'файл(ов)' : 'file(s)'}`);
+  if (uploaded) showToast(`✅ Загружено: ${uploaded} файл(ов)`);
   input.value = '';
 }
 

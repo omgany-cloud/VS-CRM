@@ -247,7 +247,7 @@ function docUploadBtn(inputId, saveCallExpr) {
 // disabled ahead of the click.
 const READONLY_GATED_FN_NAMES = [
   'saveChangePassword', 'saveDeal', 'savePortfolio', 'handleFileUpload',
-  'saveFund', 'markLPPayment', 'markLpAmlOk', 'saveIndividualCC', 'approveCC',
+  'saveFund', 'deleteFund', 'closeFund', 'markLPPayment', 'markLpAmlOk', 'saveIndividualCC', 'approveCC',
   'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
   'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewCoiEntry', 'saveNewUser',

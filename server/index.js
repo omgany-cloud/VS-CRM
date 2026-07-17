@@ -742,13 +742,16 @@ app.get('/api/funds', requireAuth, requireInternal, requirePermission('accessFM'
 app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
-  // nav has NOT NULL DEFAULT 0 at the schema level, but fundToParams() binds
-  // an explicit NULL for any field the caller omits — which overrides a
-  // column's SQL-level DEFAULT (SQLite/node:sqlite only applies DEFAULT when
-  // the column is left out of the statement entirely, not when NULL is
-  // explicitly bound). The fund-creation form never sends nav, so default it
-  // here first, same pattern already used by POST /api/deals and /api/portfolio.
-  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, ...b }) }));
+  // nav/status/color/icon all have NOT NULL DEFAULTs at the schema level,
+  // but fundToParams() binds an explicit NULL for any field the caller
+  // omits — which overrides a column's SQL-level DEFAULT (SQLite/
+  // node:sqlite only applies DEFAULT when the column is left out of the
+  // statement entirely, not when NULL is explicitly bound). The real
+  // fund-creation form (js/funds.js) always sends all four, so this went
+  // unnoticed until a more minimal caller (the automated test suite) hit
+  // it — same bug class as POST /api/deals and /api/portfolio already
+  // guard against, just missing three of the four fields here.
+  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, status: 'fundraising', color: '#3b82f6', icon: 'fa-landmark', ...b }) }));
   const row = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   const f = rowToFund(row);
   f.lpCount = 0;
@@ -768,6 +771,29 @@ app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manag
   f.lpCount = lpCount;
   f.deployed = deployed;
   res.json(f);
+});
+
+// Hybrid delete (same shape as DELETE /api/users/:id and every other
+// entity in this pass): hard-delete only if the fund has zero real
+// footprint across every table that references it. Anything with real
+// activity must be set to status 'closed' instead (already a real
+// status value in this app's vocabulary — js/funds.js's
+// getFundStatusLabel — just never had a UI action to set it before now).
+const FUND_FOOTPRINT_TABLES = ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_memos', 'first_closing', 'afsa_reports'];
+app.delete('/api/funds/:id', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Fund not found in this tenant' });
+  const footprint = [];
+  for (const table of FUND_FOOTPRINT_TABLES) {
+    const count = db.prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE tenant_id = ? AND fund_id = ?`).get(req.tenantId, existing.id).c;
+    if (count) footprint.push({ table, count });
+  }
+  if (footprint.length) {
+    const summary = footprint.map(f => `${f.table} ×${f.count}`).join(', ');
+    return res.status(409).json({ error: `Cannot delete: fund has real activity (${summary}). Set status to 'closed' instead.`, footprint });
+  }
+  db.prepare('DELETE FROM funds WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
 });
 
 app.get('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {

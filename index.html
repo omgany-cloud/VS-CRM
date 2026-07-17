@@ -95,9 +95,9 @@
   <div class="fund-switcher-dropdown" id="fundSwitcherDropdown"></div>
 
   <nav class="sidebar-nav">
-    <div class="nav-group-label" data-i18n="nav_overview">Обзор</div>
+    <div class="nav-group-label">Обзор</div>
     <a href="#" class="nav-item active" data-page="dashboard">
-      <i class="fas fa-th-large"></i><span data-i18n="nav_dashboard">Дашборд</span>
+      <i class="fas fa-th-large"></i><span>Дашборд</span>
     </a>
 
     <div class="nav-group-label">FM — Жизненный цикл LP</div>
@@ -121,17 +121,17 @@
       <i class="fas fa-file-signature"></i><span>First Closing</span>
     </a>
 
-    <div class="nav-group-label" data-i18n="nav_investment">Инвестиционный цикл</div>
+    <div class="nav-group-label">Инвестиционный цикл</div>
     <a href="#" class="nav-item" data-page="ic">
       <i class="fas fa-handshake"></i><span>Investment Committee</span>
       <span class="nav-badge" id="badge-ic" style="display:none">0</span>
     </a>
     <a href="#" class="nav-item" data-page="deals">
-      <i class="fas fa-handshake"></i><span data-i18n="nav_deals">Сделки / Pipeline</span>
+      <i class="fas fa-handshake"></i><span>Сделки / Pipeline</span>
       <span class="nav-badge warning" id="badge-deals">0</span>
     </a>
     <a href="#" class="nav-item" data-page="portfolio">
-      <i class="fas fa-briefcase"></i><span data-i18n="nav_portfolio">Портфель</span>
+      <i class="fas fa-briefcase"></i><span>Портфель</span>
     </a>
 
     <div class="nav-group-label">Compliance</div>
@@ -165,10 +165,10 @@
       <span class="nav-badge" style="background:#22c55e">AFSA</span>
     </a>
     <a href="#" class="nav-item" data-page="documents">
-      <i class="fas fa-folder-open"></i><span data-i18n="nav_documents">Документы</span>
+      <i class="fas fa-folder-open"></i><span>Документы</span>
     </a>
     <a href="#" class="nav-item" data-page="subscription">
-      <i class="fas fa-credit-card"></i><span data-i18n="nav_subscription">Подписка</span>
+      <i class="fas fa-credit-card"></i><span>Подписка</span>
       <span class="nav-badge" style="background:var(--accent-green)">PRO</span>
     </a>
     <a href="#" class="nav-item" data-page="users">
@@ -182,11 +182,6 @@
       <span class="user-name" id="sidebarUserName">Golden Leaves Ltd</span>
       <span class="user-role" id="sidebarUserRole">CEO</span>
     </div>
-    <!-- Language Toggle -->
-    <div class="lang-toggle">
-      <button class="lang-btn active" data-lang="ru" onclick="setLang('ru')">RU</button>
-      <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
-    </div>
   </div>
 </aside>
 
@@ -197,12 +192,12 @@
   <header class="topbar">
     <div class="topbar-left">
       <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-      <div class="page-breadcrumb" id="pageBreadcrumb" data-i18n="nav_dashboard">Дашборд</div>
+      <div class="page-breadcrumb" id="pageBreadcrumb">Дашборд</div>
     </div>
     <div class="topbar-right">
       <div class="fund-phase-indicator" id="fundPhaseIndicator">
         <i class="fas fa-circle-dot"></i>
-        <span id="fundPhaseText" data-i18n="phase_label">Investment Period · Year 2</span>
+        <span id="fundPhaseText">Investment Period · Year 2</span>
       </div>
       <div class="topbar-date"><i class="fas fa-calendar-alt"></i> <span id="currentDate"></span></div>
 
@@ -637,15 +632,15 @@
     <!-- ===== DOCUMENTS ===== -->
     <section id="page-documents" class="page">
       <div class="section-header">
-        <h1 data-i18n="doc_title">Документы</h1>
-        <p data-i18n="doc_sub">Загрузка файлов, шаблонов и комментарии по процессам</p>
+        <h1>Документы</h1>
+        <p>Загрузка файлов, шаблонов и комментарии по процессам</p>
       </div>
 
       <!-- Upload bar -->
       <div class="doc-upload-bar">
         <div class="doc-upload-zone" onclick="document.getElementById('fileInput').click()">
           <i class="fas fa-cloud-upload-alt"></i>
-          <span data-i18n="doc_upload_btn">Загрузить файл</span>
+          <span>Загрузить файл</span>
           <span class="doc-upload-hint">PDF, DOCX, XLSX, JPG, ZIP — до 20 MB</span>
           <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
             style="display:none" onchange="handleFileUpload(this)" />
@@ -685,8 +680,8 @@
     <!-- ===== SUBSCRIPTION ===== -->
     <section id="page-subscription" class="page">
       <div class="section-header">
-        <h1 data-i18n="sub_title">Тарифные планы</h1>
-        <p data-i18n="sub_sub">Выберите план для вашей организации</p>
+        <h1>Тарифные планы</h1>
+        <p>Выберите план для вашей организации</p>
       </div>
 
       <!-- Billing Toggle -->
@@ -991,11 +986,11 @@
 <!-- Modal: Новый фонд -->
 <div class="modal" id="modal-addFund">
   <div class="modal-header">
-    <h3><i class="fas fa-plus-circle"></i> <span id="fundModalTitleText" data-i18n="btn_add_fund_modal">Создать новый фонд</span></h3>
+    <h3><i class="fas fa-plus-circle"></i> <span id="fundModalTitleText">Создать новый фонд</span></h3>
     <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
   </div>
   <div class="modal-body">
-    <div class="form-section-title" data-i18n="general_info">Основная информация</div>
+    <div class="form-section-title">Основная информация</div>
     <div class="form-grid">
       <div class="form-group full">
         <label>Название фонда *</label>
@@ -1052,14 +1047,19 @@
       </div>
     </div>
   </div>
-  <div class="modal-footer">
-    <button class="btn-ghost" onclick="closeModal()" data-i18n="btn_cancel">Отмена</button>
-    <button class="btn-primary" onclick="saveFund()"><i class="fas fa-save"></i> <span data-i18n="btn_save">Сохранить</span></button>
+  <div class="modal-footer" style="justify-content:space-between">
+    <div>
+      <button id="fundDeleteBtn" class="btn-ghost" style="display:none;color:#f87171;border-color:rgba(239,68,68,0.3)" onclick="deleteFund(fundModalEditId)"><i class="fas fa-trash"></i> Удалить</button>
+      <button id="fundCloseBtn" class="btn-ghost" style="display:none;color:#94a3b8" onclick="closeFund(fundModalEditId)"><i class="fas fa-lock"></i> Закрыть фонд</button>
+    </div>
+    <div>
+      <button class="btn-ghost" onclick="closeModal()">Отмена</button>
+      <button class="btn-primary" onclick="saveFund()"><i class="fas fa-save"></i> Сохранить</button>
+    </div>
   </div>
 </div>
 
 <script src="js/roles.js"></script>
-<script src="js/i18n.js"></script>
 <script src="js/status-labels.js"></script>
 <script src="js/password-strength.js"></script>
 <script src="js/currency.js"></script>

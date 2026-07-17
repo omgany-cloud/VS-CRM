@@ -1090,27 +1090,6 @@ button:focus-visible, [role="button"]:focus-visible {
 /* ===== TOPBAR ADJUSTMENTS ===== */
 .fund-type-switch { display: none; }
 
-/* ===== LANGUAGE TOGGLE ===== */
-.lang-toggle {
-  display: flex;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px;
-  gap: 2px;
-  margin-left: 4px;
-}
-.lang-btn {
-  padding: 3px 9px;
-  border: none; background: none;
-  color: var(--text-muted);
-  font-size: 11px; font-weight: 700;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-.lang-btn.active { background: var(--accent-blue); color: #fff; }
-
 /* ===== FUND SWITCHER DROPDOWN ===== */
 .fund-switcher-dropdown {
   display: none;

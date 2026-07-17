@@ -25,7 +25,7 @@ function switchFund(id) {
   if (typeof renderLPRegisterPage === 'function') renderLPRegisterPage();
   if (typeof renderCapitalCallsPage === 'function') renderCapitalCallsPage();
   if (typeof renderICPage === 'function') renderICPage();
-  if (f) showToast(`✅ ${f.shortName} — ${t('all_funds')}`);
+  if (f) showToast(`✅ ${f.shortName} — Все фонды`);
 }
 
 function renderFundSwitcher() {
@@ -39,7 +39,7 @@ function renderFundSwitcher() {
         <div class="fsi-type">${f.type} · $${f.targetSize}M</div>
       </div>
       <span class="fsi-status ${f.status}">${getFundStatusLabel(f.status)}</span>
-      <span class="fsi-edit" onclick="event.stopPropagation();openEditFundModal(${f.id})" title="${currentLang === 'ru' ? 'Редактировать' : 'Edit'}">
+      <span class="fsi-edit" onclick="event.stopPropagation();openEditFundModal(${f.id})" title="Редактировать">
         <i class="fas fa-pen" style="font-size:10px"></i>
       </span>
     </div>
@@ -47,17 +47,17 @@ function renderFundSwitcher() {
     <div class="fund-switch-divider"></div>
     <div class="fund-switch-item add-fund" onclick="openNewFundModal()">
       <div class="fsi-dot" style="background:var(--text-muted)"><i class="fas fa-plus" style="font-size:9px"></i></div>
-      <div class="fsi-body"><div class="fsi-name" data-i18n="btn_add_fund_modal">${t('btn_add_fund_modal')}</div></div>
+      <div class="fsi-body"><div class="fsi-name">Создать новый фонд</div></div>
     </div>
   `;
 }
 
 function getFundStatusLabel(status) {
   const map = {
-    active: currentLang === 'ru' ? 'Активный' : 'Active',
-    fundraising: currentLang === 'ru' ? 'Фандрайзинг' : 'Fundraising',
-    harvesting: currentLang === 'ru' ? 'Harvesting' : 'Harvesting',
-    closed: currentLang === 'ru' ? 'Закрыт' : 'Closed',
+    active: 'Активный',
+    fundraising: 'Фандрайзинг',
+    harvesting: 'Harvesting',
+    closed: 'Закрыт',
   };
   return map[status] || status;
 }
@@ -95,7 +95,9 @@ function openNewFundModal() {
   const mfeeEl = document.getElementById('nf_mfee'); if (mfeeEl) mfeeEl.value = 2;
   const carryEl = document.getElementById('nf_carry'); if (carryEl) carryEl.value = 20;
   const prefEl = document.getElementById('nf_pref'); if (prefEl) prefEl.value = 8;
-  const titleEl = document.getElementById('fundModalTitleText'); if (titleEl) titleEl.textContent = t('btn_add_fund_modal');
+  const titleEl = document.getElementById('fundModalTitleText'); if (titleEl) titleEl.textContent = 'Создать новый фонд';
+  const delBtn = document.getElementById('fundDeleteBtn'); if (delBtn) delBtn.style.display = 'none';
+  const closeBtn = document.getElementById('fundCloseBtn'); if (closeBtn) closeBtn.style.display = 'none';
   openModal('addFund');
 }
 
@@ -116,7 +118,11 @@ function openEditFundModal(id) {
   set('nf_carry', f.carriedInterest);
   set('nf_pref', f.preferredReturn);
   const titleEl = document.getElementById('fundModalTitleText');
-  if (titleEl) titleEl.textContent = currentLang === 'ru' ? 'Редактировать фонд' : 'Edit fund';
+  if (titleEl) titleEl.textContent = 'Редактировать фонд';
+  const delBtn = document.getElementById('fundDeleteBtn');
+  if (delBtn) delBtn.style.display = '';
+  const closeBtn = document.getElementById('fundCloseBtn');
+  if (closeBtn) closeBtn.style.display = f.status === 'closed' ? 'none' : '';
   openModal('addFund');
 }
 
@@ -132,7 +138,7 @@ async function saveFund() {
   const carry   = parseFloat(document.getElementById('nf_carry').value) || 20;
   const pref    = parseFloat(document.getElementById('nf_pref').value) || 8;
 
-  if (!name) { alert(currentLang === 'ru' ? 'Введите название фонда' : 'Enter fund name'); return; }
+  if (!name) { alert('Введите название фонда'); return; }
 
   const isEdit = fundModalEditId != null;
   const colors = ['#3b82f6','#8b5cf6','#22c55e','#f97316','#14b8a6','#ef4444','#eab308'];
@@ -166,16 +172,53 @@ async function saveFund() {
       const updated = await apiFetch(`/api/funds/${fundModalEditId}`, { method: 'PUT', body: JSON.stringify(payload) });
       const idx = funds.findIndex(f => f.id === fundModalEditId);
       if (idx >= 0) funds[idx] = updated;
-      showToast(`✅ ${currentLang === 'ru' ? 'Фонд обновлён' : 'Fund updated'}: ${updated.shortName}`);
+      showToast(`✅ Фонд обновлён: ${updated.shortName}`);
     } else {
       const created = await apiFetch('/api/funds', { method: 'POST', body: JSON.stringify(payload) });
       funds.push(created);
-      showToast(`✅ ${currentLang === 'ru' ? 'Фонд создан' : 'Fund created'}: ${created.shortName}`);
+      showToast(`✅ Фонд создан: ${created.shortName}`);
     }
     renderFundSwitcher();
     closeModalSilent();
   } catch (err) {
     console.error('Failed to save fund:', err);
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
+// Soft alternative to delete when a fund has real activity — 'closed' is
+// already a real status value in this app's vocabulary
+// (getFundStatusLabel above), it just never had a UI action to set it.
+async function closeFund(id) {
+  const f = funds.find(x => x.id === id);
+  if (!f) return;
+  if (!confirm(`Закрыть фонд «${f.shortName}»? Статус изменится на "Закрыт".`)) return;
+  try {
+    const updated = await apiFetch(`/api/funds/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'closed' }) });
+    const idx = funds.findIndex(x => x.id === id);
+    if (idx >= 0) funds[idx] = updated;
+    renderFundSwitcher();
+    closeModalSilent();
+    showToast(`✅ Фонд «${updated.shortName}» закрыт`, 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
+async function deleteFund(id) {
+  const f = funds.find(x => x.id === id);
+  if (!f) return;
+  if (!confirm(`Удалить фонд «${f.shortName}» без возможности восстановления? Возможно только если у фонда нет LP, сделок, портфельных компаний или capital calls.`)) return;
+  try {
+    await apiFetch(`/api/funds/${id}`, { method: 'DELETE' });
+    funds = funds.filter(x => x.id !== id);
+    if (activeFundId === id) activeFundId = funds[0] ? funds[0].id : null;
+    renderFundSwitcher();
+    closeModalSilent();
+    const active = getActiveFund();
+    if (active) switchFund(active.id);
+    showToast('✅ Фонд удалён', 'green');
+  } catch (err) {
     showToast('⚠️ ' + err.message, 'red');
   }
 }

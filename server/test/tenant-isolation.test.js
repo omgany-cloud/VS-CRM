@@ -177,3 +177,13 @@ test('External API key isolation: a key only ever resolves to the tenant that cr
   await server.apiFetch(`/api/api-keys/${aKeyRes.id}/revoke`, { method: 'PUT' }).catch(() => {});
   await tenantB.apiFetch(`/api/api-keys/${bKeyRes.id}/revoke`, { method: 'PUT' }).catch(() => {});
 });
+
+test('Fund isolation', async () => {
+  await assertEntityIsolation({
+    name: 'Fund',
+    createPath: '/api/funds',
+    createBody: { name: 'ZZZ_ISO_FUND', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 },
+    listPath: '/api/funds', listKey: 'funds',
+    idPath: (id) => `/api/funds/${id}`,
+  });
+});
