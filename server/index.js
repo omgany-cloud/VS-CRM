@@ -74,6 +74,10 @@ const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // The Документы page's file input accepts .zip client-side
+  // (index.html) — without these, a zip upload there silently 400s
+  // ("file type not allowed") despite the UI advertising it.
+  'application/zip', 'application/x-zip-compressed',
 ]);
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB — payment orders/scans, not video
 

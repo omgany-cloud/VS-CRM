@@ -231,6 +231,15 @@ async function handleFileUpload(input) {
       showToast('⚠️ Не удалось загрузить ' + file.name + ': ' + err.message, 'red');
     }
   }
+  // A category filter left active from browsing (e.g. "KYC/AML") would
+  // otherwise hide whatever was just uploaded under a different category —
+  // the upload genuinely succeeds (toast fires) but the file never shows
+  // up in the list underneath, which just looks broken. Switch the filter
+  // to match what was just uploaded so the result is always visible.
+  if (uploaded && docFilterCategory !== category) {
+    docFilterCategory = category;
+    document.querySelectorAll('.doc-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === category));
+  }
   renderDocumentsPage();
   if (uploaded) showToast(`✅ ${currentLang === 'ru' ? 'Загружено' : 'Uploaded'}: ${uploaded} ${currentLang === 'ru' ? 'файл(ов)' : 'file(s)'}`);
   input.value = '';
