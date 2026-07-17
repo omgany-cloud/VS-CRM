@@ -30,6 +30,7 @@ const STATUS_LABELS = {
   'Approved': 'Одобрено',
   'Approved with conditions': 'Одобрено с условиями',
   'Rejected': 'Отклонено',
+  'Escalated': 'Эскалировано (требует CEO)',
   'Suspended': 'Приостановлен',
   'Exited': 'Вышел',
   'Overdue': 'Просрочено',

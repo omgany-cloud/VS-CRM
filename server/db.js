@@ -507,9 +507,16 @@ CREATE TABLE IF NOT EXISTS conflict_approvals (
   -- e.g. 'Within 48 hours', 'Within 5 business days', 'Next quarterly meeting'
   status             TEXT NOT NULL DEFAULT 'Pending',
   -- 'Pending' | 'Approved' | 'Approved with conditions' | 'Rejected' | 'Escalated'
+  -- ('Escalated' is now real: POST auto-sets it for High/Critical risk_level,
+  -- and PUT requires the deciding user to actually be CEO for those rows —
+  -- see the escalation comment on PUT /api/conflict-approvals/:id.)
   description        TEXT,
   rationale          TEXT,
   decided_at         TEXT,
+  -- Server-stamped from the authenticated user at decision time, not
+  -- client-trusted — decision_maker above is a free-text/role label the
+  -- form author picks, not proof of who actually clicked Approve/Reject.
+  decided_by         TEXT,
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
   -- Same reasoning as engagements.currency — a conflict-approval fee
   -- isn't fund-scoped either.
@@ -786,6 +793,7 @@ if (!columnExists('documents', 'archived')) db.exec("ALTER TABLE documents ADD C
 if (!columnExists('documents', 'archived_at')) db.exec("ALTER TABLE documents ADD COLUMN archived_at TEXT");
 if (!columnExists('documents', 'archived_by')) db.exec("ALTER TABLE documents ADD COLUMN archived_by TEXT");
 if (!columnExists('documents', 'history_json')) db.exec("ALTER TABLE documents ADD COLUMN history_json TEXT NOT NULL DEFAULT '[]'");
+if (!columnExists('conflict_approvals', 'decided_by')) db.exec("ALTER TABLE conflict_approvals ADD COLUMN decided_by TEXT");
 if (!columnExists('capital_call_line_items', 'wire_confirm_url')) db.exec("ALTER TABLE capital_call_line_items ADD COLUMN wire_confirm_url TEXT");
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);

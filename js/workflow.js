@@ -154,15 +154,20 @@ function collectExternalPendingApprovals() {
     });
   });
 
-  // Conflict Approvals — single decision-maker, one-shot.
+  // Conflict Approvals — single decision-maker, one-shot. High/Critical
+  // risk auto-escalates (status 'Escalated') and requires the CEO
+  // specifically, not just any decideConflicts holder — see
+  // PUT /api/conflict-approvals/:id.
   (typeof conflictApprovals !== 'undefined' ? conflictApprovals : []).forEach(a => {
-    if (a.status !== 'Pending') return;
+    if (a.status !== 'Pending' && a.status !== 'Escalated') return;
     const client = (typeof obClients !== 'undefined' ? obClients : []).find(c => c.id === a.clientId);
     items.push({
-      category: 'Конфликты / Одобрения', icon: 'fa-gavel', color: '#ef4444',
+      category: a.status === 'Escalated' ? 'Конфликты — эскалировано' : 'Конфликты / Одобрения',
+      icon: 'fa-gavel', color: '#ef4444',
       title: (client ? client.name : a.dealRef) || `Конфликт #${a.id}`,
-      meta: a.description || 'Ожидает решения Compliance',
+      meta: a.status === 'Escalated' ? `Риск ${a.riskLevel} — требует решения CEO` : (a.description || 'Ожидает решения Compliance'),
       permission: 'decideConflicts',
+      requireRole: a.status === 'Escalated' ? 'CEO' : null,
       action: () => { navigateTo('conflict-approvals'); setTimeout(() => openConflictApprovalDetail(a.id), 200); },
     });
   });
@@ -213,7 +218,8 @@ function renderPendingApprovalsBoard() {
   }
 
   el.innerHTML = _pendingApprovalItems.map((it, idx) => {
-    const canAct = typeof currentUserPermission !== 'function' || !it.permission || currentUserPermission(it.permission);
+    const canAct = (typeof currentUserPermission !== 'function' || !it.permission || currentUserPermission(it.permission)) &&
+      (!it.requireRole || (typeof currentUserRole === 'function' && currentUserRole() === it.requireRole));
     return `
       <div class="wf-row" onclick="runPendingApprovalAction(${idx})">
         <div class="wf-row-icon" style="background:${it.color}22;color:${it.color}">

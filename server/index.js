@@ -1424,10 +1424,23 @@ app.get('/api/conflict-approvals', requireAuth, requireInternal, (req, res) => {
   res.json({ tenant: req.tenantSlug, conflictApprovals: rows.map(rowToConflictApproval) });
 });
 
+// High/Critical risk conflicts escalate automatically — 'Escalated' instead
+// of 'Pending', routed to the CEO specifically rather than any of the three
+// decideConflicts roles (CEO/Compliance Officer/MLRO). status/escalatedTo
+// are always server-decided from riskLevel, never trusted from the client
+// (same reasoning as Capital Call always starting at Draft).
+const ESCALATING_RISK_LEVELS = new Set(['High', 'Critical']);
+
 app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const b = req.body || {};
   if (!b.decisionType) return res.status(400).json({ error: 'decisionType is required' });
-  const params = conflictApprovalToParams({ riskLevel: 'Low', status: 'Pending', currency: 'USD', ...b });
+  const riskLevel = b.riskLevel || 'Low';
+  const escalates = ESCALATING_RISK_LEVELS.has(riskLevel);
+  const params = conflictApprovalToParams({
+    ...b, riskLevel, currency: b.currency || 'USD',
+    status: escalates ? 'Escalated' : 'Pending',
+    escalatedTo: escalates ? 'CEO' : (b.escalatedTo || null),
+  });
   const info = db.prepare(CONFLICT_APPROVAL_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToConflictApproval(row));
@@ -1436,7 +1449,23 @@ app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConfli
 app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const existing = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Conflict approval not found in this tenant' });
-  const merged = Object.assign(rowToConflictApproval(existing), req.body || {});
+  const b = req.body || {};
+  const DECIDED_STATUSES = new Set(['Approved', 'Approved with conditions', 'Rejected']);
+  // An Escalated (High/Critical risk) conflict can only be resolved by the
+  // CEO specifically — decideConflicts alone (which Compliance Officer and
+  // MLRO also hold) isn't enough once it's escalated. Role-code match, same
+  // pattern as the old deal_ic workflow steps' role === req.user.role check.
+  if (existing.status === 'Escalated' && DECIDED_STATUSES.has(b.status) && req.user.role !== 'CEO') {
+    return res.status(403).json({ error: 'Forbidden: this conflict is escalated — only the CEO may decide it' });
+  }
+  // decided_by is server-stamped from the authenticated user, not client-
+  // trusted — decisionMaker is a free-text/role label the form author
+  // picks when the record is created, not proof of who actually decided.
+  if (DECIDED_STATUSES.has(b.status) && !DECIDED_STATUSES.has(existing.status)) {
+    b.decidedBy = req.user.name || req.user.email;
+    b.decidedAt = b.decidedAt || new Date().toISOString().slice(0, 10);
+  }
+  const merged = Object.assign(rowToConflictApproval(existing), b);
   const params = conflictApprovalToParams(merged);
   db.prepare(CONFLICT_APPROVAL_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);

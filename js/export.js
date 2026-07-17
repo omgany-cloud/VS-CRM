@@ -433,6 +433,45 @@ function exportAMLRegister() {
 /* ═══════════════════════════════════════════════════════════
    10. FULL CRM EXPORT — Полный дамп всех данных
 ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   10. CONFLICTS / COI REGISTER — Decision & Escalation Matrix
+       (COI Addendum Section E / GL-ONB-CF&A-001 Section 4.7)
+═══════════════════════════════════════════════════════════ */
+function exportConflictApprovals() {
+  const header = [
+    '№', 'Клиент', 'Тип конфликта', 'Deal Ref', 'Уровень риска', 'Fee',
+    'Кто решает', 'Эскалировано на', 'Срок рассмотрения', 'Статус',
+    'Дата решения', 'Кто решил', 'Описание', 'Rationale / условия',
+  ];
+  const rows = conflictApprovals.map((a, i) => {
+    const client = obClients.find(c => c.id === a.clientId);
+    return [
+      i + 1, client ? client.name : '—', a.decisionType, a.dealRef || '—',
+      a.riskLevel, a.feeAmount ? `${a.feeAmount} ${a.currency || 'USD'}` : '—',
+      a.decisionMaker || '—', a.escalatedTo || '—', a.requiredTimeline || '—',
+      a.status, fmtDate(a.decidedAt), a.decidedBy || '—',
+      a.description || '', a.rationale || '',
+    ];
+  });
+
+  const summaryData = [
+    ['КОНФЛИКТЫ / COI РЕЕСТР — DECISION & ESCALATION MATRIX'],
+    ['Дата отчёта', new Date().toLocaleDateString('ru-RU')],
+    ['Лицензия AFSA', FUND_PARAMS.license],
+    [],
+    ['Всего решений в реестре', conflictApprovals.length],
+    ['На рассмотрении', conflictApprovals.filter(a => a.status === 'Pending').length],
+    ['Эскалировано (требует CEO)', conflictApprovals.filter(a => a.status === 'Escalated').length],
+    ['Одобрено', conflictApprovals.filter(a => a.status === 'Approved' || a.status === 'Approved with conditions').length],
+    ['Отклонено', conflictApprovals.filter(a => a.status === 'Rejected').length],
+  ];
+
+  downloadExcel([
+    { name: 'Summary', data: summaryData, colWidths: [30, 24] },
+    { name: 'Conflicts Register', data: [header, ...rows], colWidths: [4, 26, 20, 16, 12, 16, 18, 16, 20, 22, 14, 20, 40, 40] },
+  ], `Conflicts_Register_${todayStr()}.xlsx`);
+}
+
 function exportFullCRM() {
   const genDate = new Date().toLocaleDateString('ru-RU', {
     day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -453,6 +492,7 @@ function exportFullCRM() {
     ['5. Deals — сделки инвестиционного пайплайна'],
     ['6. CFA Clients — клиенты CF&A'],
     ['7. AML Register — реестр AML проверок'],
+    ['8. Conflicts — Decision & Escalation Matrix (COI реестр)'],
     [''],
     ['Предназначен для регуляторной отчётности AFSA,'],
     ['внутреннего аудита и отчётности перед LP.'],
@@ -479,6 +519,12 @@ function exportFullCRM() {
   const amlHeader = ['№','Наименование','Тип','Страна','AML','PEP','Source of Funds','UBO'];
   const amlLP     = lpRegister.map((lp, i) => [i+1, lp.name, lp.type, lp.country, yesNo(lp.amlScreeningCleared), yesNo(lp.pepCheckCleared), yesNo(lp.sofVerified), yesNo(lp.uboVerified)]);
 
+  const conflictHeader = ['№','Клиент','Тип конфликта','Риск','Статус','Дата решения','Кто решил'];
+  const conflictRows = conflictApprovals.map((a, i) => {
+    const client = obClients.find(c => c.id === a.clientId);
+    return [i+1, client ? client.name : '—', a.decisionType, a.riskLevel, a.status, fmtDate(a.decidedAt), a.decidedBy || '—'];
+  });
+
   downloadExcel([
     { name: 'Cover', data: coverData, colWidths: [50, 40] },
     { name: 'LP Register', data: [lpHeader, ...lpRows], colWidths: [4,32,18,14,18,16,16,14,14] },
@@ -488,6 +534,7 @@ function exportFullCRM() {
     { name: 'Deals', data: [dealHeader, ...dealRows], colWidths: [4,24,18,18,12,18,14] },
     { name: 'CFA Clients', data: [cfaHeader, ...cfaRows], colWidths: [4,32,16,20,14,14,14,14] },
     { name: 'AML Register', data: [amlHeader, ...amlLP], colWidths: [4,32,18,14,10,10,14,10] },
+    { name: 'Conflicts', data: [conflictHeader, ...conflictRows], colWidths: [4,28,20,12,20,14,20] },
   ], `TCF_FullExport_${todayStr()}.xlsx`);
 }
 
@@ -534,6 +581,16 @@ function renderExportPage() {
       desc: 'Полный AML-реестр: LP + клиенты CF&A. Enhanced DD, PEP, сводка нарушений. Требуется AFSA AML Rules 5–6.',
       fn: 'exportAMLRegister()',
       tag: 'AML',
+    },
+    {
+      id: 'conflicts',
+      icon: 'fa-gavel',
+      color: 'red',
+      title: 'Conflicts / COI Register',
+      subtitle: 'Decision & Escalation Matrix',
+      desc: 'Реестр решений по конфликтам интересов: тип, риск, кто решал, дата. Включая эскалированные (CEO). COI Addendum Section E.',
+      fn: 'exportConflictApprovals()',
+      tag: 'AFSA',
     },
     {
       id: 'cc',
@@ -591,7 +648,7 @@ function renderExportPage() {
       color: 'red',
       title: 'Full CRM Export',
       subtitle: 'Полный дамп всех данных (9 листов)',
-      desc: 'Все модули CRM одним файлом xlsx: LP, KYC/AML, Capital Calls, Portfolio, Deals, CF&A, Tasks. Для аудита.',
+      desc: 'Все модули CRM одним файлом xlsx: LP, KYC/AML, Capital Calls, Portfolio, Deals, CF&A, AML Register, Conflicts. Для аудита.',
       fn: 'exportFullCRM()',
       tag: 'Full',
       featured: true,

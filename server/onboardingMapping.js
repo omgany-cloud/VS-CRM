@@ -214,7 +214,7 @@ const ENGAGEMENT_UPDATE_SQL = `
 const CONFLICT_APPROVAL_SCALARS = [
   'clientId', 'engagementId', 'dealRef', 'decisionType', 'riskLevel', 'feeAmount',
   'decisionMaker', 'escalatedTo', 'requiredTimeline', 'status', 'description', 'rationale', 'decidedAt',
-  'currency',
+  'decidedBy', 'currency',
 ];
 function conflictApprovalToParams(a) {
   const out = {};
@@ -227,23 +227,23 @@ function rowToConflictApproval(row) {
     decisionType: row.decision_type, riskLevel: row.risk_level, feeAmount: row.fee_amount,
     decisionMaker: row.decision_maker, escalatedTo: row.escalated_to, requiredTimeline: row.required_timeline,
     status: row.status, description: row.description, rationale: row.rationale, decidedAt: row.decided_at,
-    currency: row.currency,
+    decidedBy: row.decided_by, currency: row.currency,
   };
 }
 const CONFLICT_APPROVAL_INSERT_SQL = `
   INSERT INTO conflict_approvals
     (tenant_id, client_id, engagement_id, deal_ref, decision_type, risk_level, fee_amount,
-     decision_maker, escalated_to, required_timeline, status, description, rationale, decided_at, currency)
+     decision_maker, escalated_to, required_timeline, status, description, rationale, decided_at, decided_by, currency)
   VALUES
     (@tenantId, @clientId, @engagementId, @dealRef, @decisionType, @riskLevel, @feeAmount,
-     @decisionMaker, @escalatedTo, @requiredTimeline, @status, @description, @rationale, @decidedAt, @currency)
+     @decisionMaker, @escalatedTo, @requiredTimeline, @status, @description, @rationale, @decidedAt, @decidedBy, @currency)
 `;
 const CONFLICT_APPROVAL_UPDATE_SQL = `
   UPDATE conflict_approvals SET
     client_id=@clientId, engagement_id=@engagementId, deal_ref=@dealRef, decision_type=@decisionType,
     risk_level=@riskLevel, fee_amount=@feeAmount, decision_maker=@decisionMaker, escalated_to=@escalatedTo,
     required_timeline=@requiredTimeline, status=@status, description=@description, rationale=@rationale,
-    decided_at=@decidedAt, currency=@currency
+    decided_at=@decidedAt, decided_by=@decidedBy, currency=@currency
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

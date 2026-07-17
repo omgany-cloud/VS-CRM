@@ -5760,6 +5760,7 @@ function conflictRiskStyle(risk) {
 
 function conflictStatusStyle(status) {
   if (status === 'Pending') return { c: '#f59e0b', bg: 'rgba(245,158,11,0.12)' };
+  if (status === 'Escalated') return { c: '#ef4444', bg: 'rgba(239,68,68,0.15)' };
   if (status === 'Rejected') return { c: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
   if (status === 'Approved') return { c: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
   return { c: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }; // Approved with conditions, etc.
@@ -5770,9 +5771,9 @@ function renderConflictApprovalsPage() {
   if (!el) return;
   const list = typeof conflictApprovals !== 'undefined' ? conflictApprovals : [];
 
-  const cntPending = list.filter(a => a.status === 'Pending').length;
-  const cntHigh    = list.filter(a => a.riskLevel === 'High' || a.riskLevel === 'Critical').length;
-  const cntDual    = list.filter(a => a.decisionType === 'Dual-Mandate').length;
+  const cntPending   = list.filter(a => a.status === 'Pending').length;
+  const cntEscalated = list.filter(a => a.status === 'Escalated').length;
+  const cntDual      = list.filter(a => a.decisionType === 'Dual-Mandate').length;
 
   const filtered = list.filter(a => {
     if (conflictStatusFilter && a.status !== conflictStatusFilter) return false;
@@ -5792,13 +5793,13 @@ function renderConflictApprovalsPage() {
         <div class="kpi-icon orange"><i class="fas fa-gavel"></i></div>
         <div class="kpi-body"><span class="kpi-label">Решений в реестре</span>
           <span class="kpi-value">${list.length}</span>
-          <span class="kpi-delta">${cntPending} ожидают решения</span></div>
+          <span class="kpi-delta">${cntPending + cntEscalated} ожидают решения</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon red"><i class="fas fa-triangle-exclamation"></i></div>
-        <div class="kpi-body"><span class="kpi-label">Высокий / Критичный риск</span>
-          <span class="kpi-value">${cntHigh}</span>
-          <span class="kpi-delta">Требуют CF Deal Committee</span></div>
+        <div class="kpi-body"><span class="kpi-label">Эскалировано</span>
+          <span class="kpi-value">${cntEscalated}</span>
+          <span class="kpi-delta">Требуют решения CEO</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon purple"><i class="fas fa-people-arrows"></i></div>
@@ -5816,6 +5817,7 @@ function renderConflictApprovalsPage() {
         style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
         <option value="" ${conflictStatusFilter===''?'selected':''}>Все статусы</option>
         <option value="Pending" ${conflictStatusFilter==='Pending'?'selected':''}>На рассмотрении</option>
+        <option value="Escalated" ${conflictStatusFilter==='Escalated'?'selected':''}>Эскалировано (CEO)</option>
         <option value="Approved" ${conflictStatusFilter==='Approved'?'selected':''}>Одобрено</option>
         <option value="Approved with conditions" ${conflictStatusFilter==='Approved with conditions'?'selected':''}>Одобрено с условиями</option>
         <option value="Rejected" ${conflictStatusFilter==='Rejected'?'selected':''}>Отклонено</option>
@@ -5836,11 +5838,11 @@ function renderConflictApprovalsPage() {
           <thead>
             <tr>
               <th>Тип конфликта</th><th>Клиент</th><th>Deal Ref</th><th>Риск</th>
-              <th>Fee</th><th>Кто решает</th><th>Срок</th><th>Статус</th><th>Дата решения</th>
+              <th>Fee</th><th>Кто решает</th><th>Срок</th><th>Статус</th><th>Дата решения</th><th>Кто решил</th>
             </tr>
           </thead>
           <tbody>
-            ${filtered.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Решений не найдено</td></tr>` :
+            ${filtered.length === 0 ? `<tr><td colspan="10" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Решений не найдено</td></tr>` :
             filtered.map(a => {
               const client = obClients.find(c => c.id === a.clientId);
               const risk   = conflictRiskStyle(a.riskLevel);
@@ -5856,6 +5858,7 @@ function renderConflictApprovalsPage() {
                   <td style="font-size:11px;color:#8a9bbf">${a.requiredTimeline || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${statusLabel(a.status)}</span></td>
                   <td style="font-size:11px;color:#5a6b8a">${a.decidedAt || '—'}</td>
+                  <td style="font-size:11px;color:#5a6b8a">${a.decidedBy || '—'}</td>
                 </tr>`;
             }).join('')}
           </tbody>
@@ -5948,7 +5951,9 @@ async function saveNewConflictApproval() {
     requiredTimeline: document.getElementById('ca_requiredTimeline')?.value || null,
     description: document.getElementById('ca_description')?.value || null,
     rationale: document.getElementById('ca_rationale')?.value || null,
-    status: 'Pending',
+    // status is deliberately omitted — the server decides Pending vs
+    // Escalated from riskLevel (High/Critical auto-escalates to CEO-only),
+    // same reasoning as Capital Call always starting at Draft server-side.
   };
 
   try {
@@ -5973,12 +5978,24 @@ function openConflictApprovalDetail(id) {
   const risk = conflictRiskStyle(a.riskLevel);
   const stat = conflictStatusStyle(a.status);
 
+  const isDecidable = a.status === 'Pending' || a.status === 'Escalated';
+  // Same permission the server enforces, just checked here too so a user
+  // who can't decide doesn't even see live-looking buttons that would
+  // just 403 (real enforcement stays server-side either way). Escalated
+  // (High/Critical risk) conflicts additionally require the CEO role
+  // specifically — Compliance Officer/MLRO hold decideConflicts too but
+  // can't resolve an escalated one.
+  const canDecide = isDecidable && currentUserPermission('decideConflicts') &&
+    (a.status !== 'Escalated' || currentUserRole() === 'CEO');
+
   document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>${statusLabel(a.decisionType)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${risk.bg};color:${risk.c}">Риск: ${statusLabel(a.riskLevel)}</span>
       <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${stat.bg};color:${stat.c}">${statusLabel(a.status)}</span>
     </div>
+    ${a.status === 'Escalated' ? `<div style="margin-bottom:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:12px;color:#fca5a5">
+      <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>Риск ${statusLabel(a.riskLevel)} — решение может принять только CEO.</div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#94a3b8;margin-bottom:14px">
       <div><b style="color:#8a9bbf">Клиент:</b> ${client ? client.name : '—'}</div>
       <div><b style="color:#8a9bbf">Договор:</b> ${eng ? eng.engId : '—'}</div>
@@ -5987,15 +6004,17 @@ function openConflictApprovalDetail(id) {
       <div><b style="color:#8a9bbf">Кто решает:</b> ${a.decisionMaker || '—'}</div>
       <div><b style="color:#8a9bbf">Срок:</b> ${a.requiredTimeline || '—'}</div>
       <div><b style="color:#8a9bbf">Дата решения:</b> ${a.decidedAt || '—'}</div>
+      <div><b style="color:#8a9bbf">Кто решил:</b> ${a.decidedBy || '—'}</div>
     </div>
     ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${a.description}</p></div>` : ''}
     ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${a.rationale}</p></div>` : ''}
-    ${a.status === 'Pending' ? `
+    ${canDecide ? `
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
       <button onclick="decideConflictApproval(${a.id},'Rejected')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-xmark"></i> Отклонить</button>
       <button onclick="decideConflictApproval(${a.id},'Approved with conditions')" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-check"></i> Одобрить с условиями</button>
       <button onclick="decideConflictApproval(${a.id},'Approved')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700"><i class="fas fa-check-double"></i> Одобрить</button>
-    </div>` : ''}`;
+    </div>` : (isDecidable ? `<div style="padding-top:14px;border-top:1px solid #2a3448;margin-top:16px;font-size:12px;color:#64748b;text-align:right">
+      <i class="fas fa-lock" style="margin-right:5px"></i>У вас нет прав на это решение</div>` : '')}`;
 
   modal.style.display = 'flex';
 }
@@ -6009,9 +6028,11 @@ async function decideConflictApproval(id, status) {
   // there is no re-decide control in the UI.
   if (!confirm(`Решение «${status}» по конфликту (${client ? client.name : 'клиент #' + a.clientId}) будет зафиксировано и не подлежит изменению через интерфейс. Продолжить?`)) return;
   try {
+    // decidedAt/decidedBy are server-stamped from the authenticated user
+    // (see PUT /api/conflict-approvals/:id) — not sent from here.
     await apiFetch(`/api/conflict-approvals/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status, decidedAt: today() }),
+      body: JSON.stringify({ status }),
     });
     await loadConflictApprovalsFromApi();
     closeObNewModalSilent();
