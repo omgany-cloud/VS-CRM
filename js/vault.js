@@ -1,7 +1,11 @@
 // ============================================================
 //  vault.js — Global File Vault (Просмотр всех загруженных файлов)
-//  Aggregates: Documents module (docFiles) + any file uploaded
-//  anywhere in CRM
+//  Real cross-module aggregator: every field in the app backed by the
+//  shared /api/uploads infrastructure (pickFile()+uploadFile(), or
+//  docUploadBtn()) — deals, portfolio, first closing, capital calls,
+//  AFSA reports, onboarding contracts/amendments — plus the Документы
+//  library itself. Every entry here is a real, downloadable file, not
+//  a metadata placeholder.
 // ============================================================
 
 /* ── File-preview modal (inline lightbox) ──────────────────── */
@@ -11,51 +15,150 @@ let vaultFilterModule = '';
 let vaultFilterType   = '';
 let vaultSearch       = '';
 
-/* ─────────────────────────────────────────────────────────────
-   AGGREGATOR — collect files from ALL modules
-───────────────────────────────────────────────────────────── */
-function vaultGetAllFiles() {
-  const all = [];
+// Populated by renderVaultPage() (async — needs one bulk metadata fetch
+// for every cross-module upload id) and read synchronously by every
+// filter/search/preview/download/goToSource interaction afterward, so
+// those stay instant without re-fetching on every keystroke.
+let _vaultFilesCache = [];
 
-  // ── 1. Documents module (docFiles[]) ──────────────────────
-  if (typeof docFiles !== 'undefined') {
-    docFiles.forEach(f => {
-      all.push({
-        key:      'doc_' + f.id,
-        module:   'Документы',
-        moduleColor: '#3b82f6',
-        moduleIcon:  'fa-folder-open',
-        client:   f.category || '—',
-        name:     f.name,
-        size:     f.size || '—',
-        date:     f.date || '—',
-        uploader: f.uploader || '—',
-        dataUrl:  null,        // documents.js stores metadata only
-        comments: f.comments?.length || 0,
-        canPreview: false,
-        source:   'docs',
-        sourceId: f.id,
-      });
+/* ─────────────────────────────────────────────────────────────
+   AGGREGATOR — collect files from every module with a real upload
+───────────────────────────────────────────────────────────── */
+function vaultFormatBytes(n) {
+  if (!n) return '—';
+  return n > 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
+}
+
+async function vaultCollectAllFiles() {
+  const files = [];
+
+  // Документы already tracks real name/size/date/uploader itself — no
+  // metadata lookup needed for these.
+  (typeof docFiles !== 'undefined' ? docFiles.filter(d => !d.archived) : []).forEach(f => {
+    files.push({
+      key: 'doc_' + f.id, module: 'Документы', moduleColor: '#3b82f6', moduleIcon: 'fa-folder-open',
+      client: f.category || '—', name: f.name, size: f.size || '—', date: f.date || '—', uploader: f.uploader || '—',
+      documentUrl: f.documentUrl || null, goToSource: () => navigateTo('documents'),
     });
+  });
+
+  // Every other source only has the /api/uploads/:id URL — the real
+  // filename/uploader/date live in uploaded_files, fetched in bulk below
+  // rather than once per file.
+  const pending = [];
+  function addPending(url, label, module, moduleColor, moduleIcon, client, goToSource) {
+    if (!url || !url.startsWith('/api/uploads/')) return;
+    const urlId = parseInt(url.split('/').pop(), 10);
+    if (!Number.isInteger(urlId)) return;
+    pending.push({ key: `${module}_${urlId}_${label}`, urlId, url, label, module, moduleColor, moduleIcon, client, goToSource });
   }
 
-  return all;
+  // One unexpected shape in any single source (a field that's a JSON
+  // string instead of an array, a record missing a field entirely, ...)
+  // shouldn't take down the whole aggregator — each source collects
+  // independently, logging and moving on rather than throwing.
+  function vaultSafe(label, fn) {
+    try { fn(); } catch (err) { console.error(`Vault: failed to collect files from ${label}:`, err); }
+  }
+
+  vaultSafe('deals', () => (typeof deals !== 'undefined' ? deals : []).forEach(d => {
+    const goTo = () => { navigateTo('deals'); setTimeout(() => openDealDetailModal(d.id), 200); };
+    addPending(d.pitchDeckUrl, 'Питч-дек', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo);
+    addPending(d.icMemoUrl, 'Investment Memo', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo);
+    addPending(d.icMinutesUrl, 'IC Minutes', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo);
+    addPending(d.wireConfirmUrl, 'Wire Confirm', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo);
+    addPending(d.dataRoomUrl, 'Data Room', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo);
+    (d.tsVersions || []).forEach(v => addPending(v.url, `TS ${v.v || ''}`.trim(), 'Сделки', '#f97316', 'fa-handshake', d.company, goTo));
+    (d.signedDocsUrls || []).forEach(v => addPending(v.url, v.name || 'Signed Doc', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo));
+    (d.otherDocs || []).forEach(v => addPending(v.url, v.name || 'Other Doc', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo));
+    (d.ddConclusions || []).forEach(c => (c.documents || []).forEach(doc =>
+      addPending(doc.url, doc.name || 'DD Document', 'Сделки', '#f97316', 'fa-handshake', d.company, goTo)));
+  }));
+
+  vaultSafe('portfolio', () => (typeof portfolio !== 'undefined' ? portfolio : []).forEach(p => {
+    const goTo = () => { navigateTo('portfolio'); setTimeout(() => openPortfolioModal(p.id), 200); };
+    addPending(p.documents?.driveUrl, 'Google Drive', 'Портфель', '#22c55e', 'fa-briefcase', p.name, goTo);
+    (p.documents?.files || []).forEach(f => addPending(f.url, f.name || 'Документ', 'Портфель', '#22c55e', 'fa-briefcase', p.name, goTo));
+  }));
+
+  vaultSafe('firstClosing', () => (typeof firstClosingList !== 'undefined' ? firstClosingList : []).forEach(fc => {
+    const fund = (typeof funds !== 'undefined' ? funds.find(x => x.id === fc.fundId) : null);
+    const label = fund ? fund.name : 'Fund';
+    const goTo = () => navigateTo('closing');
+    addPending(fc.boardResolutionUrl, 'Board Resolution', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
+    addPending(fc.closingCertUrl, 'Closing Certificate', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
+    addPending(fc.afsaConfirmUrl, 'AFSA Confirmation', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
+  }));
+
+  vaultSafe('capitalCalls', () => (typeof capitalCallsLog !== 'undefined' ? capitalCallsLog : []).forEach(cc => {
+    const goTo = () => { navigateTo('lp-capital-calls'); setTimeout(() => openCCDetail(cc.id), 200); };
+    (cc.lineItems || []).forEach(li => addPending(li.wireConfirmUrl, `Wire — ${li.lpName}`, 'Capital Calls', '#eab308', 'fa-coins', `CC ${cc.ccNumber}`, goTo));
+  }));
+
+  vaultSafe('afsaReports', () => (typeof afsaReports !== 'undefined' ? afsaReports : []).forEach(r => {
+    addPending(r.documentUrl, `${r.period} (${r.reportType})`, 'AFSA Отчётность', '#0ea5e9', 'fa-landmark', r.period, () => navigateTo('calendar'));
+  }));
+
+  vaultSafe('obClients', () => (typeof obClients !== 'undefined' ? obClients : []).forEach(c => {
+    const goTo = () => navigateTo('ob-clients');
+    addPending(c.contractUrl, 'Договор CF&A', 'Онбординг', '#a78bfa', 'fa-user-check', c.name, goTo);
+    addPending(c.lpaUrl, 'LPA / FM договор', 'Онбординг', '#a78bfa', 'fa-user-check', c.name, goTo);
+  }));
+
+  vaultSafe('engagements', () => (typeof engagements !== 'undefined' ? engagements : []).forEach(e => {
+    const goTo = () => navigateTo('engagements');
+    // Stored as a JSON string on the engagement record, not a real array —
+    // same parse-defensively pattern as js/onboarding.js:5463.
+    let amendArr = [];
+    try { amendArr = e.amendments ? (typeof e.amendments === 'string' ? JSON.parse(e.amendments) : e.amendments) : []; } catch (err) { amendArr = []; }
+    if (Array.isArray(amendArr)) {
+      amendArr.forEach((a, i) => addPending(a.url, `Amendment #${a.num || i + 1}`, 'Онбординг', '#a78bfa', 'fa-user-check', e.clientName, goTo));
+    }
+  }));
+
+  const ids = [...new Set(pending.map(p => p.urlId))];
+  let metaById = {};
+  if (ids.length) {
+    try {
+      const data = await apiFetch('/api/uploads/meta?ids=' + ids.join(','));
+      (data.files || []).forEach(f => { metaById[f.id] = f; });
+    } catch (err) {
+      console.error('Failed to load upload metadata for Vault:', err);
+    }
+  }
+
+  pending.forEach(p => {
+    const meta = metaById[p.urlId];
+    files.push({
+      key: p.key, module: p.module, moduleColor: p.moduleColor, moduleIcon: p.moduleIcon,
+      client: p.client, name: meta ? meta.originalName : p.label,
+      size: meta ? vaultFormatBytes(meta.sizeBytes) : '—',
+      date: meta && meta.uploadedAt ? meta.uploadedAt.slice(0, 10) : '—',
+      uploader: meta ? meta.uploadedBy || '—' : '—',
+      documentUrl: p.url, goToSource: p.goToSource,
+    });
+  });
+
+  return files;
 }
 
 /* ─────────────────────────────────────────────────────────────
    RENDER VAULT PAGE
 ───────────────────────────────────────────────────────────── */
-function renderVaultPage() {
+async function renderVaultPage() {
   const el = document.getElementById('vaultContent');
   if (!el) return;
+  el.innerHTML = `<div style="padding:60px;text-align:center;color:#8a9bbf"><i class="fas fa-spinner fa-spin" style="font-size:22px;margin-bottom:10px;display:block"></i>Загрузка файлов из всех модулей...</div>`;
 
-  const allFiles  = vaultGetAllFiles();
+  _vaultFilesCache = await vaultCollectAllFiles();
+  const allFiles  = _vaultFilesCache;
   const modules   = [...new Set(allFiles.map(f => f.module))];
 
   // KPIs
   const totalCount = allFiles.length;
-  const docCount   = allFiles.filter(f => f.source === 'docs').length;
-  const previewable= allFiles.filter(f => f.canPreview).length;
+  const byModule = {};
+  allFiles.forEach(f => { byModule[f.module] = (byModule[f.module] || 0) + 1; });
+  const previewable = allFiles.filter(f => vaultCanPreview(f)).length;
 
   el.innerHTML = `
     <!-- KPIs -->
@@ -65,15 +168,15 @@ function renderVaultPage() {
         <div class="kpi-body">
           <span class="kpi-label">Всего файлов</span>
           <span class="kpi-value">${totalCount}</span>
-          <span class="kpi-delta up">в CRM</span>
+          <span class="kpi-delta up">во всех модулях CRM</span>
         </div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-icon blue"><i class="fas fa-folder-open"></i></div>
+        <div class="kpi-icon blue"><i class="fas fa-shapes"></i></div>
         <div class="kpi-body">
-          <span class="kpi-label">Документы CRM</span>
-          <span class="kpi-value">${docCount}</span>
-          <span class="kpi-delta">файлов</span>
+          <span class="kpi-label">Модулей-источников</span>
+          <span class="kpi-value">${modules.length}</span>
+          <span class="kpi-delta">${modules.join(', ')}</span>
         </div>
       </div>
       <div class="kpi-card">
@@ -102,7 +205,7 @@ function renderVaultPage() {
         <select id="vaultModuleFilter" onchange="vaultFilterModule=this.value;renderVaultTable()"
           style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;min-width:160px">
           <option value="">Все модули</option>
-          ${modules.map(m => `<option value="${m}" ${vaultFilterModule===m?'selected':''}>${m}</option>`).join('')}
+          ${modules.map(m => `<option value="${m}" ${vaultFilterModule===m?'selected':''}>${m} (${byModule[m]})</option>`).join('')}
         </select>
 
         <!-- Type filter -->
@@ -136,23 +239,28 @@ function renderVaultPage() {
   renderVaultTable();
 }
 
+function vaultCanPreview(f) {
+  if (!f.documentUrl) return false;
+  const ext = (f.name || '').split('.').pop().toLowerCase();
+  return ext === 'pdf' || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+}
+
 /* ─────────────────────────────────────────────────────────────
-   RENDER TABLE (filtered)
+   RENDER TABLE (filtered) — synchronous, filters _vaultFilesCache
 ───────────────────────────────────────────────────────────── */
 function renderVaultTable() {
   const wrap = document.getElementById('vaultTableWrap');
   const countEl = document.getElementById('vaultFileCount');
   if (!wrap) return;
 
-  let files = vaultGetAllFiles();
+  let files = _vaultFilesCache;
 
-  // Apply filters
   if (vaultFilterModule) files = files.filter(f => f.module === vaultFilterModule);
   if (vaultSearch) {
     const q = vaultSearch.toLowerCase();
     files = files.filter(f =>
       f.name.toLowerCase().includes(q) ||
-      f.client.toLowerCase().includes(q) ||
+      (f.client || '').toLowerCase().includes(q) ||
       f.module.toLowerCase().includes(q)
     );
   }
@@ -175,7 +283,7 @@ function renderVaultTable() {
       <div style="padding:50px;text-align:center;color:#4a5568">
         <i class="fas fa-folder-open" style="font-size:40px;margin-bottom:12px;display:block;opacity:.4"></i>
         <div style="font-size:14px;margin-bottom:6px">Файлы не найдены</div>
-        <div style="font-size:12px">Загрузите файлы в разделе Документы</div>
+        <div style="font-size:12px">Загрузите файлы в разделе Документы, или в любом модуле, где есть кнопка загрузки</div>
       </div>`;
     return;
   }
@@ -205,31 +313,29 @@ function vaultFileRow(f) {
   const ext  = f.name.split('.').pop().toLowerCase();
   const icon = vaultGetFileIcon(ext);
   const iconColor = vaultGetFileColor(ext);
+  const canPreview = vaultCanPreview(f);
 
-  const previewBtn = f.canPreview && f.dataUrl
+  const previewBtn = canPreview
     ? `<button onclick="vaultPreview('${escapeAttr(f.key)}')"
          title="Предпросмотр"
          style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
          <i class="fas fa-eye"></i>
        </button>`
-    : `<button disabled title="Предпросмотр недоступен"
+    : `<button disabled title="Предпросмотр недоступен для этого типа файла"
          style="background:rgba(255,255,255,0.03);border:1px solid #1e293b;color:#374151;padding:5px 9px;border-radius:6px;cursor:not-allowed;font-size:11px">
          <i class="fas fa-eye-slash"></i>
        </button>`;
 
-  const downloadBtn = f.dataUrl
+  const downloadBtn = f.documentUrl
     ? `<button onclick="vaultDownload('${escapeAttr(f.key)}')"
-         title="Скачать"
+         title="Открыть / скачать"
          style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#4ade80;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
          <i class="fas fa-download"></i>
        </button>`
-    : `<button onclick="showToast('Файл хранится как метаданные — скачать нельзя','red')" title="Нет данных файла"
-         style="background:rgba(255,255,255,0.03);border:1px solid #1e293b;color:#374151;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
-         <i class="fas fa-download"></i>
-       </button>`;
+    : '';
 
-  const goBtn = `<button onclick="vaultGoToModule('${escapeAttr(f.module)}')"
-      title="Открыть модуль"
+  const goBtn = `<button onclick="vaultGoToSource('${escapeAttr(f.key)}')"
+      title="Открыть в модуле"
       style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
       <i class="fas fa-external-link-alt"></i>
     </button>`;
@@ -267,11 +373,11 @@ function vaultFileRow(f) {
    PREVIEW MODAL
 ───────────────────────────────────────────────────────────── */
 function vaultPreview(key) {
-  const allFiles = vaultGetAllFiles();
-  const f = allFiles.find(x => x.key === key);
-  if (!f || !f.dataUrl) { showToast('Нет данных для предпросмотра', 'red'); return; }
+  const f = _vaultFilesCache.find(x => x.key === key);
+  if (!f || !f.documentUrl) { showToast('Нет файла для предпросмотра', 'red'); return; }
 
   const ext = f.name.split('.').pop().toLowerCase();
+  const url = resolveDocUrl(f.documentUrl);
 
   const modal   = document.getElementById('vaultPreviewModal');
   const overlay = document.getElementById('vaultPreviewOverlay');
@@ -286,10 +392,10 @@ function vaultPreview(key) {
 
   let html = '';
   if (ext === 'pdf') {
-    html = `<iframe src="${f.dataUrl}" style="width:100%;height:70vh;border:none;border-radius:8px;background:#fff"></iframe>`;
+    html = `<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:#fff"></iframe>`;
   } else if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) {
     html = `<div style="text-align:center;padding:20px">
-      <img src="${f.dataUrl}" alt="${f.name}"
+      <img src="${url}" alt="${f.name}"
         style="max-width:100%;max-height:70vh;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.5);object-fit:contain" />
     </div>`;
   } else {
@@ -317,28 +423,24 @@ function vaultClosePreview() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   DOWNLOAD
+   DOWNLOAD / OPEN
 ───────────────────────────────────────────────────────────── */
 function vaultDownload(key) {
-  const allFiles = vaultGetAllFiles();
-  const f = allFiles.find(x => x.key === key);
-  if (!f || !f.dataUrl) { showToast('Нет данных файла для скачивания', 'red'); return; }
-  const a = document.createElement('a');
-  a.href     = f.dataUrl;
-  a.download = f.name;
-  a.click();
-  showToast(`📥 Скачивание: ${f.name}`, 'green');
+  const f = _vaultFilesCache.find(x => x.key === key);
+  if (!f || !f.documentUrl) { showToast('Нет файла для скачивания', 'red'); return; }
+  window.open(resolveDocUrl(f.documentUrl), '_blank');
 }
 
 /* ─────────────────────────────────────────────────────────────
-   NAVIGATE TO MODULE
+   NAVIGATE TO SOURCE — each entry carries its own real navigation
+   closure (set in vaultCollectAllFiles()); dispatched by key rather
+   than serialized into the onclick attribute, since a closure can't
+   survive being turned into a string (same pattern as js/workflow.js's
+   runPendingApprovalAction / js/modules.js's runCalendarEventAction).
 ───────────────────────────────────────────────────────────── */
-function vaultGoToModule(moduleName) {
-  const MAP = {
-    'Документы':  'documents',
-  };
-  const page = MAP[moduleName];
-  if (page) navigateTo(page);
+function vaultGoToSource(key) {
+  const f = _vaultFilesCache.find(x => x.key === key);
+  if (f && f.goToSource) f.goToSource();
 }
 
 /* ─────────────────────────────────────────────────────────────

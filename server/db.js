@@ -592,6 +592,21 @@ CREATE TABLE IF NOT EXISTS documents (
   date           TEXT,
   uploader       TEXT,
   comments_json  TEXT NOT NULL DEFAULT '[]',
+  -- The real file itself (/api/uploads/:id), added alongside the
+  -- pre-existing metadata-only fields above once real binary storage
+  -- (server/index.js's POST/GET /api/uploads) existed to point it at.
+  document_url   TEXT,
+  -- No hard delete for a regulated fund's document register — archiving
+  -- keeps the row (and its audit trail below) forever; only the "active"
+  -- filter changes. archived_by/archived_at are set server-side from the
+  -- authenticated user, same as uploader.
+  archived       INTEGER NOT NULL DEFAULT 0,
+  archived_at    TEXT,
+  archived_by    TEXT,
+  -- Append-only log of {action, by, at, detail} — uploaded/commented/
+  -- archived/restored — independent of comments_json, which is user-
+  -- authored content rather than a system audit record.
+  history_json   TEXT NOT NULL DEFAULT '[]',
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -766,6 +781,11 @@ if (!columnExists('roles', 'payment_confirm')) db.exec("ALTER TABLE roles ADD CO
 db.exec("UPDATE roles SET payment_confirm = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND payment_confirm = 0");
 if (!columnExists('roles', 'afsa_submit')) db.exec("ALTER TABLE roles ADD COLUMN afsa_submit INTEGER NOT NULL DEFAULT 0");
 db.exec("UPDATE roles SET afsa_submit = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO', 'COMPLIANCE_OFFICER', 'MLRO') AND afsa_submit = 0");
+if (!columnExists('documents', 'document_url')) db.exec("ALTER TABLE documents ADD COLUMN document_url TEXT");
+if (!columnExists('documents', 'archived')) db.exec("ALTER TABLE documents ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+if (!columnExists('documents', 'archived_at')) db.exec("ALTER TABLE documents ADD COLUMN archived_at TEXT");
+if (!columnExists('documents', 'archived_by')) db.exec("ALTER TABLE documents ADD COLUMN archived_by TEXT");
+if (!columnExists('documents', 'history_json')) db.exec("ALTER TABLE documents ADD COLUMN history_json TEXT NOT NULL DEFAULT '[]'");
 if (!columnExists('capital_call_line_items', 'wire_confirm_url')) db.exec("ALTER TABLE capital_call_line_items ADD COLUMN wire_confirm_url TEXT");
 for (const table of ['engagements', 'conflict_approvals']) {
   if (!columnExists(table, 'currency')) db.exec(`ALTER TABLE ${table} ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'`);

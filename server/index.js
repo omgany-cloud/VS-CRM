@@ -110,6 +110,30 @@ app.post('/api/uploads', requireAuth, requireInternal, requirePermission('access
   });
 });
 
+// Bulk, no-file-bytes lookup — Vault's cross-module aggregator (js/vault.js)
+// links to dozens of /api/uploads/:id URLs scattered across deals,
+// portfolio, capital calls, AFSA reports, etc., none of which know the
+// real original filename/uploader/date of the file behind their own URL
+// (only Documents' own docFiles[] tracks that). One request for however
+// many ids the current page's aggregation touches, instead of Vault
+// firing a separate full-file GET per row just to read a name. MUST be
+// registered before the /:id route below, or Express would try to parse
+// "meta" as an id.
+app.get('/api/uploads/meta', requireAuth, requireInternal, (req, res) => {
+  const ids = String(req.query.ids || '').split(',').map(s => parseInt(s, 10)).filter(n => Number.isInteger(n));
+  if (!ids.length) return res.json({ files: [] });
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(
+    `SELECT id, original_name, mime_type, size_bytes, uploaded_by, uploaded_at FROM uploaded_files WHERE tenant_id = ? AND id IN (${placeholders})`
+  ).all(req.tenantId, ...ids);
+  res.json({
+    files: rows.map(r => ({
+      id: r.id, originalName: r.original_name, mimeType: r.mime_type,
+      sizeBytes: r.size_bytes, uploadedBy: r.uploaded_by, uploadedAt: r.uploaded_at,
+    })),
+  });
+});
+
 // Deliberately NOT behind requireAuth — this route accepts the JWT via
 // either the normal Authorization header OR a ?token= query param, so a
 // plain <a href>/window.open/iframe (no way to attach a header) can open
@@ -1638,19 +1662,60 @@ app.post('/api/documents', requireAuth, requireInternal, (req, res) => {
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   if (blocksDocumentCategory(req.user.permissions, b.category)) return res.status(403).json({ error: 'Forbidden: CF&A staff cannot upload FM-category documents' });
   // Server-stamped, not client-trusted — same lesson as restricted_list.added_by.
-  const params = documentToParams({ ...b, uploader: req.user.name || req.user.email });
+  const uploader = req.user.name || req.user.email;
+  const history = [{ action: 'uploaded', by: uploader, at: new Date().toISOString(), detail: b.name }];
+  const params = documentToParams({ ...b, uploader, history });
   const info = db.prepare(DOCUMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   res.status(201).json(rowToDocument(row));
 });
 
+// No DELETE route — a regulated fund's document register doesn't support
+// hard delete (see the archived/archived_at/archived_by/history_json
+// comment on the `documents` table in db.js). PUT is the only mutation
+// path; archiving/restoring is just a status flip through it, same as
+// every other field, so no separate archive endpoint either.
 app.put('/api/documents/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Document not found in this tenant' });
   const existingDoc = rowToDocument(existing);
   if (blocksDocumentCategory(req.user.permissions, existingDoc.category)) return res.status(403).json({ error: 'Forbidden: CF&A staff cannot access FM-category documents' });
-  const merged = Object.assign(existingDoc, req.body || {});
+  const b = req.body || {};
+  const actor = req.user.name || req.user.email;
+  const now = new Date().toISOString();
+  // Snapshot pre-merge state — Object.assign below mutates existingDoc in
+  // place, so every "what changed" comparison has to use these, not
+  // existingDoc, or it'd be comparing the new value against itself.
+  const wasArchived = existingDoc.archived;
+  const prevCommentCount = existingDoc.comments.length;
+  // History is built server-side only, from transitions the server itself
+  // detects — never trusted as client-supplied entries, same reasoning as
+  // archived_by/archived_at below. Comments stay separately authored
+  // content (comment.author), but a new one still gets a history line too.
+  const history = existingDoc.history.slice();
+  const merged = Object.assign(existingDoc, b);
   if (blocksDocumentCategory(req.user.permissions, merged.category)) return res.status(403).json({ error: 'Forbidden: CF&A staff cannot access FM-category documents' });
+  // archived_by/archived_at are stamped from the authenticated user on
+  // every real transition, not trusted from the client — same reasoning
+  // as uploader above and paymentConfirm/afsaSubmit elsewhere. A restore
+  // (archived -> not archived) clears both; who/when it WAS archived
+  // stays in history, which is append-only and never cleared.
+  if (b.archived !== undefined && !!b.archived !== !!wasArchived) {
+    if (b.archived) {
+      merged.archivedAt = now.slice(0, 10);
+      merged.archivedBy = actor;
+      history.push({ action: 'archived', by: actor, at: now, detail: null });
+    } else {
+      merged.archivedAt = null;
+      merged.archivedBy = null;
+      history.push({ action: 'restored', by: actor, at: now, detail: null });
+    }
+  }
+  if (Array.isArray(b.comments) && b.comments.length > prevCommentCount) {
+    const added = b.comments.slice(prevCommentCount);
+    for (const c of added) history.push({ action: 'commented', by: c.author || actor, at: now, detail: c.text });
+  }
+  merged.history = history;
   const params = documentToParams(merged);
   db.prepare(DOCUMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM documents WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);

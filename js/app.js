@@ -53,6 +53,13 @@ function updateUserRoleUI(role) {
   const portfolioNav = document.querySelector('.nav-item[data-page="portfolio"]');
   if (portfolioNav) portfolioNav.style.display = currentUserPermission('internal') ? '' : 'none';
 
+  // Vault aggregates real files from every internal module (deals,
+  // portfolio, capital calls, AFSA reports, onboarding contracts) — same
+  // internal-only reasoning as Portfolio above. Its own data source (GET
+  // /api/uploads/meta) already 403s a non-internal role server-side.
+  const vaultNav = document.querySelector('.nav-item[data-page="vault"]');
+  if (vaultNav) vaultNav.style.display = currentUserPermission('internal') ? '' : 'none';
+
   const roBanner = document.getElementById('readOnlyBanner');
   if (roBanner) roBanner.style.display = currentUserPermission('readOnly') ? '' : 'none';
 
@@ -200,7 +207,12 @@ function updateBadges() {
   set('badge-ic', icPending);
   set('badge-kycrenewal', kycOverdue);
   // Vault: total files across all aggregated sources
-  const vaultCount = typeof vaultGetAllFiles === 'function' ? vaultGetAllFiles().length : 0;
+  // _vaultFilesCache (js/vault.js) is only populated once the Vault page
+  // has actually been rendered (its aggregation needs an async bulk
+  // metadata fetch, so it can't run synchronously on every badge update) —
+  // reads as 0 until then, same as any other page whose data hasn't
+  // loaded yet.
+  const vaultCount = typeof _vaultFilesCache !== 'undefined' ? _vaultFilesCache.length : 0;
   set('badge-vault', vaultCount);
   // Onboarding (TZ)
   const obOverdue = typeof getObOverdueCount === 'function' ? getObOverdueCount() : 0;
