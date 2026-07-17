@@ -1,0 +1,170 @@
+openapi: 3.0.3
+info:
+  title: Turan CRM — Curated External API
+  version: "1.0.0"
+  description: >
+    A small, deliberately curated, read-only subset of the CRM's data,
+    for external integrations (starting with future AI agents) that
+    should never use the internal human-login API. Everything under
+    /api/v1/external is a completely separate identity space from human
+    JWT sessions and the LP self-service portal — see server/auth.js's
+    requireApiKey() and server/externalApi.js.
+
+    Keys are managed by internal staff (Team / Пользователи → API-ключи
+    tab in the app), never self-service. A key is shown in full exactly
+    once at creation time and is never retrievable again — only its
+    prefix and metadata (scopes, last used, revoked) are visible
+    afterward.
+
+    This surface is read-only by design. No concrete use case for write
+    access exists yet; if one emerges, it will be added as new, narrowly
+    scoped endpoints and scopes — not by widening what an existing key
+    can already do.
+servers:
+  - url: /api/v1/external
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: "sk_live_<random>"
+      description: >
+        Present the full key value (shown once at creation) as a Bearer
+        token. Hashed with SHA-256 server-side for lookup — the raw value
+        is never stored.
+  schemas:
+    LP:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        fundId: { type: integer, nullable: true }
+        registerId: { type: string }
+        name: { type: string }
+        type: { type: string, example: "Corporate" }
+        lpType: { type: string, example: "Institution" }
+        country: { type: string }
+        commitment: { type: number }
+        calledAmount: { type: number }
+        paidAmount: { type: number }
+        distributions: { type: number }
+        status: { type: string, enum: [Active, Exited] }
+        kycStatus: { type: string }
+    Portfolio:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        fundId: { type: integer, nullable: true }
+        name: { type: string }
+        sector: { type: string }
+        stage: { type: string }
+        invested: { type: number }
+        value: { type: number }
+        status: { type: string }
+        archived: { type: boolean }
+    Deal:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        fundId: { type: integer, nullable: true }
+        company: { type: string }
+        sector: { type: string }
+        stage: { type: string }
+        amount: { type: number }
+        type: { type: string }
+        priority: { type: string }
+        icDecision: { type: string, nullable: true }
+    Fund:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        shortName: { type: string }
+        currency: { type: string, example: "USD" }
+        targetSize: { type: number }
+        vintage: { type: integer }
+        status: { type: string }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or revoked API key
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: The key does not have the required scope
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooManyRequests:
+      description: Rate limit exceeded for this key (100 requests / 15 minutes)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+paths:
+  /lp:
+    get:
+      summary: List LP register entries
+      description: Requires the `read:lp` scope.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lp: { type: array, items: { $ref: '#/components/schemas/LP' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /portfolio:
+    get:
+      summary: List portfolio companies
+      description: Requires the `read:portfolio` scope.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  portfolio: { type: array, items: { $ref: '#/components/schemas/Portfolio' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /deals:
+    get:
+      summary: List deals / pipeline
+      description: Requires the `read:deals` scope.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deals: { type: array, items: { $ref: '#/components/schemas/Deal' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /funds:
+    get:
+      summary: List funds
+      description: Requires the `read:funds` scope.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  funds: { type: array, items: { $ref: '#/components/schemas/Fund' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }

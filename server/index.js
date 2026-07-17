@@ -19,6 +19,7 @@ const jwt = require('jsonwebtoken');
 const { db, at } = require('./db');
 const { runBackup, scheduleBackups } = require('./backup');
 const { logError } = require('./logger');
+const externalApiRouter = require('./externalApi');
 const { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
@@ -28,6 +29,7 @@ const {
   blocksPermissions: chineseWallBlocks, filterClientsForPermissions,
   blocksDocumentCategory, filterDocumentsForPermissions,
 } = require('./chineseWall');
+const { rowToLp } = require('./lpMapping');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
@@ -669,51 +671,60 @@ app.delete('/api/roles/:id', requireAuth, requirePermission('manageRoles'), (req
   res.json({ ok: true, deleted: true });
 });
 
-/* ===== LP Register API — tenant-scoped ===== */
-function rowToLp(r) {
-  return {
-    id: r.id,
-    fundId: r.fund_id,
-    registerId: r.register_id,
-    name: r.name,
-    type: r.type,
-    lpType: r.lp_type,
-    country: r.country,
-    address: r.address,
-    taxId: r.tax_id,
-    contact: r.contact,
-    email: r.email,
-    phone: r.phone,
-    commitment: r.commitment,
-    calledAmount: r.called_amount,
-    paidAmount: r.paid_amount,
-    distributions: r.distributions,
-    fundClass: r.fund_class,
-    ownershipPct: r.ownership_pct,
-    professionalClient: r.professional_client,
-    kycStatus: r.kyc_status,
-    kycDate: r.kyc_date,
-    kycNextReview: r.kyc_next_review,
-    riskRating: r.risk_rating,
-    admissionDate: r.admission_date,
-    saNumber: r.sa_number,
-    afsaNotified: !!r.afsa_notified,
-    lpacMember: !!r.lpac_member,
-    status: r.status,
-    exitDate: r.exit_date,
-    notes: r.notes,
-    obClientId: r.ob_client_id,
-    rm: r.rm,
-    identityVerified: !!r.identity_verified,
-    proofAddressVerified: !!r.proof_address_verified,
-    sofVerified: !!r.sof_verified,
-    taxIdVerified: !!r.tax_id_verified,
-    pepCheckCleared: !!r.pep_check_cleared,
-    amlScreeningCleared: !!r.aml_screening_cleared,
-    uboVerified: !!r.ubo_verified,
-  };
-}
+/* ===== API Keys — machine-to-machine access for the curated external
+   API (server/externalApi.js). Managed by humans (requireAuth), used by
+   machines (requireApiKey) — two different identity spaces, same split
+   as everywhere else in this file (portal tokens vs internal users). */
+const API_KEY_SCOPES = ['read:lp', 'read:portfolio', 'read:deals', 'read:funds'];
 
+app.get('/api/api-keys', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  // Never returns key_hash or the raw key — key_prefix is the only
+  // identifying information a key gives up after creation.
+  const rows = db.prepare('SELECT id, name, key_prefix, scopes_json, created_at, created_by, last_used_at, revoked_at, revoked_by FROM api_keys WHERE tenant_id = ? ORDER BY id DESC').all(req.tenantId);
+  res.json({
+    apiKeys: rows.map(r => ({
+      id: r.id, name: r.name, keyPrefix: r.key_prefix,
+      scopes: JSON.parse(r.scopes_json || '[]'),
+      createdAt: r.created_at, createdBy: r.created_by,
+      lastUsedAt: r.last_used_at, revokedAt: r.revoked_at, revokedBy: r.revoked_by,
+    })),
+  });
+});
+
+app.post('/api/api-keys', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  const b = req.body || {};
+  if (!b.name) return res.status(400).json({ error: 'name is required' });
+  const scopes = Array.isArray(b.scopes) ? b.scopes.filter(s => API_KEY_SCOPES.includes(s)) : [];
+  if (!scopes.length) return res.status(400).json({ error: 'at least one valid scope is required: ' + API_KEY_SCOPES.join(', ') });
+
+  const rawKey = 'sk_live_' + crypto.randomBytes(32).toString('base64url');
+  const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+  const keyPrefix = rawKey.slice(0, 16);
+
+  const info = db.prepare(`
+    INSERT INTO api_keys (tenant_id, name, key_prefix, key_hash, scopes_json, created_by)
+    VALUES (@tenantId, @name, @keyPrefix, @keyHash, @scopesJson, @createdBy)
+  `).run(at({
+    tenantId: req.tenantId, name: b.name, keyPrefix, keyHash,
+    scopesJson: JSON.stringify(scopes), createdBy: req.user.name || req.user.email,
+  }));
+
+  // The only time the raw key is ever returned — not stored anywhere in
+  // plaintext, not retrievable again after this response (same "shown
+  // once" pattern as PUT /api/portfolio/:id/portal-password above).
+  res.status(201).json({ id: info.lastInsertRowid, name: b.name, keyPrefix, scopes, key: rawKey });
+});
+
+app.put('/api/api-keys/:id/revoke', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM api_keys WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'API key not found in this tenant' });
+  if (existing.revoked_at) return res.status(409).json({ error: 'This key is already revoked' });
+  db.prepare('UPDATE api_keys SET revoked_at = ?, revoked_by = ? WHERE id = ? AND tenant_id = ?')
+    .run(new Date().toISOString(), req.user.name || req.user.email, existing.id, req.tenantId);
+  res.json({ ok: true, revoked: true });
+});
+
+/* ===== LP Register API — tenant-scoped ===== */
 /* ===== Funds ===== */
 app.get('/api/funds', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM funds WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
@@ -2085,6 +2096,9 @@ app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) 
   const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToWfInstance(row));
 });
+
+/* ===== Curated external API (machine callers — see server/externalApi.js) ===== */
+app.use('/api/v1/external', externalApiRouter);
 
 /* ===== Static frontend ===== */
 const FRONTEND_ROOT = path.join(__dirname, '..');

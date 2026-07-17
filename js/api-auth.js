@@ -251,7 +251,7 @@ const READONLY_GATED_FN_NAMES = [
   'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
   'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewCoiEntry', 'saveNewUser',
-  'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveNewRole',
+  'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveNewRole', 'saveNewApiKey', 'revokeApiKey',
   'saveRoleEdit', 'deleteRole', 'wfAction', 'withdrawWf', 'startWorkflow',
   'saveNewEngagement', 'updateEngPayment', 'obAddTaskComment',
   'saveDDConclusion', 'removeDDConclusionDoc', 'signGpConclusion',

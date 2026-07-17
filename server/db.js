@@ -767,6 +767,34 @@ CREATE TABLE IF NOT EXISTS afsa_reports (
   created_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_afsa_reports_tenant ON afsa_reports(tenant_id);
+
+-- Machine-to-machine access (future AI/integration use) — a completely
+-- separate identity space from internal users/roles above, same spirit
+-- as the portal's own separate identity space. key_hash is SHA-256, not
+-- bcrypt: API keys are already high-entropy random strings, not
+-- human-guessable passwords, so they don't need slow hashing on every
+-- request. key_prefix is stored in the clear so staff can identify a key
+-- in the admin UI without the full value ever being retrievable again
+-- after creation. scopes_json is a small, deliberately separate
+-- vocabulary from the human permission keys in the roles table (read:lp,
+-- read:portfolio, etc.) — those are fund-governance concepts (IC votes,
+-- AML, Capital Call approval) that don't map onto "what can this
+-- integration read".
+CREATE TABLE IF NOT EXISTS api_keys (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  name              TEXT NOT NULL,
+  key_prefix        TEXT NOT NULL,
+  key_hash          TEXT NOT NULL,
+  scopes_json       TEXT NOT NULL DEFAULT '[]',
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  created_by        TEXT,
+  last_used_at      TEXT,
+  revoked_at        TEXT,
+  revoked_by        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —

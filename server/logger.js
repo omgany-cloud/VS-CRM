@@ -29,4 +29,19 @@ function logError(err, context) {
   }
 }
 
-module.exports = { logError };
+// Every call to the curated external API (server/externalApi.js) — not
+// just failures — so staff can see exactly what an integration has
+// actually been doing and decide whether to revoke it. Separate file
+// from the error log since this is routine traffic, not a problem.
+function logApiCall({ method, path: reqPath, keyId, keyName, status }) {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const file = path.join(LOG_DIR, `api-external-${new Date().toISOString().slice(0, 10)}.log`);
+    const line = JSON.stringify({ at: new Date().toISOString(), method, path: reqPath, keyId, keyName, status }) + '\n';
+    fs.appendFileSync(file, line);
+  } catch (writeErr) {
+    console.error('[logger] failed to write api call log:', writeErr.message);
+  }
+}
+
+module.exports = { logError, logApiCall };

@@ -120,6 +120,44 @@ function requirePortalAuth(req, res, next) {
   }
 }
 
+// Express middleware for the curated external API (server/externalApi.js)
+// — a third, completely separate identity space from both requireAuth's
+// internal users and requirePortalAuth's portfolio companies. Machine
+// callers (future AI/integrations) present a long-lived API key instead
+// of a short-lived JWT. Keys are SHA-256 hashed at rest (not bcrypt —
+// already-high-entropy random strings don't need slow hashing the way
+// human passwords do) and looked up by that hash, never decrypted.
+//
+// req.user is still populated, shaped identically to requireAuth's
+// (id/email/name/role/permissions) even though no external route
+// currently needs it — this is what lets this app's existing
+// actor-stamping call sites (req.user.name || req.user.email, used by
+// every archivedBy/decidedBy/etc. field) work unchanged if a write scope
+// is ever added to the external API later, without those call sites
+// needing to know or care whether the caller was a human or a key.
+function requireApiKey(scope) {
+  return function (req, res, next) {
+    const header = req.headers.authorization || '';
+    const key = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (!key) return res.status(401).json({ error: 'Missing bearer API key' });
+    const keyHash = crypto.createHash('sha256').update(key).digest('hex');
+    const row = db.prepare('SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL').get(keyHash);
+    if (!row) return res.status(401).json({ error: 'Invalid or revoked API key' });
+    let scopes = [];
+    try { scopes = JSON.parse(row.scopes_json || '[]'); } catch (e) { /* malformed row, treat as no scopes */ }
+    if (scope && !scopes.includes(scope)) {
+      return res.status(403).json({ error: `Forbidden: this key does not have the '${scope}' scope` });
+    }
+    req.tenantId = row.tenant_id;
+    req.apiKey = { id: row.id, name: row.name, scopes };
+    req.user = { id: null, email: null, name: `API: ${row.name}`, role: 'API_KEY', permissions: NO_PERMISSIONS };
+    // Fire-and-forget — not on the request's critical path, and a failed
+    // write here must never block or fail the actual API call.
+    db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
+    next();
+  };
+}
+
 // 403 unless req.user.permissions[key] is truthy.
 function requirePermission(key) {
   return function (req, res, next) {
@@ -135,4 +173,4 @@ function requirePermission(key) {
 // routes that internal GP staff need but external committee members don't.
 const requireInternal = requirePermission('internal');
 
-module.exports = { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET };
+module.exports = { signToken, signPortalToken, requireAuth, requirePortalAuth, requireApiKey, requirePermission, requireInternal, JWT_SECRET };

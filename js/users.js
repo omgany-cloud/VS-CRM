@@ -40,13 +40,20 @@ const PERMISSION_DEFS = [
 
 function switchUsersTab(tab) {
   usersActiveTab = tab;
-  const btnUsers = document.getElementById('usersTabUsers');
-  const btnRoles = document.getElementById('usersTabRoles');
-  if (btnUsers) { btnUsers.style.background = tab === 'users' ? '#3b82f6' : 'transparent'; btnUsers.style.border = tab === 'users' ? 'none' : '1px solid #2a3448'; btnUsers.style.color = tab === 'users' ? '#fff' : '#8a9bbf'; btnUsers.setAttribute('aria-selected', String(tab === 'users')); }
-  if (btnRoles) { btnRoles.style.background = tab === 'roles' ? '#3b82f6' : 'transparent'; btnRoles.style.border = tab === 'roles' ? 'none' : '1px solid #2a3448'; btnRoles.style.color = tab === 'roles' ? '#fff' : '#8a9bbf'; btnRoles.setAttribute('aria-selected', String(tab === 'roles')); }
+  const tabButtons = { users: 'usersTabUsers', roles: 'usersTabRoles', apiKeys: 'usersTabApiKeys' };
+  for (const [t, id] of Object.entries(tabButtons)) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.style.background = tab === t ? '#3b82f6' : 'transparent';
+    btn.style.border = tab === t ? 'none' : '1px solid #2a3448';
+    btn.style.color = tab === t ? '#fff' : '#8a9bbf';
+    btn.setAttribute('aria-selected', String(tab === t));
+  }
   const content = document.getElementById('usersContent');
-  if (content) content.setAttribute('aria-labelledby', tab === 'roles' ? 'usersTabRoles' : 'usersTabUsers');
-  if (tab === 'roles') renderRolesPage(); else renderUsersPage();
+  if (content) content.setAttribute('aria-labelledby', tabButtons[tab] || 'usersTabUsers');
+  if (tab === 'roles') renderRolesPage();
+  else if (tab === 'apiKeys') renderApiKeysPage();
+  else renderUsersPage();
 }
 
 function roleOptionsHtml(selected) {
@@ -62,6 +69,8 @@ function renderUsersPage() {
   if (!el) return;
   const btnRoles = document.getElementById('usersTabRoles');
   if (btnRoles) btnRoles.style.display = currentUserPermission('manageRoles') ? '' : 'none';
+  const btnApiKeys = document.getElementById('usersTabApiKeys');
+  if (btnApiKeys) btnApiKeys.style.display = currentUserPermission('manageUsers') ? '' : 'none';
 
   const cntActive = crmUsers.filter(u => u.active).length;
   const cntExternal = crmUsers.filter(u => ROLES[u.role] && !ROLES[u.role].internal).length;
@@ -489,6 +498,153 @@ async function deleteRole(id) {
     await loadRolesFromApi();
     renderRolesPage();
     showToast('✅ Роль удалена', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   API KEYS — machine-to-machine access for the curated
+   external API (server/externalApi.js, /api/v1/external/*).
+   A separate identity space from human users/roles above —
+   these keys never log into the app, they only call the
+   small read-only external surface. Fetched on demand (not
+   cached at login like crmUsers/roles) since this tab is
+   admin-only and infrequently visited.
+═══════════════════════════════════════════════════ */
+
+const API_KEY_SCOPES = [
+  { key: 'read:lp', label: 'Чтение: LP Register' },
+  { key: 'read:portfolio', label: 'Чтение: Портфель' },
+  { key: 'read:deals', label: 'Чтение: Сделки' },
+  { key: 'read:funds', label: 'Чтение: Фонды' },
+];
+
+async function renderApiKeysPage() {
+  const el = document.getElementById('usersContent');
+  if (!el) return;
+  el.innerHTML = `<div style="padding:40px;text-align:center;color:#8a9bbf"><i class="fas fa-spinner fa-spin"></i></div>`;
+
+  let apiKeys = [];
+  try {
+    const res = await apiFetch('/api/api-keys');
+    apiKeys = res.apiKeys;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:24px;color:#f87171">⚠️ Не удалось загрузить: ${escapeHtml(err.message)}</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title"><i class="fas fa-key" style="color:#eab308;margin-right:6px"></i>API-ключи</span>
+        <button onclick="openNewApiKeyModal()"
+          style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.3);color:#eab308;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-plus"></i> Создать ключ
+        </button>
+      </div>
+      <div style="padding:10px 20px 0;font-size:12px;color:#8a9bbf">
+        Для внешних интеграций (в перспективе — ИИ-агентов), которым нужен доступ только к чтению определённых данных, без человеческого логина.
+        Только для чтения — API-ключ не может ничего создавать/менять/удалять.
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>Название</th><th>Ключ</th><th>Права</th><th>Создан</th><th>Последнее использование</th><th>Статус</th><th></th></tr></thead>
+          <tbody>
+            ${apiKeys.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-key" style="font-size:24px;display:block;margin-bottom:8px;opacity:.4"></i>Ключей ещё нет</td></tr>` :
+            apiKeys.map(k => `
+              <tr>
+                <td style="font-weight:700;color:#e2e8f0">${escapeHtml(k.name)}</td>
+                <td style="font-family:monospace;font-size:11px;color:#8a9bbf">${escapeHtml(k.keyPrefix)}...</td>
+                <td>${k.scopes.map(s => `<span class="badge badge-blue" style="font-size:9px;margin-right:3px">${escapeHtml(s)}</span>`).join('')}</td>
+                <td style="font-size:11px;color:#8a9bbf">${k.createdAt ? k.createdAt.slice(0,10) : '—'} · ${escapeHtml(k.createdBy)||'—'}</td>
+                <td style="font-size:11px;color:#8a9bbf">${k.lastUsedAt ? k.lastUsedAt.slice(0,16).replace('T',' ') : 'Ещё не использован'}</td>
+                <td>${k.revokedAt
+                  ? `<span class="badge badge-gray">Отозван ${k.revokedAt.slice(0,10)}</span>`
+                  : `<span class="badge badge-green">Активен</span>`}</td>
+                <td>${k.revokedAt ? '' : `<button class="act-btn del" onclick="revokeApiKey(${k.id})" title="Отозвать"><i class="fas fa-ban"></i></button>`}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function openNewApiKeyModal() {
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  document.body.style.overflow = 'hidden';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>Новый API-ключ';
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название *</label>
+      <input type="text" id="ak_name" placeholder="Например: AI Reporting Agent"
+        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:6px;text-transform:uppercase">Права доступа (только чтение) *</label>
+      ${API_KEY_SCOPES.map(s => `
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;color:#e2e8f0;cursor:pointer">
+          <input type="checkbox" class="ak_scope" value="${s.key}" /> ${escapeHtml(s.label)}
+        </label>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveNewApiKey()" style="background:linear-gradient(135deg,#eab308,#ca8a04);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
+    </div>`;
+  modal.style.display = 'flex';
+  _snapshotObNewModal();
+}
+
+async function saveNewApiKey() {
+  const name = document.getElementById('ak_name')?.value?.trim();
+  const scopes = Array.from(document.querySelectorAll('.ak_scope:checked')).map(el => el.value);
+  if (!name) { showToast('⚠️ Введите название', 'red'); return; }
+  if (!scopes.length) { showToast('⚠️ Выберите хотя бы одно право доступа', 'red'); return; }
+
+  let created;
+  try {
+    created = await apiFetch('/api/api-keys', { method: 'POST', body: JSON.stringify({ name, scopes }) });
+  } catch (err) {
+    showToast('⚠️ Не удалось создать: ' + err.message, 'red');
+    return;
+  }
+  closeObNewModalSilent();
+  renderApiKeysPage();
+  showApiKeyRevealDialog(created);
+}
+
+// Shown once — the full key is never retrievable again after this
+// response (server never stores or logs the plaintext, only its SHA-256
+// hash). Same "stays open until dismissed" dialog pattern as
+// generatePortalPassword in js/app.js, since a toast would auto-dismiss
+// before anyone could copy the value down.
+function showApiKeyRevealDialog(created) {
+  const overlay = document.createElement('div');
+  overlay.id = 'apiKeyRevealOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#1c2333;border:1px solid #2a3448;border-radius:14px;max-width:520px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-bottom:6px"><i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>API-ключ создан — ${escapeHtml(created.name)}</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">Ключ показывается один раз. Скопируйте и сохраните его в надёжном месте — повторно посмотреть будет нельзя.</div>
+      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 12px;margin-bottom:16px">
+        <code id="revealedApiKey" style="flex:1;font-size:12px;color:#22c55e;font-weight:700;word-break:break-all;user-select:all">${escapeHtml(created.key)}</code>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('revealedApiKey').textContent).then(()=>showToast('📋 Скопировано','green'))"
+          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0"><i class="fas fa-copy"></i></button>
+      </div>
+      <button onclick="document.getElementById('apiKeyRevealOverlay').remove()"
+        style="width:100%;background:#3b82f6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил ключ</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function revokeApiKey(id) {
+  if (!confirm('Отозвать этот API-ключ? Действие необратимо — все интеграции, использующие этот ключ, сразу потеряют доступ.')) return;
+  try {
+    await apiFetch(`/api/api-keys/${id}/revoke`, { method: 'PUT' });
+    renderApiKeysPage();
+    showToast('✅ Ключ отозван', 'green');
   } catch (err) {
     showToast('⚠️ ' + err.message, 'red');
   }
