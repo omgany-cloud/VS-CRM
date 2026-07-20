@@ -251,7 +251,7 @@ const READONLY_GATED_FN_NAMES = [
   'registerLPFromOnboarding', 'castICVote', 'saveRiskConclusion', 'saveNewICMemo',
   'createObClient', 'submitObTask', 'reopenObTask', 'saveNewRestrictedEntry',
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewCoiEntry', 'saveNewUser',
-  'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveNewRole', 'saveNewApiKey', 'revokeApiKey',
+  'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveCompanyName', 'saveNewRole', 'saveNewApiKey', 'revokeApiKey',
   'saveRoleEdit', 'deleteRole', 'wfAction', 'withdrawWf', 'startWorkflow',
   'saveNewEngagement', 'updateEngPayment', 'obAddTaskComment',
   'saveDDConclusion', 'removeDDConclusionDoc', 'signGpConclusion',
@@ -782,11 +782,22 @@ function startAuthRefreshLoop() {
   });
 }
 
+// Browser tab title only — the in-app sidebar shows the active fund's
+// name (js/funds.js), not the tenant/company name, so this is the one
+// visible spot that reflects a company rename (js/users.js's
+// saveCompanyName()) without a full page reload.
+function applyTenantBranding() {
+  const auth = getAuth();
+  const name = auth && auth.tenant && auth.tenant.name;
+  if (name) document.title = name + ' — CRM';
+}
+
 // Shared by both the login and signup submit handlers below — same
 // post-auth sequence either way.
 async function completeAuth(data) {
   setAuth(data);
   hideLoginOverlay();
+  applyTenantBranding();
   await loadRolesFromApi();
   if (typeof initUserRole === 'function') initUserRole();
   loadAllApiData();
@@ -852,6 +863,7 @@ async function completeAuth(data) {
   const auth = getAuth();
   if (auth && auth.token) {
     hideLoginOverlay();
+    applyTenantBranding();
     loadRolesFromApi().then(() => {
       if (typeof initUserRole === 'function') initUserRole();
       loadAllApiData();

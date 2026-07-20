@@ -75,7 +75,21 @@ function renderUsersPage() {
   const cntActive = crmUsers.filter(u => u.active).length;
   const cntExternal = crmUsers.filter(u => ROLES[u.role] && !ROLES[u.role].internal).length;
 
+  const auth = getAuth();
+  const companyName = auth && auth.tenant ? auth.tenant.name : '—';
+
   el.innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title"><i class="fas fa-building" style="color:#3b82f6;margin-right:6px"></i>Компания</span>
+        ${currentUserPermission('manageUsers') ? `
+        <button onclick="openEditCompanyModal()" title="Переименовать компанию"
+          style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px">
+          <i class="fas fa-edit"></i> Изменить</button>` : ''}
+      </div>
+      <div style="padding:14px 18px;font-size:15px;font-weight:700;color:#e2e8f0">${escapeHtml(companyName)}</div>
+    </div>
+
     <div class="kpi-row" style="margin-bottom:20px">
       <div class="kpi-card">
         <div class="kpi-icon blue"><i class="fas fa-users"></i></div>
@@ -187,6 +201,43 @@ async function saveNewUser() {
     showToast('✅ Пользователь создан', 'green');
   } catch (err) {
     showToast('⚠️ Не удалось создать: ' + err.message, 'red');
+  }
+}
+
+/* ===== Company name ===== */
+
+function openEditCompanyModal() {
+  const modal = document.getElementById('modal-ob-new');
+  if (!modal) return;
+  const auth = getAuth();
+  document.body.style.overflow = 'hidden';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-building" style="color:#3b82f6;margin-right:8px"></i>Название компании';
+  document.getElementById('obNewModalContent').innerHTML = `
+    <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название компании</label>
+      <input type="text" id="company_name" value="${escapeHtml(auth && auth.tenant ? auth.tenant.name : '')}"
+        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveCompanyName()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
+    </div>`;
+  modal.style.display = 'flex';
+  _snapshotObNewModal();
+}
+
+async function saveCompanyName() {
+  const name = document.getElementById('company_name')?.value?.trim();
+  if (!name) { showToast('⚠️ Введите название компании', 'red'); return; }
+  try {
+    const updated = await apiFetch('/api/tenant', { method: 'PUT', body: JSON.stringify({ name }) });
+    const auth = getAuth();
+    if (auth) { auth.tenant = updated; setAuth(auth); }
+    if (typeof applyTenantBranding === 'function') applyTenantBranding();
+    closeObNewModalSilent();
+    renderUsersPage();
+    showToast('✅ Название компании обновлено', 'green');
+  } catch (err) {
+    showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
   }
 }
 

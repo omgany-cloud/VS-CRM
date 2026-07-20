@@ -12,7 +12,7 @@
 // meant to police.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { createTestServer } = require('./helpers');
+const { createTestServer, SEED_EMAIL, SEED_PASSWORD } = require('./helpers');
 
 let server; // tenant A — the fully-seeded tenant from createTestServer()
 let tenantB; // tenant B — freshly signed up, empty, isolated
@@ -186,4 +186,19 @@ test('Fund isolation', async () => {
     listPath: '/api/funds', listKey: 'funds',
     idPath: (id) => `/api/funds/${id}`,
   });
+});
+
+test('Tenant rename isolation: PUT /api/tenant only ever touches the caller\'s own tenant', async () => {
+  const renamed = await (await tenantB.apiFetch('/api/tenant', { method: 'PUT', body: JSON.stringify({ name: 'ZZZ_ISO_RENAMED' }) })).json();
+  assert.equal(renamed.name, 'ZZZ_ISO_RENAMED', 'tenant B\'s own rename must succeed and echo back');
+
+  // tenant A's name must be completely unaffected by tenant B renaming itself
+  const aLogin = await (await fetch(server.baseUrl + '/api/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: SEED_EMAIL, password: SEED_PASSWORD }),
+  })).json();
+  assert.notEqual(aLogin.tenant.name, 'ZZZ_ISO_RENAMED', 'tenant A\'s name must not be affected by tenant B\'s rename');
+
+  // revert tenant B's name so it doesn't leak into any later-running test's assumptions
+  await tenantB.apiFetch('/api/tenant', { method: 'PUT', body: JSON.stringify({ name: 'ZZZ Isolation Test Co' }) });
 });

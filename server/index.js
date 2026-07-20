@@ -577,6 +577,17 @@ app.delete('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req
   res.json({ ok: true, deleted: true });
 });
 
+// Company display name — the only tenant field an admin can rename from
+// the UI. `slug` stays immutable: it's the tenant's stable identifier
+// (portal company lookups, test fixtures, etc.), and renaming the
+// business shouldn't require touching anything keyed off it.
+app.put('/api/tenant', requireAuth, requirePermission('manageUsers'), (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim();
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  db.prepare('UPDATE tenants SET name = ? WHERE id = ?').run(name, req.tenantId);
+  res.json(db.prepare('SELECT id, slug, name FROM tenants WHERE id = ?').get(req.tenantId));
+});
+
 /* ===== Roles API =====
    GET is open to every authenticated user (everyone needs the catalogue to
    resolve role labels/icons/colors — same as the old fully-client-shipped
