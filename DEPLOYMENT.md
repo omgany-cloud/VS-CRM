@@ -32,9 +32,12 @@ off-machine storage (cloud bucket, network share, etc.), sync
 `server/data/backups/` there too — a disk failure currently takes out
 the live DB and every local backup at once.
 
-## 5. Reconfirm rate limiting is appropriate
+## 5. Behind a reverse proxy (nginx)? Set TRUST_PROXY
 `server/index.js`'s `authRateLimit` (10 attempts / 15 min / IP) covers
-login and password-change. If you deploy behind a proxy/load balancer,
-confirm `req.ip` still reflects the real client IP (may need
-`app.set('trust proxy', ...)` — not currently set, since there's no
-proxy yet) or the limiter will key off the proxy's IP for everyone.
+login and password-change. Once nginx sits in front, every request's
+`req.ip` is the proxy's IP unless the app is told to trust
+`X-Forwarded-For` — set `TRUST_PROXY=1` in `.env` in that case, or the
+limiter keys off the proxy's IP for everyone (first user to trip it
+locks out everyone else). Leave it unset for local/direct use — trusting
+`X-Forwarded-For` with no real proxy in front lets a client fake its own
+IP and dodge the limiter entirely.

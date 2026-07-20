@@ -53,6 +53,14 @@ const { rowToAfsaReport, afsaReportToParams, INSERT_SQL: AFSA_REPORT_INSERT_SQL,
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Only trust X-Forwarded-* headers when actually deployed behind a
+// reverse proxy (nginx — see DEPLOYMENT.md step 7). Without a real proxy
+// in front, blindly trusting them would let a client spoof its own IP via
+// the X-Forwarded-For header and dodge authRateLimit entirely; with one,
+// leaving trust proxy off makes every request look like it comes from the
+// proxy's IP, so the first user to trip the limiter locks out everyone.
+if (process.env.TRUST_PROXY) app.set('trust proxy', 1);
+
 // This app renders everything via inline onclick="..." handlers and
 // inline style="..." attributes (its whole rendering architecture, no
 // build step) — helmet's default CSP would block all of that and break
