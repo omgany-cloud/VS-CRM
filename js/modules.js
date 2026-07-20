@@ -7,7 +7,7 @@
 
 /* ═══════════════════════════════════════════════════════════
    MODULE 1 — KYC RENEWAL TRACKER
-   AFSA требует ежегодного обновления KYC для всех LP и CF&A
+   Регулятор требует ежегодного обновления KYC для всех LP и CF&A
 ═══════════════════════════════════════════════════════════ */
 
 const KYC_RENEWAL_MONTHS = 12; // обновление каждые 12 месяцев
@@ -84,7 +84,7 @@ function renderKycRenewalPage() {
     <div class="card">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-sync-alt" style="color:#8b5cf6;margin-right:6px"></i>KYC Renewal Schedule</span>
-        <span style="font-size:11px;color:#8a9bbf">Обновление каждые 12 месяцев · AFSA AML Rules</span>
+        <span style="font-size:11px;color:#8a9bbf">Обновление каждые 12 месяцев · Правила AML регулятора</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -137,17 +137,17 @@ function startKycRenewal(id, name) {
 
 /* ═══════════════════════════════════════════════════════════
    MODULE 2 — COMPLIANCE CALENDAR
-   AFSA deadlines + KYC renewals + Capital Calls + Tasks
+   Regulator deadlines + KYC renewals + Capital Calls + Tasks
 ═══════════════════════════════════════════════════════════ */
 
 function buildCalendarEvents() {
   const events = [];
   const today  = new Date();
 
-  // AFSA Reporting deadlines — afsaReports (server-backed, see
+  // Regulatory reporting deadlines — afsaReports (server-backed, see
   // js/api-auth.js's loadAfsaReportsFromApi()), not the old js/data.js
   // reportSchedule static array (no backend, status could never change).
-  // Clickable: the actual "mark submitted" action lives in the AFSA
+  // Clickable: the actual "mark submitted" action lives in the regulator
   // reports table on this same page (renderAfsaReportsTable() below), so
   // this just gets you to the page — same "navigate, don't auto-act"
   // convention as the other categories.
@@ -198,7 +198,7 @@ function buildCalendarEvents() {
 }
 
 const CAL_CATEGORIES = {
-  afsa:    { label: 'AFSA Отчётность', icon: 'fa-landmark',      color: '#3b82f6'  },
+  afsa:    { label: 'Отчётность регулятору', icon: 'fa-landmark', color: '#3b82f6'  },
   capital: { label: 'Capital Calls',   icon: 'fa-coins',          color: '#22c55e'  },
   kyc:     { label: 'KYC Renewal',     icon: 'fa-shield-alt',     color: '#8b5cf6'  },
 };
@@ -243,7 +243,7 @@ function renderComplianceCalendar() {
         </div>`).join('')}
     </div>
 
-    <!-- AFSA report obligations — the actual "mark submitted" action -->
+    <!-- Regulator report obligations — the actual "mark submitted" action -->
     ${renderAfsaReportsTable()}
 
     <!-- Overdue -->
@@ -275,7 +275,7 @@ function renderAfsaReportsTable() {
   return `
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-landmark" style="color:#3b82f6;margin-right:6px"></i>Отчётность AFSA</span>
+        <span class="card-title"><i class="fas fa-landmark" style="color:#3b82f6;margin-right:6px"></i>Отчётность регулятору</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -382,8 +382,8 @@ function renderCalEvent(e, isOverdue) {
    Меморандумы, голосование, история решений
 ═══════════════════════════════════════════════════════════ */
 
-// Fixed IC voting composition per Constitution Section 7 (2 GP Reps +
-// 1 Independent Member + 1 LP Rep — IC_SEATS in js/roles.js). Which role
+// Fixed IC voting composition (2 GP Reps + 1 Independent Member + 1 LP
+// Rep — IC_SEATS in js/roles.js). Which role
 // occupies each seat is configurable via the Roles admin UI, so this is
 // derived live rather than a hardcoded 4-entry list of specific people —
 // shows the role label holding the seat, not a specific person's name
@@ -525,8 +525,8 @@ function icQuorumMet(votes) {
 
 function renderICModalContent(m) {
   // Each IC seat is now cast by the real account holding that seat's role
-  // (Constitution Section 7: GP Rep 1 = CEO, GP Rep 2 = CFO, Independent
-  // Member and LP Rep have their own external accounts) — a vote button
+  // (GP Rep 1 = CEO, GP Rep 2 = CFO, Independent Member and LP Rep have
+  // their own external accounts) — a vote button
   // only renders on the row matching the logged-in user's own role, unvoted.
   const myRole = currentUserRole();
   const canCastVote = (v) => m.status === 'pending' && !v.vote && currentUserPermissionValue('icSeat') === v.role;
@@ -583,7 +583,7 @@ function renderICModalContent(m) {
         <div style="font-size:13px;color:#94a3b8;line-height:1.55">${escapeHtml(text)||'—'}</div>
       </div>`).join('')}
 
-    <!-- Risk Manager conclusion (independent of the IC vote — Constitution Section 7.7) -->
+    <!-- Risk Manager conclusion (independent of the IC vote) -->
     <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1px solid ${m.riskVeto?'rgba(239,68,68,0.4)':'#2a3448'}">
       <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
         <i class="fas fa-shield-alt" style="margin-right:5px"></i>Заключение Risk Manager (независимое вето)
@@ -605,7 +605,7 @@ function renderICModalContent(m) {
 
     <!-- Votes -->
     <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC (Constitution Section 7)</div>
+      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC</div>
       ${m.status !== 'pending' ? `
         <div style="font-size:11px;color:#5a6b8a;font-style:italic;margin-bottom:8px">
           Голосование завершено, меморандум переведён в статус «${IC_MEMO_STATUS_LABELS[m.status] || m.status}» — записи ниже финальны.
@@ -639,7 +639,7 @@ function renderICModalContent(m) {
 function printICMemo(id) {
   const m = icMemos.find(x => x.id === id);
   if (!m) return;
-  const fp = FUND_PARAMS;
+  const fp = fundParamsFor(m.fundId);
 
   const docStyle = `
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -686,7 +686,7 @@ function printICMemo(id) {
     <div>
       <div class="logo-name">${fp.gp}</div>
       <div class="logo-sub">General Partner · ${fp.name}</div>
-      <div class="logo-sub">AFSA: ${fp.license}</div>
+      <div class="logo-sub">Лицензия: ${fp.license}</div>
     </div>
     <div class="ref-block">
       <div><b>Memo Ref:</b> IC-${String(m.id).padStart(3,'0')}</div>
@@ -696,7 +696,7 @@ function printICMemo(id) {
   </div>
 
   <h1>Investment Committee Memorandum</h1>
-  <div class="subtitle">Инвестиционный меморандум для Investment Committee (Constitution Section 7)</div>
+  <div class="subtitle">Инвестиционный меморандум для Investment Committee</div>
 
   <table class="deal-table">
     <tr><td>Компания</td><td><b>${escapeHtml(m.company)}</b></td></tr>
@@ -721,7 +721,7 @@ function printICMemo(id) {
     </div>`).join('')}
 
   <div class="risk-box ${m.riskVeto ? 'veto' : ''}">
-    <div class="section-title" style="border:none;margin-bottom:4px">Заключение Risk Manager (независимое вето, Constitution Section 7.7)</div>
+    <div class="section-title" style="border:none;margin-bottom:4px">Заключение Risk Manager (независимое вето)</div>
     <div class="section-text"><b>${m.riskConclusion ? (RISK_CONCLUSIONS[m.riskConclusion]?.label || m.riskConclusion) : 'Ещё не рассмотрено'}</b></div>
   </div>
 
@@ -756,8 +756,8 @@ function printICMemo(id) {
   </div>
 
   <div class="footer">
-    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · AFSA: ${fp.license}<br>
-    STRICTLY CONFIDENTIAL — Только для членов Investment Committee. Retention: 6 years (Constitution §8.5)
+    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · Лицензия: ${fp.license}<br>
+    STRICTLY CONFIDENTIAL — Только для членов Investment Committee. Retention: 6 years
   </div>
   `;
 
@@ -1002,7 +1002,7 @@ function openNewICMemo() {
     <!-- IC Members panel -->
     <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">
-        <i class="fas fa-users" style="margin-right:5px"></i>Состав IC (Constitution Section 7) — проголосуют после создания
+        <i class="fas fa-users" style="margin-right:5px"></i>Состав IC — проголосуют после создания
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         ${icRoleDefs().map(({role,name}) => `
@@ -1139,7 +1139,7 @@ async function saveNewICMemo() {
     }
   }
 
-  // Selected IC members (fixed Constitution Section 7 roster — unchecked
+  // Selected IC members (fixed roster — unchecked
   // ones are recorded as absent, same as the seeded "missing Independent
   // Member" scenario, so quorum still resolves correctly against them)
   const selectedRoles = icRoleDefs().filter(({role}) => {

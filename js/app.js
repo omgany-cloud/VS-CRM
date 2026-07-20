@@ -1,6 +1,5 @@
 // ============================================================
-//  Turan Capital Fund LP — Application Logic
-//  GP: Golden Leaves Ltd | License: AFSA-A-LA-2024-0038
+//  Application Logic
 // ============================================================
 
 let jcChart = null, lpTypeChart = null;
@@ -54,7 +53,7 @@ function updateUserRoleUI(role) {
   if (portfolioNav) portfolioNav.style.display = currentUserPermission('internal') ? '' : 'none';
 
   // Vault aggregates real files from every internal module (deals,
-  // portfolio, capital calls, AFSA reports, onboarding contracts) — same
+  // portfolio, capital calls, regulator reports, onboarding contracts) — same
   // internal-only reasoning as Portfolio above. Its own data source (GET
   // /api/uploads/meta) already 403s a non-internal role server-side.
   const vaultNav = document.querySelector('.nav-item[data-page="vault"]');
@@ -254,11 +253,11 @@ function initNavigation() {
 }
 
 const PAGE_LABELS = {
-  dashboard:     'nav_dashboard',
-  closing:       'nav_closing',
-  deals:         'nav_deals',
-  portfolio:     'nav_portfolio',
-  documents:     'nav_documents',
+  dashboard:     'Дашборд',
+  closing:       'First Closing',
+  deals:         'Сделки / Pipeline',
+  portfolio:     'Портфель',
+  documents:     'Документы',
   export:        'Экспорт Excel',
   workflow:      'Согласования',
   kycrenewal:    'KYC Renewal',
@@ -269,7 +268,7 @@ const PAGE_LABELS = {
   'ob-restricted': 'Restricted List / COI',
   engagements:   'Реестр договоров',
   'conflict-approvals': 'Конфликты / Одобрения — CF Deal Committee',
-  subscription:  'nav_subscription',
+  subscription:  'Подписка',
   'lp-register':      'LP Register — Реестр партнёров',
   'lp-capital-calls': 'Capital Calls — Журнал взносов',
   users:         'Команда / Пользователи',
@@ -280,7 +279,7 @@ function navigateTo(page) {
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  document.getElementById('pageBreadcrumb').textContent = t(PAGE_LABELS[page] || page);
+  document.getElementById('pageBreadcrumb').textContent = PAGE_LABELS[page] || page;
   // Close fund dropdown if open
   const dd = document.getElementById('fundSwitcherDropdown');
   if (dd) dd.classList.remove('open');
@@ -540,7 +539,7 @@ function renderClosing() {
   const el = document.getElementById('closingDashboard');
   if (!el) return;
 
-  const fp  = FUND_PARAMS;
+  const fp  = fundParamsFor(activeFundId);
   const fcs = currentFirstClosingState();
 
   /* ── Живые данные из системы ── */
@@ -692,7 +691,7 @@ function renderClosing() {
             color:${overallColor};border:1px solid ${t5ok?'rgba(34,197,94,0.3)':t3ok?'rgba(249,115,22,0.3)':'rgba(139,92,246,0.3)'}"
           >${overallStatus}</span>
         </div>
-        <div style="font-size:12px;color:#64748b">${fp.name} · GP: ${fp.gp} · AFSA: ${fp.license} · Дата закрытия: <b style="color:#94a3b8">${fcs.closingDate || '—'}</b></div>
+        <div style="font-size:12px;color:#64748b">${fp.name} · GP: ${fp.gp} · Лицензия: ${fp.license} · Дата закрытия: <b style="color:#94a3b8">${fcs.closingDate || '—'}</b></div>
       </div>
       <div style="display:flex;align-items:center;gap:16px">
         <div style="text-align:right">
@@ -726,7 +725,7 @@ function renderClosing() {
         ${timelineConnector(t3ok)}
         ${timelineStep('Неделя +1','Capital Call','CC Notice #1<br>10 рабочих дней','CFO', t4ok, t3ok&&!t4ok)}
         ${timelineConnector(t4ok)}
-        ${timelineStep('Неделя +4','Завершение','Welcome Letters<br>LP Register ✓<br>AFSA уведомлён','CEO + Reg.Agent', t5ok, t4ok&&!t5ok)}
+        ${timelineStep('Неделя +4','Завершение','Welcome Letters<br>LP Register ✓<br>Регулятор уведомлён','CEO + Reg.Agent', t5ok, t4ok&&!t5ok)}
       </div>
     </div>
 
@@ -889,7 +888,7 @@ function renderClosing() {
                 {l:'Min. Commitment', v:`$${fp.firstClosingMin}M`,                         c:commitOk?'#22c55e':'#ef4444'},
                 {l:'Выполнение',      v:commitOk?'✓ Порог достигнут':'✗ Ниже минимума',   c:commitOk?'#22c55e':'#ef4444'},
                 {l:'KYC All OK',      v:allKycOk?'✓ Все проверены':'⚠ Есть незавершённые', c:allKycOk?'#22c55e':'#f97316'},
-                {l:'AFSA >20% check', v:activeLP.filter(l=>l.ownershipPct>20&&!l.afsaNotified).length===0?'✓ OK':'⚠ Требует уведомления',
+                {l:'Регулятор >20% check', v:activeLP.filter(l=>l.ownershipPct>20&&!l.afsaNotified).length===0?'✓ OK':'⚠ Требует уведомления',
                                       c:activeLP.filter(l=>l.ownershipPct>20&&!l.afsaNotified).length===0?'#22c55e':'#f97316'},
               ].map(k=>`
                 <div>
@@ -903,14 +902,14 @@ function renderClosing() {
         </button>
       </div>
 
-      <!-- Template 8: AFSA Notification -->
+      <!-- Template 8: Regulator Notification -->
       <div class="card" style="grid-column:1/-1">
         ${sectionHeader('fas fa-landmark','239,68,68',
-          'Template 8 — AFSA Notification (First Closing)',
+          'Template 8 — Уведомление регулятора (First Closing)',
           afsaOk,
           afsaOk ? `Отправлено ${fcs.afsaNotifDate}` : 'Требуется')}
         <div style="font-size:11px;color:#64748b;margin-bottom:14px">
-          Уведомление регулятора AFSA о завершении First Closing · Обязательно если LP с долей &gt;20% ·
+          Уведомление регулятора о завершении First Closing · Обязательно если LP с долей &gt;20% ·
           Срок: в течение 10 рабочих дней после Closing Day
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
@@ -920,7 +919,7 @@ function renderClosing() {
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">№ письма / Reference</label>
-            <input type="text" id="fc_afsaNum" placeholder="AFSA-2025-XXXX" value="${fcs.afsaNotifNum}" style="${inpStyle};width:100%" />
+            <input type="text" id="fc_afsaNum" placeholder="№ письма" value="${fcs.afsaNotifNum}" style="${inpStyle};width:100%" />
           </div>
           <div>
             <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">URL подтверждения</label>
@@ -932,7 +931,7 @@ function renderClosing() {
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button onclick="fcSaveAFSA()" style="${saveBtnS}">
-            <i class="fas fa-save" style="margin-right:4px"></i>Сохранить данные AFSA
+            <i class="fas fa-save" style="margin-right:4px"></i>Сохранить данные уведомления
           </button>
           ${fcs.afsaConfirmUrl ? `
             <button onclick="_obOpenPreviewModal('${resolveDocUrl(fcs.afsaConfirmUrl).replace(/'/g,"\\'")}','${resolveDocUrl(fcs.afsaConfirmUrl).replace(/'/g,"\\'")}')"
@@ -989,7 +988,7 @@ async function fcSaveAFSA() {
   const url  = document.getElementById('fc_afsaUrl')?.value?.trim();
   if (!date || !num) { showToast('⚠ Укажите дату и номер письма', 'red'); return; }
   if (await _persistFirstClosingFields({ afsaNotifDate: date, afsaNotifNum: num, afsaConfirmUrl: url || '' })) {
-    showToast('✅ Данные AFSA Notification сохранены', 'green');
+    showToast('✅ Данные уведомления регулятора сохранены', 'green');
     renderClosing();
   }
 }
@@ -1924,7 +1923,7 @@ async function signGpConclusion(id) {
 function openGpConclusionDocument(id) {
   const d = deals.find(x => x.id === id);
   if (!d) return;
-  const fp = FUND_PARAMS;
+  const fp = fundParamsFor(d.fundId);
   const fund = funds.find(f => f.id === d.fundId);
   const conclusions = d.ddConclusions || [];
 
@@ -1957,7 +1956,7 @@ function openGpConclusionDocument(id) {
     <div>
       <div class="logo-name">${fp.gp}</div>
       <div class="logo-sub">General Partner · ${fp.name}</div>
-      <div class="logo-sub">AFSA: ${fp.license}</div>
+      <div class="logo-sub">Лицензия: ${fp.license}</div>
     </div>
     <div class="ref-block">
       <div><b>Фонд:</b> ${fund ? fund.shortName : '—'}</div>
@@ -2006,7 +2005,7 @@ function openGpConclusionDocument(id) {
   </div>
 
   <div class="footer">
-    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · AFSA: ${fp.license}<br>
+    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · Лицензия: ${fp.license}<br>
     STRICTLY CONFIDENTIAL — Только для внутреннего использования и Инвестиционного комитета.
   </div>
   `;

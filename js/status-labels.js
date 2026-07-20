@@ -7,7 +7,7 @@
 //
 // Deliberately NOT included here: finance-instrument/jargon terms
 // (Equity, SAFE, M&A, IPO, fund-type taxonomy), job titles (CEO, CFO,
-// Compliance Officer), and AFSA/CF&A classification terms (Advising,
+// Compliance Officer), and CF&A classification terms (Advising,
 // Arranging, Professional Client, Qualified Investor) — these read as
 // established English finance vocabulary elsewhere in the app, not as
 // generic UI chrome, so translating them would be a product judgment

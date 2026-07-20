@@ -2,9 +2,9 @@
 // catalogue now that `roles` is a real per-tenant table (server/db.js).
 const { db, at } = require('./db');
 
-// Fixed IC voting composition (Constitution Section 7: 2 GP Reps + 1
-// Independent Member + 1 LP Rep) — the 4 seats themselves are a regulatory
-// constant, not configurable; only WHICH role occupies each seat is.
+// Fixed IC voting composition (2 GP Reps + 1 Independent Member + 1 LP Rep)
+// — the 4 seats themselves are a regulatory constant, not configurable;
+// only WHICH role occupies each seat is.
 const IC_SEATS = ['GP Rep 1', 'GP Rep 2', 'Independent Member', 'LP Rep'];
 
 function getRoleRowByCode(tenantId, code) {

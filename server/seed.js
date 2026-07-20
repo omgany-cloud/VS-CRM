@@ -25,13 +25,13 @@ const SEED_EMAIL = 'admin@turancapital.kz';
 const SEED_PASSWORD = 'TuranDemo2025!';
 
 const FUNDS = [
-  { name: 'Turan Capital Fund I LP', shortName: 'TCF-I', gp: 'Golden Leaves Ltd', license: 'AFSA-A-LA-2024-0038',
+  { name: 'Turan Capital Fund I LP', shortName: 'TCF-I', gp: 'Golden Leaves Ltd', license: 'LA-2024-0038',
     type: 'Private Equity', currency: 'USD', targetSize: 50, vintage: 2024, status: 'active',
     phase: 'Investment Period', phaseYear: 2, fundTerm: 10, investmentPeriod: 5, managementFee: 2,
     carriedInterest: 20, preferredReturn: 8, targetIRR: '20–25%', targetMOIC: '2.5–3.5x',
     description: 'Первый фонд под управлением Golden Leaves Ltd. Инвестирует в компании среднего бизнеса в Казахстане и ЦА.',
     color: '#3b82f6', icon: 'fa-landmark', nav: 48 },
-  { name: 'Turan Capital Fund II LP', shortName: 'TCF-II', gp: 'Golden Leaves Ltd', license: 'AFSA-A-LA-2025-XXXX',
+  { name: 'Turan Capital Fund II LP', shortName: 'TCF-II', gp: 'Golden Leaves Ltd', license: 'LA-2025-XXXX',
     type: 'Growth Equity', currency: 'USD', targetSize: 100, vintage: 2026, status: 'fundraising',
     phase: 'Fundraising', phaseYear: 0, fundTerm: 10, investmentPeriod: 5, managementFee: 2,
     carriedInterest: 20, preferredReturn: 8, targetIRR: '22–28%', targetMOIC: '3.0–4.0x',
@@ -72,7 +72,7 @@ const LP_RECORDS = [
     distributions:0, fundClass:'A', ownershipPct:24.46, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-10-20', kycNextReview:'2026-10-20', riskRating:'Low', admissionDate:'2024-11-05', saNumber:'SA-2024-001',
     afsaNotified:true, lpacMember:true, status:'Active', exitDate:null,
-    notes:'Полный пакет KYC получен и проверен. AML — чисто. Ownership >20% — AFSA уведомлён.', obClientId:null,
+    notes:'Полный пакет KYC получен и проверен. AML — чисто. Ownership >20% — регулятор уведомлён.', obClientId:null,
     rm:'Асанов Б.К. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
     pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-002', name:'Отбасы Family Office', type:'Corporate', lpType:'Family Office', country:'Казахстан',
@@ -90,7 +90,7 @@ const LP_RECORDS = [
     distributions:0, fundClass:'A', ownershipPct:30.58, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-10-18', kycNextReview:'2026-10-18', riskRating:'Low', admissionDate:'2024-11-01', saNumber:'SA-2024-003',
     afsaNotified:true, lpacMember:true, status:'Active', exitDate:null,
-    notes:'Крупнейший LP фонда, институциональный инвестор. Ownership >20% — AFSA уведомлён.', obClientId:null,
+    notes:'Крупнейший LP фонда, институциональный инвестор. Ownership >20% — регулятор уведомлён.', obClientId:null,
     rm:'Асанов Б.К. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
     pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-004', name:'Eurasia Bridge Partners LLP', type:'Corporate', lpType:'Institution', country:'Казахстан',
@@ -99,7 +99,7 @@ const LP_RECORDS = [
     distributions:0, fundClass:'A', ownershipPct:22.94, professionalClient:'Deemed Professional Client', kycStatus:'Одобрен',
     kycDate:'2024-11-20', kycNextReview:'2026-11-20', riskRating:'Low', admissionDate:'2024-12-01', saNumber:'SA-2024-004',
     afsaNotified:false, lpacMember:true, status:'Active', exitDate:null,
-    notes:'KYC пройден без замечаний. Ownership >20% — уведомление AFSA ожидается (10 р.д.).', obClientId:null,
+    notes:'KYC пройден без замечаний. Ownership >20% — уведомление регулятора ожидается (10 р.д.).', obClientId:null,
     rm:'Жаксыбекова А.Н. (RM)', identityVerified:true, proofAddressVerified:true, sofVerified:true, taxIdVerified:true,
     pepCheckCleared:true, amlScreeningCleared:true, uboVerified:true },
   { registerId:'LP-2024-005', name:'Нурланов Ерлан Тимурович', type:'Individual', lpType:'HNWI', country:'Казахстан',
@@ -724,7 +724,7 @@ const OB_TASK_TEMPLATES_CFA = [
   { num: '1.1', title: 'Conflict Pre-Check (Go/No-Go)',  phase: 1, role: 'RM', dayEnd: 2,  formKey: 'conflict_precheck' },
   { num: '2.1', title: 'Documentation Collection',       phase: 2, role: 'RM', dayEnd: 5,  formKey: 'doc_collection' },
   { num: '2.2', title: 'Client Due Diligence Outcome',   phase: 2, role: 'CO', dayEnd: 7,  formKey: 'dd_outcome' },
-  { num: '3.1', title: 'Client Classification (AFSA)',   phase: 3, role: 'RM', dayEnd: 9,  formKey: 'classification' },
+  { num: '3.1', title: 'Client Classification',          phase: 3, role: 'RM', dayEnd: 9,  formKey: 'classification' },
   { num: '3.2', title: 'Suitability / Appropriateness',  phase: 3, role: 'RM', dayEnd: 10, formKey: 'suitability' },
   { num: '4.1', title: 'Draft & Sign Engagement Letter', phase: 4, role: 'RM', dayEnd: 13, formKey: 'engagement_letter' },
   { num: '5.1', title: 'Client Activation',              phase: 5, role: 'RM', dayEnd: 15, formKey: 'activation' },
@@ -1145,8 +1145,8 @@ function seedConflictApprovals(tenantId) {
 
 // NOTE: same lesson as DEALS/PORTFOLIO/onboarding above — js/modules.js's
 // `icMemos` array has since been emptied out, so it's hardcoded here.
-// IC voting composition matches Constitution Section 7: 2 GP representatives,
-// 1 Independent Member, 1 LP Representative (4 voting members; quorum = 3
+// IC voting composition: 2 GP representatives, 1 Independent Member,
+// 1 LP Representative (4 voting members; quorum = 3
 // incl. the Independent Member). The Risk Manager sits outside this vote —
 // an independent veto/conclusion per Section 7.7 (Template 3), not a vote.
 const IC_MEMOS = [
@@ -1219,7 +1219,7 @@ const IC_MEMOS = [
       { role: 'LP Rep', name: 'Байжанова Динара Сериковна', vote: 'approve', comment: 'Видит потенциал в региональной экспансии.' },
     ],
     quorumMet: false, riskVeto: false, riskConclusion: null,
-    resolution: 'Инвестиция отклонена (2 против, 1 за). Независимый член на заседании отсутствовал — формально кворум по Constitution Section 7 не набран, решение носит предварительный характер. Возможен возврат к рассмотрению через 12 месяцев (не ранее 2026-06-01) при расширении географии и повторном созыве IC с участием независимого члена.' },
+    resolution: 'Инвестиция отклонена (2 против, 1 за). Независимый член на заседании отсутствовал — формально кворум не набран, решение носит предварительный характер. Возможен возврат к рассмотрению через 12 месяцев (не ранее 2026-06-01) при расширении географии и повторном созыве IC с участием независимого члена.' },
 ];
 
 function seedIcMemos(tenantId, fundId) {
@@ -1310,8 +1310,8 @@ function seedWorkflowInstances(tenantId) {
 
 // Replaces the old js/data.js `reportSchedule` static array (no backend,
 // status could never actually change from the UI). Same quarterly/annual
-// financial-report entries as before, plus the fixed AFSA compliance set
-// (AML/CTF, Annual Compliance) — Breach Notification isn't seeded since
+// financial-report entries as before, plus the fixed regulatory compliance
+// set (AML/CTF, Annual Compliance) — Breach Notification isn't seeded since
 // it's only ever created ad hoc if a real breach happens.
 const AFSA_REPORTS = [
   { reportType: 'Quarterly', period: 'Q4 2024', deadline: '2025-02-14', status: 'Отправлен', resp: 'CFO' },

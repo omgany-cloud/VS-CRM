@@ -19,8 +19,8 @@ let ROLES = {
 
 let ROLE_CODES = Object.keys(ROLES);
 
-// The 4 fixed IC voting seats (Constitution Section 7) — a regulatory
-// constant, not configurable. Only which role occupies each seat is.
+// The 4 fixed IC voting seats — a regulatory constant, not configurable.
+// Only which role occupies each seat is.
 const IC_SEATS = ['GP Rep 1', 'GP Rep 2', 'Independent Member', 'LP Rep'];
 
 function roleLabel(code) {

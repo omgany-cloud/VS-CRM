@@ -201,7 +201,7 @@ async function handleFileUpload(input) {
     const sizeKB = Math.round(file.size / 1024);
     try {
       // Real binary storage (same /api/uploads infra as Capital Call/
-      // Portfolio/AFSA), not just a metadata record — the size/date
+      // Portfolio/regulatory reports), not just a metadata record — the size/date
       // fields below are still stored for display, but documentUrl is
       // what actually makes the file downloadable/previewable again.
       const uploadedFile = await uploadFile(file);

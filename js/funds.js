@@ -1,6 +1,5 @@
 // ============================================================
 //  funds.js — Multi-Fund Management
-//  Golden Leaves Ltd — GP
 //  Populated at runtime by js/api-auth.js via GET /api/funds
 //  (see server/index.js) — no hardcoded demo funds here anymore.
 // ============================================================
@@ -11,6 +10,37 @@ let fundModalEditId = null; // null = creating a new fund, else editing this fun
 
 function getActiveFund() {
   return funds.find(f => f.id === activeFundId) || funds[0];
+}
+
+// For documents about a specific record (an LP, a capital call...) that
+// must reflect THAT record's fund/GP details — not whichever fund happens
+// to be switched to in the UI right now. Falls back to the active fund so
+// callers with a stale/missing fundId still render something sane rather
+// than crashing on undefined.
+function getFundById(id) {
+  return funds.find(f => f.id === id) || getActiveFund();
+}
+
+// Document generators (js/lp-register.js, js/modules.js) read GP-identity/
+// banking fields off an `fp` object shaped like the old hardcoded
+// FUND_PARAMS constant (js/data.js). This resolves it from the real fund
+// a given record belongs to, falling back to FUND_PARAMS field-by-field
+// for anything the fund doesn't have filled in yet (still-null new columns
+// on an existing fund, or fund-terms fields this pass didn't migrate) —
+// so a document never renders a blank/null GP address instead of at least
+// a sensible placeholder.
+const FUND_PARAMS_OVERRIDABLE_KEYS = [
+  'name', 'gp', 'license', 'gpCEO', 'gpTitle', 'gpAddress', 'gpBIN',
+  'gpBankName', 'gpBIC', 'gpIBANkzt', 'gpIBANusd',
+  'managementFee', 'carriedInterest', 'preferredReturn', 'fundTerm',
+];
+function fundParamsFor(fundId) {
+  const f = getFundById(fundId) || {};
+  const out = { ...FUND_PARAMS };
+  for (const k of FUND_PARAMS_OVERRIDABLE_KEYS) {
+    if (f[k] != null && f[k] !== '') out[k] = f[k];
+  }
+  return out;
 }
 
 function switchFund(id) {
@@ -90,7 +120,9 @@ function updateFundBranding(f) {
 // Opens the "Add Fund" modal in create mode.
 function openNewFundModal() {
   fundModalEditId = null;
-  ['nf_name','nf_size','nf_license','nf_desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['nf_name','nf_gp','nf_size','nf_license','nf_desc',
+   'nf_gpCEO','nf_gpTitle','nf_gpAddress','nf_gpBIN','nf_gpBankName','nf_gpBIC','nf_gpIBANkzt','nf_gpIBANusd',
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const currEl = document.getElementById('nf_currency'); if (currEl) currEl.value = 'USD';
   const mfeeEl = document.getElementById('nf_mfee'); if (mfeeEl) mfeeEl.value = 2;
   const carryEl = document.getElementById('nf_carry'); if (carryEl) carryEl.value = 20;
@@ -108,6 +140,7 @@ function openEditFundModal(id) {
   fundModalEditId = id;
   const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val != null ? val : ''; };
   set('nf_name', f.name);
+  set('nf_gp', f.gp);
   set('nf_type', f.type);
   set('nf_currency', f.currency || 'USD');
   set('nf_size', f.targetSize);
@@ -117,6 +150,14 @@ function openEditFundModal(id) {
   set('nf_mfee', f.managementFee);
   set('nf_carry', f.carriedInterest);
   set('nf_pref', f.preferredReturn);
+  set('nf_gpCEO', f.gpCEO);
+  set('nf_gpTitle', f.gpTitle);
+  set('nf_gpAddress', f.gpAddress);
+  set('nf_gpBIN', f.gpBIN);
+  set('nf_gpBankName', f.gpBankName);
+  set('nf_gpBIC', f.gpBIC);
+  set('nf_gpIBANkzt', f.gpIBANkzt);
+  set('nf_gpIBANusd', f.gpIBANusd);
   const titleEl = document.getElementById('fundModalTitleText');
   if (titleEl) titleEl.textContent = 'Редактировать фонд';
   const delBtn = document.getElementById('fundDeleteBtn');
@@ -128,6 +169,7 @@ function openEditFundModal(id) {
 
 async function saveFund() {
   const name     = document.getElementById('nf_name').value.trim();
+  const gp       = document.getElementById('nf_gp').value.trim() || '—';
   const type     = document.getElementById('nf_type').value;
   const currency = document.getElementById('nf_currency').value || 'USD';
   const size    = parseFloat(document.getElementById('nf_size').value) || 0;
@@ -137,6 +179,14 @@ async function saveFund() {
   const mfee    = parseFloat(document.getElementById('nf_mfee').value) || 2;
   const carry   = parseFloat(document.getElementById('nf_carry').value) || 20;
   const pref    = parseFloat(document.getElementById('nf_pref').value) || 8;
+  const gpCEO       = document.getElementById('nf_gpCEO').value.trim();
+  const gpTitle     = document.getElementById('nf_gpTitle').value.trim();
+  const gpAddress   = document.getElementById('nf_gpAddress').value.trim();
+  const gpBIN       = document.getElementById('nf_gpBIN').value.trim();
+  const gpBankName  = document.getElementById('nf_gpBankName').value.trim();
+  const gpBIC       = document.getElementById('nf_gpBIC').value.trim();
+  const gpIBANkzt   = document.getElementById('nf_gpIBANkzt').value.trim();
+  const gpIBANusd   = document.getElementById('nf_gpIBANusd').value.trim();
 
   if (!name) { alert('Введите название фонда'); return; }
 
@@ -146,7 +196,7 @@ async function saveFund() {
   const payload = {
     name,
     shortName: name.split(' ').map(w => w[0]).join('').substring(0,6).toUpperCase(),
-    gp: 'Golden Leaves Ltd',
+    gp,
     license,
     type,
     targetSize: size,
@@ -165,6 +215,7 @@ async function saveFund() {
     description: desc,
     color: colors[funds.length % colors.length],
     icon: 'fa-building',
+    gpCEO, gpTitle, gpAddress, gpBIN, gpBankName, gpBIC, gpIBANkzt, gpIBANusd,
   };
 
   try {

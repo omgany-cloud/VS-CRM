@@ -490,8 +490,8 @@ CREATE TABLE IF NOT EXISTS engagements (
 -- Escalation Matrix (COI Addendum Section E.1): who decided/approved a
 -- given conflict, classification, or engagement, at what risk level, and
 -- whether/where it was escalated. One client or engagement can accumulate
--- many of these over time — this is the audit trail the regulator (AFSA)
--- would expect to see, rather than a single free-text status field.
+-- many of these over time — this is the audit trail the regulator would
+-- expect to see, rather than a single free-text status field.
 CREATE TABLE IF NOT EXISTS conflict_approvals (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id          INTEGER NOT NULL REFERENCES tenants(id),
@@ -556,11 +556,11 @@ CREATE INDEX IF NOT EXISTS idx_engagements_deal_ref ON engagements(deal_ref);
 -- (Investment & Harvesting Package, Template 4).
 --
 -- quorum_met / risk_veto / risk_conclusion capture two distinct process
--- facts from the same package that a bare vote count can't: quorum per
--- Constitution Section 7 requires >=3 voting members INCLUDING at least
+-- facts from the same package that a bare vote count can't: the fund's
+-- governing documents require >=3 voting members INCLUDING at least
 -- one Independent Member (not just >=3 votes present), and the Risk
 -- Manager holds an independent veto separate from the IC vote itself
--- (Constitution Section 7.7, Template 3 "Risk Manager Conclusion").
+-- (Template 3 "Risk Manager Conclusion").
 CREATE TABLE IF NOT EXISTS ic_memos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
@@ -667,7 +667,7 @@ CREATE TABLE IF NOT EXISTS roles (
   -- to CFO/CEO by default, same segregation-of-duties reasoning as
   -- cc_approve and aml_clear.
   payment_confirm   INTEGER NOT NULL DEFAULT 0,
-  -- Marking an AFSA filing as actually submitted is a regulatory
+  -- Marking a regulatory filing as actually submitted is a regulatory
   -- assertion ("this was really filed with the regulator"), same
   -- reasoning as payment_confirm — restricted by default to the roles
   -- who'd realistically be the one filing (CFO/CEO for financial
@@ -742,7 +742,7 @@ CREATE TABLE IF NOT EXISTS workflow_instances (
 );
 CREATE INDEX IF NOT EXISTS idx_workflow_instances_tenant ON workflow_instances(tenant_id);
 
--- AFSA regulatory filings (quarterly/annual financial reports + the fixed
+-- Regulatory filings (quarterly/annual financial reports + the fixed
 -- compliance set: AML/CTF report, breach notifications, annual compliance
 -- report). Replaces the old js/data.js reportSchedule static array —
 -- that had no backend at all, so a report's status could never actually
@@ -861,6 +861,14 @@ if (!columnExists('portfolio', 'archived_by')) db.exec("ALTER TABLE portfolio AD
 // portal (no fallback to anything guessable) until staff generates one —
 // see PUT /api/portfolio/:id/portal-password (server/index.js).
 if (!columnExists('portfolio', 'portal_password_hash')) db.exec("ALTER TABLE portfolio ADD COLUMN portal_password_hash TEXT");
+// Management company (GP) identity/banking details for this fund — used
+// to fill in generated LP-facing documents (welcome letters, capital call
+// notices, capital account statements). Per-fund rather than per-tenant
+// since a management company can run multiple funds under different GP
+// entities/accounts; `gp` and `license` already existed as columns.
+for (const col of ['gp_ceo', 'gp_title', 'gp_address', 'gp_bin', 'gp_bank_name', 'gp_bic', 'gp_iban_kzt', 'gp_iban_usd']) {
+  if (!columnExists('funds', col)) db.exec(`ALTER TABLE funds ADD COLUMN ${col} TEXT`);
+}
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

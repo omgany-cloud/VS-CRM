@@ -3,7 +3,7 @@
 //  Real cross-module aggregator: every field in the app backed by the
 //  shared /api/uploads infrastructure (pickFile()+uploadFile(), or
 //  docUploadBtn()) — deals, portfolio, first closing, capital calls,
-//  AFSA reports, onboarding contracts/amendments — plus the Документы
+//  regulatory reports, onboarding contracts/amendments — plus the Документы
 //  library itself. Every entry here is a real, downloadable file, not
 //  a metadata placeholder.
 // ============================================================
@@ -85,7 +85,7 @@ async function vaultCollectAllFiles() {
     const goTo = () => navigateTo('closing');
     addPending(fc.boardResolutionUrl, 'Board Resolution', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
     addPending(fc.closingCertUrl, 'Closing Certificate', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
-    addPending(fc.afsaConfirmUrl, 'AFSA Confirmation', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
+    addPending(fc.afsaConfirmUrl, 'Regulator Confirmation', 'First Closing', '#8b5cf6', 'fa-file-signature', label, goTo);
   }));
 
   vaultSafe('capitalCalls', () => (typeof capitalCallsLog !== 'undefined' ? capitalCallsLog : []).forEach(cc => {
@@ -94,7 +94,7 @@ async function vaultCollectAllFiles() {
   }));
 
   vaultSafe('afsaReports', () => (typeof afsaReports !== 'undefined' ? afsaReports : []).forEach(r => {
-    addPending(r.documentUrl, `${r.period} (${r.reportType})`, 'AFSA Отчётность', '#0ea5e9', 'fa-landmark', r.period, () => navigateTo('calendar'));
+    addPending(r.documentUrl, `${r.period} (${r.reportType})`, 'Отчётность регулятору', '#0ea5e9', 'fa-landmark', r.period, () => navigateTo('calendar'));
   }));
 
   vaultSafe('obClients', () => (typeof obClients !== 'undefined' ? obClients : []).forEach(c => {

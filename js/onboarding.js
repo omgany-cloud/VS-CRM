@@ -22,17 +22,17 @@ let obClients = [];  // populated at runtime by js/api-auth.js via GET /api/onbo
 
 // ── 7 задач онбординга: шаблоны по направлению ─────────────
 // CF&A: Corporate Finance & Advisory
-//   Услуги: Advising (AFSA COBS 3.2 Suitability) | Arranging (AFSA COBS 3.3 Appropriateness)
+//   Услуги: Advising (Suitability) | Arranging (Appropriateness)
 //   Клиент: физлицо или юрлицо, получающее консалтинговые услуги
 // FM: Fund Management (управление фондом)
 //   Клиент: Limited Partner (LP), инвестирует в фонд
-//   НЕТ Suitability/Appropriateness (AFSA COBS не применяется к LP onboarding в том же объёме)
+//   НЕТ Suitability/Appropriateness (регуляторные COBS-правила не применяются к LP onboarding в том же объёме)
 //   Вместо Engagement Letter → Subscription Agreement
 const OB_TASK_TEMPLATES_CFA = [
   { num: '1.1', title: 'Conflict Pre-Check (Go/No-Go)',  phase: 1, role: 'RM', dayStart: 1,  dayEnd: 2,  formKey: 'conflict_precheck' },
   { num: '2.1', title: 'Documentation Collection',       phase: 2, role: 'RM', dayStart: 3,  dayEnd: 5,  formKey: 'doc_collection' },
   { num: '2.2', title: 'Client Due Diligence Outcome',   phase: 2, role: 'CO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
-  { num: '3.1', title: 'Client Classification (AFSA)',   phase: 3, role: 'RM', dayStart: 8,  dayEnd: 9,  formKey: 'classification' },
+  { num: '3.1', title: 'Client Classification',          phase: 3, role: 'RM', dayStart: 8,  dayEnd: 9,  formKey: 'classification' },
   { num: '3.2', title: 'Suitability / Appropriateness',  phase: 3, role: 'RM', dayStart: 9,  dayEnd: 10, formKey: 'suitability' },
   { num: '4.1', title: 'Draft & Sign Engagement Letter', phase: 4, role: 'RM', dayStart: 11, dayEnd: 13, formKey: 'engagement_letter' },
   { num: '5.1', title: 'Client Activation',              phase: 5, role: 'RM', dayStart: 14, dayEnd: 15, formKey: 'activation' },
@@ -4885,7 +4885,7 @@ function openNewObClientModal(editId) {
     // CF&A fields
     + '<div id="obNewFieldsCFA" style="display:' + (isFM ? 'none' : 'block') + ';margin-top:12px">'
     +   '<div style="font-size:11px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-top:1px solid #2a3448;padding-top:10px">'
-    +     '<i class="fas fa-briefcase" style="margin-right:5px"></i>CF&A — тип услуги и классификация AFSA'
+    +     '<i class="fas fa-briefcase" style="margin-right:5px"></i>CF&A — тип услуги и классификация клиента'
     +   '</div>'
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
     +     '<div>'
@@ -4898,7 +4898,7 @@ function openNewObClientModal(editId) {
     +       '<div style="font-size:10px;color:#5a6b8a;margin-top:3px">Advising → Suitability · Arranging → Appropriateness</div>'
     +     '</div>'
     +     '<div>'
-    +       '<label style="' + labelStyle + '">Классификация AFSA</label>'
+    +       '<label style="' + labelStyle + '">Классификация клиента</label>'
     +       '<select id="ob_classificationCFA" style="' + inputStyle + '">'
     +         '<option value="Professional Client"' + ((!client || client.classification === 'Professional Client') ? ' selected' : '') + '>Professional Client</option>'
     +         '<option value="Market Counterparty"' + ((client && client.classification === 'Market Counterparty') ? ' selected' : '') + '>Market Counterparty</option>'
@@ -4925,7 +4925,7 @@ function openNewObClientModal(editId) {
     +     '<div style="grid-column:1/-1">'
     +       '<label style="' + labelStyle + '">Commitment (' + currencyForFundId(activeFundId) + ') *</label>'
     +       '<input type="number" id="ob_commitment" value="' + ((client && client.commitment) || '') + '" placeholder="1000000" style="' + inputStyle + '" />'
-    +       '<div style="font-size:10px;color:#5a6b8a;margin-top:3px">Минимум $500K для Qualified Investor по AFSA</div>'
+    +       '<div style="font-size:10px;color:#5a6b8a;margin-top:3px">Минимум $500K для Qualified Investor</div>'
     +     '</div>'
     +   '</div>'
     + '</div>'
@@ -6434,7 +6434,7 @@ function chineseWallCheck(client) {
       allowed: false,
       reason: `Ваша роль (${roleLabel(currentUserRole())}) не имеет доступа к направлению FM. ` +
               `Доступ к клиентам направления FM ограничен Китайской стеной. ` +
-              `(Требование AFSA: информационная изоляция FM и CF&A)`
+              `(Регуляторное требование: информационная изоляция FM и CF&A)`
     };
   }
 

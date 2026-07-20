@@ -1218,11 +1218,11 @@ app.post('/api/afsa-reports', requireAuth, requireInternal, requirePermission('a
 
 app.put('/api/afsa-reports/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM afsa_reports WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
-  if (!existing) return res.status(404).json({ error: 'AFSA report not found in this tenant' });
+  if (!existing) return res.status(404).json({ error: 'Regulatory report not found in this tenant' });
   const b = req.body || {};
   if (b.status === 'Отправлен' && existing.status !== 'Отправлен') {
     if (!req.user.permissions.afsaSubmit) {
-      return res.status(403).json({ error: 'Forbidden: only CEO/CFO/Compliance Officer/MLRO may mark an AFSA report as submitted' });
+      return res.status(403).json({ error: 'Forbidden: only CEO/CFO/Compliance Officer/MLRO may mark a regulatory report as submitted' });
     }
     if (!b.documentUrl || !b.documentUrl.trim()) {
       return res.status(400).json({ error: 'documentUrl (the filed report itself) is required to mark as submitted' });
@@ -1811,16 +1811,16 @@ function deriveIcResolution(memo, votes) {
   const rejectN = votes.filter(v => v.vote === 'reject').length;
   const deferN = votes.filter(v => v.vote === 'defer').length;
   // Majority alone must never resolve early — only once everyone has voted,
-  // or once quorum (which requires the Independent Member's actual vote per
-  // Constitution Section 7) is met, does a decisive majority finalize the
-  // memo. Otherwise 3 non-Independent-Member votes could lock the memo
+  // or once quorum (which requires the Independent Member's actual vote) is
+  // met, does a decisive majority finalize the memo. Otherwise 3
+  // non-Independent-Member votes could lock the memo
   // before that mandatory seat ever gets to vote. 'defer' (request
   // additional/external DD before deciding) only resolves via allVoted,
   // same as reject — no early-exit fast path for it either.
   if (!(allVoted || (quorumMet && approveN > votes.length / 2))) {
     return { quorumMet, status: 'pending', resolution: memo.resolution };
   }
-  const quorumNote = quorumMet ? '' : ' Кворум по Constitution Section 7 не набран — решение носит предварительный характер.';
+  const quorumNote = quorumMet ? '' : ' Кворум не набран — решение носит предварительный характер.';
   let status, resolution;
   if (deferN > approveN && deferN > rejectN) {
     status = 'deferred';

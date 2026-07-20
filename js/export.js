@@ -1,7 +1,6 @@
 // ============================================================
 //  export.js — Excel Export Module
-//  Golden Leaves Ltd / Turan Capital Fund LP
-//  AFSA-compliant reports via SheetJS (xlsx)
+//  Regulator-compliant reports via SheetJS (xlsx)
 //  Generates: LP Register, KYC/AML, Capital Calls, Portfolio,
 //             Deals, CF&A Clients, Full CRM dump
 // ============================================================
@@ -76,7 +75,7 @@ function downloadExcel(sheets, filename) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   1. LP REGISTER — Реестр инвесторов (AFSA Rule 8.3)
+   1. LP REGISTER — Реестр инвесторов
 ═══════════════════════════════════════════════════════════ */
 function exportLPRegister() {
   const header = [
@@ -125,7 +124,7 @@ function exportLPRegister() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   2. KYC/AML REPORT — Статус KYC всех LP (AFSA AML Rules)
+   2. KYC/AML REPORT — Статус KYC всех LP
 ═══════════════════════════════════════════════════════════ */
 function exportKYCAML() {
   const header = [
@@ -321,23 +320,23 @@ function exportCFAClients() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   8. FUND OVERVIEW — Сводный отчёт по фонду (AFSA Annual)
+   8. FUND OVERVIEW — Сводный отчёт по фонду
 ═══════════════════════════════════════════════════════════ */
 function exportFundOverview() {
-  const p = FUND_PARAMS;
+  const p = fundParamsFor(activeFundId);
   const totalCommit  = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
   const totalCalled  = lpRegister.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
   const totalPortVal = portfolio.reduce((s, p) => s + (p.value || 0), 0);
   const totalInvest  = portfolio.reduce((s, p) => s + (p.invested || 0), 0);
 
   const fundInfo = [
-    ['TURAN CAPITAL FUND — ОБЗОР ФОНДА'],
+    [`${p.name} — ОБЗОР ФОНДА`],
     ['Сформировано:', new Date().toLocaleDateString('ru-RU')],
     [],
     ['ПАРАМЕТРЫ ФОНДА'],
     ['Наименование фонда',       p.name],
     ['Генеральный партнёр',      p.gp],
-    ['Лицензия AFSA',            p.license],
+    ['Лицензия',                 p.license],
     ['Целевой размер фонда',     fmtMoney(p.targetSize)],
     ['Мин. commitment LP',       fmtMoney(p.minCommitment)],
     ['Management Fee',           fmtPct(p.managementFee)],
@@ -380,9 +379,10 @@ function exportFundOverview() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   9. AML REGISTER — Реестр AML проверок (AFSA AML Rules 5-6)
+   9. AML REGISTER — Реестр AML проверок
 ═══════════════════════════════════════════════════════════ */
 function exportAMLRegister() {
+  const fp = fundParamsFor(activeFundId);
   const lpHeader = [
     '№', 'Наименование', 'Тип', 'Страна', 'AML Статус',
     'PEP Check', 'Санкционный скрининг', 'Source of Funds', 'UBO', 'Дата проверки', 'Комментарий'
@@ -414,7 +414,7 @@ function exportAMLRegister() {
   const summaryData = [
     ['AML REGISTER — СВОДКА'],
     ['Дата отчёта', new Date().toLocaleDateString('ru-RU')],
-    ['Лицензия AFSA', FUND_PARAMS.license],
+    ['Лицензия', fp.license],
     [],
     ['LP — AML прошли', lpRegister.filter(lp => lp.amlScreeningCleared).length],
     ['LP — AML ожидает', lpRegister.filter(lp => !lp.amlScreeningCleared).length],
@@ -438,6 +438,7 @@ function exportAMLRegister() {
        (COI Addendum Section E / GL-ONB-CF&A-001 Section 4.7)
 ═══════════════════════════════════════════════════════════ */
 function exportConflictApprovals() {
+  const fp = fundParamsFor(activeFundId);
   const header = [
     '№', 'Клиент', 'Тип конфликта', 'Deal Ref', 'Уровень риска', 'Fee',
     'Кто решает', 'Эскалировано на', 'Срок рассмотрения', 'Статус',
@@ -457,7 +458,7 @@ function exportConflictApprovals() {
   const summaryData = [
     ['КОНФЛИКТЫ / COI РЕЕСТР — DECISION & ESCALATION MATRIX'],
     ['Дата отчёта', new Date().toLocaleDateString('ru-RU')],
-    ['Лицензия AFSA', FUND_PARAMS.license],
+    ['Лицензия', fp.license],
     [],
     ['Всего решений в реестре', conflictApprovals.length],
     ['На рассмотрении', conflictApprovals.filter(a => a.status === 'Pending').length],
@@ -473,13 +474,14 @@ function exportConflictApprovals() {
 }
 
 function exportFullCRM() {
+  const fp = fundParamsFor(activeFundId);
   const genDate = new Date().toLocaleDateString('ru-RU', {
     day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
   const coverData = [
-    ['TURAN CAPITAL FUND LIMITED PARTNERSHIP'],
-    ['Генеральный партнёр: Golden Leaves Ltd'],
-    ['Лицензия AFSA: ' + FUND_PARAMS.license],
+    [fp.name],
+    ['Генеральный партнёр: ' + fp.gp],
+    ['Лицензия: ' + fp.license],
     [''],
     ['ПОЛНЫЙ ЭКСПОРТ CRM'],
     ['Сформирован:', genDate],
@@ -494,7 +496,7 @@ function exportFullCRM() {
     ['7. AML Register — реестр AML проверок'],
     ['8. Conflicts — Decision & Escalation Matrix (COI реестр)'],
     [''],
-    ['Предназначен для регуляторной отчётности AFSA,'],
+    ['Предназначен для регуляторной отчётности,'],
     ['внутреннего аудита и отчётности перед LP.'],
   ];
 
@@ -558,9 +560,9 @@ function renderExportPage() {
       color: 'blue',
       title: 'LP Register',
       subtitle: 'Реестр всех инвесторов фонда',
-      desc: 'Список LP с commitment, capital called, статусом и контактами. Обязательный документ AFSA (Rule 8.3).',
+      desc: 'Список LP с commitment, capital called, статусом и контактами. Обязательный документ для регулятора.',
       fn: 'exportLPRegister()',
-      tag: 'AFSA',
+      tag: 'Регулятор',
     },
     {
       id: 'kyc',
@@ -578,7 +580,7 @@ function renderExportPage() {
       color: 'red',
       title: 'AML Register',
       subtitle: 'Реестр AML-проверок LP и CF&A',
-      desc: 'Полный AML-реестр: LP + клиенты CF&A. Enhanced DD, PEP, сводка нарушений. Требуется AFSA AML Rules 5–6.',
+      desc: 'Полный AML-реестр: LP + клиенты CF&A. Enhanced DD, PEP, сводка нарушений. Требуется по правилам AML регулятора.',
       fn: 'exportAMLRegister()',
       tag: 'AML',
     },
@@ -590,7 +592,7 @@ function renderExportPage() {
       subtitle: 'Decision & Escalation Matrix',
       desc: 'Реестр решений по конфликтам интересов: тип, риск, кто решал, дата. Включая эскалированные (CEO). COI Addendum Section E.',
       fn: 'exportConflictApprovals()',
-      tag: 'AFSA',
+      tag: 'Регулятор',
     },
     {
       id: 'cc',
@@ -598,7 +600,7 @@ function renderExportPage() {
       color: 'green',
       title: 'Capital Calls',
       subtitle: 'История Capital Call Notices',
-      desc: 'Все Capital Call уведомления: даты, суммы, статусы. Разбивка по LP. Приложение к отчёту AFSA.',
+      desc: 'Все Capital Call уведомления: даты, суммы, статусы. Разбивка по LP. Приложение к отчёту для регулятора.',
       fn: 'exportCapitalCalls()',
       tag: 'Finance',
     },
@@ -640,7 +642,7 @@ function renderExportPage() {
       subtitle: 'Сводный отчёт по фонду',
       desc: 'Параметры фонда, сводка по LP, NAV, capital calls — одним файлом. Для регулятора и ежегодного отчёта.',
       fn: 'exportFundOverview()',
-      tag: 'AFSA',
+      tag: 'Регулятор',
     },
     {
       id: 'full',
@@ -656,7 +658,7 @@ function renderExportPage() {
   ];
 
   const tagColor = {
-    'AFSA':       { bg: 'rgba(139,92,246,0.15)', color: '#a78bfa' },
+    'Регулятор':  { bg: 'rgba(139,92,246,0.15)', color: '#a78bfa' },
     'AML':        { bg: 'rgba(239,68,68,0.15)',  color: '#f87171' },
     'Finance':    { bg: 'rgba(34,197,94,0.15)',  color: '#4ade80' },
     'Investment': { bg: 'rgba(59,130,246,0.15)', color: '#60a5fa' },
@@ -671,7 +673,7 @@ function renderExportPage() {
     <div class="export-header">
       <div>
         <h2 class="export-title"><i class="fas fa-file-excel" style="color:#22c55e"></i> Экспорт отчётов</h2>
-        <p class="export-subtitle">Выгрузка данных CRM в Excel (.xlsx) для регулятора AFSA, внутреннего аудита и отчётности LP</p>
+        <p class="export-subtitle">Выгрузка данных CRM в Excel (.xlsx) для регулятора, внутреннего аудита и отчётности LP</p>
       </div>
       <button class="export-all-btn" onclick="exportFullCRM()">
         <i class="fas fa-download"></i> Скачать всё одним файлом
@@ -715,6 +717,6 @@ function renderExportPage() {
     <div class="export-footer-note">
       <i class="fas fa-info-circle"></i>
       Все файлы в формате <strong>.xlsx</strong> (Microsoft Excel). Открываются в Excel, Google Sheets, LibreOffice.
-      При загрузке файлов в формы AFSA используйте листы с пометкой <span style="color:#a78bfa">AFSA</span> и <span style="color:#f87171">AML</span>.
+      При загрузке файлов в формы регулятора используйте листы с пометкой <span style="color:#a78bfa">Регулятор</span> и <span style="color:#f87171">AML</span>.
     </div>`;
 }

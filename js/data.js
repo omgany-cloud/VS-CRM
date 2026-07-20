@@ -1,7 +1,6 @@
 ﻿// ============================================================
-//  Turan Capital Fund LP — Data Store
-//  General Partner: Golden Leaves Ltd
-//  License: AFSA-A-LA-2024-0038
+//  Data Store — fallback values for fields not yet filled in on the
+//  real fund (see js/funds.js's fundParamsFor()).
 // ============================================================
 
 const COLORS = [
@@ -21,7 +20,7 @@ const FUND_PARAMS = {
   gpCEO:    'Омирсериков Г.М.',
   gpCEOen:  'G.M. Omirserikov',
   gpTitle:  'SEO / Главный управляющий директор',
-  license:  'AFSA-A-LA-2024-0038',
+  license:  '—',
   // Registered address
   gpAddress:   'Республика Казахстан, Z05T8M2, г. Нур-Султан, район Есиль, ул. Гейдар Алиева 1, нп.1',
   gpAddressEn: 'Republic of Kazakhstan, Z05T8M2, Nur-Sultan, Yesil district, Heydar Aliyev Street 1, premises 1',

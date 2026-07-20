@@ -462,7 +462,7 @@ async function loadCapitalCallsFromApi() {
   }
 }
 
-/* ===== AFSA Regulatory Reports — backed by the real API =====
+/* ===== Regulatory Reports — backed by the real API =====
    Replaces the old static js/data.js `reportSchedule` array. */
 let afsaReports = [];
 async function loadAfsaReportsFromApi() {
@@ -473,8 +473,8 @@ async function loadAfsaReportsFromApi() {
     refreshComplianceCalendarIfActive();
     refreshPendingApprovalsBoardIfActive();
   } catch (err) {
-    console.error('Failed to load AFSA reports from API:', err);
-    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить отчётность AFSA из API: ' + err.message, 'red');
+    console.error('Failed to load regulatory reports from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить отчётность регулятора из API: ' + err.message, 'red');
   }
 }
 

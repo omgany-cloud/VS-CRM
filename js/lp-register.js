@@ -1,7 +1,5 @@
 ﻿// ============================================================
 //  LP Register + Capital Call Module + Unfunded Commitment
-//  Turan Capital Fund LP — Golden Leaves Ltd (GP)
-//  Конституция §3.8, §3.9, §3.6 | AFSA AIFC CIS Rules
 //  Version: 5.4
 // ============================================================
 
@@ -11,16 +9,15 @@
 
 /**
  * lpRegister[] — Official Register of Limited Partners
- * Per Constitution §3.8.2 — must contain: name, address,
- * commitment, admission date, % ownership, professional
- * client status, exit date (if applicable).
+ * Must contain: name, address, commitment, admission date,
+ * % ownership, professional client status, exit date (if applicable).
  * Retention: 6 years after LP exit.
  */
 let lpRegister = [];  // populated at runtime by js/api-auth.js via GET /api/lp (see server/index.js)
 
 /**
  * capitalCallsLog[] — Capital Call Journal
- * Per Constitution §3.9.1 — notice 10 business days before payment
+ * Notice 10 business days before payment.
  * Each CC has line items per LP (pro-rata)
  */
 let capitalCallsLog = [];  // populated at runtime by js/api-auth.js via GET /api/capital-calls (see server/index.js)
@@ -142,7 +139,7 @@ function renderLPRegisterPage() {
   // covers every fmtUSD(...) call below without touching each call site.
   const fmtUSD = (n) => fmtCurrency(n, currencyForFundId(activeFundId));
 
-  // AFSA triggers
+  // Regulator triggers
   const activeCount  = fundLps.filter(l => l.status === 'Active').length;
   const totalCommit  = fundLps.filter(l => l.status === 'Active').reduce((s, l) => s + l.commitment, 0);
   const totalCalled  = fundLps.filter(l => l.status === 'Active').reduce((s, l) => s + l.calledAmount, 0);
@@ -158,21 +155,21 @@ function renderLPRegisterPage() {
   });
 
   el.innerHTML = `
-    <!-- AFSA Triggers Alert -->
+    <!-- Regulator Triggers Alert -->
     ${custodianTrigger ? `
     <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <i class="fas fa-exclamation-triangle" style="color:#ef4444;font-size:18px;flex-shrink:0"></i>
       <div>
-        <div style="font-size:13px;font-weight:700;color:#ef4444">⚠ AFSA Custodian Trigger</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:2px">LP count = ${activeCount} / AUM = ${fmtUSD(totalCommit)} — Обязан назначить независимого Кастодиана в течение 90 дней (Constitution §7.1)</div>
+        <div style="font-size:13px;font-weight:700;color:#ef4444">⚠ Триггер по Кастодиану</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px">LP count = ${activeCount} / AUM = ${fmtUSD(totalCommit)} — Обязан назначить независимого Кастодиана в течение 90 дней</div>
       </div>
     </div>` : ''}
     ${afsaPending > 0 ? `
     <div style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <i class="fas fa-bell" style="color:#eab308;font-size:18px;flex-shrink:0"></i>
       <div>
-        <div style="font-size:13px;font-weight:700;color:#eab308">AFSA Уведомление требуется</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:2px">${afsaPending} LP с долей >20% — уведомление AFSA не отправлено (10 рабочих дней)</div>
+        <div style="font-size:13px;font-weight:700;color:#eab308">Уведомление регулятора требуется</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px">${afsaPending} LP с долей >20% — уведомление регулятору не отправлено (10 рабочих дней)</div>
       </div>
     </div>` : ''}
 
@@ -218,7 +215,7 @@ function renderLPRegisterPage() {
       <div style="font-size:12px;color:#94a3b8;flex:1">
         LP попадает в реестр <b style="color:#e2e8f0">автоматически</b> после завершения онбординга
         (<b style="color:#e2e8f0">Задача 5.1 — LP Activation</b>).
-        Прямое добавление в обход KYC/AML не допускается — Constitution §3.1, §8.
+        Прямое добавление в обход KYC/AML не допускается.
       </div>
       <button onclick="navigateTo('ob-clients')"
         style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0">
@@ -252,7 +249,7 @@ function renderLPRegisterPage() {
     <div class="card">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-book" style="color:#3b82f6;margin-right:6px"></i>Реестр ограниченных партнёров (LP Register)</span>
-        <span style="font-size:12px;color:#8a9bbf">${filtered.length} LP · Constitution §3.8.2 · Хранение 6 лет</span>
+        <span style="font-size:12px;color:#8a9bbf">${filtered.length} LP · Хранение 6 лет</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -268,7 +265,7 @@ function renderLPRegisterPage() {
               <th>KYC / Риск</th>
               <th>Prof. Client</th>
               <th>Дата вступления</th>
-              <th>AFSA</th>
+              <th>Регулятор</th>
               <th>Статус</th>
               <th style="text-align:center">Действия</th>
             </tr>
@@ -389,7 +386,7 @@ function openLPDetail(lpId) {
           <span style="font-size:17px;font-weight:800;color:#f1f5f9">${escapeHtml(lp.name)}</span>
           ${lpRegStatusBadge(lp.status)}
           ${lp.lpacMember ? '<span style="font-size:11px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);border-radius:6px;padding:2px 8px;font-weight:700">★ LPAC Member</span>' : ''}
-          ${lp.afsaNotified ? '<span style="font-size:11px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:2px 8px">AFSA ✓</span>' : ''}
+          ${lp.afsaNotified ? '<span style="font-size:11px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:2px 8px">Регулятор ✓</span>' : ''}
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8a9bbf">
           <span style="color:#8b5cf6;font-weight:700">${lp.registerId}</span>
@@ -440,7 +437,7 @@ function openLPDetail(lpId) {
         ['Дата вступления', lp.admissionDate],
         ['Fund Class',      'Class ' + (lp.fundClass||'—')],
         ['Доля в фонде',    fmtPctLP(lp.ownershipPct)],
-        ['AFSA (>20%)',     lp.ownershipPct > 20 ? (lp.afsaNotified ? '✅ Уведомлён' : '⚠ Ожидает') : 'N/A'],
+        ['Регулятор (>20%)', lp.ownershipPct > 20 ? (lp.afsaNotified ? '✅ Уведомлён' : '⚠ Ожидает') : 'N/A'],
         ['Contract №',      lp.contractNum || '—'],
       ].map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:8px 12px">
@@ -517,7 +514,7 @@ function openLPDetail(lpId) {
         ${lp.ownershipPct > 20 && !lp.afsaNotified ? `
         <button onclick="markAfsaNotified(${lp.id})"
           style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.3);color:#eab308;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
-          <i class="fas fa-bell"></i> Отметить AFSA уведомлён
+          <i class="fas fa-bell"></i> Отметить уведомление регулятора
         </button>` : ''}
         ${lp.status === 'Active' ? `
         <button onclick="setLPStatus(${lp.id},'Exited')"
@@ -552,7 +549,7 @@ async function markAfsaNotified(lpId) {
   lp.afsaNotified = true;
   try {
     await apiFetch(`/api/lp/${lpId}`, { method: 'PUT', body: JSON.stringify({ afsaNotified: true }) });
-    showToast(`✅ AFSA уведомлён — ${lp.name} (${lp.registerId})`, 'green');
+    showToast(`✅ Регулятор уведомлён — ${lp.name} (${lp.registerId})`, 'green');
   } catch (err) {
     lp.afsaNotified = false;
     showToast('⚠️ Не удалось сохранить: ' + err.message, 'red');
@@ -601,6 +598,7 @@ function openCapitalAccountStatement(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
   const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
+  const fp = fundParamsFor(lp.fundId);
 
   // Build full call history
   const ccHistory = capitalCallsLog.flatMap(cc =>
@@ -631,8 +629,8 @@ function openCapitalAccountStatement(lpId) {
     <!-- Statement Header -->
     <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #2a3448">
       <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Capital Account Statement</div>
-      <div style="font-size:18px;font-weight:800;color:#f1f5f9;margin-bottom:4px">Turan Capital Fund LP</div>
-      <div style="font-size:12px;color:#8a9bbf">Golden Leaves Ltd · GP · AFSA-A-LA-2024-0038</div>
+      <div style="font-size:18px;font-weight:800;color:#f1f5f9;margin-bottom:4px">${escapeHtml(fp.name)}</div>
+      <div style="font-size:12px;color:#8a9bbf">${escapeHtml(fp.gp)} · GP · Лицензия: ${escapeHtml(fp.license)}</div>
       <div style="font-size:11px;color:#64748b;margin-top:6px">Дата выписки: <b>${statementDate}</b></div>
     </div>
 
@@ -667,7 +665,7 @@ function openCapitalAccountStatement(lpId) {
         { label:'Unfunded Commitment (Remaining)',val:fmtUSD(unfunded),             color:'#8b5cf6', bold:true  },
         { label:'Distributions Received to Date', val:fmtUSD(distributions),        color:'#22c55e', bold:false },
         { label:'NAV per Unit (последняя оценка)',val:'$1.00 (2024-12-31)',          color:'#3b82f6', bold:false },
-        { label:'Fund Term Remaining',            val:`${10 - FUND_PARAMS.currentYear} лет`, color:'#eab308', bold:false },
+        { label:'Fund Term Remaining',            val:`${(getFundById(lp.fundId)?.fundTerm ?? 10) - (getFundById(lp.fundId)?.phaseYear ?? FUND_PARAMS.currentYear)} лет`, color:'#eab308', bold:false },
       ].map((row, i) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;${i%2===0?'background:#0f1623':'background:#131c2e'};border-bottom:1px solid #1e293b">
           <span style="font-size:12px;color:#94a3b8">${row.label}</span>
@@ -757,8 +755,8 @@ function openCapitalAccountStatement(lpId) {
     <!-- Legal Note -->
     <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:10px 14px;font-size:10px;color:#64748b;margin-bottom:16px">
       <i class="fas fa-info-circle" style="color:#3b82f6;margin-right:6px"></i>
-      Выписка подготовлена: ${statementDate} · Golden Leaves Ltd (GP) · Turan Capital Fund LP · AFSA-A-LA-2024-0038 ·
-      Конфиденциально. Только для авторизованных получателей. Хранение: 6 лет (Constitution §8.5).
+      Выписка подготовлена: ${statementDate} · ${escapeHtml(fp.gp)} (GP) · ${escapeHtml(fp.name)} · Лицензия: ${escapeHtml(fp.license)} ·
+      Конфиденциально. Только для авторизованных получателей. Хранение: 6 лет.
     </div>
 
     <!-- Footer -->
@@ -805,7 +803,7 @@ function generateLPWelcomeLetter(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
   const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
-  const fp  = FUND_PARAMS;
+  const fp = fundParamsFor(lp.fundId);
   const dt  = today();
   const letterNum = 'GL-' + new Date().getFullYear() + '-LP-' + String(lp.id).padStart(3,'0');
 
@@ -841,7 +839,7 @@ function generateLPWelcomeLetter(lpId) {
     <div class="logo-block">
       <div class="logo-name">${fp.gp}</div>
       <div class="logo-sub">General Partner · ${fp.name}</div>
-      <div class="logo-sub">AFSA License: ${fp.license}</div>
+      <div class="logo-sub">Лицензия: ${fp.license}</div>
     </div>
     <div class="ref-block">
       <div><b>Ref:</b> ${letterNum}</div>
@@ -888,7 +886,7 @@ function generateLPWelcomeLetter(lpId) {
   <div class="obligations">
     <b>Your Key Obligations as Limited Partner:</b>
     <ul>
-      <li>Fund Capital Calls within <b>10 business days</b> of receiving a Capital Call Notice (Constitution §3.9.1)</li>
+      <li>Fund Capital Calls within <b>10 business days</b> of receiving a Capital Call Notice</li>
       <li>Maintain up-to-date KYC documentation; next scheduled review: <b>${lp.kycNextReview || '—'}</b></li>
       <li>Notify the GP of any material change in beneficial ownership, tax residency, or PEP status within 5 business days</li>
       <li>Keep all Fund information strictly confidential (LPA §14)</li>
@@ -922,9 +920,9 @@ function generateLPWelcomeLetter(lpId) {
   </div>
 
   <div class="footer">
-    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · AFSA: ${fp.license} ·
+    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · Лицензия: ${fp.license} ·
     Bank: ${fp.gpBankName} · BIC: ${fp.gpBIC} · IBAN USD: ${fp.gpIBANusd}<br>
-    CONFIDENTIAL — For authorised recipient only. Retention: 6 years (Constitution §8.5)
+    CONFIDENTIAL — For authorised recipient only. Retention: 6 years
   </div>
 
   `;
@@ -947,7 +945,7 @@ function generateCCNotice(ccId, lpId) {
   if (!li) return;
   const lp = lpRegister.find(l => l.id === lpId);
   const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(cc));
-  const fp = FUND_PARAMS;
+  const fp = fundParamsFor(lp.fundId);
   const noticeNum = cc.ccNumber + '-' + String(lpId).padStart(3,'0');
   const payDue    = cc.paymentDate || '—';
 
@@ -985,7 +983,7 @@ function generateCCNotice(ccId, lpId) {
     <div>
       <div class="logo-name">${fp.gp}</div>
       <div class="logo-sub">General Partner · ${fp.name}</div>
-      <div class="logo-sub">AFSA: ${fp.license}</div>
+      <div class="logo-sub">Лицензия: ${fp.license}</div>
     </div>
     <div class="ref-block">
       <div><b>Notice Ref:</b> ${noticeNum}</div>
@@ -1005,7 +1003,7 @@ function generateCCNotice(ccId, lpId) {
 
   <p>Dear ${escapeHtml(lp ? (lp.contact || lp.name) : li.lpName)},</p>
 
-  <p>Pursuant to Section 3.9 of the <b>${fp.name}</b> Constitution and your Subscription Agreement, <b>${fp.gp}</b>, as General Partner, hereby issues this Capital Call Notice requiring your pro-rata contribution to the Fund.</p>
+  <p>Pursuant to the <b>${fp.name}</b> Constitution and your Subscription Agreement, <b>${fp.gp}</b>, as General Partner, hereby issues this Capital Call Notice requiring your pro-rata contribution to the Fund.</p>
 
   <div class="alert-box">
     <div style="text-align:center;font-size:10.5pt;color:#92400e;font-weight:600;margin-bottom:4px">YOUR REQUIRED CONTRIBUTION / СУММА К ПЕРЕЧИСЛЕНИЮ</div>
@@ -1043,7 +1041,7 @@ function generateCCNotice(ccId, lpId) {
   </div>
 
   <div class="warn">
-    <b>⚠ Important:</b> Failure to fund within 10 business days may result in default penalties as outlined in the LPA and Constitution §3.9.3. Please ensure your wire reference exactly matches the Payment Reference above to enable correct allocation.
+    <b>⚠ Important:</b> Failure to fund within 10 business days may result in default penalties as outlined in the LPA and Constitution. Please ensure your wire reference exactly matches the Payment Reference above to enable correct allocation.
   </div>
 
   <p>Please confirm receipt of this notice by contacting your Relationship Manager. Upon receipt of funds, a payment confirmation will be issued.</p>
@@ -1066,8 +1064,8 @@ function generateCCNotice(ccId, lpId) {
   </div>
 
   <div class="footer">
-    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · AFSA: ${fp.license}<br>
-    STRICTLY CONFIDENTIAL — For authorised recipient only. Retention: 6 years (Constitution §8.5)
+    ${fp.gp} · ${fp.gpAddress} · BIN: ${fp.gpBIN} · Лицензия: ${fp.license}<br>
+    STRICTLY CONFIDENTIAL — For authorised recipient only. Retention: 6 years
   </div>
 
   `;
@@ -1088,7 +1086,7 @@ function printCapitalAccountStatement(lpId) {
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
   const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
-  const fp  = FUND_PARAMS;
+  const fp = fundParamsFor(lp.fundId);
   const dt  = today();
 
   /* ── Build full call history ── */
@@ -1238,7 +1236,7 @@ function printCapitalAccountStatement(lpId) {
     <div class="hdr-left">
       <div class="gp-name">${fp.gp}</div>
       <div class="gp-sub">General Partner · ${fp.name}</div>
-      <div class="gp-sub">AFSA License: ${fp.license}</div>
+      <div class="gp-sub">Лицензия: ${fp.license}</div>
       <div class="gp-sub">${fp.gpAddress}</div>
     </div>
     <div class="hdr-right">
@@ -1348,7 +1346,7 @@ function printCapitalAccountStatement(lpId) {
       <span style="color:${lp.riskRating==='High'?'#c53030':lp.riskRating==='Medium'?'#b7791f':'#276749'}">${riskLabel}</span>
     </div>
     <div class="kyc-cell">
-      <label>AFSA Уведомление (&gt;20%)</label>
+      <label>Уведомление регулятора (&gt;20%)</label>
       <span>${lp.afsaNotified ? '✓ Уведомлён' : '— Не требуется'}</span>
     </div>
     <div class="kyc-cell">
@@ -1410,14 +1408,14 @@ function printCapitalAccountStatement(lpId) {
     Все суммы указаны в долларах США (USD), если не указано иное. Документ является строго конфиденциальным
     и предназначен исключительно для поимённого Limited Partner. Воспроизведение, распространение или
     передача третьим лицам без письменного согласия GP запрещены.
-    Срок хранения: 6 лет (Constitution §8.5).
+    Срок хранения: 6 лет.
     По вопросам обращаться: <b>${fp.gpCEO}</b> · ${fp.gp} · ${fp.gpAddress}
   </div>
 
   <div class="doc-footer">
     ${fp.gp} · BIN: ${fp.gpBIN} · Банк: ${fp.gpBankName} · BIC: ${fp.gpBIC} ·
     IBAN USD: ${fp.gpIBANusd} · IBAN KZT: ${fp.gpIBANkzt}<br>
-    AFSA License: ${fp.license} · Документ сформирован автоматически CRM-системой · ${dt}
+    Лицензия: ${fp.license} · Документ сформирован автоматически CRM-системой · ${dt}
   </div>
 
   `;
@@ -1443,7 +1441,7 @@ function printCapitalAccountStatement(lpId) {
 // used to only ever update the new LP's own row on the server (from its
 // own creation POST); every other LP's recalculated % was applied to
 // lpRegister[] locally and never persisted, so it silently drifted from
-// the DB (and from what a regulatory >20% AFSA-notification check would
+// the DB (and from what a regulatory >20% notification check would
 // see on reload) the moment a second LP ever joined a fund.
 async function recalcOwnershipPcts(fundId) {
   const totalC = getTotalCommitments(fundId);
@@ -1547,7 +1545,7 @@ function renderCapitalCallsPage() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-coins" style="color:#f97316;margin-right:6px"></i>Журнал Capital Calls</span>
-        <span style="font-size:12px;color:#8a9bbf">${filtered.length} записей · Constitution §3.9.1 · 10 рабочих дней уведомление</span>
+        <span style="font-size:12px;color:#8a9bbf">${filtered.length} записей · 10 рабочих дней уведомление</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -2386,7 +2384,7 @@ async function registerLPFromOnboarding(client, saTask, actTask) {
   showToast(`📋 LP ${savedLP.registerId} (${client.name}) добавлен в Реестр LP`, 'green');
 
   if (savedLP.ownershipPct > 20) {
-    showToast(`⚠ ${client.name} — доля >20%. Требуется уведомление AFSA (10 р.д.)`, 'yellow');
+    showToast(`⚠ ${client.name} — доля >20%. Требуется уведомление регулятора (10 р.д.)`, 'yellow');
   }
   if (savedLP.lpacMember) {
     showToast(`★ ${client.name} — Commitment ≥$3M. Предложить участие в LPAC`, 'blue');

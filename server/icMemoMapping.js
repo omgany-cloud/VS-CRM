@@ -1,7 +1,7 @@
 // Shared row <-> frontend-object mapping for `icMemos`.
 //
-// IC voting-seat ownership (Constitution Section 7: 2 GP Reps + 1
-// Independent Member + 1 LP Rep, each seat held by whichever role has that
+// IC voting-seat ownership (2 GP Reps + 1 Independent Member + 1 LP Rep,
+// each seat held by whichever role has that
 // icSeat set — server/rolesRepo.js) used to be a hardcoded map here; it's
 // now a live `roles.ic_seat` column lookup, see server/index.js's
 // PUT /api/ic-memos/:id handler.

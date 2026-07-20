@@ -8,6 +8,7 @@ const SCALAR_FIELDS = [
   'status', 'phase', 'phaseYear', 'fundTerm', 'investmentPeriod',
   'managementFee', 'carriedInterest', 'preferredReturn', 'targetIRR', 'targetMOIC',
   'description', 'color', 'icon', 'nav',
+  'gpCEO', 'gpTitle', 'gpAddress', 'gpBIN', 'gpBankName', 'gpBIC', 'gpIBANkzt', 'gpIBANusd',
 ];
 
 function fundToParams(f) {
@@ -41,6 +42,14 @@ function rowToFund(row) {
     color: row.color,
     icon: row.icon,
     nav: row.nav,
+    gpCEO: row.gp_ceo,
+    gpTitle: row.gp_title,
+    gpAddress: row.gp_address,
+    gpBIN: row.gp_bin,
+    gpBankName: row.gp_bank_name,
+    gpBIC: row.gp_bic,
+    gpIBANkzt: row.gp_iban_kzt,
+    gpIBANusd: row.gp_iban_usd,
     createdAt: row.created_at,
   };
 }
@@ -50,12 +59,14 @@ const INSERT_SQL = `
     (tenant_id, name, short_name, gp, license, type, currency, target_size, vintage,
      status, phase, phase_year, fund_term, investment_period,
      management_fee, carried_interest, preferred_return, target_irr, target_moic,
-     description, color, icon, nav)
+     description, color, icon, nav,
+     gp_ceo, gp_title, gp_address, gp_bin, gp_bank_name, gp_bic, gp_iban_kzt, gp_iban_usd)
   VALUES
     (@tenantId, @name, @shortName, @gp, @license, @type, @currency, @targetSize, @vintage,
      @status, @phase, @phaseYear, @fundTerm, @investmentPeriod,
      @managementFee, @carriedInterest, @preferredReturn, @targetIRR, @targetMOIC,
-     @description, @color, @icon, @nav)
+     @description, @color, @icon, @nav,
+     @gpCEO, @gpTitle, @gpAddress, @gpBIN, @gpBankName, @gpBIC, @gpIBANkzt, @gpIBANusd)
 `;
 
 const UPDATE_SQL = `
@@ -66,7 +77,9 @@ const UPDATE_SQL = `
     investment_period=@investmentPeriod, management_fee=@managementFee,
     carried_interest=@carriedInterest, preferred_return=@preferredReturn,
     target_irr=@targetIRR, target_moic=@targetMOIC, description=@description,
-    color=@color, icon=@icon, nav=@nav
+    color=@color, icon=@icon, nav=@nav,
+    gp_ceo=@gpCEO, gp_title=@gpTitle, gp_address=@gpAddress, gp_bin=@gpBIN,
+    gp_bank_name=@gpBankName, gp_bic=@gpBIC, gp_iban_kzt=@gpIBANkzt, gp_iban_usd=@gpIBANusd
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

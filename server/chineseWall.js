@@ -1,4 +1,4 @@
-// AFSA information-barrier (Chinese Wall) between FM (Fund Management) and
+// Regulatory information-barrier (Chinese Wall) between FM (Fund Management) and
 // CF&A (Corporate Finance & Advisory) — any role without the `accessFM`
 // permission must not see FM-direction onboarding clients or anything
 // scoped to them (tasks, engagements). Shared by both the GET filter and
