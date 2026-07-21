@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About Us | Golden Leaves Ltd</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.2/css/all.min.css" />
+
+    <style>
+      :root {
+        --primary-navy: #0d1b2a;
+        --secondary-teal: #1b4332;
+        --accent-gold: #d4af37;
+        --accent-gold-hover: #b5952f;
+        --text-dark: #2d3436;
+        --text-light: #ffffff;
+        --bg-light: #ffffff;
+        --bg-gray: #f8f9fa;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Open Sans', sans-serif;
+        color: var(--text-dark);
+        line-height: 1.6;
+        overflow-x: hidden;
+        background-color: var(--bg-light);
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 700;
+        color: var(--primary-navy);
+        margin-bottom: 1rem;
+      }
+
+      a {
+        text-decoration: none;
+        transition: all 0.3s ease;
+      }
+
+      ul {
+        list-style: none;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-block;
+        padding: 12px 30px;
+        border-radius: 4px;
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+      }
+
+      .btn-gold {
+        background-color: var(--accent-gold);
+        color: var(--primary-navy);
+      }
+
+      .btn-gold:hover {
+        background-color: var(--accent-gold-hover);
+        transform: translateY(-2px);
+      }
+
+      .btn-outline-navy {
+        background-color: transparent;
+        border: 2px solid var(--primary-navy);
+        color: var(--primary-navy);
+      }
+
+      .btn-outline-navy:hover {
+        background-color: var(--primary-navy);
+        color: var(--text-light);
+      }
+
+      /* Header */
+      header {
+        background-color: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        position: fixed;
+        width: 100%;
+        top: 0;
+        z-index: 1000;
+        padding: 15px 0;
+      }
+
+      .nav-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+      }
+
+      .nav-menu {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+      }
+
+      .nav-link {
+        color: var(--primary-navy);
+        font-weight: 600;
+        font-size: 0.95rem;
+        position: relative;
+      }
+
+      .nav-link::after {
+        content: '';
+        position: absolute;
+        width: 0;
+        height: 2px;
+        bottom: -5px;
+        left: 0;
+        background-color: var(--accent-gold);
+        transition: width 0.3s;
+      }
+
+      .nav-link:hover::after {
+        width: 100%;
+      }
+
+      /* Page Hero */
+      .page-hero {
+        background:
+          linear-gradient(135deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 67, 50, 0.9) 100%),
+          url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80');
+        background-size: cover;
+        background-position: center;
+        height: 350px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-top: 80px;
+        color: var(--text-light);
+      }
+
+      .page-hero h1 {
+        color: var(--text-light);
+        font-size: 3rem;
+        margin-bottom: 10px;
+      }
+
+      .breadcrumb {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .breadcrumb a {
+        color: var(--accent-gold);
+      }
+
+      /* Sections */
+      section {
+        padding: 80px 0;
+      }
+
+      .section-bg-gray {
+        background-color: var(--bg-gray);
+      }
+
+      .section-header {
+        text-align: center;
+        max-width: 800px;
+        margin: 0 auto 50px;
+      }
+
+      .section-header h2 {
+        font-size: 2.2rem;
+        position: relative;
+        display: inline-block;
+        margin-bottom: 1rem;
+      }
+
+      .section-header h2::after {
+        content: '';
+        display: block;
+        width: 60px;
+        height: 3px;
+        background-color: var(--accent-gold);
+        margin: 15px auto 0;
+      }
+
+      /* Overview & Timeline */
+      .overview-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 50px;
+        align-items: center;
+      }
+
+      .timeline {
+        position: relative;
+        padding-left: 30px;
+        border-left: 2px solid var(--accent-gold);
+      }
+
+      .timeline-item {
+        position: relative;
+        margin-bottom: 30px;
+      }
+
+      .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -36px;
+        top: 5px;
+        width: 10px;
+        height: 10px;
+        background: var(--accent-gold);
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px var(--accent-gold);
+      }
+
+      .year {
+        font-weight: 700;
+        color: var(--primary-navy);
+        font-size: 1.1rem;
+      }
+
+      /* Mission & Values */
+      .mission-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 50px;
+      }
+
+      .mission-content {
+        background-color: var(--primary-navy);
+        color: white;
+        padding: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+      }
+
+      .mission-text {
+        font-size: 1.2rem;
+        font-style: italic;
+        line-height: 1.8;
+      }
+
+      .mission-text i {
+        color: var(--accent-gold);
+        font-size: 2rem;
+        margin-bottom: 20px;
+        display: block;
+      }
+
+      .values-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+      }
+
+      .value-item {
+        background: white;
+        padding: 20px;
+        border-radius: 4px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .value-item i {
+        color: var(--accent-gold);
+      }
+
+      /* Services */
+      .services-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 30px;
+      }
+
+      .service-detail-card {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        border-top: 4px solid var(--primary-navy);
+        transition: transform 0.3s;
+      }
+
+      .service-detail-card:hover {
+        transform: translateY(-5px);
+        border-top-color: var(--accent-gold);
+      }
+
+      .service-detail-card h3 {
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      /* Why Choose Us */
+      .why-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        text-align: center;
+      }
+
+      .why-item {
+        background: white;
+        padding: 30px 20px;
+        border-radius: 8px;
+        border: 1px solid #eee;
+      }
+
+      .why-icon {
+        font-size: 2.5rem;
+        color: var(--secondary-teal);
+        margin-bottom: 20px;
+      }
+
+      .why-item h4 {
+        margin-bottom: 0;
+        font-size: 1.1rem;
+      }
+
+      /* Directors */
+      .directors-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 40px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .director-card {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+
+      .director-icon {
+        background: var(--bg-gray);
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: var(--primary-navy);
+        flex-shrink: 0;
+      }
+
+      /* CTA */
+      .cta-section {
+        background-color: var(--accent-gold);
+        text-align: center;
+        padding: 60px 0;
+      }
+
+      .cta-buttons {
+        margin-top: 30px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      /* Footer */
+      footer {
+        background-color: var(--primary-navy);
+        color: var(--text-light);
+        padding: 60px 0 20px;
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 50px;
+        margin-bottom: 40px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 40px;
+      }
+
+      .footer-links h4,
+      .footer-contact h4 {
+        color: var(--text-light);
+        margin-bottom: 20px;
+      }
+
+      .footer-links ul li {
+        margin-bottom: 10px;
+      }
+
+      .footer-links a {
+        color: #adb5bd;
+        font-size: 0.9rem;
+      }
+
+      .footer-links a:hover {
+        color: var(--accent-gold);
+      }
+
+      .risk-warning {
+        font-size: 0.8rem;
+        color: #6c757d;
+        text-align: justify;
+        margin-bottom: 20px;
+        line-height: 1.4;
+      }
+
+      .copyright {
+        text-align: center;
+        font-size: 0.9rem;
+        color: #adb5bd;
+      }
+
+      /* Mobile */
+      @media (max-width: 768px) {
+        .overview-container,
+        .mission-grid,
+        .services-grid,
+        .why-grid,
+        .directors-grid,
+        .footer-grid {
+          grid-template-columns: 1fr;
+          gap: 30px;
+        }
+
+        .values-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header>
+      <div class="container nav-container">
+        <a href="company.html" class="logo">
+          <img src="https://www.genspark.ai/api/files/s/vNRnn0yC" alt="Golden Leaves Ltd" style="height: 50px" />
+        </a>
+        <nav>
+          <ul class="nav-menu">
+            <li><a href="company.html" class="nav-link">Home</a></li>
+            <li><a href="about.html" class="nav-link" style="color: var(--accent-gold)">About</a></li>
+            <li><a href="funds.html" class="nav-link">Funds</a></li>
+            <li><a href="team.html" class="nav-link">Team</a></li>
+            <li><a href="contact.html" class="btn btn-gold">Invest with Us</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Page Hero -->
+    <div class="page-hero">
+      <div class="container">
+        <h1>About Golden Leaves</h1>
+        <div class="breadcrumb"><a href="company.html">Home</a> &gt; About Us</div>
+      </div>
+    </div>
+
+    <!-- Overview Section -->
+    <section>
+      <div class="container">
+        <div class="overview-container">
+          <div>
+            <h2>Creating Opportunities for Investors and Businesses</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 20px">
+              Golden Leaves was established in 2020 to provide high-quality consulting services in finance and
+              investment. Today, we are a fully licensed AIFC fund manager specializing in Exempt Private Equity Funds.
+            </p>
+            <p>
+              We operate within the Astana International Financial Centre (AIFC), leveraging a stable legal framework
+              based on Common Law principles to offer transparent and secure investment vehicles for professional
+              clients.
+            </p>
+          </div>
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="year">2020</div>
+              <p>Company Founded as a financial consultancy firm.</p>
+            </div>
+            <div class="timeline-item">
+              <div class="year">2024</div>
+              <p>Obtained CIS License from AFSA (AFSA-A-LA-2024-0038) to manage collective investment schemes.</p>
+            </div>
+            <div class="timeline-item">
+              <div class="year">2025</div>
+              <p>Launch of Turan Capital Fund LP, focused on SME development in Central Asia.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mission & Values -->
+    <section class="section-bg-gray">
+      <div class="container">
+        <div class="mission-grid">
+          <div class="mission-content">
+            <div class="mission-text">
+              <i class="fas fa-quote-left"></i>
+              To contribute to Kazakhstan's economic development by attracting investments and developing private
+              capital in strategically important economic sectors, with a focus on supporting SMEs, consolidating small
+              and medium enterprises, and creating National Conglomerates.
+            </div>
+          </div>
+          <div>
+            <h3 style="margin-bottom: 20px">Company Values</h3>
+            <div class="values-grid">
+              <div class="value-item"><i class="fas fa-globe"></i> Global perspective</div>
+              <div class="value-item"><i class="fas fa-random"></i> Flexibility and adaptability</div>
+              <div class="value-item"><i class="fas fa-handshake"></i> Inclusiveness in partnerships</div>
+              <div class="value-item"><i class="fas fa-layer-group"></i> Diversification of opportunities</div>
+              <div class="value-item"><i class="fas fa-lightbulb"></i> Innovation at scale</div>
+              <div class="value-item"><i class="fas fa-unlock"></i> Barrier removal</div>
+              <div class="value-item"><i class="fas fa-laptop-code"></i> Digitalization and technology</div>
+              <div class="value-item"><i class="fas fa-leaf"></i> Social responsibility</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Services -->
+    <section>
+      <div class="container">
+        <div class="section-header">
+          <h2>Our Core Competencies</h2>
+          <p>Comprehensive financial solutions for complex investment needs.</p>
+        </div>
+
+        <div class="services-grid">
+          <div class="service-detail-card">
+            <h3>Fund Management</h3>
+            <p>
+              Establishment and management of Private Equity funds, Real Estate funds, and Hedge funds. CIS licensing
+              ensures compliance with international standards and robust governance structures.
+            </p>
+          </div>
+          <div class="service-detail-card">
+            <h3>Financial Consulting</h3>
+            <p>
+              Expert deal structuring, attraction of bank financing, attraction of bond financing, private capital
+              raising, restructuring and refinancing of loans for corporate clients.
+            </p>
+          </div>
+          <div class="service-detail-card">
+            <h3>Regulatory Compliance</h3>
+            <p>
+              Full compliance with AIFC/AFSA rules, AML/CFT procedures, and Best Execution standards. We ensure
+              transparency and security for all stakeholders.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why Choose Us -->
+    <section class="section-bg-gray">
+      <div class="container">
+        <div class="section-header">
+          <h2>Why Choose Golden Leaves</h2>
+        </div>
+        <div class="why-grid">
+          <div class="why-item">
+            <i class="fas fa-shield-alt why-icon"></i>
+            <h4>AIFC Licensed</h4>
+          </div>
+          <div class="why-item">
+            <i class="fas fa-users why-icon"></i>
+            <h4>Experienced Team</h4>
+          </div>
+          <div class="why-item">
+            <i class="fas fa-file-contract why-icon"></i>
+            <h4>Transparent Governance</h4>
+          </div>
+          <div class="why-item">
+            <i class="fas fa-chart-line why-icon"></i>
+            <h4>Focus on SME Growth</h4>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Independent Directors -->
+    <section>
+      <div class="container">
+        <div class="section-header">
+          <h2>Board of Independent Directors</h2>
+          <p>Ensuring objective oversight and strategic guidance.</p>
+        </div>
+
+        <div class="directors-grid">
+          <div class="director-card">
+            <div class="director-icon"><i class="fas fa-user-graduate"></i></div>
+            <div>
+              <h3>Alexey Stepanov</h3>
+              <p style="font-size: 0.9rem; margin-top: 5px; color: #666">Independent Director</p>
+              <p style="font-size: 0.9rem; margin-top: 10px">
+                Master of Law (KIMEP, 2024). Expertise in civil law, contract support, and litigation with 12 years of
+                experience.
+              </p>
+            </div>
+          </div>
+          <div class="director-card">
+            <div class="director-icon"><i class="fas fa-briefcase"></i></div>
+            <div>
+              <h3>Nurlan Yesmagambetov</h3>
+              <p style="font-size: 0.9rem; margin-top: 5px; color: #666">Independent Director</p>
+              <p style="font-size: 0.9rem; margin-top: 10px">
+                Master's in Corporate Finance (Bayes Business School). Specialization in corporate finance and M&A
+                transactions with 15 years of experience.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+      <div class="container">
+        <h2 style="color: var(--primary-navy)">Ready to learn more?</h2>
+        <p style="color: var(--primary-navy)">Explore our investment opportunities or get in touch with our team.</p>
+        <div class="cta-buttons">
+          <a href="funds.html" class="btn btn-outline-navy">View Our Funds</a>
+          <a href="contact.html" class="btn btn-outline-navy">Contact Us</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-company">
+            <img
+              src="https://www.genspark.ai/api/files/s/vNRnn0yC"
+              alt="Golden Leaves Ltd"
+              style="height: 40px; margin-bottom: 20px"
+            />
+            <p>A Professional Approach for Exempt Funds.<br />Licensed by the Astana Financial Services Authority.</p>
+            <div style="margin-top: 20px">
+              <span style="border: 1px solid #ffffff33; padding: 5px 10px; font-size: 0.8rem; border-radius: 4px"
+                >License: AFSA-A-LA-2024-0038</span
+              >
+            </div>
+          </div>
+
+          <div class="footer-links">
+            <h4>Quick Links</h4>
+            <ul>
+              <li><a href="about.html">About Us</a></li>
+              <li><a href="funds.html">Turan Capital Fund</a></li>
+              <li><a href="team.html">Management Team</a></li>
+              <li><a href="contact.html">Contact</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-contact">
+            <h4>Contact</h4>
+            <ul>
+              <li><i class="fas fa-envelope" style="width: 20px; color: var(--accent-gold)"></i> <a href="mailto:info@gl.com.kz" style="color: inherit">info@gl.com.kz</a></li>
+              <li><i class="fas fa-phone" style="width: 20px; color: var(--accent-gold)"></i> +7 (701) 997 60 39</li>
+              <li><i class="fas fa-map-marker-alt" style="width: 20px; color: var(--accent-gold)"></i> AIFC, Astana</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="risk-warning">
+          <strong>RISK WARNING:</strong> Golden Leaves Ltd is regulated by the Astana Financial Services Authority
+          (AFSA). License: AFSA-A-LA-2024-0038. Investments in private equity funds carry significant risks, including
+          the loss of capital, and are suitable only for Professional Clients as defined under AIFC rules. Past
+          performance is not indicative of future results.
+        </div>
+
+        <div class="copyright">&copy; 2026 Golden Leaves Ltd. All rights reserved.</div>
+      </div>
+    </footer>
+  </body>
+</html>

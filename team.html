@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Leadership Team | Golden Leaves Ltd</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.2/css/all.min.css" />
+
+    <style>
+      :root {
+        --color-navy: #0d1b2a;
+        --color-teal: #1b4332;
+        --color-gold: #d4af37;
+        --color-gold-light: #f4e4bc;
+        --color-white: #ffffff;
+        --color-gray-light: #f8f9fa;
+        --color-text-dark: #1a1a1a;
+        --color-text-gray: #4a4a4a;
+
+        --font-heading: 'Montserrat', sans-serif;
+        --font-body: 'Open Sans', sans-serif;
+
+        --transition: all 0.3s ease;
+        --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: var(--font-body);
+        color: var(--color-text-dark);
+        line-height: 1.6;
+        background-color: var(--color-gray-light);
+        overflow-x: hidden;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-family: var(--font-heading);
+        font-weight: 700;
+        line-height: 1.2;
+      }
+
+      a {
+        text-decoration: none;
+        color: inherit;
+        transition: var(--transition);
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+
+      /* Header */
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: var(--color-navy);
+        color: var(--color-white);
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .nav-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 80px;
+      }
+
+      .logo {
+        font-family: var(--font-heading);
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--color-gold);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+      }
+
+      .nav-links a {
+        font-family: var(--font-heading);
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        color: var(--color-white);
+      }
+
+      .nav-links a:hover,
+      .nav-links a.active {
+        color: var(--color-gold);
+      }
+
+      .nav-actions {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+
+      .btn-cta {
+        background-color: var(--color-gold);
+        color: var(--color-navy);
+        padding: 0.75rem 1.5rem;
+        border-radius: 4px;
+        font-family: var(--font-heading);
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+      }
+
+      .btn-cta:hover {
+        background-color: #e6c35c;
+        transform: translateY(-2px);
+      }
+
+      /* Hero Section */
+      .hero {
+        position: relative;
+        height: 50vh;
+        min-height: 400px;
+        background-image:
+          linear-gradient(rgba(13, 27, 42, 0.8), rgba(13, 27, 42, 0.8)),
+          url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80');
+        background-size: cover;
+        background-position: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-top: 80px;
+        color: var(--color-white);
+      }
+
+      .hero h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: var(--color-white);
+      }
+
+      .hero p {
+        font-size: 1.25rem;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      /* Team Grid */
+      .team-section {
+        padding: 5rem 0;
+        background-color: var(--color-gray-light);
+      }
+
+      .team-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2.5rem;
+        margin-top: 2rem;
+      }
+
+      .team-card {
+        background: var(--color-white);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        transition: var(--transition);
+        display: flex;
+        flex-direction: row;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+
+      .team-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--color-gold);
+      }
+
+      .member-photo {
+        width: 280px;
+        min-width: 280px;
+        height: 350px;
+        overflow: hidden;
+      }
+
+      .member-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        transition: var(--transition);
+      }
+
+      .team-card:hover .member-photo img {
+        transform: scale(1.03);
+      }
+
+      .member-info {
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .member-name {
+        font-size: 1.5rem;
+        color: var(--color-navy);
+        margin-bottom: 0.5rem;
+      }
+
+      .member-role {
+        font-family: var(--font-heading);
+        color: var(--color-gold);
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        margin-bottom: 1rem;
+        letter-spacing: 0.5px;
+      }
+
+      .member-bio {
+        color: var(--color-text-gray);
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+      }
+
+      /* Section Dividers */
+      .section-title {
+        text-align: center;
+        margin-bottom: 3rem;
+      }
+
+      .section-title h2 {
+        font-size: 2.25rem;
+        color: var(--color-navy);
+        margin-bottom: 1rem;
+      }
+
+      .section-divider {
+        width: 80px;
+        height: 4px;
+        background-color: var(--color-gold);
+        margin: 0 auto;
+      }
+
+      /* Independent Directors Section */
+      .directors-section {
+        background-color: var(--color-white);
+        padding: 5rem 0;
+      }
+
+      /* Contact CTA */
+      .contact-cta {
+        background-color: var(--color-navy);
+        padding: 4rem 0;
+        text-align: center;
+        color: var(--color-white);
+      }
+
+      .contact-cta h2 {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .contact-cta p {
+        margin-bottom: 2rem;
+        font-size: 1.1rem;
+        opacity: 0.9;
+      }
+
+      /* Footer */
+      footer {
+        background-color: #0a1622;
+        color: rgba(255, 255, 255, 0.7);
+        padding: 4rem 0 2rem;
+        font-size: 0.9rem;
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 3rem;
+        margin-bottom: 3rem;
+      }
+
+      .footer-col h4 {
+        color: var(--color-white);
+        margin-bottom: 1.5rem;
+        font-size: 1.1rem;
+      }
+
+      .footer-links li {
+        margin-bottom: 0.8rem;
+      }
+
+      .footer-links a:hover {
+        color: var(--color-gold);
+        padding-left: 5px;
+      }
+
+      .contact-item {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 1rem;
+        align-items: flex-start;
+      }
+
+      .contact-item i {
+        color: var(--color-gold);
+        margin-top: 4px;
+      }
+
+      .footer-bottom {
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 2rem;
+        text-align: center;
+      }
+
+      .afsa-badge {
+        display: inline-block;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 5px 15px;
+        border-radius: 20px;
+        margin-bottom: 1rem;
+        font-size: 0.8rem;
+      }
+
+      /* Mobile Responsive */
+      @media (max-width: 992px) {
+        .team-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .team-card {
+          max-width: 600px;
+          margin: 0 auto;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .team-card {
+          flex-direction: column;
+        }
+
+        .member-photo {
+          width: 100%;
+          height: 300px;
+        }
+
+        .nav-links,
+        .nav-actions {
+          display: none;
+        }
+
+        .footer-grid {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+
+        .hero h1 {
+          font-size: 2rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header>
+      <div class="container nav-container">
+        <div class="logo"><i class="fas fa-leaf"></i> Golden Leaves</div>
+        <nav class="nav-links">
+          <a href="company.html">Home</a>
+          <a href="about.html">About</a>
+          <a href="funds.html">Funds</a>
+          <a href="team.html" class="active">Team</a>
+          <a href="contact.html">Contact</a>
+        </nav>
+        <div class="nav-actions">
+          <a href="contact.html" class="btn-cta">Invest with Us</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container">
+        <h1>Our Leadership Team</h1>
+        <p>Experienced professionals driving Central Asia's private equity excellence</p>
+      </div>
+    </section>
+
+    <!-- Executive Team Section -->
+    <section class="team-section">
+      <div class="container">
+        <div class="section-title">
+          <h2>Executive Management</h2>
+          <div class="section-divider"></div>
+        </div>
+
+        <div class="team-grid">
+          <!-- CEO: Gaini Omirserikov -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/hhX8mF9Y" alt="Gaini Omirserikov" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Gaini Omirserikov</h3>
+              <p class="member-role">Chief Executive Officer (CEO)</p>
+              <p class="member-bio">
+                21 years of experience in financial services and private equity. Former senior executive at KPMG.
+                Graduate of KazNU. Leads investment strategy and portfolio management with deep expertise in Central
+                Asian markets.
+              </p>
+            </div>
+          </div>
+
+          <!-- CFO: Zhanibek Amankulov -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/NQaAAvgh" alt="Zhanibek Amankulov" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Zhanibek Amankulov</h3>
+              <p class="member-role">Chief Financial Officer (CFO)</p>
+              <p class="member-bio">
+                CFA charterholder since 2018. 15 years of financial leadership experience at AK Altynalmas, KAZ
+                Minerals, and Samruk-Kazyna. Expert in fund accounting, valuations, and financial reporting.
+              </p>
+            </div>
+          </div>
+
+          <!-- CIO/COO: Ruslan Ibrayev -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/S68cI6Q6" alt="Ruslan Ibrayev" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Ruslan Ibrayev</h3>
+              <p class="member-role">CIO / Chief Operating Officer</p>
+              <p class="member-bio">
+                17 years in energy sector investments and operations. Specialist in financial modeling, deal
+                structuring, and operational due diligence. Drives portfolio company value creation.
+              </p>
+            </div>
+          </div>
+
+          <!-- CCO: Nurbek Tasbolatov -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/eXU0npQD" alt="Nurbek Tasbolatov" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Nurbek Tasbolatov</h3>
+              <p class="member-role">Chief Compliance Officer (CCO)</p>
+              <p class="member-bio">
+                16 years of regulatory and compliance expertise in financial services. Ensures adherence to AFSA
+                regulations, AML/CFT requirements, and international best practices.
+              </p>
+            </div>
+          </div>
+
+          <!-- Risk Manager: Sabit Kezhenov -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/UIN7UmtU" alt="Sabit Kezhenov" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Sabit Kezhenov</h3>
+              <p class="member-role">Risk Manager</p>
+              <p class="member-bio">
+                13 years of experience in enterprise risk management. Oversees portfolio risk assessment, investment
+                limits monitoring, and independent risk veto authority per fund constitution.
+              </p>
+            </div>
+          </div>
+
+          <!-- MLRO: Togzhan Tolepbergenova -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/9MTYEMUI" alt="Togzhan Tolepbergenova" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Togzhan Tolepbergenova</h3>
+              <p class="member-role">Money Laundering Reporting Officer</p>
+              <p class="member-bio">
+                Master of Law from KIMEP. 5 years specializing in AML/CFT compliance. Fluent in four languages. Manages
+                KYC/AML processes and regulatory reporting to AFSA.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Independent Directors Section -->
+    <section class="directors-section">
+      <div class="container">
+        <div class="section-title">
+          <h2>Independent Directors</h2>
+          <div class="section-divider"></div>
+        </div>
+
+        <div class="team-grid">
+          <!-- Director: Alexey Stepanov -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/WUgh8eNx" alt="Alexey Stepanov" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Alexey Stepanov</h3>
+              <p class="member-role">Independent Director</p>
+              <p class="member-bio">
+                Master of Law (LL.M.) from KIMEP University, 2024. 12 years of legal and governance experience. Provides
+                independent oversight and strategic guidance to the fund.
+              </p>
+            </div>
+          </div>
+
+          <!-- Director: Nurlan Yesmagambetov -->
+          <div class="team-card">
+            <div class="member-photo">
+              <img src="https://www.genspark.ai/api/files/s/cJYjAWQG" alt="Nurlan Yesmagambetov" />
+            </div>
+            <div class="member-info">
+              <h3 class="member-name">Nurlan Yesmagambetov</h3>
+              <p class="member-role">Independent Director</p>
+              <p class="member-bio">
+                Master's degree from Bayes Business School. 15 years in corporate finance and M&A advisory. Brings deep
+                transactional expertise and board-level governance experience.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contact CTA -->
+    <section class="contact-cta">
+      <div class="container">
+        <h2>Partner with Experienced Leadership</h2>
+        <p>Our team combines deep local knowledge with international best practices.</p>
+        <a href="contact.html" class="btn-cta" style="background-color: var(--color-gold); color: var(--color-navy)"
+          >Contact Us</a
+        >
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-col">
+            <div class="logo" style="margin-bottom: 1.5rem">Golden Leaves</div>
+            <div class="contact-item">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>1 Heydar Aliyev St, Office 1<br />Yesil District, Astana Z05T8M2<br />Republic of Kazakhstan</span>
+            </div>
+            <div class="contact-item">
+              <i class="fas fa-envelope"></i>
+              <span><a href="mailto:info@gl.com.kz">info@gl.com.kz</a></span>
+            </div>
+            <div class="contact-item">
+              <i class="fas fa-phone"></i>
+              <span>+7 (701) 997 60 39</span>
+            </div>
+          </div>
+
+          <div class="footer-col">
+            <h4>Quick Links</h4>
+            <ul class="footer-links">
+              <li><a href="about.html">About Us</a></li>
+              <li><a href="funds.html">Turan Capital Fund</a></li>
+              <li><a href="team.html">Leadership Team</a></li>
+              <li><a href="contact.html">Contact Us</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <h4>Regulatory Status</h4>
+            <div class="afsa-badge">AFSA Licensed</div>
+            <p style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 1rem">License Number: AFSA-A-LA-2024-0038</p>
+            <p style="font-size: 0.85rem; opacity: 0.6">
+              Golden Leaves Ltd is regulated by the Astana Financial Services Authority (AFSA).
+            </p>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <p class="risk-warning" style="margin-bottom: 1rem; font-size: 0.8rem; color: #aaa">
+            RISK WARNING: Investments in private equity funds carry risks, including loss of capital. Past performance
+            is not indicative of future results. Services are available to Professional Clients only.
+          </p>
+          <p>&copy; 2026 Golden Leaves Ltd. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

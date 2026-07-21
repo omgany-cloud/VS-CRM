@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contact Us | Golden Leaves Ltd</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.2/css/all.min.css" />
+
+    <style>
+      :root {
+        --primary-navy: #0d1b2a;
+        --secondary-teal: #1b4332;
+        --accent-gold: #d4af37;
+        --accent-gold-hover: #b5952f;
+        --text-dark: #2d3436;
+        --text-light: #ffffff;
+        --bg-light: #ffffff;
+        --bg-gray: #f8f9fa;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Open Sans', sans-serif;
+        color: var(--text-dark);
+        line-height: 1.6;
+        overflow-x: hidden;
+        background-color: var(--bg-light);
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 700;
+        color: var(--primary-navy);
+        margin-bottom: 1rem;
+      }
+
+      a {
+        text-decoration: none;
+        transition: all 0.3s ease;
+      }
+
+      ul {
+        list-style: none;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-block;
+        padding: 12px 30px;
+        border-radius: 4px;
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        background-color: var(--accent-gold);
+        color: var(--primary-navy);
+      }
+
+      .btn:hover {
+        background-color: var(--accent-gold-hover);
+        transform: translateY(-2px);
+      }
+
+      .btn-outline-navy {
+        background-color: transparent;
+        border: 2px solid var(--primary-navy);
+        color: var(--primary-navy);
+      }
+
+      .btn-outline-navy:hover {
+        background-color: var(--primary-navy);
+        color: var(--text-light);
+      }
+
+      /* Header */
+      header {
+        background-color: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        position: fixed;
+        width: 100%;
+        top: 0;
+        z-index: 1000;
+        padding: 15px 0;
+      }
+
+      .nav-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+      }
+
+      .nav-menu {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+      }
+
+      .nav-link {
+        color: var(--primary-navy);
+        font-weight: 600;
+        font-size: 0.95rem;
+        position: relative;
+      }
+
+      .nav-link::after {
+        content: '';
+        position: absolute;
+        width: 0;
+        height: 2px;
+        bottom: -5px;
+        left: 0;
+        background-color: var(--accent-gold);
+        transition: width 0.3s;
+      }
+
+      .nav-link:hover::after {
+        width: 100%;
+      }
+
+      /* Page Hero */
+      .page-hero {
+        background:
+          linear-gradient(135deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 67, 50, 0.9) 100%),
+          url('https://images.unsplash.com/photo-1423666639041-f56000c27a9a?auto=format&fit=crop&q=80');
+        background-size: cover;
+        background-position: center;
+        height: 350px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-top: 80px;
+        color: var(--text-light);
+      }
+
+      .page-hero h1 {
+        color: var(--text-light);
+        font-size: 3rem;
+        margin-bottom: 10px;
+      }
+
+      .breadcrumb {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .breadcrumb a {
+        color: var(--accent-gold);
+      }
+
+      /* Sections */
+      section {
+        padding: 80px 0;
+      }
+
+      .section-bg-gray {
+        background-color: var(--bg-gray);
+      }
+
+      .section-header {
+        text-align: center;
+        max-width: 800px;
+        margin: 0 auto 50px;
+      }
+
+      .section-header h2 {
+        font-size: 2.2rem;
+        position: relative;
+        display: inline-block;
+        padding-bottom: 15px;
+      }
+
+      .section-header h2::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background-color: var(--accent-gold);
+      }
+
+      /* Contact Cards */
+      .contact-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        margin-bottom: 80px;
+      }
+
+      .contact-card {
+        background: white;
+        padding: 40px 30px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        text-align: center;
+        transition: transform 0.3s;
+        border-top: 4px solid var(--accent-gold);
+      }
+
+      .contact-card:hover {
+        transform: translateY(-5px);
+      }
+
+      .card-icon {
+        font-size: 2.5rem;
+        color: var(--primary-navy);
+        margin-bottom: 20px;
+      }
+
+      .contact-card h3 {
+        font-size: 1.3rem;
+        margin-bottom: 15px;
+      }
+
+      .contact-card p {
+        color: #666;
+        margin-bottom: 10px;
+        font-size: 0.95rem;
+      }
+
+      .contact-card a {
+        color: var(--primary-navy);
+        font-weight: 600;
+      }
+
+      .contact-card a:hover {
+        color: var(--accent-gold);
+      }
+
+      /* Office Info + Map (form removed — no backend, see office-details layout below) */
+      .office-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 50px;
+        background: white;
+        padding: 50px;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+      }
+
+      .office-info h3 {
+        margin-bottom: 25px;
+        font-size: 1.5rem;
+      }
+
+      .info-item {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 25px;
+      }
+
+      .info-icon {
+        color: var(--accent-gold);
+        font-size: 1.2rem;
+        margin-top: 5px;
+      }
+
+      .info-content h4 {
+        margin-bottom: 5px;
+        font-size: 1.1rem;
+      }
+
+      .info-content p {
+        color: #666;
+        font-size: 0.95rem;
+      }
+
+      /* Map */
+      .map-container {
+        height: 400px;
+        width: 100%;
+        background-color: #eee;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      /* FAQ */
+      .faq-accordion {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .faq-item {
+        margin-bottom: 15px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        background: white;
+      }
+
+      .faq-question {
+        padding: 20px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        color: var(--primary-navy);
+      }
+
+      .faq-answer {
+        padding: 0 20px 20px;
+        color: #666;
+        display: none;
+        border-top: 1px solid #f5f5f5;
+        padding-top: 15px;
+      }
+
+      .faq-item:first-child .faq-answer {
+        display: block;
+      }
+
+      /* CTA Section */
+      .cta-section {
+        background-color: var(--accent-gold);
+        padding: 80px 0;
+        text-align: center;
+        color: var(--primary-navy);
+      }
+
+      .cta-phone {
+        font-size: 2.5rem;
+        font-weight: 800;
+        font-family: 'Montserrat', sans-serif;
+        margin: 20px 0;
+        display: block;
+      }
+
+      /* Footer */
+      footer {
+        background-color: var(--primary-navy);
+        color: var(--text-light);
+        padding: 80px 0 30px;
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1fr;
+        gap: 50px;
+        margin-bottom: 50px;
+      }
+
+      .footer-about p {
+        opacity: 0.8;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+      }
+
+      .footer-links h4,
+      .footer-contact h4 {
+        color: var(--text-light);
+        margin-bottom: 25px;
+        position: relative;
+        padding-bottom: 10px;
+      }
+
+      .footer-links h4::after,
+      .footer-contact h4::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 30px;
+        height: 2px;
+        background-color: var(--accent-gold);
+      }
+
+      .footer-links ul li {
+        margin-bottom: 12px;
+      }
+
+      .footer-links a {
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 0.95rem;
+      }
+
+      .footer-links a:hover {
+        color: var(--accent-gold);
+        padding-left: 5px;
+      }
+
+      .footer-contact p {
+        margin-bottom: 15px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      .risk-warning {
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 30px;
+        margin-top: 30px;
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-align: center;
+      }
+
+      .copyright {
+        text-align: center;
+        margin-top: 20px;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      /* Responsive */
+      @media (max-width: 992px) {
+        .office-details {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-grid {
+          grid-template-columns: 1fr;
+          gap: 40px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .page-hero h1 {
+          font-size: 2rem;
+        }
+
+        .nav-menu {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header>
+      <div class="container nav-container">
+        <a href="company.html" class="logo">
+          <img src="https://www.genspark.ai/api/files/s/vNRnn0yC" alt="Golden Leaves Ltd" style="height: 50px" />
+        </a>
+        <nav>
+          <ul class="nav-menu">
+            <li><a href="company.html" class="nav-link">Home</a></li>
+            <li><a href="about.html" class="nav-link">About</a></li>
+            <li><a href="funds.html" class="nav-link">Funds</a></li>
+            <li><a href="team.html" class="nav-link">Team</a></li>
+            <li><a href="contact.html" class="nav-link" style="color: var(--accent-gold)">Contact</a></li>
+            <li><a href="contact.html" class="btn">Invest with Us</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Page Hero -->
+    <div class="page-hero">
+      <div class="container">
+        <h1>Get in Touch</h1>
+        <p>We're here to answer your questions about investment opportunities</p>
+        <div class="breadcrumb"><a href="company.html">Home</a> &gt; Contact</div>
+      </div>
+    </div>
+
+    <!-- Contact Cards -->
+    <section class="section-bg-gray">
+      <div class="container">
+        <div class="contact-grid">
+          <!-- General Inquiries -->
+          <div class="contact-card">
+            <div class="card-icon">
+              <i class="fas fa-envelope-open-text"></i>
+            </div>
+            <h3>General Inquiries</h3>
+            <p>For general questions about our company and services.</p>
+            <p><strong>Email:</strong> <a href="mailto:info@gl.com.kz">info@gl.com.kz</a></p>
+            <p><strong>Phone:</strong> +7 (701) 997 60 39</p>
+            <p><strong>Hours:</strong> Mon-Fri, 9:00-18:00 (Astana time)</p>
+          </div>
+
+          <!-- Investor Relations -->
+          <div class="contact-card">
+            <div class="card-icon">
+              <i class="fas fa-handshake"></i>
+            </div>
+            <h3>Investor Relations</h3>
+            <p>Direct line for investment inquiries and fund details.</p>
+            <p><strong>Contact:</strong> Gaini Omirserikov, CEO</p>
+            <p><strong>Email:</strong> <a href="mailto:omg@gl.com.kz">omg@gl.com.kz</a></p>
+            <p><strong>Phone:</strong> +7 (701) 997 60 39</p>
+          </div>
+
+          <!-- Compliance & Legal -->
+          <div class="contact-card">
+            <div class="card-icon">
+              <i class="fas fa-scale-balanced"></i>
+            </div>
+            <h3>Compliance & Legal</h3>
+            <p>For regulatory questions, complaints, and legal matters.</p>
+            <p><strong>Contact:</strong> Nurbek Tasbolatov, CCO</p>
+            <p><strong>Email:</strong> <a href="mailto:compliance@gl.com.kz">compliance@gl.com.kz</a></p>
+            <p><strong>AFSA License:</strong> AFSA-A-LA-2024-0038</p>
+          </div>
+        </div>
+
+        <!-- Office Info & Map (no contact form — write to us directly by email/phone above) -->
+        <div class="office-details">
+          <div class="office-info">
+            <h3>Our Office</h3>
+
+            <div class="info-item">
+              <div class="info-icon"><i class="fas fa-map-marker-alt"></i></div>
+              <div class="info-content">
+                <h4>Registered Office</h4>
+                <p>
+                  Astana International Financial Centre (AIFC)<br />
+                  1 Heydar Aliyev St, Office 1<br />
+                  Yesil District, Astana Z05T8M2<br />
+                  Republic of Kazakhstan
+                </p>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-icon"><i class="fas fa-clock"></i></div>
+              <div class="info-content">
+                <h4>Business Hours</h4>
+                <p>Monday - Friday: 9:00 AM - 6:00 PM</p>
+                <p>Saturday - Sunday: Closed</p>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-icon"><i class="fas fa-id-card"></i></div>
+              <div class="info-content">
+                <h4>License Information</h4>
+                <p>Regulated by the Astana Financial Services Authority (AFSA)</p>
+                <p><strong>License No:</strong> AFSA-A-LA-2024-0038</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Embedded Map -->
+          <div class="map-container">
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2503.693637492965!2d71.4157583157559!3d51.09636597956972!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x424585a6a42704eb%3A0x6b7726715201c10!2sAstana%20International%20Financial%20Centre!5e0!3m2!1sen!2skz!4v1645512345678!5m2!1sen!2skz"
+              width="100%"
+              height="100%"
+              style="border: 0"
+              allowfullscreen=""
+              loading="lazy"
+            ></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section>
+      <div class="container">
+        <div class="section-header">
+          <h2>Frequently Asked Questions</h2>
+          <p>Common questions about investing with Golden Leaves</p>
+        </div>
+
+        <div class="faq-accordion">
+          <div class="faq-item">
+            <div class="faq-question">
+              How do I invest in Turan Capital Fund?
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="faq-answer">
+              To invest, please contact our CEO or Investor Relations team via <a href="mailto:omg@gl.com.kz">omg@gl.com.kz</a> to schedule a consultation.
+              After verifying your Professional Client status, you will receive the Offering Memorandum and Subscription
+              Agreement.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">
+              What are the minimum investment requirements?
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="faq-answer">
+              The minimum capital commitment for Turan Capital Fund LP is USD 500,000. Additionally, all investors must
+              qualify as Professional Clients under AIFC rules (e.g., net assets > USD 100,000 for individuals).
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">
+              How long until I receive a response?
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="faq-answer">
+              We aim to respond to all inquiries within 1-2 business days. For urgent matters, please call our direct
+              line.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">
+              Can I visit your office?
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="faq-answer">
+              Yes, we welcome visits from potential investors and partners. Visits are by appointment only. Please email
+              us to schedule a meeting.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">
+              Where can I verify your AFSA license?
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="faq-answer">
+              You can verify our license status on the AFSA Public Register website by searching for our company name
+              "Golden Leaves Ltd" or license number "AFSA-A-LA-2024-0038".
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <div class="cta-section">
+      <div class="container">
+        <h2>Prefer to discuss by phone?</h2>
+        <p>Our team is available to answer your questions directly.</p>
+        <span class="cta-phone">+7 (701) 997 60 39</span>
+        <a href="mailto:omg@gl.com.kz" class="btn-outline-navy btn" style="background: white; border-color: white">Schedule a Consultation</a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-about">
+            <img
+              src="https://www.genspark.ai/api/files/s/vNRnn0yC"
+              alt="Golden Leaves Ltd"
+              style="height: 40px; margin-bottom: 20px"
+            />
+            <p>
+              Golden Leaves Ltd is a private equity fund manager regulated by the Astana Financial Services Authority
+              (AFSA). We specialize in creating value through strategic investments in Central Asian growth companies.
+            </p>
+          </div>
+
+          <div class="footer-links">
+            <h4>Quick Links</h4>
+            <ul>
+              <li><a href="about.html">About Golden Leaves</a></li>
+              <li><a href="funds.html">Turan Capital Fund</a></li>
+              <li><a href="team.html">Leadership Team</a></li>
+              <li><a href="contact.html">Contact Us</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-contact">
+            <h4>Contact Us</h4>
+            <p>
+              <i class="fas fa-map-marker-alt"></i>
+              1 Heydar Aliyev St, Office 1, Yesil District<br/>Astana Z05T8M2, Kazakhstan
+            </p>
+            <p>
+              <i class="fas fa-envelope"></i>
+              <a href="mailto:info@gl.com.kz" style="color: rgba(255, 255, 255, 0.8)">info@gl.com.kz</a>
+            </p>
+            <p>
+              <i class="fas fa-phone"></i>
+              +7 (701) 997 60 39
+            </p>
+            <p>
+              <i class="fas fa-id-badge"></i>
+              License: AFSA-A-LA-2024-0038
+            </p>
+          </div>
+        </div>
+
+        <div class="risk-warning">
+          <strong>RISK WARNING:</strong> Golden Leaves Ltd is regulated by the Astana Financial Services Authority
+          (AFSA). License number: AFSA-A-LA-2024-0038. Investments in private equity funds are speculative and involve a
+          high degree of risk. Investors may lose some or all of their capital. These investments are suitable only for
+          Professional Clients as defined by AIFC rules. Past performance is not indicative of future results.
+        </div>
+
+        <div class="copyright">
+          &copy; 2026 Golden Leaves Ltd. All rights reserved.
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
