@@ -19,13 +19,16 @@ provision.
 
 ## Prerequisites
 
-- A Linux VPS (these steps assume Ubuntu/Debian; ask us for the CentOS/Alma
-  equivalents if that's what you're running).
+- A Linux VPS running **Ubuntu Server 24.04 LTS or 26.04 LTS** (these steps
+  are apt-based; ask us for the CentOS/Alma equivalents if you're running
+  something else).
 - Root or sudo SSH access to it.
 - A domain name with its DNS A record already pointed at the VPS's public IP
   (needed for step 8; you can do everything up through step 6 without one).
-- Node.js **≥ 22.5.0** — this app uses `node:sqlite`, which is only
-  available from that version onward. Older Node will fail to start.
+- Node.js **≥ 24.0.0** — this app uses `node:sqlite`, which needs the
+  `--experimental-sqlite` flag on some 22.x builds and this app doesn't pass
+  it. Node 24 doesn't need the flag at all. Don't substitute an older Node
+  22.x install here even though some other guide might suggest it.
 
 ## 1. Connect and update the system
 
@@ -37,9 +40,9 @@ sudo apt update && sudo apt upgrade -y
 ## 2. Install Node.js
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
-node -v   # confirm >= 22.5.0
+node -v   # confirm >= 24.0.0
 ```
 
 ## 3. Clone the repository
@@ -53,9 +56,14 @@ sudo npm install --omit=dev
 
 ## 4. Configure `.env`
 
+The app loads `.env` from the **project root** (`/var/www/crm/.env`), one
+level above `server/` — not from inside `server/` itself. Get this wrong
+and the app silently falls back to defaults (auto-generated JWT secret,
+demo portal password) with no error telling you why.
+
 ```bash
-cp ../.env.example .env
-nano .env
+cp ../.env.example ../.env
+nano ../.env
 ```
 
 Set these before going live:
@@ -81,23 +89,33 @@ curl -o /dev/null -s -w "%{http_code}\n" http://localhost:4000/company.html
 ```
 Both should respond. `Ctrl+C` the server once confirmed.
 
-## 6. Run it under pm2
+## 6. Run it as a systemd service
 
-pm2 keeps the process alive across crashes and server reboots.
+Native to Ubuntu Server, no extra tooling to install, integrates with
+`journalctl`/`systemctl`, and restarts automatically on crash or reboot.
+
+A ready-made unit file is included in the repo at `deploy/crm.service`
+(assumes the paths from step 3 — adjust `WorkingDirectory`/`ExecStart` if
+you cloned somewhere else):
 
 ```bash
-sudo npm install -g pm2
-pm2 start index.js --name crm
-pm2 save
-pm2 startup       # then run the one-line command it prints out
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin crmapp
+sudo chown -R crmapp:crmapp /var/www/crm
+sudo cp /var/www/crm/deploy/crm.service /etc/systemd/system/crm.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now crm
+sudo systemctl status crm
 ```
 
-Useful pm2 commands for later:
+Useful commands for later:
 ```bash
-pm2 status              # is it running?
-pm2 logs crm            # tail live logs
-pm2 restart crm         # after a deploy update (step 11)
+sudo systemctl status crm     # is it running?
+sudo journalctl -u crm -f     # tail live logs
+sudo systemctl restart crm    # after a deploy update (step 12)
 ```
+
+(If your team already standardizes on pm2 instead, that works too —
+`sudo npm install -g pm2 && pm2 start index.js --name crm && pm2 save && pm2 startup` — just don't run both process managers against the same port.)
 
 ## 7. Put nginx in front
 
@@ -179,10 +197,15 @@ Whenever new code is pushed to the `master` branch on GitHub:
 
 ```bash
 cd /var/www/crm
-sudo git pull origin master
+sudo -u crmapp git pull origin master
 cd server && sudo npm install --omit=dev   # only needed if package.json changed
-pm2 restart crm
+sudo systemctl restart crm
 ```
+
+Running `git pull` as the `crmapp` user (rather than root/sudo directly)
+keeps the pulled files owned by the same user the service already runs
+as — running it as root would leave newly-pulled files root-owned, which
+`crmapp` then can't write to on the next deploy.
 
 The live database (`server/data/crm.sqlite`) is untouched by a `git pull`
 — it's gitignored and lives only on the server.
@@ -205,8 +228,9 @@ there too. Example (adjust the destination to whatever you use):
 
 | Symptom | Likely cause |
 |---|---|
-| `curl http://localhost:4000/api/version` fails | Node process isn't running — check `pm2 status` / `pm2 logs crm`. |
+| `curl http://localhost:4000/api/version` fails | Node process isn't running — check `sudo systemctl status crm` / `sudo journalctl -u crm -f`. |
+| Service won't start, no useful error in `systemctl status` | Check `sudo journalctl -u crm -n 50` for the actual stack trace — common causes: wrong Node version (see Prerequisites), or `.env` in the wrong location (see step 4). |
 | Login rate-limits everyone after one bad attempt | `TRUST_PROXY` isn't set in `.env` while nginx is in front — see step 4. |
 | Public site pages (`company.html` etc.) show broken images | Team photos / PDFs are still on temporary `genspark.ai` hosting from initial site setup — ask us to swap in permanent files once you have them. |
-| 502 from nginx | Node process crashed or isn't listening on port 4000 — check `pm2 logs crm` for the actual error. |
+| 502 from nginx | Node process crashed or isn't listening on port 4000 — check `sudo journalctl -u crm -f` for the actual error. |
 | Uploaded files / DB missing after a redeploy | Confirm `server/data/` wasn't accidentally deleted — it's gitignored on purpose (it holds real data, not code) but must persist across deploys. |

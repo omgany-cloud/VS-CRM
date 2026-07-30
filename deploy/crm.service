@@ -1,0 +1,18 @@
+[Unit]
+Description=Turan CRM
+After=network.target
+
+[Service]
+Type=simple
+User=crmapp
+Group=crmapp
+WorkingDirectory=/var/www/crm/server
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

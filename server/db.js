@@ -4,6 +4,12 @@
 //  toolchain that better-sqlite3 needs, which isn't available
 //  in this environment).
 //
+//  Requires Node >= 24 (see package.json's engines field): node:sqlite
+//  was still behind the --experimental-sqlite flag on some 22.x
+//  releases, and this app passes no such flag anywhere — deploying
+//  onto an older Node 22.x build could otherwise fail at startup with
+//  no obvious explanation.
+//
 //  Tenancy model: shared DB, shared tables, `tenant_id` column
 //  on every tenant-scoped table + enforced in every query.
 //  This is the fastest strategy to stand up and is fine for a
