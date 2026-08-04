@@ -879,6 +879,20 @@ for (const col of ['gp_ceo', 'gp_title', 'gp_address', 'gp_bin', 'gp_bank_name',
 // a separate identity space from both, since an LP and a portfolio
 // company are different stakeholders with different data to see).
 if (!columnExists('lp_register', 'portal_password_hash')) db.exec("ALTER TABLE lp_register ADD COLUMN portal_password_hash TEXT");
+// Document links for the LP's own governing paperwork — same "paste a
+// link you already have" convention as pitchDeckUrl/closingCertUrl/etc.
+// elsewhere in this app (no real binary storage for these). Previously
+// the frontend displayed an `lp.lpaUrl` that was never actually backed
+// by a lp_register column — it only ever existed as an in-memory copy
+// from the onboarding activation task, so it silently vanished on the
+// next page reload / API refetch. These two real columns fix that.
+// contract_num has the exact same "displayed but never persisted" bug —
+// registerLPFromOnboarding() (js/lp-register.js) has been sending it in
+// the POST /api/lp body all along, silently dropped since there was no
+// column to bind it to.
+for (const col of ['lpa_url', 'sa_url', 'contract_num']) {
+  if (!columnExists('lp_register', col)) db.exec(`ALTER TABLE lp_register ADD COLUMN ${col} TEXT`);
+}
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

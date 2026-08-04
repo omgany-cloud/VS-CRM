@@ -36,6 +36,8 @@ function rowToLp(r) {
     notes: r.notes,
     obClientId: r.ob_client_id,
     rm: r.rm,
+    lpaUrl: r.lpa_url,
+    saUrl: r.sa_url,
     identityVerified: !!r.identity_verified,
     proofAddressVerified: !!r.proof_address_verified,
     sofVerified: !!r.sof_verified,
@@ -67,6 +69,9 @@ function rowToLpPortalView(r) {
     kycStatus: r.kyc_status,
     kycNextReview: r.kyc_next_review,
     lpacMember: !!r.lpac_member,
+    lpaUrl: r.lpa_url,
+    saUrl: r.sa_url,
+    contractNum: r.contract_num,
   };
 }
 

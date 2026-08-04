@@ -444,17 +444,40 @@ function openLPDetail(lpId) {
           <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
           <div style="font-size:12px;color:#e2e8f0;font-weight:600">${v||'—'}</div>
         </div>`).join('')}
-    ${lp.lpaUrl ? `
-    <div style="background:#0f1623;border-radius:8px;padding:8px 12px;margin-top:4px;display:flex;align-items:center;gap:10px;border-left:3px solid #8b5cf6">
-      <div style="flex:1">
-        <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">LP Agreement (LPA)</div>
-        <div style="font-size:11px;color:#a78bfa;word-break:break-all;font-weight:600">${lp.lpaUrl.length > 55 ? lp.lpaUrl.slice(0,55)+'…' : lp.lpaUrl}</div>
+    </div>
+
+    <!-- LP Documents (LPA / Subscription Agreement) — plain URL links, same
+         "paste a link you already have" pattern as pitchDeckUrl etc.
+         elsewhere in this app. Visible read-only to the LP themselves via
+         lp-portal.html; editable here by staff. -->
+    <div style="font-size:11px;font-weight:700;color:#8b5cf6;text-transform:uppercase;margin-bottom:8px">
+      <i class="fas fa-file-contract" style="margin-right:5px"></i>Документы LP
+    </div>
+    <div style="background:#0f1623;border-radius:8px;padding:12px;margin-bottom:18px;display:grid;gap:10px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">LP Agreement (LPA)</div>
+          <input type="text" id="lpDocLpaUrl_${lp.id}" value="${escapeAttr(lp.lpaUrl || '')}" placeholder="Ссылка на LPA (Google Drive и т.п.)"
+            style="width:100%;background:#131c2e;border:1px solid #2a3448;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px" />
+        </div>
+        ${lp.lpaUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${escapeAttr(lp.lpaUrl)}','${escapeAttr(lp.lpaUrl)}')" title="Открыть"
+          style="background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0;margin-top:16px">
+          <i class="fas fa-external-link-alt"></i></button>` : ''}
       </div>
-      <button onclick="event.stopPropagation();_obOpenPreviewModal('${lp.lpaUrl}','${lp.lpaUrl}')"
-        style="background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0">
-        <i class="fas fa-file-contract" style="margin-right:4px"></i>Открыть LPA
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">Subscription Agreement</div>
+          <input type="text" id="lpDocSaUrl_${lp.id}" value="${escapeAttr(lp.saUrl || '')}" placeholder="Ссылка на Subscription Agreement"
+            style="width:100%;background:#131c2e;border:1px solid #2a3448;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px" />
+        </div>
+        ${lp.saUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${escapeAttr(lp.saUrl)}','${escapeAttr(lp.saUrl)}')" title="Открыть"
+          style="background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0;margin-top:16px">
+          <i class="fas fa-external-link-alt"></i></button>` : ''}
+      </div>
+      <button onclick="event.stopPropagation();saveLpDocuments(${lp.id})"
+        style="justify-self:start;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:5px"></i>Сохранить документы
       </button>
-    </div>` : ''}
     </div>
 
     <!-- Capital Call History for this LP -->
@@ -546,6 +569,20 @@ function closeLPDetail() {
   if (modal)   modal.style.display   = 'none';
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+async function saveLpDocuments(id) {
+  const lpaUrl = document.getElementById(`lpDocLpaUrl_${id}`)?.value.trim() || '';
+  const saUrl  = document.getElementById(`lpDocSaUrl_${id}`)?.value.trim() || '';
+  try {
+    const updated = await apiFetch(`/api/lp/${id}`, { method: 'PUT', body: JSON.stringify({ lpaUrl, saUrl }) });
+    const idx = lpRegister.findIndex(l => l.id === id);
+    if (idx >= 0) lpRegister[idx] = updated;
+    openLPDetail(id);
+    showToast('✅ Документы LP сохранены', 'green');
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 // No email infrastructure exists to automate delivery — same "shown once,

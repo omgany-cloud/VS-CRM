@@ -31,6 +31,15 @@ test('LP portal: login, curated self-service view, and per-LP data isolation', a
     body: JSON.stringify({ fundId, name: 'ZZZ_LPPORTAL_B', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 2000, status: 'Active', registerId: 'LPP-B', email: 'lpp-b@example.com' }),
   })).json();
 
+  // Staff sets document links for LP A — previously lpaUrl was displayed
+  // in the CRM but never actually persisted (no lp_register column to
+  // bind it to); confirm it now round-trips through a real PUT.
+  const docSave = await server.apiFetch(`/api/lp/${lpA.id}`, {
+    method: 'PUT', body: JSON.stringify({ lpaUrl: 'https://example.com/lpa.pdf', saUrl: 'https://example.com/sa.pdf' }),
+  });
+  assert.equal(docSave.status, 200);
+  assert.equal((await docSave.json()).lpaUrl, 'https://example.com/lpa.pdf');
+
   // Staff generates a portal password for LP A only.
   const genRes = await server.apiFetch(`/api/lp/${lpA.id}/portal-password`, { method: 'PUT' });
   assert.equal(genRes.status, 200);
@@ -56,6 +65,8 @@ test('LP portal: login, curated self-service view, and per-LP data isolation', a
   assert.equal(lp.notes, undefined, 'internal staff notes must not leak to the LP');
   assert.equal(lp.rm, undefined, 'internal RM assignment must not leak to the LP');
   assert.equal(lp.riskRating, undefined, 'internal risk rating must not leak to the LP');
+  assert.equal(lp.lpaUrl, 'https://example.com/lpa.pdf', 'the LP must see its own document links');
+  assert.equal(lp.saUrl, 'https://example.com/sa.pdf');
 
   async function lpFetch(path) {
     return fetch(server.baseUrl + path, { headers: { Authorization: 'Bearer ' + token } });

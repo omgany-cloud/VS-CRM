@@ -931,13 +931,13 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
        commitment, called_amount, paid_amount, distributions, fund_class, ownership_pct, professional_client,
        kyc_status, kyc_date, kyc_next_review, risk_rating, admission_date, sa_number, afsa_notified, lpac_member,
        status, exit_date, notes, ob_client_id, rm, identity_verified, proof_address_verified, sof_verified,
-       tax_id_verified, pep_check_cleared, aml_screening_cleared, ubo_verified, updated_at)
+       tax_id_verified, pep_check_cleared, aml_screening_cleared, ubo_verified, lpa_url, sa_url, contract_num, updated_at)
     VALUES
       (@tenantId, @fundId, @registerId, @name, @type, @lpType, @country, @address, @taxId, @contact, @email, @phone,
        @commitment, @calledAmount, @paidAmount, @distributions, @fundClass, @ownershipPct, @professionalClient,
        @kycStatus, @kycDate, @kycNextReview, @riskRating, @admissionDate, @saNumber, @afsaNotified, @lpacMember,
        @status, @exitDate, @notes, @obClientId, @rm, @identityVerified, @proofAddressVerified, @sofVerified,
-       @taxIdVerified, @pepCheckCleared, @amlScreeningCleared, @uboVerified, datetime('now'))
+       @taxIdVerified, @pepCheckCleared, @amlScreeningCleared, @uboVerified, @lpaUrl, @saUrl, @contractNum, datetime('now'))
   `).run(at({
     tenantId: req.tenantId,
     fundId: b.fundId || null,
@@ -978,6 +978,9 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
     pepCheckCleared: b.pepCheckCleared ? 1 : 0,
     amlScreeningCleared: b.amlScreeningCleared ? 1 : 0,
     uboVerified: b.uboVerified ? 1 : 0,
+    lpaUrl: b.lpaUrl || null,
+    saUrl: b.saUrl || null,
+    contractNum: b.contractNum || null,
   }));
 
   const row = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -1002,7 +1005,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
       ob_client_id=@obClientId, rm=@rm, identity_verified=@identityVerified,
       proof_address_verified=@proofAddressVerified, sof_verified=@sofVerified, tax_id_verified=@taxIdVerified,
       pep_check_cleared=@pepCheckCleared, aml_screening_cleared=@amlScreeningCleared, ubo_verified=@uboVerified,
-      updated_at=datetime('now')
+      lpa_url=@lpaUrl, sa_url=@saUrl, contract_num=@contractNum, updated_at=datetime('now')
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({
     fundId: merged.fundId || null,
@@ -1018,6 +1021,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
     proofAddressVerified: merged.proofAddressVerified ? 1 : 0, sofVerified: merged.sofVerified ? 1 : 0,
     taxIdVerified: merged.taxIdVerified ? 1 : 0, pepCheckCleared: merged.pepCheckCleared ? 1 : 0,
     amlScreeningCleared: merged.amlScreeningCleared ? 1 : 0, uboVerified: merged.uboVerified ? 1 : 0,
+    lpaUrl: merged.lpaUrl || null, saUrl: merged.saUrl || null, contractNum: merged.contractNum || null,
     id: existing.id, tenantId: req.tenantId,
   }));
 

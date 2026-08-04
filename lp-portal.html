@@ -154,6 +154,11 @@
       </div>
     </div>
 
+    <div class="p-section" id="docsSection" style="display:none">
+      <div class="p-section-title"><i class="fas fa-file-contract"></i>Документы</div>
+      <div id="docsWrap" style="display:grid;gap:8px"></div>
+    </div>
+
     <div class="p-section">
       <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>История Capital Calls</div>
       <div id="ccTableWrap">
@@ -261,6 +266,29 @@ function renderOverview(lp) {
   document.getElementById('kpiCalled').textContent       = fmtUSD(lp.calledAmount);
   document.getElementById('kpiUnfunded').textContent     = fmtUSD(Math.max(0, (lp.commitment || 0) - (lp.paidAmount || 0)));
   document.getElementById('kpiDistributions').textContent = fmtUSD(lp.distributions);
+  renderDocuments(lp);
+}
+
+const LP_DOC_DEFS = [
+  { key: 'lpaUrl', label: 'LP Agreement (LPA)', icon: 'fa-file-contract' },
+  { key: 'saUrl',  label: 'Subscription Agreement', icon: 'fa-file-signature' },
+];
+
+function renderDocuments(lp) {
+  const docs = LP_DOC_DEFS.filter(d => lp[d.key]);
+  const section = document.getElementById('docsSection');
+  if (!docs.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  document.getElementById('docsWrap').innerHTML = docs.map(d => `
+    <div style="display:flex;align-items:center;gap:10px;background:#0f1623;border-radius:8px;padding:10px 12px">
+      <i class="fas ${d.icon}" style="color:var(--purple)"></i>
+      <div style="flex:1;font-size:12px;font-weight:600">${escapeHtml(d.label)}</div>
+      <a href="${escapeHtml(lp[d.key])}" target="_blank" rel="noopener"
+        style="background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.35);color:var(--purple);padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none">
+        <i class="fas fa-external-link-alt" style="margin-right:5px"></i>Открыть
+      </a>
+    </div>
+  `).join('');
 }
 
 const CC_STATUS_BADGE = {
