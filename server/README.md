@@ -53,6 +53,7 @@ route table in `server/index.js`:
 | Documents (file register) | `documents`, `uploaded_files` | Real disk storage via `POST /api/uploads`, not just a metadata row. |
 | Users / Roles | `users`, `roles` | Roles are DB-backed with boolean capability flags, editable at runtime — not hardcoded role-name checks. |
 | API keys (external integrations) | `api_keys` | Scoped read-only keys, see `server/externalApi.js`. |
+| MCP server | (none — wraps the same tables as the API keys above) | `POST /api/v1/external/mcp`, see `server/mcp.js`. Same identity/scopes as the REST routes; exposed as `list_lp`/`list_portfolio`/`list_deals`/`list_funds` tools instead of endpoints, so an MCP client (Claude, or any other MCP-aware caller) can query this tenant's data directly. |
 | Tenants (company settings) | `tenants` | Company display name is editable from the UI, not fixed at signup. |
 | LP portal (self-service) | reuses `portfolio`/`documents` | Separate login space, BIN + per-company password, not a `users` row. |
 
@@ -64,9 +65,11 @@ migrated off the original hardcoded constant (`FUND_PARAMS` in
 that constant's defaults if a fund doesn't have its own value set; this is
 a known, narrow gap, not a hidden one — see `js/funds.js`'s `fundParamsFor()`.
 
-77 API routes, 22 tables — verified by grepping the actual route/schema
+81 internal routes (`server/index.js`) + 22 tables (`server/db.js`), plus
+the curated external surface in `server/externalApi.js` (4 scoped REST
+routes and 1 MCP endpoint) — verified by grepping the actual route/schema
 definitions, not by re-reading old docs. If this table and the code drift
-apart again, trust `server/index.js` and `server/db.js`, not this file.
+apart again, trust the code, not this file.
 
 ## Multi-tenancy model
 Shared DB, shared tables, `tenant_id` column enforced on every
@@ -86,6 +89,25 @@ Covers LP, deals, portfolio, engagements, capital calls, onboarding
 clients, users, funds, API keys, and tenant rename — re-run it any time
 someone touches a tenant-scoped query to confirm the guarantee still
 holds.
+
+## Connecting an MCP client
+1. Create an API key from the CRM (Команда / Пользователи → API-ключи),
+   picking whichever `read:*` scopes the client should have. The raw key
+   is only ever shown once at creation time.
+2. Point an MCP client (Claude Code, Claude.ai via a custom connector, or
+   any other MCP-aware caller) at `POST https://<your-domain>/api/v1/external/mcp`
+   with `Authorization: Bearer <the key>`.
+3. The client's `tools/list` will show all four tools regardless of the
+   key's actual scopes (so it knows what exists); calling a tool the key
+   isn't scoped for returns a normal tool-level error (`isError: true`),
+   not an HTTP-level rejection.
+
+This is a stateless Streamable HTTP server (`server/mcp.js`) — every
+request gets a fresh `McpServer` instance scoped to that request's
+`req.tenantId`/`req.apiKey.scopes`, with no session state kept between
+calls. `GET`/`DELETE` on the endpoint both 405 (there's no session to
+resume or tear down). See `server/test/mcp.test.js` for the exact
+handshake shape if building a client from scratch.
 
 ## Extending further
 To wire up a new entity end-to-end:

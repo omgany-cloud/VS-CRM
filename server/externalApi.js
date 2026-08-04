@@ -20,6 +20,7 @@ const { rowToLp } = require('./lpMapping');
 const { rowToDeal } = require('./dealMapping');
 const { rowToPortfolio } = require('./portfolioMapping');
 const { rowToFund } = require('./fundMapping');
+const { handleMcpRequest, methodNotAllowed } = require('./mcp');
 
 const router = express.Router();
 
@@ -73,5 +74,15 @@ router.get('/funds', requireApiKey('read:funds'), apiKeyRateLimit, (req, res) =>
   const rows = db.prepare('SELECT * FROM funds WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
   res.json({ funds: rows.map(rowToFund) });
 });
+
+// MCP (server/mcp.js) — same 4 read scopes as the REST routes above,
+// exposed as tools instead of endpoints so an MCP client (Claude, or any
+// other MCP-aware caller) can query this tenant's data directly. No
+// specific scope required by requireApiKey() here: this single endpoint
+// hosts all four tools at once, and each tool checks its own scope
+// against the key at call time instead.
+router.post('/mcp', requireApiKey(), apiKeyRateLimit, handleMcpRequest);
+router.get('/mcp', methodNotAllowed);
+router.delete('/mcp', methodNotAllowed);
 
 module.exports = router;
