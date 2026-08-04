@@ -216,13 +216,49 @@ The live database (`server/data/crm.sqlite`) is untouched by a `git pull`
 timestamped snapshots to `server/data/backups/` every 6 hours (30-day
 retention). This is **still the same physical disk** as the live
 database — a disk failure takes out the live DB and every local backup at
-once. Once you have real off-machine storage (a cloud bucket, another
-server, etc.), set up a cron job or similar to sync `server/data/backups/`
-there too. Example (adjust the destination to whatever you use):
+once.
+
+### Offsite: syncing to a second Ubuntu Server
+
+A ready-made script is included at `deploy/backup-sync.sh` — it rsyncs
+`server/data/backups/` to a second server over SSH, with locking (won't
+double-run if a previous sync is still copying), logging, and a real
+non-zero exit code on failure so cron/monitoring can see it failed. It
+does the recurring sync only; do the one-time key setup below first.
+
+**One-time setup, on the primary server:**
 ```bash
-# crontab -e
-0 * * * * rsync -a /var/www/crm/server/data/backups/ user@backup-host:/backups/crm/
+# Generate a dedicated key for this (don't reuse a personal one) —
+# leave the passphrase empty, this needs to run unattended from cron.
+sudo -u crmapp ssh-keygen -t ed25519 -f /var/www/crm/server/data/.backup_ssh_key -N ""
+
+# Copy the public key to the backup server (you'll need a password or
+# existing key for this one-time step)
+sudo -u crmapp ssh-copy-id -i /var/www/crm/server/data/.backup_ssh_key.pub backupuser@your-backup-server
 ```
+
+**On the backup server**, make sure the target directory exists and is
+owned by whatever user `backupuser` is:
+```bash
+mkdir -p /backups/crm
+```
+
+**Back on the primary server**, install the cron job:
+```bash
+sudo -u crmapp crontab -e
+```
+```cron
+0 * * * * BACKUP_REMOTE_HOST=backupuser@your-backup-server BACKUP_SSH_KEY=/var/www/crm/server/data/.backup_ssh_key /var/www/crm/deploy/backup-sync.sh
+```
+
+Check it actually worked:
+```bash
+cat /var/www/crm/server/data/backup-sync.log
+```
+
+The remote copy mirrors the same 30-day retention as the local one
+(`--delete` in the script) rather than growing forever — see the
+script's comments if you'd rather keep the offsite copy indefinitely.
 
 ## Troubleshooting
 
@@ -234,3 +270,5 @@ there too. Example (adjust the destination to whatever you use):
 | Public site pages (`company.html` etc.) show broken images | Team photos / PDFs are still on temporary `genspark.ai` hosting from initial site setup — ask us to swap in permanent files once you have them. |
 | 502 from nginx | Node process crashed or isn't listening on port 4000 — check `sudo journalctl -u crm -f` for the actual error. |
 | Uploaded files / DB missing after a redeploy | Confirm `server/data/` wasn't accidentally deleted — it's gitignored on purpose (it holds real data, not code) but must persist across deploys. |
+| `deploy/backup-sync.sh` fails with a tool-not-found error | `flock`/`rsync`/`ssh` all ship with a standard Ubuntu Server — if one's missing, something's off with the base install, not the script. |
+| Backup sync fails with an SSH/auth error | Re-check the one-time `ssh-keygen`/`ssh-copy-id` setup in step 13 — test manually with `sudo -u crmapp ssh -i /var/www/crm/server/data/.backup_ssh_key backupuser@your-backup-server` to see the real error. |
