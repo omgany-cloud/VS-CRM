@@ -787,9 +787,21 @@ function startAuthRefreshLoop() {
 // visible spot that reflects a company rename (js/users.js's
 // saveCompanyName()) without a full page reload.
 function applyTenantBranding() {
-  const auth = getAuth();
-  const name = auth && auth.tenant && auth.tenant.name;
+  const name = companyName();
   if (name) document.title = name + ' — CRM';
+}
+
+// The management company's own name (the GP — e.g. "Golden Leaves Ltd"),
+// for text that's about the company itself rather than any one fund it
+// manages (CF&A engagement documents, generic branding). Distinct from a
+// fund's own `gp` field (js/funds.js's fundParamsFor()) — the two happen
+// to hold the same value today, but conceptually a fund's GP and the
+// tenant running this CRM aren't guaranteed to be the same thing. Falls
+// back to a literal default rather than an empty string so a document
+// generator never silently prints nothing where a name is expected.
+function companyName() {
+  const auth = getAuth();
+  return (auth && auth.tenant && auth.tenant.name) || 'Golden Leaves Ltd';
 }
 
 // Shared by both the login and signup submit handlers below — same

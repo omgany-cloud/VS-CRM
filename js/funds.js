@@ -97,6 +97,12 @@ function updateFundBranding(f) {
   if (el) el.textContent = f.shortName;
   const sub = document.getElementById('activeFundSub');
   if (sub) sub.textContent = f.license;
+  // Dashboard header — previously frozen to whichever fund's markup
+  // happened to ship in index.html, never updated when switching funds.
+  const dashLabel = document.getElementById('dashFundLabel');
+  if (dashLabel) dashLabel.textContent = f.name;
+  const dashSub = document.getElementById('dashFundSub');
+  if (dashSub) dashSub.textContent = `Сводная информация · ${f.gp} (GP) · Лицензия ${f.license || '—'}`;
   const phase = document.getElementById('fundPhaseText');
   if (phase) phase.textContent = `${f.phase} · Year ${f.phaseYear}`;
   document.documentElement.style.setProperty('--fund-color', f.color);

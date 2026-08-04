@@ -226,7 +226,7 @@ async function checkRestrictedList(client) {
       coiId,
       date:          new Date().toISOString().slice(0,10),
       conflictType:  'Restricted List Match',
-      parties:       `${client.name} / Golden Leaves Ltd.`,
+      parties:       `${client.name} / ${companyName()}`,
       severity:      match.restrictionType === 'Full Restriction' ? 'High' : 'Medium',
       status:        'Open',
       description:   `Клиент "${client.name}" совпадает с записью в Restricted List (${match.company}, ${match.fund}, ${match.ownershipPct}% владение).`,
@@ -2509,7 +2509,7 @@ function buildTaskForm(task, client) {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             ${buildSelect('f_lpSigned','Подписан LP?',['Нет','Ожидается','Да — оригинал','Да — эл. подпись'],fd.lpSigned,disabledAttr,selectStyle,labelStyle)}
-            ${buildSelect('f_gpSigned','Подписан GP (Golden Leaves Ltd)?',['Нет','Ожидается','Да'],fd.gpSigned,disabledAttr,selectStyle,labelStyle)}
+            ${buildSelect('f_gpSigned',`Подписан GP (${companyName()})?`,['Нет','Ожидается','Да'],fd.gpSigned,disabledAttr,selectStyle,labelStyle)}
           </div>
         </div>
 
@@ -3541,10 +3541,10 @@ function obGenerateSubscriptionAgreement(taskId) {
     biSection(
       'PARTIES',
       'СТОРОНЫ',
-      '"Golden Leaves Ltd." Private Company, represented by the CEO <b>' + FUND_PARAMS.gpCEOen + '</b>, acting on the basis of the Charter, hereinafter referred to as the <b>"General Partner"</b>, on the one hand, and<br><br>' +
+      '"' + companyName() + '." Private Company, represented by the CEO <b>' + FUND_PARAMS.gpCEOen + '</b>, acting on the basis of the Charter, hereinafter referred to as the <b>"General Partner"</b>, on the one hand, and<br><br>' +
       '"<b>' + lpName + '</b>" Limited Liability Partnership, represented by the <b>' + lpTitle + ' ' + lpCEO + '</b>, acting on the basis of the Charter, hereinafter referred to as the <b>"Limited Partner"</b>, on the other hand.<br><br>' +
       'Hereinafter jointly referred to as the <b>"Parties"</b> or separately as the <b>"Party"</b>.',
-      '«Golden Leaves Ltd.» Частная Компания, представленная Генеральным директором <b>' + FUND_PARAMS.gpCEO + '</b>, действующим на основании Устава, именуемая <b>«Генеральный Партнер»</b>, с одной стороны, и<br><br>' +
+      '«' + companyName() + '.» Частная Компания, представленная Генеральным директором <b>' + FUND_PARAMS.gpCEO + '</b>, действующим на основании Устава, именуемая <b>«Генеральный Партнер»</b>, с одной стороны, и<br><br>' +
       '«<b>' + lpName + '</b>» Товарищество с ограниченной ответственностью, представленное <b>' + lpTitle + ' ' + lpCEO + '</b>, действующим на основании Устава, именуемое <b>«Ограниченный Партнер»</b>, с другой стороны.<br><br>' +
       'В дальнейшем совместно именуемые <b>«Сторонами»</b> или по отдельности — <b>«Стороной»</b>.'
     ) +
@@ -3665,7 +3665,7 @@ function obGenerateSubscriptionAgreement(taskId) {
 
     // §14 BANK ACCOUNT
     '<div class="section-header">14. Bank Account for Contributions &nbsp;|&nbsp; 14. Банковский счёт для перечисления вкладов</div>' +
-    '<h3>Golden Leaves Ltd. (General Partner / Генеральный Партнер)</h3>' +
+    '<h3>' + companyName() + '. (General Partner / Генеральный Партнер)</h3>' +
     dataTable([
       ['Account Holder / Владелец счёта', FUND_PARAMS.fundShort],
       ['Bank / Банк', FUND_PARAMS.gpBankName],
@@ -4312,7 +4312,7 @@ function obGenerateTermSheet(taskId) {
   var body =
   // ── HEADER ──────────────────────────────────────────────────
   '<div class="doc-header">' +
-    '<div><div class="co-name">Golden Leaves Ltd</div>' +
+    '<div><div class="co-name">' + companyName() + '</div>' +
     '<div class="co-sub">' + FUND_PARAMS.license + ' · AIFC, Astana, Republic of Kazakhstan</div>' +
     '<div class="co-sub">CF&A Division — Advisory Services</div></div>' +
     '<div class="ts-ref"><div class="ts-label">Term Sheet</div><div class="ts-num">' + tsNum + '</div></div>' +
@@ -4339,7 +4339,7 @@ function obGenerateTermSheet(taskId) {
     row2('Client Type', client.type, 'Client Classification', fd31.proposedClass || fd31.f_proposedClass || client.classification || '—') +
     row2('Address', client.address || '—', 'Email', client.email || '—') +
     row2('Phone', client.phone || '—', 'KYC/AML Risk Rating', fd22.riskTotal || fd22.f_riskTotal || client.riskRating || '—') +
-    row('Service Provider', 'Golden Leaves Ltd · ' + FUND_PARAMS.license + ' · AIFC, Astana, Republic of Kazakhstan')
+    row('Service Provider', companyName() + ' · ' + FUND_PARAMS.license + ' · AIFC, Astana, Republic of Kazakhstan')
   ) +
 
   // ── SECTION 2: SCOPE OF ENGAGEMENT ──────────────────────────
@@ -4442,14 +4442,14 @@ function obGenerateTermSheet(taskId) {
       '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Signature</th>' +
       '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Date</th>' +
     '</tr></thead><tbody>' +
-    sigLine('For and on behalf of<br>Golden Leaves Ltd', 'Authorised Signatory') +
+    sigLine('For and on behalf of<br>' + companyName(), 'Authorised Signatory') +
     sigLine('For and on behalf of<br>the Client', client.name) +
     sigLine('Witnessed by<br>(if applicable)', '') +
     '</tbody></table>' +
 
   // ── FOOTER ───────────────────────────────────────────────────
   '<div class="doc-footer">' +
-    '<span>' + tsNum + ' · Generated ' + new Date().toLocaleDateString('en-GB') + ' by Golden Leaves Ltd CRM</span>' +
+    '<span>' + tsNum + ' · Generated ' + new Date().toLocaleDateString('en-GB') + ' by ' + companyName() + ' CRM</span>' +
     '<span>Page 1 of 1 · ' + FUND_PARAMS.license + '</span>' +
   '</div>' +
 
@@ -4604,7 +4604,7 @@ function obGenerateDDReport(taskId) {
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
       <div>
         <div style="font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">
-          Golden Leaves Capital — ${isFM ? 'Fund Management' : 'CF&A Services'}
+          ${companyName()} — ${isFM ? 'Fund Management' : 'CF&A Services'}
         </div>
         <h1 style="font-size:20px;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:4px">
           CLIENT DUE DILIGENCE<br>OUTCOME FORM
@@ -4799,7 +4799,7 @@ function obGenerateDDReport(taskId) {
     </div>
     <div style="margin-top:20px;font-size:10px;color:#94a3b8;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:12px">
       This document is confidential and prepared for internal compliance purposes only.
-      Generated by Golden Leaves Capital CRM · ${docRef} · ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})}
+      Generated by ${companyName()} CRM · ${docRef} · ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})}
     </div>
   </div>
 

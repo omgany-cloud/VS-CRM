@@ -756,7 +756,7 @@ function renderClosing() {
           boardResOk,
           boardResOk ? 'Загружен' : 'Нужен URL')}
         <div style="font-size:11px;color:#64748b;margin-bottom:10px">
-          Решение GP Board о проведении First Closing · Подписывается всеми директорами Golden Leaves Ltd
+          Решение GP Board о проведении First Closing · Подписывается всеми директорами ${fp.gp}
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <input type="text" id="fc_boardResUrl" placeholder="https://drive.google.com/... или загрузите файл"
