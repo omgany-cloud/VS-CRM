@@ -875,6 +875,10 @@ if (!columnExists('portfolio', 'portal_password_hash')) db.exec("ALTER TABLE por
 for (const col of ['gp_ceo', 'gp_title', 'gp_address', 'gp_bin', 'gp_bank_name', 'gp_bic', 'gp_iban_kzt', 'gp_iban_usd']) {
   if (!columnExists('funds', col)) db.exec(`ALTER TABLE funds ADD COLUMN ${col} TEXT`);
 }
+// LP self-service portal login (mirrors portfolio.portal_password_hash —
+// a separate identity space from both, since an LP and a portfolio
+// company are different stakeholders with different data to see).
+if (!columnExists('lp_register', 'portal_password_hash')) db.exec("ALTER TABLE lp_register ADD COLUMN portal_password_hash TEXT");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

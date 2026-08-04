@@ -46,4 +46,28 @@ function rowToLp(r) {
   };
 }
 
-module.exports = { rowToLp };
+// Curated subset for the LP's own self-service view (lp-portal.html) —
+// deliberately NOT the full rowToLp(): an LP should see their own
+// commercial/investment position, not internal-only fields like staff
+// notes, the assigned RM's name, the internal risk rating, or the
+// granular KYC-checklist booleans (that's an audit trail for compliance
+// staff, not something to expose to the person being checked).
+function rowToLpPortalView(r) {
+  return {
+    registerId: r.register_id,
+    name: r.name,
+    fundClass: r.fund_class,
+    commitment: r.commitment,
+    calledAmount: r.called_amount,
+    paidAmount: r.paid_amount,
+    distributions: r.distributions,
+    ownershipPct: r.ownership_pct,
+    admissionDate: r.admission_date,
+    status: r.status,
+    kycStatus: r.kyc_status,
+    kycNextReview: r.kyc_next_review,
+    lpacMember: !!r.lpac_member,
+  };
+}
+
+module.exports = { rowToLp, rowToLpPortalView };

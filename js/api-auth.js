@@ -263,7 +263,7 @@ const READONLY_GATED_FN_NAMES = [
   'portNestedField',
   'deleteLP', 'setLPStatus', 'deleteCC', 'deleteDeal',
   'deletePortfolioCompany', 'archivePortfolioCompany', 'restorePortfolioCompany',
-  'deleteEngagement', 'deleteObClient', 'generatePortalPassword',
+  'deleteEngagement', 'deleteObClient', 'generatePortalPassword', 'generateLpPortalPassword',
 ];
 const READONLY_GATED_FN_RE = new RegExp('^\\s*(' + READONLY_GATED_FN_NAMES.join('|') + ')\\s*\\(');
 // Triggers that don't call a gated function directly by name (e.g. the

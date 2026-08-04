@@ -507,6 +507,11 @@ function openLPDetail(lpId) {
           style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-envelope-open-text"></i> Welcome Letter
         </button>
+        <button onclick="generateLpPortalPassword(${lp.id})" ${lp.email ? '' : 'disabled'}
+          title="${lp.email ? '' : 'У LP не указан email — сначала добавьте его'}"
+          style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.3);color:#eab308;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700${lp.email ? '' : ';opacity:0.5;cursor:not-allowed'}">
+          <i class="fas fa-key"></i> Пароль LP-портала
+        </button>
         ${lp.lpaUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${lp.lpaUrl}','${lp.lpaUrl}')"
           style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#c4b5fd;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-file-contract"></i> Открыть LPA
@@ -541,6 +546,41 @@ function closeLPDetail() {
   if (modal)   modal.style.display   = 'none';
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// No email infrastructure exists to automate delivery — same "shown once,
+// stays open until staff dismisses it, then relayed manually" flow as
+// generatePortalPassword() (js/app.js) for portfolio companies. Never
+// stored or logged in plaintext server-side, only its bcrypt hash.
+async function generateLpPortalPassword(id) {
+  const lp = lpRegister.find(l => l.id === id);
+  if (!lp) return;
+  if (!lp.email) { showToast('⚠️ У LP не указан email — сначала добавьте его', 'red'); return; }
+  if (!confirm(`Сгенерировать новый пароль LP-портала для «${lp.name}»? Старый пароль (если был) перестанет работать.`)) return;
+  let password;
+  try {
+    const res = await apiFetch(`/api/lp/${id}/portal-password`, { method: 'PUT' });
+    password = res.password;
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'genLpPortalPwOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#1c2333;border:1px solid #2a3448;border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-bottom:6px"><i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>Пароль LP-портала — ${escapeHtml(lp.name)}</div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">Email для входа: <b>${escapeHtml(lp.email)}</b>. Пароль показывается один раз — сообщите его LP лично, повторно посмотреть будет нельзя.</div>
+      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 12px;margin-bottom:16px">
+        <code id="genLpPortalPw" style="flex:1;font-size:15px;color:#22c55e;font-weight:700;letter-spacing:0.5px;user-select:all">${escapeHtml(password)}</code>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('genLpPortalPw').textContent).then(()=>showToast('📋 Скопировано','green'))"
+          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-copy"></i></button>
+      </div>
+      <button onclick="document.getElementById('genLpPortalPwOverlay').remove()"
+        style="width:100%;background:#3b82f6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил пароль</button>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 async function markAfsaNotified(lpId) {

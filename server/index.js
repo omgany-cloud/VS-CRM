@@ -20,7 +20,7 @@ const { db, at } = require('./db');
 const { runBackup, scheduleBackups } = require('./backup');
 const { logError } = require('./logger');
 const externalApiRouter = require('./externalApi');
-const { signToken, signPortalToken, requireAuth, requirePortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
+const { signToken, signPortalToken, signLpPortalToken, requireAuth, requirePortalAuth, requireLpPortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
 const { rowToRole, rowToPermissions, roleToParams, INSERT_SQL: ROLE_INSERT_SQL, UPDATE_SQL: ROLE_UPDATE_SQL } = require('./rolesMapping');
 const { rowToUser } = require('./usersMapping');
@@ -29,7 +29,7 @@ const {
   blocksPermissions: chineseWallBlocks, filterClientsForPermissions,
   blocksDocumentCategory, filterDocumentsForPermissions,
 } = require('./chineseWall');
-const { rowToLp } = require('./lpMapping');
+const { rowToLp, rowToLpPortalView } = require('./lpMapping');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
@@ -340,6 +340,79 @@ app.put('/api/portfolio/:id/portal-password', requireAuth, requireInternal, requ
   const hash = bcrypt.hashSync(password, 10);
   db.prepare('UPDATE portfolio SET portal_password_hash = ? WHERE id = ? AND tenant_id = ?').run(hash, existing.id, req.tenantId);
   res.json({ password });
+});
+
+/* ===== LP self-service portal (lp-portal.html) =====
+   Same shape as the portfolio-company portal above, but a completely
+   separate identity space (requireLpPortalAuth, not requirePortalAuth) —
+   an LP invests INTO the fund, a portfolio company is invested IN BY the
+   fund, and they must never be able to authenticate into each other's
+   data. Login is by email rather than BIN (an LP's internal register_id
+   like "LP-2025-003" is sequential per tenant, not globally unique the
+   way a real business registration number is — email is the more
+   collision-resistant identifier available on this record). Same
+   documented caveat as the portco login: this lookup isn't tenant-scoped
+   (no tenant is known yet at login time), so an email collision across
+   two different tenants could theoretically match the wrong LP's row. */
+app.post('/api/portal/lp/login', authRateLimit, (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+  const row = db.prepare('SELECT * FROM lp_register WHERE email = ?').get(String(email).trim());
+  if (!row || !row.portal_password_hash || !bcrypt.compareSync(password, row.portal_password_hash)) {
+    return res.status(401).json({ error: 'Неверный email или пароль' });
+  }
+  const token = signLpPortalToken(row);
+  res.json({ token, lp: rowToLpPortalView(row) });
+});
+
+// Internal-staff action: (re)generates a random password for an LP's
+// portal login — same "shown once, relayed manually, never stored in
+// plaintext" flow as the portfolio-company equivalent above. Requires the
+// LP to already have an email on file (that's the login identifier).
+app.put('/api/lp/:id/portal-password', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
+  if (!existing.email) return res.status(409).json({ error: 'LP has no email on file — add one first, it doubles as the portal login' });
+  const password = crypto.randomBytes(9).toString('base64url');
+  const hash = bcrypt.hashSync(password, 10);
+  db.prepare('UPDATE lp_register SET portal_password_hash = ? WHERE id = ? AND tenant_id = ?').run(hash, existing.id, req.tenantId);
+  res.json({ password });
+});
+
+app.get('/api/portal/lp/me', requireLpPortalAuth, (req, res) => {
+  res.json({ lp: rowToLpPortalView(req.portalLp) });
+});
+
+// Read-only capital call history for the authenticated LP — line items
+// only for THIS LP (req.portalLp.id, never a client-supplied id), joined
+// with the parent call for context (notice date, purpose, the call's own
+// status). No write routes here: capital call state changes only ever
+// happen from the internal CRM side.
+app.get('/api/portal/lp/capital-calls', requireLpPortalAuth, (req, res) => {
+  const rows = db.prepare(`
+    SELECT cli.commitment, cli.pct, cli.called, cli.paid, cli.payment_date AS paid_date, cli.status, cli.wire_ref,
+           cc.cc_number, cc.notice_date, cc.payment_date AS due_date, cc.purpose, cc.purpose_type, cc.status AS cc_status
+    FROM capital_call_line_items cli
+    JOIN capital_calls cc ON cc.id = cli.call_id AND cc.tenant_id = cli.tenant_id
+    WHERE cli.tenant_id = ? AND cli.lp_id = ?
+    ORDER BY cc.id
+  `).all(req.tenantId, req.portalLp.id);
+  const capitalCalls = rows.map(r => ({
+    ccNumber: r.cc_number,
+    noticeDate: r.notice_date,
+    dueDate: r.due_date,
+    purpose: r.purpose,
+    purposeType: r.purpose_type,
+    ccStatus: r.cc_status,
+    commitment: r.commitment,
+    pct: r.pct,
+    called: r.called,
+    paid: r.paid,
+    paidDate: r.paid_date,
+    status: r.status,
+    wireRef: r.wire_ref,
+  }));
+  res.json({ capitalCalls });
 });
 
 // Reuses the same disk-storage multer instance as POST /api/uploads, just

@@ -120,6 +120,39 @@ function requirePortalAuth(req, res, next) {
   }
 }
 
+// LP self-service portal (lp-portal.html) — a fourth identity space,
+// deliberately separate from requirePortalAuth's portfolio companies
+// above even though the shape is nearly identical. An LP invests INTO
+// the fund; a portfolio company is invested IN BY the fund — different
+// stakeholders who should never be able to see each other's data, so
+// keeping their auth (and the fields each token/lookup exposes) apart
+// avoids the two ever accidentally merging into one.
+function signLpPortalToken(lpRow) {
+  return jwt.sign(
+    { lpPortal: true, lpId: lpRow.id, tenantId: lpRow.tenant_id },
+    JWT_SECRET,
+    { expiresIn: '12h' }
+  );
+}
+
+function requireLpPortalAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Missing bearer token' });
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!payload.lpPortal) return res.status(401).json({ error: 'Not an LP portal token' });
+    const row = db.prepare('SELECT * FROM lp_register WHERE id = @id AND tenant_id = @tenantId')
+      .get(at({ id: payload.lpId, tenantId: payload.tenantId }));
+    if (!row) return res.status(401).json({ error: 'LP record not found' });
+    req.portalLp = row;
+    req.tenantId = payload.tenantId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 // Express middleware for the curated external API (server/externalApi.js)
 // — a third, completely separate identity space from both requireAuth's
 // internal users and requirePortalAuth's portfolio companies. Machine
@@ -173,4 +206,4 @@ function requirePermission(key) {
 // routes that internal GP staff need but external committee members don't.
 const requireInternal = requirePermission('internal');
 
-module.exports = { signToken, signPortalToken, requireAuth, requirePortalAuth, requireApiKey, requirePermission, requireInternal, JWT_SECRET };
+module.exports = { signToken, signPortalToken, signLpPortalToken, requireAuth, requirePortalAuth, requireLpPortalAuth, requireApiKey, requirePermission, requireInternal, JWT_SECRET };

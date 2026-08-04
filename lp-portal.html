@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Портал LP — Turan Capital Fund</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1321; --surface: #131d2e; --surface2: #1c2333; --border: #1e293b;
+      --text: #e2e8f0; --muted: #64748b; --accent: #3b82f6;
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444; --purple: #a78bfa;
+    }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+    .portal-header {
+      background:var(--surface2); border-bottom:1px solid var(--border);
+      padding:0 24px; height:64px; display:flex; align-items:center; justify-content:space-between;
+      position:sticky; top:0; z-index:100;
+    }
+    .portal-logo { display:flex; align-items:center; gap:12px; }
+    .portal-logo-mark { width:36px; height:36px; border-radius:9px;
+      background:linear-gradient(135deg,#1d4ed8,#6d28d9); display:flex;
+      align-items:center; justify-content:center; font-weight:800; font-size:14px; }
+    .portal-logo-text { font-size:14px; font-weight:700; color:var(--text); }
+    .portal-logo-sub { font-size:10px; color:var(--muted); }
+    .lp-badge { background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.3);
+      border-radius:8px; padding:6px 14px; font-size:12px; font-weight:700; color:#60a5fa; }
+
+    #loginScreen { display:flex; align-items:center; justify-content:center;
+      min-height:calc(100vh - 64px); padding:20px; }
+    .login-card { background:var(--surface2); border:1px solid var(--border); border-radius:16px;
+      padding:40px; width:100%; max-width:420px; }
+    .login-title { font-size:22px; font-weight:800; margin-bottom:6px; }
+    .login-sub { font-size:13px; color:var(--muted); margin-bottom:28px; }
+
+    #portalMain { display:none; }
+    .portal-content { padding:24px; max-width:900px; margin:0 auto; }
+
+    .fgroup label { display:block; font-size:10px; font-weight:700; color:var(--muted);
+      text-transform:uppercase; margin-bottom:4px; }
+    .fgroup input {
+      width:100%; background:#0f1623; border:1px solid #2a3448; border-radius:7px;
+      padding:8px 11px; color:var(--text); font-size:12px; font-family:'Inter',sans-serif;
+      transition:border-color 0.15s; }
+    .fgroup input:focus { outline:none; border-color:var(--accent); }
+
+    .btn-primary { background:linear-gradient(135deg,#1d4ed8,#6d28d9); border:none;
+      color:#fff; padding:10px 22px; border-radius:8px; font-size:13px; font-weight:700;
+      cursor:pointer; font-family:'Inter',sans-serif; transition:opacity 0.15s; }
+    .btn-primary:hover { opacity:0.9; }
+    .btn-ghost { background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.25);
+      color:var(--muted); padding:8px 18px; border-radius:8px; font-size:12px; font-weight:700;
+      cursor:pointer; font-family:'Inter',sans-serif; }
+
+    .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    @media(max-width:700px) { .kpi-row { grid-template-columns:1fr 1fr; } }
+    .kpi-card { background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+      padding:14px; text-align:center; }
+    .kpi-val { font-size:20px; font-weight:800; margin-bottom:3px; }
+    .kpi-label { font-size:10px; color:var(--muted); text-transform:uppercase; }
+
+    .p-section { background:var(--surface2); border:1px solid var(--border); border-radius:12px;
+      padding:20px; margin-bottom:20px; }
+    .p-section-title { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
+      letter-spacing:0.05em; margin-bottom:16px; display:flex; align-items:center; gap:7px; }
+
+    .sbadge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:5px; }
+    .sbadge.green { background:rgba(34,197,94,0.12); color:#4ade80; }
+    .sbadge.yellow { background:rgba(234,179,8,0.12); color:#fde047; }
+    .sbadge.red { background:rgba(239,68,68,0.12); color:#fca5a5; }
+    .sbadge.gray { background:rgba(100,116,139,0.12); color:#94a3b8; }
+
+    .p-table { width:100%; border-collapse:collapse; }
+    .p-table th { padding:8px 12px; text-align:left; font-size:10px; color:var(--muted);
+      font-weight:700; text-transform:uppercase; background:#0a1120; border-bottom:1px solid var(--border); }
+    .p-table td { padding:9px 12px; font-size:12px; border-bottom:1px solid #1a2335; }
+    .p-table tr:last-child td { border-bottom:none; }
+    .p-table tr:hover td { background:rgba(255,255,255,0.02); }
+    .empty-state { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; }
+  </style>
+</head>
+<body>
+
+<div class="portal-header">
+  <div class="portal-logo">
+    <div class="portal-logo-mark">TC</div>
+    <div>
+      <div class="portal-logo-text">Портал LP</div>
+      <div class="portal-logo-sub">Turan Capital Fund</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="lp-badge" id="headerLpName" style="display:none"></div>
+    <button class="btn-ghost" id="logoutBtn" style="display:none" onclick="doLogout()">
+      <i class="fas fa-sign-out-alt"></i> Выйти
+    </button>
+  </div>
+</div>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="width:56px;height:56px;background:linear-gradient(135deg,#1d4ed8,#6d28d9);
+        border-radius:14px;display:flex;align-items:center;justify-content:center;
+        margin:0 auto 12px;font-size:22px;font-weight:800">LP</div>
+      <div class="login-title">Добро пожаловать</div>
+      <div class="login-sub">Вход для ограниченных партнёров фонда</div>
+    </div>
+    <div class="fgroup" style="margin-bottom:14px">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com"/>
+    </div>
+    <div class="fgroup" style="margin-bottom:20px">
+      <label>Пароль</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <button class="btn-primary" style="width:100%;padding:12px" id="loginBtn" onclick="doLogin()">
+      <i class="fas fa-sign-in-alt" style="margin-right:8px"></i>Войти
+    </button>
+    <div id="loginError" style="display:none;color:#f87171;font-size:12px;margin-top:10px;text-align:center"></div>
+    <div style="margin-top:18px;font-size:11px;color:var(--muted);text-align:center">
+      Логин и пароль выдаёт команда фонда лично. Если у вас их нет — обратитесь к вашему менеджеру.
+    </div>
+  </div>
+</div>
+
+<div id="portalMain">
+  <div class="portal-content">
+
+    <div style="margin-bottom:20px">
+      <h1 id="lpName" style="font-size:22px;font-weight:800;margin-bottom:4px"></h1>
+      <div id="lpMeta" style="font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-val" id="kpiCommitment">—</div>
+        <div class="kpi-label">Commitment</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" id="kpiCalled">—</div>
+        <div class="kpi-label">Called to date</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" id="kpiUnfunded">—</div>
+        <div class="kpi-label">Unfunded</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val" id="kpiDistributions">—</div>
+        <div class="kpi-label">Distributions</div>
+      </div>
+    </div>
+
+    <div class="p-section">
+      <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>История Capital Calls</div>
+      <div id="ccTableWrap">
+        <div class="empty-state">Загрузка...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let lpToken = null;
+let currentLp = null;
+
+function fmtUSD(n) {
+  if (n == null) return '—';
+  return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+function fmtPct(n) {
+  if (n == null) return '—';
+  return Number(n).toFixed(1) + '%';
+}
+function escapeHtml(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+  errEl.style.display = 'none';
+  if (!email || !pass) {
+    errEl.style.display = 'block';
+    errEl.textContent   = 'Введите email и пароль.';
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const res = await fetch(API_BASE + '/api/portal/lp/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      errEl.style.display = 'block';
+      errEl.textContent   = data.error || 'Неверный email или пароль.';
+      return;
+    }
+    lpToken = data.token;
+    currentLp = data.lp;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('portalMain').style.display  = 'block';
+    document.getElementById('headerLpName').style.display = 'block';
+    document.getElementById('logoutBtn').style.display    = 'block';
+    document.getElementById('headerLpName').textContent   = currentLp.name;
+    initPortal();
+  } catch (err) {
+    errEl.style.display = 'block';
+    errEl.textContent   = 'Не удалось связаться с сервером. Попробуйте ещё раз.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function doLogout() {
+  lpToken = null;
+  currentLp = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('portalMain').style.display  = 'none';
+  document.getElementById('headerLpName').style.display = 'none';
+  document.getElementById('logoutBtn').style.display    = 'none';
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+async function lpFetch(path) {
+  const res = await fetch(API_BASE + path, { headers: { Authorization: 'Bearer ' + lpToken } });
+  if (!res.ok) {
+    if (res.status === 401) doLogout();
+    throw new Error((await res.json().catch(() => ({}))).error || 'Ошибка запроса');
+  }
+  return res.json();
+}
+
+async function initPortal() {
+  renderOverview(currentLp);
+  try {
+    const { capitalCalls } = await lpFetch('/api/portal/lp/capital-calls');
+    renderCapitalCalls(capitalCalls);
+  } catch (err) {
+    document.getElementById('ccTableWrap').innerHTML = `<div class="empty-state">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderOverview(lp) {
+  document.getElementById('lpName').textContent = lp.name;
+  document.getElementById('lpMeta').textContent = [lp.registerId, lp.fundClass ? `Class ${lp.fundClass}` : null]
+    .filter(Boolean).join(' · ');
+  document.getElementById('kpiCommitment').textContent   = fmtUSD(lp.commitment);
+  document.getElementById('kpiCalled').textContent       = fmtUSD(lp.calledAmount);
+  document.getElementById('kpiUnfunded').textContent     = fmtUSD(Math.max(0, (lp.commitment || 0) - (lp.paidAmount || 0)));
+  document.getElementById('kpiDistributions').textContent = fmtUSD(lp.distributions);
+}
+
+const CC_STATUS_BADGE = {
+  Paid: 'green', Pending: 'yellow', Default: 'red',
+};
+
+function renderCapitalCalls(calls) {
+  const wrap = document.getElementById('ccTableWrap');
+  if (!calls || !calls.length) {
+    wrap.innerHTML = '<div class="empty-state">Пока нет ни одного capital call по вашей позиции.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="p-table">
+      <thead>
+        <tr>
+          <th>CC №</th><th>Уведомление</th><th>Срок оплаты</th><th>Цель</th>
+          <th style="text-align:right">Вызвано</th><th style="text-align:right">Оплачено</th><th>Статус</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${calls.map(cc => `
+          <tr>
+            <td style="font-weight:700">${escapeHtml(cc.ccNumber)}</td>
+            <td>${escapeHtml(cc.noticeDate || '—')}</td>
+            <td>${escapeHtml(cc.dueDate || '—')}</td>
+            <td>${escapeHtml(cc.purpose || '—')}</td>
+            <td style="text-align:right">${fmtUSD(cc.called)}</td>
+            <td style="text-align:right">${fmtUSD(cc.paid)}</td>
+            <td><span class="sbadge ${CC_STATUS_BADGE[cc.status] || 'gray'}">${escapeHtml(cc.status || '—')}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+</script>
+</body>
+</html>
