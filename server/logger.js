@@ -44,4 +44,20 @@ function logApiCall({ method, path: reqPath, keyId, keyName, status }) {
   }
 }
 
-module.exports = { logError, logApiCall };
+// One line per AI-assist call (server/aiProvider.js's completeJson,
+// invoked from the ai-draft/ai-extract/ai-screen routes in
+// server/index.js) — never the raw prompt (may contain client PII), just
+// enough to reconstruct "who asked AI to draft what, for which record,
+// and what model answered" if a suggestion is ever questioned later.
+function logAiCall({ userEmail, entityType, entityId, promptDigest, model, status }) {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    const file = path.join(LOG_DIR, `ai-assist-${new Date().toISOString().slice(0, 10)}.log`);
+    const line = JSON.stringify({ at: new Date().toISOString(), userEmail, entityType, entityId, promptDigest, model, status }) + '\n';
+    fs.appendFileSync(file, line);
+  } catch (writeErr) {
+    console.error('[logger] failed to write ai call log:', writeErr.message);
+  }
+}
+
+module.exports = { logError, logApiCall, logAiCall };

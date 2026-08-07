@@ -18,7 +18,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db, at } = require('./db');
 const { runBackup, scheduleBackups } = require('./backup');
-const { logError } = require('./logger');
+const { logError, logAiCall } = require('./logger');
+const { z } = require('zod');
+const { completeJson } = require('./aiProvider');
 const externalApiRouter = require('./externalApi');
 const { signToken, signPortalToken, signLpPortalToken, requireAuth, requirePortalAuth, requireLpPortalAuth, requirePermission, requireInternal, JWT_SECRET } = require('./auth');
 const { getRoleRowByCode, isValidRole, listRoleRows, IC_SEATS } = require('./rolesRepo');
@@ -1647,6 +1649,42 @@ app.delete('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
   res.json({ ok: true, deleted: true });
 });
 
+// AI-assist Stage 3: fuzzy/alias flagging on top of the existing exact
+// substring check (checkRestrictedList, js/onboarding.js) — a suggestion
+// surfaced on the Conflict Pre-Check (1.1) form only. Never writes
+// f_restrictedMatch or creates a COI itself; the human still answers
+// "Да"/"Нет" and the existing checkRestrictedList()/COI-creation path is
+// unchanged. Not a substitute for a licensed sanctions/PEP screening
+// vendor — see the plan notes for this limitation.
+const AI_SCREEN_SCHEMA = z.object({
+  possibleMatch: z.boolean(),
+  matchedEntries: z.array(z.string()),
+  confidence: z.enum(['Низкая', 'Средняя', 'Высокая']),
+  reasoning: z.string(),
+});
+
+app.post('/api/ob-clients/:id/ai-screen', requireAuth, requireInternal, requirePermission('aiAssist'), async (req, res) => {
+  const client = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!client) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
+  if (chineseWallBlocks(req.user.permissions, client.direction)) {
+    return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
+  const restrictedRows = db.prepare('SELECT company, sector, fund, restriction_type FROM restricted_list WHERE tenant_id = ?').all(req.tenantId);
+  const promptDigest = crypto.createHash('sha256').update(client.name).digest('hex').slice(0, 16);
+  try {
+    const { data, model } = await completeJson({
+      system: 'You flag POSSIBLE fuzzy/alias name matches for a Compliance Officer — you never decide, you only flag for human review. Prefer a false positive over a missed match, but never claim possibleMatch=true without naming which restricted-list entry it resembles and why.',
+      prompt: `Клиент для проверки: "${client.name}".\nRestricted List (JSON):\n${JSON.stringify(restrictedRows)}\n\nЕсть ли вероятное совпадение (включая транслитерацию, сокращения, дочерние компании)? Верни JSON: possibleMatch (bool), matchedEntries (список названий из списка, которые похожи), confidence, reasoning (на русском).`,
+      schema: AI_SCREEN_SCHEMA,
+    });
+    logAiCall({ userEmail: req.user.email, entityType: 'ob_client_ai_screen', entityId: client.id, promptDigest, model, status: 'ok' });
+    res.json(data);
+  } catch (err) {
+    logAiCall({ userEmail: req.user.email, entityType: 'ob_client_ai_screen', entityId: client.id, promptDigest, model: null, status: 'error: ' + err.message });
+    res.status(502).json({ error: 'AI screening failed: ' + err.message });
+  }
+});
+
 // The common day-to-day write: update a task's status/formData as the
 // RM/CO works through the wizard.
 app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
@@ -1671,6 +1709,137 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   db.prepare(OB_TASK_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToObTask(row));
+});
+
+// AI-assist Stage 1: draft the DD Outcome (2.2) conclusion from whatever
+// f_* fields the Compliance Officer has already filled in — the same
+// "fill the form, human still reviews and submits" contract as
+// draftGpConclusion() in js/app.js, just backed by a real model instead of
+// fixed rules. Returns a suggestion only; never writes to the task itself
+// (that still only happens via the existing PUT /api/ob-tasks/:id, driven
+// by the human clicking submit in submitObTask()).
+const DD_DRAFT_SCHEMA = z.object({
+  riskJurisdiction: z.enum(['Low', 'Medium', 'High']),
+  riskSanction: z.enum(['Low', 'Medium', 'High']),
+  riskRep: z.enum(['Low', 'Medium', 'High']),
+  riskBusiness: z.enum(['Low', 'Medium', 'High']),
+  riskTotal: z.enum(['Low', 'Medium', 'High', 'Unacceptable']),
+  conclusion: z.enum(['Одобрить — Approve', 'Отказать — Reject', 'Расширенная проверка (EDD)']),
+  mlroNote: z.string(),
+  rationale: z.string(),
+});
+
+app.post('/api/ob-tasks/:id/ai-draft', requireAuth, requireInternal, requirePermission('aiAssist'), async (req, res) => {
+  const task = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!task) return res.status(404).json({ error: 'Onboarding task not found in this tenant' });
+  if (task.form_key !== 'dd_outcome') return res.status(400).json({ error: 'AI draft is only available for the DD Outcome (2.2) task' });
+  const client = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(task.client_id, req.tenantId);
+  if (client && chineseWallBlocks(req.user.permissions, client.direction)) {
+    return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
+  const fd = JSON.parse(task.form_data_json || '{}');
+  const isFM = client && client.direction === 'FM';
+
+  // Only the fields a human compliance officer has already screened —
+  // never the client's full record, never raw documents (that's Stage 2).
+  const facts = {
+    clientType: client ? client.type : null,
+    direction: client ? client.direction : null,
+    identityVerified: fd.corpVerified || null,
+    lpDocsVerified: fd.lpDocsVerified || null,
+    uboVerified: fd.uboVerified || null,
+    sanctionsHits: [0, 1, 2, 3].map(i => fd[`sanction_${i}`] || 'Не проверено'),
+    sanctionsTotal: fd.sanctionTotal || null,
+    pepClient: fd.pepClient || null,
+    pepDirectors: fd.pepDirectors || null,
+    sofVerified: isFM ? (fd.sofVerified || null) : undefined,
+    sowVerified: isFM ? (fd.sowVerified || null) : undefined,
+    bankRefOk: isFM ? (fd.bankRefOk || null) : undefined,
+    adverseMedia: fd.adverseMedia || null,
+    officerComments: fd.coComment || null,
+  };
+
+  const promptDigest = crypto.createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 16);
+  try {
+    const { data, model } = await completeJson({
+      system: 'You are assisting a Compliance Officer at a fund manager by drafting (not deciding) a KYC/AML due-diligence conclusion in Russian, from fields the officer has already screened themselves. You never invent findings not present in the input — if a field is unscreened, treat it as unresolved and let that drive a more cautious, not more lenient, rating.',
+      prompt: `Черновик заключения по due diligence на основе уже проверенных полей (JSON):\n${JSON.stringify(facts, null, 2)}\n\nВерни JSON строго по схеме: riskJurisdiction, riskSanction, riskRep, riskBusiness, riskTotal (Low/Medium/High, riskTotal может быть Unacceptable), conclusion (одно из трёх точных значений), mlroNote (краткое пояснение по рискам, 1-3 предложения, на русском), rationale (обоснование итогового решения, 1-3 предложения, на русском).`,
+      schema: DD_DRAFT_SCHEMA,
+    });
+    logAiCall({ userEmail: req.user.email, entityType: 'ob_task_dd_draft', entityId: task.id, promptDigest, model, status: 'ok' });
+    res.json(data);
+  } catch (err) {
+    logAiCall({ userEmail: req.user.email, entityType: 'ob_task_dd_draft', entityId: task.id, promptDigest, model: null, status: 'error: ' + err.message });
+    res.status(502).json({ error: 'AI draft failed: ' + err.message });
+  }
+});
+
+// AI-assist Stage 2: extract identity/SOF facts from an uploaded document
+// (the DD Outcome form has no document upload fields of its own before
+// this — js/onboarding.js's dd_outcome case adds one purely to feed this
+// route). Reuses the exact same uploaded_files rows/disk storage as
+// POST /api/uploads — no separate upload path. Returns a suggestion only;
+// never sets any ob_clients/ob_tasks verification field itself.
+const DD_EXTRACT_SCHEMA = z.object({
+  documentType: z.string(),
+  extractedName: z.string().nullable(),
+  extractedIdNumber: z.string().nullable(),
+  extractedAddress: z.string().nullable(),
+  extractedDob: z.string().nullable(),
+  statedSourceOfFunds: z.string().nullable(),
+  nameMatchesClient: z.enum(['Да', 'Нет', 'Не удалось определить']),
+  notes: z.string(),
+});
+const EXTRACTABLE_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
+
+app.post('/api/ob-tasks/:id/ai-extract', requireAuth, requireInternal, requirePermission('aiAssist'), async (req, res) => {
+  const task = db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!task) return res.status(404).json({ error: 'Onboarding task not found in this tenant' });
+  if (task.form_key !== 'dd_outcome') return res.status(400).json({ error: 'AI extract is only available for the DD Outcome (2.2) task' });
+  const client = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(task.client_id, req.tenantId);
+  if (client && chineseWallBlocks(req.user.permissions, client.direction)) {
+    return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
+  const uploadId = parseInt(req.body && req.body.uploadId, 10);
+  if (!Number.isInteger(uploadId)) return res.status(400).json({ error: 'uploadId is required' });
+  const file = db.prepare('SELECT * FROM uploaded_files WHERE id = ? AND tenant_id = ?').get(uploadId, req.tenantId);
+  if (!file) return res.status(404).json({ error: 'Uploaded file not found in this tenant' });
+  if (!EXTRACTABLE_MIME_TYPES.has(file.mime_type)) {
+    return res.status(400).json({ error: 'AI extraction only supports PDF or image files' });
+  }
+  const filePath = path.join(UPLOADS_DIR, file.stored_name);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing from storage' });
+
+  const promptDigest = crypto.createHash('sha256').update(String(file.id) + file.mime_type).digest('hex').slice(0, 16);
+  const system = 'You are assisting a Compliance Officer by extracting facts visible on one onboarding document (ID, proof of address, bank reference, etc.) into structured fields. Extract only what the document actually shows — never infer, complete, or guess a missing value. Respond in Russian for free-text fields.';
+  const clientHint = client ? `Ожидаемое имя клиента в системе: ${client.name}.` : '';
+
+  try {
+    let result;
+    if (file.mime_type === 'application/pdf') {
+      const pdfParse = require('pdf-parse');
+      const buf = fs.readFileSync(filePath);
+      const parsed = await pdfParse(buf);
+      result = await completeJson({
+        system,
+        prompt: `${clientHint}\nТекст документа (извлечён из PDF):\n${parsed.text.slice(0, 8000)}\n\nВерни JSON строго по схеме: documentType, extractedName, extractedIdNumber, extractedAddress, extractedDob, statedSourceOfFunds, nameMatchesClient (Да/Нет/Не удалось определить), notes.`,
+        schema: DD_EXTRACT_SCHEMA,
+      });
+    } else {
+      const base64 = fs.readFileSync(filePath).toString('base64');
+      result = await completeJson({
+        system,
+        prompt: `${clientHint}\nИзображение документа приложено. Верни JSON строго по схеме: documentType, extractedName, extractedIdNumber, extractedAddress, extractedDob, statedSourceOfFunds, nameMatchesClient (Да/Нет/Не удалось определить), notes.`,
+        schema: DD_EXTRACT_SCHEMA,
+        images: [{ mimeType: file.mime_type, base64 }],
+      });
+    }
+    logAiCall({ userEmail: req.user.email, entityType: 'ob_task_dd_extract', entityId: task.id, promptDigest, model: result.model, status: 'ok' });
+    res.json(result.data);
+  } catch (err) {
+    logAiCall({ userEmail: req.user.email, entityType: 'ob_task_dd_extract', entityId: task.id, promptDigest, model: null, status: 'error: ' + err.message });
+    res.status(502).json({ error: 'AI extraction failed: ' + err.message });
+  }
 });
 
 // Bulk-creates the onboarding task checklist (7 tasks) for one client in a

@@ -679,6 +679,13 @@ CREATE TABLE IF NOT EXISTS roles (
   -- who'd realistically be the one filing (CFO/CEO for financial
   -- reports, Compliance Officer/MLRO for the AML/compliance set).
   afsa_submit       INTEGER NOT NULL DEFAULT 0,
+  -- Gates the onboarding AI-assist routes (server/aiProvider.js's
+  -- completeJson, called from POST /api/ob-tasks/:id/ai-draft|ai-extract
+  -- and POST /api/ob-clients/:id/ai-screen) — every one of those routes
+  -- only ever fills a form field as an editable draft, never writes to
+  -- ob_clients/ob_tasks itself, so this permission controls who can see
+  -- AI suggestions, not who can approve anything.
+  ai_assist         INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -828,6 +835,8 @@ if (!columnExists('roles', 'payment_confirm')) db.exec("ALTER TABLE roles ADD CO
 db.exec("UPDATE roles SET payment_confirm = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO') AND payment_confirm = 0");
 if (!columnExists('roles', 'afsa_submit')) db.exec("ALTER TABLE roles ADD COLUMN afsa_submit INTEGER NOT NULL DEFAULT 0");
 db.exec("UPDATE roles SET afsa_submit = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO', 'COMPLIANCE_OFFICER', 'MLRO') AND afsa_submit = 0");
+if (!columnExists('roles', 'ai_assist')) db.exec("ALTER TABLE roles ADD COLUMN ai_assist INTEGER NOT NULL DEFAULT 0");
+db.exec("UPDATE roles SET ai_assist = 1 WHERE is_system = 1 AND code IN ('RELATIONSHIP_MANAGER', 'COMPLIANCE_OFFICER', 'MLRO') AND ai_assist = 0");
 if (!columnExists('documents', 'document_url')) db.exec("ALTER TABLE documents ADD COLUMN document_url TEXT");
 if (!columnExists('documents', 'archived')) db.exec("ALTER TABLE documents ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
 if (!columnExists('documents', 'archived_at')) db.exec("ALTER TABLE documents ADD COLUMN archived_at TEXT");

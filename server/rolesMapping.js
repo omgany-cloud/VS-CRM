@@ -19,6 +19,7 @@ function rowToRole(row) {
     ccApprove: !!row.cc_approve,
     paymentConfirm: !!row.payment_confirm,
     afsaSubmit: !!row.afsa_submit,
+    aiAssist: !!row.ai_assist,
     icSeat: row.ic_seat,
     isSystem: !!row.is_system,
   };
@@ -40,6 +41,7 @@ function rowToPermissions(row) {
     ccApprove: !!row.cc_approve,
     paymentConfirm: !!row.payment_confirm,
     afsaSubmit: !!row.afsa_submit,
+    aiAssist: !!row.ai_assist,
     icSeat: row.ic_seat,
   };
 }
@@ -47,16 +49,16 @@ function rowToPermissions(row) {
 const NO_PERMISSIONS = {
   internal: false, manageUsers: false, manageRoles: false, accessFM: false,
   decideConflicts: false, authorICMemo: false, riskVeto: false, readOnly: false,
-  amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, icSeat: null,
+  amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: false, icSeat: null,
 };
 
 const INSERT_SQL = `
   INSERT INTO roles
     (tenant_id, code, label, icon, color, internal, manage_users, manage_roles,
-     access_fm, decide_conflicts, author_ic_memo, risk_veto, read_only, aml_clear, cc_approve, payment_confirm, afsa_submit, ic_seat, is_system)
+     access_fm, decide_conflicts, author_ic_memo, risk_veto, read_only, aml_clear, cc_approve, payment_confirm, afsa_submit, ai_assist, ic_seat, is_system)
   VALUES
     (@tenantId, @code, @label, @icon, @color, @internal, @manageUsers, @manageRoles,
-     @accessFM, @decideConflicts, @authorICMemo, @riskVeto, @readOnly, @amlClear, @ccApprove, @paymentConfirm, @afsaSubmit, @icSeat, @isSystem)
+     @accessFM, @decideConflicts, @authorICMemo, @riskVeto, @readOnly, @amlClear, @ccApprove, @paymentConfirm, @afsaSubmit, @aiAssist, @icSeat, @isSystem)
 `;
 
 const UPDATE_SQL = `
@@ -65,7 +67,7 @@ const UPDATE_SQL = `
     manage_users=@manageUsers, manage_roles=@manageRoles, access_fm=@accessFM,
     decide_conflicts=@decideConflicts, author_ic_memo=@authorICMemo,
     risk_veto=@riskVeto, read_only=@readOnly, aml_clear=@amlClear, cc_approve=@ccApprove,
-    payment_confirm=@paymentConfirm, afsa_submit=@afsaSubmit, ic_seat=@icSeat
+    payment_confirm=@paymentConfirm, afsa_submit=@afsaSubmit, ai_assist=@aiAssist, ic_seat=@icSeat
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
@@ -87,6 +89,7 @@ function roleToParams(r) {
     ccApprove: r.ccApprove ? 1 : 0,
     paymentConfirm: r.paymentConfirm ? 1 : 0,
     afsaSubmit: r.afsaSubmit ? 1 : 0,
+    aiAssist: r.aiAssist ? 1 : 0,
     icSeat: r.icSeat || null,
     isSystem: r.isSystem ? 1 : 0,
   };

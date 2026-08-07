@@ -24,7 +24,7 @@ function cleanupDbFiles(dbPath) {
 // port: distinct per test file so parallel `node --test` workers never
 // collide. authRateLimitWindowMs: short by default so auth.test.js can
 // actually observe the limiter resetting without a real 15-minute wait.
-async function createTestServer({ port, authRateLimitWindowMs = 2000 } = {}) {
+async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv = {} } = {}) {
   if (!port) throw new Error('createTestServer requires a distinct port per test file');
   const dbPath = path.join(SERVER_DIR, 'data', `test-${port}.sqlite`);
   cleanupDbFiles(dbPath);
@@ -35,6 +35,10 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000 } = {}) {
     PORT: String(port),
     AUTH_RATE_LIMIT_WINDOW_MS: String(authRateLimitWindowMs),
     JWT_SECRET: 'test-only-secret-not-for-real-use',
+    // extraEnv: e.g. { AI_PROVIDER: 'stub', AI_STUB_RESPONSE: '{...}' } for
+    // ai-assist.test.js — AI_PROVIDER is otherwise unset in tests, same as
+    // a fresh deploy with no AI configured yet.
+    ...extraEnv,
   };
 
   const seed = spawnSync('node', ['seed.js'], { cwd: SERVER_DIR, env });

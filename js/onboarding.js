@@ -1018,6 +1018,15 @@ function buildTaskForm(task, client) {
         <div style="${formGroupStyle}"><label style="${labelStyle}">Дата проверки *</label>
           <input type="date" id="f_checkDate" value="${fd.checkDate||today()}" ${disabledAttr} style="${inputStyle}" /></div>
 
+        ${currentUserPermission('aiAssist') ? `
+        <div style="margin-bottom:10px">
+          <button type="button" ${disabledAttr} onclick="aiScreenClient(${client.id})"
+            style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+            <i class="fas fa-wand-magic-sparkles" style="margin-right:5px"></i>AI-скрининг по Restricted List
+          </button>
+          <span style="font-size:10px;color:#4a5568;margin-left:8px">только подсказка — не заменяет проверку ниже</span>
+          <div id="aiScreenResult_${client.id}" style="font-size:11px;color:#64748b;margin-top:6px"></div>
+        </div>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
           ${buildSelect('f_restrictedMatch','Совпадение с Restricted List',['Нет','Да'],fd.restrictedMatch,disabledAttr,selectStyle,labelStyle)}
           ${buildSelect('f_clientMatch','Совпадение с существующими клиентами',['Нет','Да'],fd.clientMatch,disabledAttr,selectStyle,labelStyle)}
@@ -1273,6 +1282,26 @@ function buildTaskForm(task, client) {
           ${isFM_dd && client.type==='Corporate' ? buildSelect('f_uboVerified','UBO верифицированы (все ≥10%)',['Да','Нет','Частично'],fd.uboVerified,disabledAttr,selectStyle,labelStyle) : ''}
         </div>
 
+        <!-- AI-assist Stage 2: document extraction — a draft only, never
+             writes the Да/Нет fields above by itself; the officer reads
+             the extracted summary and decides. Only shown to roles with
+             the aiAssist permission (same gate as the server route). -->
+        ${currentUserPermission('aiAssist') ? `
+        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+            <i class="fas fa-wand-magic-sparkles" style="margin-right:5px;color:#a78bfa"></i>AI — извлечение данных из документа
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <input type="text" id="f_aiDocUrl_${task.id}" value="${fd.aiDocUrl||''}" ${disabledAttr} style="${inputStyle};flex:1" placeholder="Загрузите скан документа (паспорт, устав, банковская выписка)..." />
+            ${docUploadBtn(`f_aiDocUrl_${task.id}`)}
+            <button type="button" ${disabledAttr} onclick="aiExtractDdDoc(${task.id})"
+              style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0">
+              Извлечь (AI)
+            </button>
+          </div>
+          <div id="aiExtractResult_${task.id}" style="font-size:11px;color:#64748b"></div>
+        </div>` : ''}
+
         <!-- Section 2: Sanctions -->
         <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:8px;text-transform:uppercase">Раздел 2 — Санкционная проверка</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
@@ -1333,6 +1362,14 @@ function buildTaskForm(task, client) {
         <div style="font-size:11px;font-weight:700;color:#f97316;margin-bottom:8px;text-transform:uppercase">
           Раздел ${isFM_dd?'7':'6'} — Заключение${isFM_dd?' AML/KYC':''}
         </div>
+        ${currentUserPermission('aiAssist') ? `
+        <div style="margin-bottom:10px">
+          <button type="button" ${disabledAttr} onclick="aiDraftDdOutcome(${task.id})"
+            style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+            <i class="fas fa-wand-magic-sparkles" style="margin-right:5px"></i>Черновик заключения (AI)
+          </button>
+          <span id="aiDraftStatus_${task.id}" style="font-size:11px;color:#64748b;margin-left:8px"></span>
+        </div>` : ''}
         ${buildSelect2('f_conclusion','Заключение / Conclusion',['Одобрить — Approve','Отказать — Reject','Расширенная проверка (EDD)'],fd.conclusion,disabledAttr,selectStyle,labelStyle,formGroupStyle)}
         ${isFM_dd ? `
         <div style="${formGroupStyle}"><label style="${labelStyle}">Примечание по рискам LP (MLRO) *</label>
@@ -2589,6 +2626,99 @@ function buildSelect2(id, label, options, selected, disabled, style, labelStyle,
     </select></div>`;
 }
 function today() { return new Date().toISOString().slice(0,10); }
+
+/* ═══════════════════════════════════════════════════
+   AI-ASSIST (Stages 1-3) — every function here only fills form fields
+   as an editable draft. None of them save anything by themselves; the
+   human still reviews and clicks the task's own Submit button
+   (submitObTask, below), which still runs unchanged.
+═══════════════════════════════════════════════════ */
+
+// Stage 1 — draft the DD Outcome risk-rating/conclusion fields from
+// whatever the officer has already filled in. Server-side: POST
+// /api/ob-tasks/:id/ai-draft (server/index.js).
+async function aiDraftDdOutcome(taskId) {
+  const statusEl = document.getElementById(`aiDraftStatus_${taskId}`);
+  if (statusEl) statusEl.textContent = 'Генерация...';
+  try {
+    const draft = await apiFetch(`/api/ob-tasks/${taskId}/ai-draft`, { method: 'POST' });
+    const setSel = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    setSel('f_riskJurisdiction', draft.riskJurisdiction);
+    setSel('f_riskSanction', draft.riskSanction);
+    setSel('f_riskRep', draft.riskRep);
+    setSel('f_riskBusiness', draft.riskBusiness);
+    setSel('f_riskTotal', draft.riskTotal);
+    setSel('f_conclusion', draft.conclusion);
+    const mlro = document.getElementById('f_mlroNote');
+    if (mlro && draft.mlroNote) mlro.value = draft.mlroNote;
+    if (statusEl) statusEl.textContent = 'Черновик AI применён — проверьте перед отправкой. ' + (draft.rationale || '');
+    showToast('🪄 Черновик заключения от AI применён — проверьте перед отправкой', 'blue');
+  } catch (err) {
+    if (statusEl) statusEl.textContent = '';
+    showToast('⚠️ Не удалось получить черновик AI: ' + err.message, 'red');
+  }
+}
+
+// Stage 2 — extract identity/SOF facts from an uploaded document. Shows
+// the result as a read-only summary next to the upload; does not touch
+// any Да/Нет field itself — the officer reads it and sets those fields
+// by hand, same as if they'd read the document on paper. Server-side:
+// POST /api/ob-tasks/:id/ai-extract.
+async function aiExtractDdDoc(taskId) {
+  const urlInput = document.getElementById(`f_aiDocUrl_${taskId}`);
+  const resultEl = document.getElementById(`aiExtractResult_${taskId}`);
+  const m = urlInput && urlInput.value.match(/\/api\/uploads\/(\d+)/);
+  if (!m) {
+    showToast('⚠️ Сначала загрузите файл документа', 'red');
+    return;
+  }
+  if (resultEl) resultEl.textContent = 'Извлечение данных...';
+  try {
+    const ex = await apiFetch(`/api/ob-tasks/${taskId}/ai-extract`, {
+      method: 'POST', body: JSON.stringify({ uploadId: Number(m[1]) }),
+    });
+    if (resultEl) {
+      resultEl.innerHTML = `
+        <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:6px;padding:8px 10px;margin-top:4px">
+          <div><b>Тип документа:</b> ${escapeHtml(ex.documentType||'—')}</div>
+          <div><b>Имя из документа:</b> ${escapeHtml(ex.extractedName||'—')} (совпадает с клиентом: ${escapeHtml(ex.nameMatchesClient||'—')})</div>
+          <div><b>Номер документа:</b> ${escapeHtml(ex.extractedIdNumber||'—')}</div>
+          <div><b>Адрес:</b> ${escapeHtml(ex.extractedAddress||'—')}</div>
+          <div><b>Заявленный источник средств:</b> ${escapeHtml(ex.statedSourceOfFunds||'—')}</div>
+          <div style="margin-top:4px;color:#94a3b8">${escapeHtml(ex.notes||'')}</div>
+        </div>`;
+    }
+    showToast('🪄 Данные извлечены — сверьте с оригиналом перед сохранением', 'blue');
+  } catch (err) {
+    if (resultEl) resultEl.textContent = '';
+    showToast('⚠️ Не удалось извлечь данные: ' + err.message, 'red');
+  }
+}
+
+// Stage 3 — fuzzy/alias flagging on top of the existing exact-substring
+// checkRestrictedList() check (above). A flag here is a suggestion only:
+// it does not set f_restrictedMatch or create a COI — the officer still
+// answers that select themselves, which still drives the existing
+// checkRestrictedList()/COI flow unchanged. Server-side: POST
+// /api/ob-clients/:id/ai-screen.
+async function aiScreenClient(clientId) {
+  const resultEl = document.getElementById(`aiScreenResult_${clientId}`);
+  if (resultEl) resultEl.textContent = 'Проверка...';
+  try {
+    const r = await apiFetch(`/api/ob-clients/${clientId}/ai-screen`, { method: 'POST' });
+    if (resultEl) {
+      if (r.possibleMatch) {
+        resultEl.innerHTML = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:8px 10px;color:#fca5a5">
+          ⚠ AI обнаружил вероятное совпадение (уверенность: ${escapeHtml(r.confidence)}): ${escapeHtml((r.matchedEntries||[]).join(', ')||'—')}.<br>${escapeHtml(r.reasoning||'')}</div>`;
+      } else {
+        resultEl.innerHTML = `<div style="color:#86efac">✓ AI не обнаружил вероятных совпадений (уверенность: ${escapeHtml(r.confidence)}).</div>`;
+      }
+    }
+  } catch (err) {
+    if (resultEl) resultEl.textContent = '';
+    showToast('⚠️ AI-скрининг не удался: ' + err.message, 'red');
+  }
+}
 
 /* ═══════════════════════════════════════════════════
    SAVE / SUBMIT TASK
