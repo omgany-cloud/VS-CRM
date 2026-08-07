@@ -71,22 +71,33 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // request — a role's permissions are DATA (server/rolesRepo.js), not code,
 // so editing them via the Roles admin UI takes effect on every holder's
 // very next request, same latency as the role/active re-check above.
+//
+// Routes still reachable while must_change_password is set — everything
+// else 403s below. Keep this list to exactly what the mandatory
+// change-password screen needs: reading who's logged in, and the one route
+// that clears the flag.
+const PASSWORD_GATE_EXEMPT = new Set(['GET /api/auth/me', 'PUT /api/users/me/password']);
+
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Missing bearer token' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const row = db.prepare('SELECT id, email, name, role, active FROM users WHERE id = @id AND tenant_id = @tenantId')
+    const row = db.prepare('SELECT id, email, name, role, active, must_change_password FROM users WHERE id = @id AND tenant_id = @tenantId')
       .get(at({ id: payload.sub, tenantId: payload.tenantId }));
     if (!row || !row.active) return res.status(401).json({ error: 'Account inactive or not found' });
     const roleRow = getRoleRowByCode(payload.tenantId, row.role);
     req.user = {
       id: row.id, email: row.email, name: row.name, role: row.role,
+      mustChangePassword: !!row.must_change_password,
       permissions: roleRow ? rowToPermissions(roleRow) : NO_PERMISSIONS,
     };
     req.tenantId = payload.tenantId;
     req.tenantSlug = payload.tenantSlug;
+    if (req.user.mustChangePassword && !PASSWORD_GATE_EXEMPT.has(`${req.method} ${req.path}`)) {
+      return res.status(403).json({ error: 'Password change required', code: 'MUST_CHANGE_PASSWORD' });
+    }
     if (req.user.permissions.readOnly && MUTATING_METHODS.has(req.method)) {
       return res.status(403).json({ error: 'Forbidden: read-only role cannot modify data' });
     }

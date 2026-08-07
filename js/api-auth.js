@@ -805,11 +805,24 @@ function companyName() {
 }
 
 // Shared by both the login and signup submit handlers below — same
-// post-auth sequence either way.
+// post-auth sequence either way. If the account still has a temporary,
+// admin-set password (server/auth.js's requireAuth blocks every route but
+// the self-service password change while this is set), every other API
+// call below would just 403 — so the app data load is deferred until
+// js/app.js's saveChangePassword() calls finishLoginSequence() once the
+// user has replaced it with their own.
 async function completeAuth(data) {
   setAuth(data);
   hideLoginOverlay();
   applyTenantBranding();
+  if (data.user && data.user.mustChangePassword) {
+    if (typeof openChangePasswordModal === 'function') openChangePasswordModal(true);
+    return;
+  }
+  await finishLoginSequence();
+}
+
+async function finishLoginSequence() {
   await loadRolesFromApi();
   if (typeof initUserRole === 'function') initUserRole();
   loadAllApiData();
@@ -876,11 +889,14 @@ async function completeAuth(data) {
   if (auth && auth.token) {
     hideLoginOverlay();
     applyTenantBranding();
-    loadRolesFromApi().then(() => {
-      if (typeof initUserRole === 'function') initUserRole();
-      loadAllApiData();
-      startAuthRefreshLoop();
-    });
+    if (auth.user && auth.user.mustChangePassword) {
+      // Page was reloaded before the mandatory change (js/app.js's
+      // openChangePasswordModal(true)) was completed — re-show it instead
+      // of loading app data, same reasoning as completeAuth() above.
+      if (typeof openChangePasswordModal === 'function') openChangePasswordModal(true);
+    } else {
+      finishLoginSequence();
+    }
   } else {
     showLoginOverlay();
   }

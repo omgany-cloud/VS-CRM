@@ -117,14 +117,24 @@ function toggleUserRoleMenu() {
   }
 }
 
-function openChangePasswordModal() {
+// mandatory=true is the post-login "admin set your password, pick your own
+// now" gate — no Cancel button, no header ✕, and js/onboarding.js's
+// closeObNewModal() itself refuses to close while window._mandatoryPasswordChange
+// is set (backdrop click / Escape both route through that same function).
+function openChangePasswordModal(mandatory = false) {
+  window._mandatoryPasswordChange = !!mandatory;
   const menu = document.getElementById('roleMenu');
   if (menu) menu.style.display = 'none';
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
   document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-key" style="color:#3b82f6;margin-right:8px"></i>Сменить пароль';
+  const closeBtn = document.getElementById('obNewModalCloseBtn');
+  if (closeBtn) closeBtn.style.display = mandatory ? 'none' : '';
   document.getElementById('obNewModalContent').innerHTML = `
+    ${mandatory ? `<div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px">
+      <i class="fas fa-circle-info" style="margin-right:6px"></i>Это первый вход с временным паролем — установите свой личный пароль, чтобы продолжить.
+    </div>` : ''}
     <div style="display:grid;gap:12px">
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Текущий пароль</label>
         <input type="password" id="pw_current"
@@ -137,7 +147,7 @@ function openChangePasswordModal() {
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      ${mandatory ? '' : `<button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>`}
       <button onclick="saveChangePassword()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
@@ -155,8 +165,18 @@ async function saveChangePassword() {
   if (newPassword !== confirmPassword) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
   try {
     await apiFetch('/api/users/me/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
+    const wasMandatory = window._mandatoryPasswordChange;
+    window._mandatoryPasswordChange = false;
+    // Patch the cached copy immediately — otherwise a page reload before
+    // the next periodic refreshAuthFromServer() (js/api-auth.js) tick would
+    // still see the stale mustChangePassword:true and re-show this modal.
+    const auth = getAuth();
+    if (auth && auth.user) { auth.user.mustChangePassword = false; setAuth(auth); }
     closeObNewModalSilent();
     showToast('✅ Пароль изменён', 'green');
+    // Deferred from completeAuth() (js/api-auth.js) until the temporary
+    // password was replaced — see the mustChangePassword branch there.
+    if (wasMandatory && typeof finishLoginSequence === 'function') finishLoginSequence();
   } catch (err) {
     showToast('⚠️ ' + err.message, 'red');
   }

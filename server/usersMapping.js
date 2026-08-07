@@ -8,6 +8,7 @@ function rowToUser(row) {
     name: row.name,
     role: row.role,
     active: !!row.active,
+    mustChangePassword: !!row.must_change_password,
     createdAt: row.created_at,
   };
 }

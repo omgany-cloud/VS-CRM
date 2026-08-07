@@ -5132,6 +5132,10 @@ function switchObNewDirection(dir) {
 // _snapshotObNewModal(), js/app.js), same convention as closeModal()'s
 // dirty-check for the other modal system.
 function closeObNewModal() {
+  // Set by js/app.js while the post-login mandatory password change is
+  // showing (temporary password known to the admin who set it) — no
+  // backdrop click, Escape, or header ✕ is allowed to dismiss it early.
+  if (window._mandatoryPasswordChange) return;
   const modal = document.getElementById('modal-ob-new');
   if (modal && _isModalDirty(modal) && !confirm('У вас есть несохранённые изменения. Закрыть без сохранения?')) return;
   closeObNewModalSilent();

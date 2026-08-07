@@ -23,6 +23,21 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+// The backend only stores one free-text `name` column (predates this split
+// UI, and other places already display/sign with a single string), so
+// Фамилия+Имя are joined into that one column on save and split back out
+// here for editing. Splitting is a heuristic (first word = Фамилия, rest =
+// Имя) — good enough for the common "Фамилия Имя" entry pattern, not a
+// guaranteed round-trip for every name shape.
+function splitFullName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { lastName: '', firstName: '' };
+  return { lastName: parts[0], firstName: parts.slice(1).join(' ') };
+}
+function joinFullName(lastName, firstName) {
+  return [String(lastName || '').trim(), String(firstName || '').trim()].filter(Boolean).join(' ');
+}
+
 const PERMISSION_DEFS = [
   { key: 'internal', label: 'Internal', hint: 'Доступ к внутренним данным (не внешний участник IC)' },
   { key: 'manageUsers', label: 'Управление пользователями', hint: 'Создание/деактивация/удаление аккаунтов' },
@@ -157,8 +172,11 @@ function openNewUserModal() {
   document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>Новый пользователь';
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Фамилия</label>
+        <input type="text" id="u_lastName" placeholder="Иванов"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
-        <input type="text" id="u_name" placeholder="Иванов И.И."
+        <input type="text" id="u_firstName" placeholder="Иван"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Email *</label>
         <input type="email" id="u_email" placeholder="user@turancapital.kz"
@@ -189,7 +207,7 @@ async function saveNewUser() {
   const password = document.getElementById('u_password')?.value;
   const passwordConfirm = document.getElementById('u_passwordConfirm')?.value;
   const role = document.getElementById('u_role')?.value;
-  const name = document.getElementById('u_name')?.value?.trim();
+  const name = joinFullName(document.getElementById('u_lastName')?.value, document.getElementById('u_firstName')?.value);
   if (!email) { showToast('⚠️ Введите email', 'red'); return; }
   if (!password || password.length < 8) { showToast('⚠️ Пароль минимум 8 символов', 'red'); return; }
   if (password !== passwordConfirm) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
@@ -247,12 +265,16 @@ function openEditUserModal(id) {
   if (!u) return;
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
+  const { lastName, firstName } = splitFullName(u.name);
   document.body.style.overflow = 'hidden';
   document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-user-edit" style="color:#3b82f6;margin-right:8px"></i>${escapeHtml(u.email)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Фамилия</label>
+        <input type="text" id="u_editLastName" value="${escapeHtml(lastName)}"
+          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
-        <input type="text" id="u_editName" value="${escapeHtml(u.name || '')}"
+        <input type="text" id="u_editFirstName" value="${escapeHtml(firstName)}"
           style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Email</label>
         <input type="email" id="u_editEmail" value="${escapeHtml(u.email)}"
@@ -279,7 +301,7 @@ function openEditUserModal(id) {
 }
 
 async function saveUserEdit(id) {
-  const name = document.getElementById('u_editName')?.value?.trim();
+  const name = joinFullName(document.getElementById('u_editLastName')?.value, document.getElementById('u_editFirstName')?.value);
   const email = document.getElementById('u_editEmail')?.value?.trim();
   const role = document.getElementById('u_editRole')?.value;
   const password = document.getElementById('u_editPassword')?.value;

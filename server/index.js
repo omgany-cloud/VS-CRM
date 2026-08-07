@@ -286,7 +286,7 @@ app.post('/api/auth/login', authRateLimit, (req, res) => {
   const token = signToken(user, tenantRow);
   res.json({
     token,
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword: !!user.must_change_password },
     tenant: { id: tenantRow.id, slug: tenantRow.slug, name: tenantRow.name },
     permissions: roleRow ? rowToPermissions(roleRow) : null,
   });
@@ -302,7 +302,7 @@ app.post('/api/auth/login', authRateLimit, (req, res) => {
 // the login screen instead of leaving it running on cached permissions.
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({
-    user: { id: req.user.id, email: req.user.email, name: req.user.name, role: req.user.role },
+    user: { id: req.user.id, email: req.user.email, name: req.user.name, role: req.user.role, mustChangePassword: req.user.mustChangePassword },
     permissions: req.user.permissions,
   });
 });
@@ -558,8 +558,8 @@ app.post('/api/users', requireAuth, requirePermission('manageUsers'), (req, res)
   let info;
   try {
     info = db.prepare(`
-      INSERT INTO users (tenant_id, email, password_hash, role, name, active)
-      VALUES (@tenantId, @email, @passwordHash, @role, @name, 1)
+      INSERT INTO users (tenant_id, email, password_hash, role, name, active, must_change_password)
+      VALUES (@tenantId, @email, @passwordHash, @role, @name, 1, 1)
     `).run(at({
       tenantId: req.tenantId,
       email: b.email,
@@ -640,7 +640,9 @@ app.put('/api/users/me/password', authRateLimit, requireAuth, (req, res) => {
   if (!newPassword || String(newPassword).length < 8) {
     return res.status(400).json({ error: 'newPassword must be at least 8 characters' });
   }
-  db.prepare('UPDATE users SET password_hash=@passwordHash WHERE id=@id AND tenant_id=@tenantId')
+  // The user picked this one themselves — the "admin knows a temporary
+  // password" condition that must_change_password guards against is over.
+  db.prepare('UPDATE users SET password_hash=@passwordHash, must_change_password=0 WHERE id=@id AND tenant_id=@tenantId')
     .run(at({ passwordHash: bcrypt.hashSync(newPassword, 10), id: existing.id, tenantId: req.tenantId }));
   res.json({ ok: true });
 });
@@ -650,7 +652,9 @@ app.put('/api/users/:id/password', authRateLimit, requireAuth, requirePermission
   if (!existing) return res.status(404).json({ error: 'User not found in this tenant' });
   const { password } = req.body || {};
   if (!password || String(password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
-  db.prepare('UPDATE users SET password_hash=@passwordHash WHERE id=@id AND tenant_id=@tenantId')
+  // Admin-set password again, same as account creation — force a change on
+  // this user's next login.
+  db.prepare('UPDATE users SET password_hash=@passwordHash, must_change_password=1 WHERE id=@id AND tenant_id=@tenantId')
     .run(at({ passwordHash: bcrypt.hashSync(password, 10), id: existing.id, tenantId: req.tenantId }));
   res.json({ ok: true });
 });

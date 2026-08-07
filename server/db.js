@@ -819,6 +819,13 @@ function columnExists(table, col) {
 }
 if (!columnExists('users', 'name'))   db.exec("ALTER TABLE users ADD COLUMN name TEXT");
 if (!columnExists('users', 'active')) db.exec("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+// Set to 1 whenever an admin sets a user's password for them (new account
+// creation or an admin-triggered reset) — cleared back to 0 only once the
+// user picks their own via PUT /api/users/me/password. requireAuth (server/
+// auth.js) blocks every route except that self-service change route while
+// this is set, so an admin-known temporary password can't be used past the
+// first login.
+if (!columnExists('users', 'must_change_password')) db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0");
 for (const table of ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_memos']) {
   if (!columnExists(table, 'fund_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN fund_id INTEGER REFERENCES funds(id)`);
 }
