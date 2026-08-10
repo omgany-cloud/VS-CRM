@@ -1285,21 +1285,30 @@ function buildTaskForm(task, client) {
         <!-- AI-assist Stage 2: document extraction — a draft only, never
              writes the Да/Нет fields above by itself; the officer reads
              the extracted summary and decides. Only shown to roles with
-             the aiAssist permission (same gate as the server route). -->
+             the aiAssist permission (same gate as the server route).
+             Accepts several documents at once (passport + proof of
+             address + bank reference, ...) — each is still sent to
+             POST /api/ob-tasks/:id/ai-extract one at a time (same route,
+             unchanged, one document per AI call keeps extraction accurate),
+             this just queues them instead of making the officer repeat
+             the single-field flow per document. -->
         ${currentUserPermission('aiAssist') ? `
         <div style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-            <i class="fas fa-wand-magic-sparkles" style="margin-right:5px;color:#a78bfa"></i>AI — извлечение данных из документа
+            <i class="fas fa-wand-magic-sparkles" style="margin-right:5px;color:#a78bfa"></i>AI — извлечение данных из документов
           </div>
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-            <input type="text" id="f_aiDocUrl_${task.id}" value="${fd.aiDocUrl||''}" ${disabledAttr} style="${inputStyle};flex:1" placeholder="Загрузите скан документа (паспорт, устав, банковская выписка)..." />
-            ${docUploadBtn(`f_aiDocUrl_${task.id}`)}
-            <button type="button" ${disabledAttr} onclick="aiExtractDdDoc(${task.id})"
-              style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0">
-              Извлечь (AI)
+          <div id="aiDocQueue_${task.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${aiDocQueueHtml(task.id)}</div>
+          <div style="display:flex;gap:8px">
+            <button type="button" ${disabledAttr} onclick="addAiDocs(${task.id})"
+              style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+              <i class="fas fa-paperclip" style="margin-right:5px"></i>Добавить документы
+            </button>
+            <button type="button" ${disabledAttr} onclick="aiExtractAllDocs(${task.id})"
+              style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+              Извлечь всё (AI)
             </button>
           </div>
-          <div id="aiExtractResult_${task.id}" style="font-size:11px;color:#64748b"></div>
+          <div id="aiExtractResult_${task.id}" style="font-size:11px;color:#64748b;margin-top:8px"></div>
         </div>` : ''}
 
         <!-- Section 2: Sanctions -->
@@ -2659,40 +2668,106 @@ async function aiDraftDdOutcome(taskId) {
   }
 }
 
-// Stage 2 — extract identity/SOF facts from an uploaded document. Shows
-// the result as a read-only summary next to the upload; does not touch
-// any Да/Нет field itself — the officer reads it and sets those fields
-// by hand, same as if they'd read the document on paper. Server-side:
-// POST /api/ob-tasks/:id/ai-extract.
-async function aiExtractDdDoc(taskId) {
-  const urlInput = document.getElementById(`f_aiDocUrl_${taskId}`);
+// Stage 2 — extract identity/SOF facts from a queue of uploaded documents
+// (passport, proof of address, bank reference, ...) instead of one at a
+// time. Purely client-side state (never persisted to form_data_json) —
+// re-add the same files if the task form is closed and reopened, same as
+// any other in-progress, unsaved form input in this app. Each entry is
+// { id, name } from POST /api/uploads.
+const _aiDocQueue = {};
+
+function aiDocQueueHtml(taskId) {
+  const docs = _aiDocQueue[taskId] || [];
+  return docs.map(d => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#93c5fd;border-radius:6px;padding:3px 8px;font-size:11px">
+      <i class="fas fa-file"></i>${escapeHtml(d.name)}
+      <button type="button" onclick="removeAiDoc(${taskId}, ${d.id})" title="Убрать из очереди"
+        style="background:none;border:none;color:#93c5fd;cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
+    </span>`).join('') || '<span style="color:#4a5568;font-size:11px">Документы не добавлены</span>';
+}
+
+function renderAiDocQueue(taskId) {
+  const el = document.getElementById(`aiDocQueue_${taskId}`);
+  if (el) el.innerHTML = aiDocQueueHtml(taskId);
+}
+
+async function addAiDocs(taskId) {
+  const files = await pickFiles('.pdf,.jpg,.jpeg,.png');
+  if (!files.length) return;
+  showToast(`📎 Загрузка ${files.length} файл(ов)...`, 'blue');
+  if (!_aiDocQueue[taskId]) _aiDocQueue[taskId] = [];
+  let uploaded = 0;
+  for (const file of files) {
+    try {
+      const res = await uploadFile(file);
+      _aiDocQueue[taskId].push({ id: res.id, name: file.name });
+      uploaded++;
+    } catch (err) {
+      showToast(`⚠️ Не удалось загрузить «${file.name}»: ` + err.message, 'red');
+    }
+  }
+  renderAiDocQueue(taskId);
+  if (uploaded) showToast(`✅ Добавлено документов: ${uploaded}`, 'green');
+}
+
+function removeAiDoc(taskId, uploadId) {
+  if (!_aiDocQueue[taskId]) return;
+  _aiDocQueue[taskId] = _aiDocQueue[taskId].filter(d => d.id !== uploadId);
+  renderAiDocQueue(taskId);
+}
+
+// Calls the existing single-document POST /api/ob-tasks/:id/ai-extract once
+// per queued file (unchanged server route — one document per AI call keeps
+// extraction accurate), then renders each result plus a simple client-side
+// consistency check across the extracted names. Still a draft only: does
+// not touch any Да/Нет field itself, same contract as before this queue
+// existed — the officer reads it and decides.
+async function aiExtractAllDocs(taskId) {
+  const docs = _aiDocQueue[taskId] || [];
   const resultEl = document.getElementById(`aiExtractResult_${taskId}`);
-  const m = urlInput && urlInput.value.match(/\/api\/uploads\/(\d+)/);
-  if (!m) {
-    showToast('⚠️ Сначала загрузите файл документа', 'red');
+  if (!docs.length) {
+    showToast('⚠️ Сначала добавьте хотя бы один документ', 'red');
     return;
   }
-  if (resultEl) resultEl.textContent = 'Извлечение данных...';
-  try {
-    const ex = await apiFetch(`/api/ob-tasks/${taskId}/ai-extract`, {
-      method: 'POST', body: JSON.stringify({ uploadId: Number(m[1]) }),
-    });
-    if (resultEl) {
-      resultEl.innerHTML = `
-        <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:6px;padding:8px 10px;margin-top:4px">
-          <div><b>Тип документа:</b> ${escapeHtml(ex.documentType||'—')}</div>
-          <div><b>Имя из документа:</b> ${escapeHtml(ex.extractedName||'—')} (совпадает с клиентом: ${escapeHtml(ex.nameMatchesClient||'—')})</div>
-          <div><b>Номер документа:</b> ${escapeHtml(ex.extractedIdNumber||'—')}</div>
-          <div><b>Адрес:</b> ${escapeHtml(ex.extractedAddress||'—')}</div>
-          <div><b>Заявленный источник средств:</b> ${escapeHtml(ex.statedSourceOfFunds||'—')}</div>
-          <div style="margin-top:4px;color:#94a3b8">${escapeHtml(ex.notes||'')}</div>
-        </div>`;
+  if (resultEl) resultEl.textContent = `Извлечение данных (0/${docs.length})...`;
+  const results = [];
+  for (let i = 0; i < docs.length; i++) {
+    try {
+      const ex = await apiFetch(`/api/ob-tasks/${taskId}/ai-extract`, {
+        method: 'POST', body: JSON.stringify({ uploadId: docs[i].id }),
+      });
+      results.push({ doc: docs[i], ex, error: null });
+    } catch (err) {
+      results.push({ doc: docs[i], ex: null, error: err.message });
     }
-    showToast('🪄 Данные извлечены — сверьте с оригиналом перед сохранением', 'blue');
-  } catch (err) {
-    if (resultEl) resultEl.textContent = '';
-    showToast('⚠️ Не удалось извлечь данные: ' + err.message, 'red');
+    if (resultEl) resultEl.textContent = `Извлечение данных (${i + 1}/${docs.length})...`;
   }
+
+  const names = results.filter(r => r.ex && r.ex.extractedName).map(r => r.ex.extractedName.trim().toLowerCase());
+  const namesConsistent = names.length > 1 ? names.every(n => n === names[0]) : null;
+
+  if (resultEl) {
+    resultEl.innerHTML = `
+      ${namesConsistent === false ? `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:6px 10px;margin-bottom:6px">
+        <i class="fas fa-triangle-exclamation" style="margin-right:5px"></i>Имя различается между документами — сверьте вручную.
+      </div>` : ''}
+      ${results.map(r => r.ex ? `
+        <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:6px;padding:8px 10px;margin-bottom:6px">
+          <div style="color:#a78bfa;font-weight:700;margin-bottom:2px">${escapeHtml(r.doc.name)}</div>
+          <div><b>Тип документа:</b> ${escapeHtml(r.ex.documentType||'—')}</div>
+          <div><b>Имя из документа:</b> ${escapeHtml(r.ex.extractedName||'—')} (совпадает с клиентом: ${escapeHtml(r.ex.nameMatchesClient||'—')})</div>
+          <div><b>Номер документа:</b> ${escapeHtml(r.ex.extractedIdNumber||'—')}</div>
+          <div><b>Адрес:</b> ${escapeHtml(r.ex.extractedAddress||'—')}</div>
+          <div><b>Заявленный источник средств:</b> ${escapeHtml(r.ex.statedSourceOfFunds||'—')}</div>
+          <div style="margin-top:4px;color:#94a3b8">${escapeHtml(r.ex.notes||'')}</div>
+        </div>` : `
+        <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:8px 10px;margin-bottom:6px">
+          <div style="color:#f87171;font-weight:700">${escapeHtml(r.doc.name)} — ошибка: ${escapeHtml(r.error)}</div>
+        </div>`).join('')}
+    `;
+  }
+  const okCount = results.filter(r => r.ex).length;
+  showToast(`🪄 Извлечено документов: ${okCount}/${docs.length} — сверьте с оригиналами перед сохранением`, 'blue');
 }
 
 // Stage 3 — fuzzy/alias flagging on top of the existing exact-substring

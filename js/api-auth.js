@@ -149,6 +149,35 @@ function pickFile(accept) {
   });
 }
 
+// Same as pickFile() but lets the user select several files in one dialog
+// (js/onboarding.js's AI document-extraction queue — passport, proof of
+// address, bank reference, etc. added together instead of one field at a
+// time). Kept as a separate function rather than a `multiple` flag on
+// pickFile() so every existing single-file call site keeps its current
+// "resolves one File or null" contract unchanged.
+function pickFiles(accept) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    if (accept) input.accept = accept;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    let settled = false;
+    const cleanup = () => { if (input.parentNode) input.parentNode.removeChild(input); };
+    input.addEventListener('change', () => {
+      settled = true;
+      resolve(input.files ? Array.from(input.files) : []);
+      cleanup();
+    }, { once: true });
+    window.addEventListener('focus', function onFocus() {
+      window.removeEventListener('focus', onFocus);
+      setTimeout(() => { if (!settled) { resolve([]); cleanup(); } }, 300);
+    }, { once: true });
+    input.click();
+  });
+}
+
 // Raw fetch, not apiFetch — multipart bodies need the browser to set
 // their own Content-Type (with the boundary), which apiFetch's hardcoded
 // 'Content-Type: application/json' would break.
