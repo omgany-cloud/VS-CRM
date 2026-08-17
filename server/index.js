@@ -92,25 +92,31 @@ app.use(helmet({
   },
 }));
 
-// Public marketing pages (company/about/funds/team/contact) aren't part of
-// the authenticated app — unlike index.html/portal.html they currently pull
-// images from genspark.ai/images.unsplash.com (temporary hosting until real
-// assets are supplied — see the commit that added these pages) and embed a
-// Google Maps iframe, none of which the CSP above allows. Scoped relaxation
-// for just these known static files rather than loosening it for the whole
-// app; runs after helmet so its res.setHeader overwrites helmet's CSP only
-// for these paths, and before express.static so it's in effect by the time
-// the response is actually sent.
-const PUBLIC_SITE_PAGES = new Set(['/company.html', '/about.html', '/funds.html', '/team.html', '/contact.html']);
+// The public marketing page (company.html, also served at '/' — see the
+// homepage route below) isn't part of the authenticated app — unlike
+// index.html/portal.html it currently pulls team avatar photos from
+// genspark.ai and its hero background from images.unsplash.com (temporary
+// hosting until real assets are supplied), links out to the real AFSA
+// licence PDF (docs/AFSA-License-*.pdf, a plain same-origin link, not
+// embedded), and uses onclick="..." for its RU/EN toggle — none of which
+// the CSP above allows. Scoped relaxation for just this page rather than
+// loosening it for the whole app; runs after helmet so its res.setHeader
+// overwrites helmet's CSP only for these paths, and before express.static
+// so it's in effect by the time the response is actually sent.
+const PUBLIC_SITE_PAGES = new Set(['/', '/company.html']);
 app.use((req, res, next) => {
   if (PUBLIC_SITE_PAGES.has(req.path)) {
     res.setHeader('Content-Security-Policy', [
       "default-src 'self'",
       "script-src 'self'",
+      // The page's RU/EN language toggle uses onclick="..." attributes
+      // (same inline-handler convention as the rest of this app) — CSP3
+      // treats script-src-attr as a separate directive from script-src, so
+      // without this the buttons would silently stop firing.
+      "script-src-attr 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
       "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
       "img-src 'self' data: https://www.genspark.ai https://images.unsplash.com",
-      "frame-src https://www.google.com",
       "connect-src 'self'",
     ].join('; '));
   }
@@ -2422,6 +2428,13 @@ app.use('/api/v1/external', externalApiRouter);
 
 /* ===== Static frontend ===== */
 const FRONTEND_ROOT = path.join(__dirname, '..');
+// Public landing page at the bare domain, not the CRM login — DEPLOYMENT.md's
+// "make the public site the homepage" option. Registered before
+// express.static (which would otherwise serve index.html for '/' by
+// default) so index.html itself is untouched and still reachable at its
+// own URL exactly as before — every existing bookmark/internal link to it
+// keeps working.
+app.get('/', (req, res) => res.sendFile(path.join(FRONTEND_ROOT, 'company.html')));
 app.use(express.static(FRONTEND_ROOT));
 
 // Express only treats a 4-arg function as error-handling middleware, and

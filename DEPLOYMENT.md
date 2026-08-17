@@ -8,9 +8,9 @@ VPS. Written for an IT team doing the deploy — follow the steps in order.
 One Node.js process (`server/index.js`) serves everything:
 - **CRM** — `index.html`, behind login, where staff manage funds/LPs/deals/etc.
 - **LP portal** — `portal.html`, behind a separate per-company login.
-- **Public marketing site** — `company.html`, `about.html`, `funds.html`,
-  `team.html`, `contact.html` — no login required, meant for the public
-  internet.
+- **Public marketing site** — `company.html` (also served at the bare
+  domain `/` — see step 10), a single page (company info, team, contact) —
+  no login required, meant for the public internet.
 - **API** — everything under `/api/...`, used by all three of the above.
 
 All of it comes from a single SQLite database file
@@ -165,18 +165,16 @@ Do **not** open port 4000 to the internet — all traffic should go through
 nginx on 80/443. Only nginx (on the same machine) talks to the Node process
 directly.
 
-## 10. Decide what lives at the bare domain
+## 10. What lives at the bare domain
 
-Right now, `https://your-domain.com/` (no path) serves `index.html` — the
-CRM login screen. Two common options:
-
-- **Keep it as-is**: staff bookmark `your-domain.com/index.html` (or you
-  just get used to the CRM being what loads at the root), and the public
-  site lives at `your-domain.com/company.html`, `/about.html`, etc.
-- **Make the public site the homepage**: move the CRM to a path like
-  `/app/` or a subdomain like `crm.your-domain.com`, and have
-  `company.html`'s content serve at `/`. This is a small code change —
-  ask us to make it if you want this instead of the default.
+`https://your-domain.com/` (no path) serves `company.html` — the public
+marketing/landing page (company info, team, contact — a single page,
+navigated via in-page anchors rather than separate URLs). The CRM login
+itself is untouched and still reachable at `your-domain.com/index.html`
+(linked from company.html's own "MYCRM" button in the header). This is a
+server-side route override (`server/index.js`), not a page rename — no
+bookmarks or internal links needed to change if you'd rather flip it back
+to the CRM being the homepage; ask us if you want that instead.
 
 ## 11. First login — do not reseed
 
@@ -269,7 +267,7 @@ script's comments if you'd rather keep the offsite copy indefinitely.
 | `curl http://localhost:4000/api/version` fails | Node process isn't running — check `sudo systemctl status crm` / `sudo journalctl -u crm -f`. |
 | Service won't start, no useful error in `systemctl status` | Check `sudo journalctl -u crm -n 50` for the actual stack trace — common causes: wrong Node version (see Prerequisites), or `.env` in the wrong location (see step 4). |
 | Login rate-limits everyone after one bad attempt | `TRUST_PROXY` isn't set in `.env` while nginx is in front — see step 4. |
-| Public site pages (`company.html` etc.) show broken images | Team photos / PDFs are still on temporary `genspark.ai` hosting from initial site setup — ask us to swap in permanent files once you have them. |
+| Public site (`company.html`) shows broken team photos | Still on temporary `genspark.ai` hosting from initial site setup — ask us to swap in permanent files once you have them. |
 | 502 from nginx | Node process crashed or isn't listening on port 4000 — check `sudo journalctl -u crm -f` for the actual error. |
 | Uploaded files / DB missing after a redeploy | Confirm `server/data/` wasn't accidentally deleted — it's gitignored on purpose (it holds real data, not code) but must persist across deploys. |
 | `deploy/backup-sync.sh` fails with a tool-not-found error | `flock`/`rsync`/`ssh` all ship with a standard Ubuntu Server — if one's missing, something's off with the base install, not the script. |

@@ -2,7 +2,7 @@
 
 Express + `node:sqlite` API backing the whole app: the CRM (`index.html`),
 the LP self-service portal (`portal.html`), and the public marketing site
-(`company.html`/`about.html`/`funds.html`/`team.html`/`contact.html`).
+(`company.html`, also served at `/`).
 
 ## Stack
 - **Express** (API + serves the static frontend from the parent folder)
