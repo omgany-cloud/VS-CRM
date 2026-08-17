@@ -2,6 +2,14 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.1.2] - 2026-08-17
+
+### Changed
+- Header logo simplified to icon-only, with "Managing & Advising Company"
+  shown large next to it instead of the "Golden Leaves Ltd" name line.
+  Mobile breakpoint that hides this text raised from 560px to 760px to
+  stop the MYCRM button wrapping at intermediate widths.
+
 ## [1.1.1] - 2026-08-17
 
 ### Changed
