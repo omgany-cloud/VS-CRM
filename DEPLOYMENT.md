@@ -185,11 +185,13 @@ account already in the database (`admin@turancapital.kz` + the current
 password), or create additional real users from **Команда / Пользователи**
 once logged in.
 
-**Do not run `npm run seed`.** That script repopulates the database with
-fictional demo data (fake LPs, deals, portfolio companies) — the kind that
-was deliberately removed from this database already. It's only meant for
-spinning up a fresh demo instance from scratch, not for a database that
-already has real data in it.
+No need to run `npm run seed` here — it only creates the tenant, system
+roles, and the one admin login above (each `seed*()` call skips its table
+if the tenant already has rows there, so it's harmless to run again, just
+a no-op). It no longer generates any fictional demo business data (funds,
+LPs, deals, portfolio companies) — that used to exist and was deliberately
+removed from this database already; create real funds/LPs/deals through
+the app itself instead.
 
 ## 12. Ongoing: deploying updates
 

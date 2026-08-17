@@ -12,9 +12,12 @@ let fundId;
 
 before(async () => {
   server = await createTestServer({ port: 4091 });
-  const res = await server.apiFetch('/api/funds');
-  const { funds } = await res.json();
-  fundId = funds[0].id;
+  // seed.js no longer creates any funds — every test file that needs one
+  // creates its own throwaway fixture instead of assuming seed data exists.
+  const fund = await (await server.apiFetch('/api/funds', {
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+  })).json();
+  fundId = fund.id;
 });
 
 after(async () => { await server.stop(); });
@@ -127,9 +130,9 @@ test('Fund: clean delete succeeds; blocked once an LP is attached, "closed" stat
   })).json();
   assert.equal((await server.apiFetch(`/api/funds/${clean.id}`, { method: 'DELETE' })).status, 200);
 
-  // fundId (module-scoped) is the main seeded fund used by every other
-  // test in this file — guaranteed to have real LP/deal/portfolio
-  // footprint by now, so it's already a real "blocked" case rather than
+  // fundId (module-scoped) is the fund created in before() and reused by
+  // every other test in this file — guaranteed to have real LP/deal/
+  // portfolio footprint by now, so it's already a real "blocked" case rather than
   // needing a fresh fixture.
   const del = await server.apiFetch(`/api/funds/${fundId}`, { method: 'DELETE' });
   assert.equal(del.status, 409);

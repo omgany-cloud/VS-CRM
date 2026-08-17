@@ -13,6 +13,11 @@ let server;
 
 before(async () => {
   server = await createTestServer({ port: 4097 });
+  // seed.js no longer creates any funds — the list_funds MCP tool tests
+  // below need at least one real row to list.
+  await server.apiFetch('/api/funds', {
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+  });
 });
 
 after(async () => { await server.stop(); });
@@ -65,7 +70,7 @@ test('MCP: full handshake, tools/list, and a scoped tools/call round-trip', asyn
   assert.equal(fundsCall.status, 200);
   assert.notEqual(fundsCall.rpc.result.isError, true);
   const funds = JSON.parse(fundsCall.rpc.result.content[0].text);
-  assert.ok(Array.isArray(funds) && funds.length > 0, 'must return real seeded fund data');
+  assert.ok(Array.isArray(funds) && funds.length > 0, 'must return the fund created in before()');
 
   await server.apiFetch(`/api/api-keys/${key.id}/revoke`, { method: 'PUT' }).catch(() => {});
 });
@@ -105,7 +110,7 @@ test('MCP: tenant isolation — a tenant B key never sees tenant A\'s data via a
   const bCall = await mcpCall(bKeyRes.key, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_funds', arguments: {} } });
   const bFunds = JSON.parse(bCall.rpc.result.content[0].text);
 
-  assert.ok(aFunds.length > 0, 'tenant A has real seeded funds');
+  assert.ok(aFunds.length > 0, 'tenant A has the fund created in before()');
   assert.equal(bFunds.length, 0, 'tenant B is a fresh signup with no funds of its own');
   assert.ok(!bFunds.some(f => aFunds.some(af => af.id === f.id)), 'no fund id should ever appear in both tenants\' MCP results');
 });

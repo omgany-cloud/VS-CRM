@@ -21,9 +21,12 @@ const PAYLOAD = '<img src=x onerror="window.__xss=1">';
 
 before(async () => {
   server = await createTestServer({ port: 4093 });
-  const res = await server.apiFetch('/api/funds');
-  const { funds } = await res.json();
-  fundId = funds[0].id;
+  // seed.js no longer creates any funds — create a throwaway one to attach
+  // the test LP to.
+  const fund = await (await server.apiFetch('/api/funds', {
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+  })).json();
+  fundId = fund.id;
 });
 
 after(async () => { await server.stop(); });

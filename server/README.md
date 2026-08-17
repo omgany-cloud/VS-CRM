@@ -15,19 +15,23 @@ the LP self-service portal (`portal.html`), and the public marketing site
 ```
 cd server
 npm install
-npm run seed     # only for a fresh demo instance — see warning below
+npm run seed     # tenant + system roles + 1 admin login — see below
 npm start         # http://localhost:4000
 ```
 Open **http://localhost:4000** (not `index.html` directly — the app needs
 to be served over HTTP so `fetch()` calls work).
 
-**Demo login:** `admin@turancapital.kz` / `TuranDemo2025!` (pre-filled in
-the login form on a freshly seeded database)
+**Login:** `admin@turancapital.kz` / `TuranDemo2025!` (pre-filled in the
+login form on a freshly seeded database)
 
-⚠️ **Don't run `npm run seed` against a database that already has real
-data.** It repopulates fictional demo records (LPs, deals, portfolio
-companies) — only meant for spinning up a brand-new demo/dev instance from
-scratch, not for topping up or resetting a live one.
+`npm run seed` only creates the tenant, system roles, and this one admin
+login — no funds/LPs/deals/portfolio/onboarding data. It used to also
+populate a full fictional demo dataset, but that's gone: create real
+records through the app itself (same as any newly-registered tenant via
+"Зарегистрировать компанию" already starts with zero of everything). Each
+`seed*()` function still skips its table if it already has rows for the
+tenant, so running it again against an existing database is harmless —
+just a no-op past the first run.
 
 ## What's real vs. what's still a placeholder
 

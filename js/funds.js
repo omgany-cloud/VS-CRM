@@ -100,11 +100,13 @@ function updateFundBranding(f) {
   // Dashboard header — previously frozen to whichever fund's markup
   // happened to ship in index.html, never updated when switching funds.
   const dashLabel = document.getElementById('dashFundLabel');
-  if (dashLabel) dashLabel.textContent = f.name;
+  if (dashLabel) { dashLabel.textContent = f.name; dashLabel.style.display = ''; }
   const dashSub = document.getElementById('dashFundSub');
   if (dashSub) dashSub.textContent = `Сводная информация · ${f.gp} (GP) · Лицензия ${f.license || '—'}`;
   const phase = document.getElementById('fundPhaseText');
   if (phase) phase.textContent = `${f.phase} · Year ${f.phaseYear}`;
+  const phaseIndicator = document.getElementById('fundPhaseIndicator');
+  if (phaseIndicator) phaseIndicator.style.display = '';
   document.documentElement.style.setProperty('--fund-color', f.color);
 
   // Dashboard headline KPI cards — previously static HTML frozen to
@@ -121,6 +123,28 @@ function updateFundBranding(f) {
   if (mgmtFee) mgmtFee.textContent = `${f.managementFee}% / год`;
   const carryDelta = document.getElementById('kpiCarryDelta');
   if (carryDelta) carryDelta.textContent = `Carried Interest: ${f.carriedInterest}%`;
+}
+
+// Called instead of updateFundBranding() when funds.length === 0 (a brand
+// new tenant, or every fund deleted) — without this, the header/dashboard
+// elements below just keep whatever placeholder text shipped in index.html
+// (e.g. "Turan Capital Fund LP", "$50M" AUM), which looks like real fund
+// data but isn't. Clears them to an honest empty state instead.
+function showNoFundsState() {
+  const nameEl = document.getElementById('activeFundName');
+  if (nameEl) nameEl.textContent = 'Нет фондов';
+  const subEl = document.getElementById('activeFundSub');
+  if (subEl) subEl.textContent = 'Создайте первый фонд';
+  const dashLabel = document.getElementById('dashFundLabel');
+  if (dashLabel) { dashLabel.textContent = ''; dashLabel.style.display = 'none'; }
+  const dashSub = document.getElementById('dashFundSub');
+  if (dashSub) dashSub.textContent = 'Фонды ещё не созданы — нажмите «+ Создать фонд» в переключателе фондов, чтобы начать.';
+  const phaseIndicator = document.getElementById('fundPhaseIndicator');
+  if (phaseIndicator) phaseIndicator.style.display = 'none';
+  for (const id of ['kpiAum', 'kpiAumDelta', 'kpiIrr', 'kpiMoic', 'kpiMgmtFee', 'kpiCarryDelta']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  }
 }
 
 // Opens the "Add Fund" modal in create mode.

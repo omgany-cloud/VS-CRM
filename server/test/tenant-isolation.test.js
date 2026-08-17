@@ -14,7 +14,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { createTestServer, SEED_EMAIL, SEED_PASSWORD } = require('./helpers');
 
-let server; // tenant A — the fully-seeded tenant from createTestServer()
+let server; // tenant A — the seeded tenant from createTestServer() (tenant + roles + 1 admin user, no business data)
 let tenantB; // tenant B — freshly signed up, empty, isolated
 
 before(async () => {
@@ -68,9 +68,18 @@ async function assertEntityIsolation({ name, createPath, createBody, listPath, l
   await server.apiFetch(idPath(created.id), { method: 'DELETE' }).catch(() => {});
 }
 
+// seed.js no longer creates any funds — tests that need one (to satisfy
+// the fund_id FK on LP/deal/portfolio/capital-call fixtures) create their
+// own throwaway one under tenant A instead of assuming seed data exists.
+async function createTestFund() {
+  const fund = await (await server.apiFetch('/api/funds', {
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+  })).json();
+  return fund.id;
+}
+
 test('LP isolation', async () => {
-  const fundsRes = await (await server.apiFetch('/api/funds')).json();
-  const fundId = fundsRes.funds[0].id;
+  const fundId = await createTestFund();
   await assertEntityIsolation({
     name: 'LP',
     createPath: '/api/lp',
@@ -81,8 +90,7 @@ test('LP isolation', async () => {
 });
 
 test('Deal isolation', async () => {
-  const fundsRes = await (await server.apiFetch('/api/funds')).json();
-  const fundId = fundsRes.funds[0].id;
+  const fundId = await createTestFund();
   await assertEntityIsolation({
     name: 'Deal',
     createPath: '/api/deals',
@@ -93,8 +101,7 @@ test('Deal isolation', async () => {
 });
 
 test('Portfolio isolation', async () => {
-  const fundsRes = await (await server.apiFetch('/api/funds')).json();
-  const fundId = fundsRes.funds[0].id;
+  const fundId = await createTestFund();
   await assertEntityIsolation({
     name: 'Portfolio',
     createPath: '/api/portfolio',
@@ -127,8 +134,7 @@ test('Onboarding client isolation', async () => {
 });
 
 test('Capital call isolation (Draft only, since PUT/DELETE both apply to a Draft-safe id)', async () => {
-  const fundsRes = await (await server.apiFetch('/api/funds')).json();
-  const fundId = fundsRes.funds[0].id;
+  const fundId = await createTestFund();
   const lp = await (await server.apiFetch('/api/lp', {
     method: 'POST', body: JSON.stringify({ fundId, name: 'ZZZ_ISO_CC_LP', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'ISO-2' }),
   })).json();
@@ -159,6 +165,14 @@ test('Users isolation: tenant B cannot list, edit, or delete tenant A\'s users',
 });
 
 test('External API key isolation: a key only ever resolves to the tenant that created it', async () => {
+  // seed.js no longer creates any funds/LPs — give tenant A a real LP of
+  // its own so this test can tell "sees tenant A's data" apart from "sees
+  // nothing at all".
+  const fundId = await createTestFund();
+  await server.apiFetch('/api/lp', {
+    method: 'POST', body: JSON.stringify({ fundId, name: 'ZZZ_ISO_KEY_LP', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'ISO-KEY-1' }),
+  });
+
   const aKeyRes = await (await server.apiFetch('/api/api-keys', {
     method: 'POST', body: JSON.stringify({ name: 'ZZZ_ISO_KEY_A', scopes: ['read:lp'] }),
   })).json();
@@ -169,8 +183,8 @@ test('External API key isolation: a key only ever resolves to the tenant that cr
   const aExternal = await (await fetch(server.baseUrl + '/api/v1/external/lp', { headers: { Authorization: 'Bearer ' + aKeyRes.key } })).json();
   const bExternal = await (await fetch(server.baseUrl + '/api/v1/external/lp', { headers: { Authorization: 'Bearer ' + bKeyRes.key } })).json();
 
-  // Tenant A's seeded data has real LPs; tenant B is a fresh signup with none.
-  assert.ok(aExternal.lp.length > 0, 'tenant A key should see tenant A\'s real seeded LPs');
+  // Tenant A now has a real LP (created above); tenant B is a fresh signup with none.
+  assert.ok(aExternal.lp.length > 0, 'tenant A key should see tenant A\'s LP');
   assert.equal(bExternal.lp.length, 0, 'tenant B key must see zero LPs — tenant B never created any, and must not see tenant A\'s');
   assert.ok(!bExternal.lp.some(l => aExternal.lp.some(al => al.id === l.id)), 'no LP id should ever appear in both tenants\' results');
 

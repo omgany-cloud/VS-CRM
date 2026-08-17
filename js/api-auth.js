@@ -406,6 +406,7 @@ async function loadFundsFromApi() {
     }
     if (typeof renderFundSwitcher === 'function') renderFundSwitcher();
     if (funds.length && typeof updateFundBranding === 'function') updateFundBranding(getActiveFund());
+    else if (!funds.length && typeof showNoFundsState === 'function') showNoFundsState();
   } catch (err) {
     console.error('Failed to load funds from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить фонды из API: ' + err.message, 'red');
