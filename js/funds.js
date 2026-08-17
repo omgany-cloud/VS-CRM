@@ -221,7 +221,7 @@ async function saveFund() {
   if (!name) { alert('Введите название фонда'); return; }
 
   const isEdit = fundModalEditId != null;
-  const colors = ['#3b82f6','#8b5cf6','#22c55e','#f97316','#14b8a6','#ef4444','#eab308'];
+  const colors = ['#0f9488','#8b5cf6','#22c55e','#f97316','#14b8a6','#ef4444','#eab308'];
 
   const payload = {
     name,

@@ -661,12 +661,12 @@ function renderExportPage() {
     'Регулятор':  { bg: 'rgba(139,92,246,0.15)', color: '#a78bfa' },
     'AML':        { bg: 'rgba(239,68,68,0.15)',  color: '#f87171' },
     'Finance':    { bg: 'rgba(34,197,94,0.15)',  color: '#4ade80' },
-    'Investment': { bg: 'rgba(59,130,246,0.15)', color: '#60a5fa' },
+    'Investment': { bg: 'rgba(20,184,166,0.15)', color: '#5eead4' },
     'CF&A':       { bg: 'rgba(249,115,22,0.15)', color: '#fb923c' },
     'Internal':   { bg: 'rgba(100,116,139,0.15)','color': '#94a3b8' },
     'Full':       { bg: 'rgba(239,68,68,0.18)',  color: '#f87171' },
   };
-  const iconColor = { blue:'#3b82f6', purple:'#8b5cf6', green:'#22c55e', orange:'#f97316', red:'#ef4444' };
+  const iconColor = { blue:'#14b8a6', purple:'#8b5cf6', green:'#22c55e', orange:'#f97316', red:'#ef4444' };
 
   el.innerHTML = `
     <!-- Шапка -->
@@ -690,7 +690,7 @@ function renderExportPage() {
     <div class="export-grid">
       ${reports.map(r => {
         const tc = tagColor[r.tag] || tagColor['Internal'];
-        const ic = iconColor[r.color] || '#3b82f6';
+        const ic = iconColor[r.color] || '#14b8a6';
         return `
           <div class="export-card ${r.featured ? 'export-card-featured' : ''}">
             <div class="export-card-top">

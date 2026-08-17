@@ -28,7 +28,7 @@ const WF_DEFINITIONS = {
   kyc_cfa: {
     label: 'KYC/AML — CF&A Client',
     icon: 'fa-building',
-    color: '#3b82f6',
+    color: '#14b8a6',
     steps: [
       { role: 'COMPLIANCE_OFFICER',   label: 'CO проверка документов',      action: 'review'  },
       { role: 'MLRO', label: 'MLRO — AML скрининг',         action: 'approve' },
@@ -181,7 +181,7 @@ function collectExternalPendingApprovals() {
   (typeof afsaReports !== 'undefined' ? afsaReports : []).forEach(r => {
     if (r.status === 'Отправлен') return;
     items.push({
-      category: 'Отчётность регулятору', icon: 'fa-landmark', color: '#3b82f6',
+      category: 'Отчётность регулятору', icon: 'fa-landmark', color: '#14b8a6',
       title: `${r.period} (${r.reportType})`,
       meta: `Дедлайн ${r.deadline} · ${r.status}`,
       permission: 'afsaSubmit',
@@ -213,7 +213,7 @@ function renderPendingApprovalsBoard() {
   if (header) header.innerHTML = `<i class="fas fa-list-check" style="color:#f97316;margin-right:6px"></i>Все ожидающие решения (${_pendingApprovalItems.length})`;
 
   if (!_pendingApprovalItems.length) {
-    el.innerHTML = '<div style="padding:40px;text-align:center;color:#8a9bbf">Нет ожидающих решений вне KYC/AML</div>';
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#8abfbb">Нет ожидающих решений вне KYC/AML</div>';
     return;
   }
 
@@ -233,7 +233,7 @@ function renderPendingApprovalsBoard() {
           <div class="wf-row-meta">
             <span style="color:${it.color};font-size:11px;font-weight:700">${it.category}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">${escapeHtml(it.meta)}</span>
+            <span style="font-size:11px;color:#8abfbb">${escapeHtml(it.meta)}</span>
           </div>
         </div>
       </div>`;
@@ -308,7 +308,7 @@ function renderWfList() {
     const completedSteps = w.steps.filter(s => s.completedAt).length;
 
     const statusCfg = {
-      active:    { label:'Активен',   color:'#3b82f6', bg:'rgba(59,130,246,0.12)' },
+      active:    { label:'Активен',   color:'#14b8a6', bg:'rgba(20,184,166,0.12)' },
       approved:  { label:'Одобрен',   color:'#22c55e', bg:'rgba(34,197,94,0.12)'  },
       rejected:  { label:'Отклонён',  color:'#ef4444', bg:'rgba(239,68,68,0.12)'  },
       withdrawn: { label:'Отозван',   color:'#94a3b8', bg:'rgba(148,163,184,0.1)' },
@@ -327,9 +327,9 @@ function renderWfList() {
           <div class="wf-row-meta">
             <span style="color:${def.color};font-size:11px;font-weight:700">${def.label}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">Шаг ${completedSteps}/${w.steps.length}: ${step ? step.label : '—'}</span>
+            <span style="font-size:11px;color:#8abfbb">Шаг ${completedSteps}/${w.steps.length}: ${step ? step.label : '—'}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">${new Date(w.createdAt).toLocaleDateString('ru-RU')}</span>
+            <span style="font-size:11px;color:#8abfbb">${new Date(w.createdAt).toLocaleDateString('ru-RU')}</span>
           </div>
           <div class="wf-progress-bar">
             <div class="wf-progress-fill" style="width:${Math.round(completedSteps/w.steps.length*100)}%;background:${def.color}"></div>
@@ -337,10 +337,10 @@ function renderWfList() {
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <span class="task-status-pill" style="background:${statusCfg.bg};color:${statusCfg.color}">${statusCfg.label}</span>
-          <span style="font-size:11px;color:#8a9bbf">${w.entityType}</span>
+          <span style="font-size:11px;color:#8abfbb">${w.entityType}</span>
         </div>
       </div>`;
-  }).join('') || '<div style="padding:40px;text-align:center;color:#8a9bbf">Нет workflow</div>';
+  }).join('') || '<div style="padding:40px;text-align:center;color:#8abfbb">Нет workflow</div>';
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ function renderWfModalContent(w) {
     const isDone    = !!s.completedAt;
     const isCurrent = i === w.currentStep && w.status === 'active';
     const isPending = !isDone && !isCurrent;
-    const dotColor  = isDone ? (s.decision === 'rejected' ? '#ef4444' : '#22c55e') : isCurrent ? def.color : '#2a3448';
+    const dotColor  = isDone ? (s.decision === 'rejected' ? '#ef4444' : '#22c55e') : isCurrent ? def.color : '#2a4846';
     const dotIcon   = isDone ? (s.decision === 'rejected' ? 'fa-times' : 'fa-check') : isCurrent ? 'fa-clock' : 'fa-circle';
     return `
       <div class="wf-step ${isDone?'done':isCurrent?'current':'pending'}">
@@ -387,7 +387,7 @@ function renderWfModalContent(w) {
           <i class="fas ${dotIcon}" style="font-size:10px;color:#fff"></i>
         </div>
         <div class="wf-step-body">
-          <div class="wf-step-label" style="color:${isCurrent?def.color:isDone?'#e2e8f0':'#8a9bbf'}">
+          <div class="wf-step-label" style="color:${isCurrent?def.color:isDone?'#e2e8f0':'#8abfbb'}">
             ${s.label}
             <span class="wf-step-role-badge">${s.role}</span>
             ${s.action === 'sign' ? '<span class="wf-step-role-badge" style="background:rgba(20,184,166,0.15);color:#2dd4bf">Подпись</span>' : ''}
@@ -397,7 +397,7 @@ function renderWfModalContent(w) {
               <span style="color:${s.decision==='approved'?'#22c55e':'#ef4444'};font-weight:700;font-size:11px">
                 ${s.decision==='approved'?'✓ Одобрено':'✗ Отклонено'}
               </span>
-              <span style="color:#8a9bbf;font-size:11px"> · ${escapeHtml(s.completedBy)} · ${new Date(s.completedAt).toLocaleDateString('ru-RU')}</span>
+              <span style="color:#8abfbb;font-size:11px"> · ${escapeHtml(s.completedBy)} · ${new Date(s.completedAt).toLocaleDateString('ru-RU')}</span>
               ${s.comment ? `<div style="color:#94a3b8;font-size:11px;margin-top:3px;font-style:italic">"${escapeHtml(s.comment)}"</div>` : ''}
             </div>` : isCurrent ? `<div style="font-size:11px;color:${def.color};font-weight:600">⏳ Ожидает действия</div>` : ''}
         </div>
@@ -411,7 +411,7 @@ function renderWfModalContent(w) {
         Ваше действие (${myRole}): ${currentStep.label}
       </div>
       <textarea id="wfComment" rows="2" placeholder="Комментарий (обязателен при отклонении)..."
-        style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:8px;
+        style="width:100%;background:#1c3332;border:1px solid #2a4846;border-radius:8px;
                padding:10px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box;margin-bottom:10px"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="wfAction(${w.id},'approved')"
@@ -445,26 +445,26 @@ function renderWfModalContent(w) {
         ['Статус', w.status === 'active' ? 'Активен' : w.status === 'approved' ? 'Одобрен' : 'Отклонён'],
         ['Прогресс', `${w.steps.filter(s=>s.completedAt).length} из ${w.steps.length} шагов`],
       ].map(([k,v]) => `
-        <div style="background:#1c2333;border-radius:8px;padding:8px 12px">
-          <div style="font-size:10px;color:#8a9bbf;font-weight:700;text-transform:uppercase;margin-bottom:2px">${k}</div>
+        <div style="background:#1c3332;border-radius:8px;padding:8px 12px">
+          <div style="font-size:10px;color:#8abfbb;font-weight:700;text-transform:uppercase;margin-bottom:2px">${k}</div>
           <div style="font-size:13px;color:#e2e8f0;font-weight:600">${v}</div>
         </div>`).join('')}
     </div>
 
     <div style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Ход согласования</div>
+      <div style="font-size:12px;font-weight:700;color:#8abfbb;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Ход согласования</div>
       <div class="wf-steps-list">${stepsHtml}</div>
     </div>
 
     ${actionHtml}
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:4px">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:4px">
       ${w.status === 'active' ? `<button onclick="withdrawWf(${w.id})"
-        style="background:none;border:1px solid #2a3448;color:#8a9bbf;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px">
+        style="background:none;border:1px solid #2a4846;color:#8abfbb;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px">
         <i class="fas fa-undo"></i> Отозвать
       </button>` : ''}
       <button onclick="closeWfModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        style="background:#14b8a6;border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         Закрыть
       </button>
     </div>`;

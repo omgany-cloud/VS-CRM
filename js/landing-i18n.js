@@ -15,10 +15,16 @@ const LANDING_LANG_KEY = 'gl_landing_lang';
 
 const LANDING_TRANSLATIONS = {
   hero_badge: { ru: 'Лицензировано AFSA', en: 'Licensed by AFSA' },
-  hero_title: { ru: 'Golden Leaves Ltd', en: 'Golden Leaves Ltd' },
+  hero_title: { ru: 'Golden <em>Leaves</em> Ltd', en: 'Golden <em>Leaves</em> Ltd' },
   hero_tagline: { ru: 'Управление фондами и консалтинг в области корпоративных финансов', en: 'Fund management and corporate finance consulting' },
   hero_btn_contact: { ru: 'Связаться с нами', en: 'Contact Us' },
+  hero_btn_license: { ru: 'Посмотреть лицензию', en: 'View License' },
 
+  stat1_label: { ru: 'Основана на МФЦА', en: 'Established at AIFC' },
+  stat2_label: { ru: 'Лицензированных вида деятельности', en: 'Licensed activities' },
+  stat3_label: { ru: 'Человек в команде', en: 'Senior team members' },
+
+  services_eyebrow: { ru: 'Чем мы занимаемся', en: 'What We Do' },
   about_title: { ru: 'Лицензированные виды деятельности', en: 'Licensed Activities' },
   about_body: {
     ru: 'Golden Leaves была основана в 2020 году для предоставления качественных услуг по управлению фондами и финансово-юридическому консультированию.',

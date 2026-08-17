@@ -10,7 +10,7 @@ const PLANS = [
     price_annual: 239,
     currency: '$',
     period: '/мес',
-    color: '#3b82f6',
+    color: '#14b8a6',
     icon: 'fa-seedling',
     tag: null,
     features: [

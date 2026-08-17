@@ -34,7 +34,7 @@ async function vaultCollectAllFiles() {
   // metadata lookup needed for these.
   (typeof docFiles !== 'undefined' ? docFiles.filter(d => !d.archived) : []).forEach(f => {
     files.push({
-      key: 'doc_' + f.id, module: 'Документы', moduleColor: '#3b82f6', moduleIcon: 'fa-folder-open',
+      key: 'doc_' + f.id, module: 'Документы', moduleColor: '#14b8a6', moduleIcon: 'fa-folder-open',
       client: f.category || '—', name: f.name, size: f.size || '—', date: f.date || '—', uploader: f.uploader || '—',
       documentUrl: f.documentUrl || null, goToSource: () => navigateTo('documents'),
     });
@@ -146,7 +146,7 @@ async function vaultCollectAllFiles() {
 async function renderVaultPage() {
   const el = document.getElementById('vaultContent');
   if (!el) return;
-  el.innerHTML = `<div style="padding:60px;text-align:center;color:#8a9bbf"><i class="fas fa-spinner fa-spin" style="font-size:22px;margin-bottom:10px;display:block"></i>Загрузка файлов из всех модулей...</div>`;
+  el.innerHTML = `<div style="padding:60px;text-align:center;color:#8abfbb"><i class="fas fa-spinner fa-spin" style="font-size:22px;margin-bottom:10px;display:block"></i>Загрузка файлов из всех модулей...</div>`;
 
   _vaultFilesCache = await vaultCollectAllFiles();
   const allFiles  = _vaultFilesCache;
@@ -196,19 +196,19 @@ async function renderVaultPage() {
           <input id="vaultSearchInput" type="text" placeholder="Поиск по имени файла или клиенту..."
             value="${vaultSearch}"
             oninput="vaultSearch=this.value;renderVaultTable()"
-            style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
 
         <!-- Module filter -->
         <select id="vaultModuleFilter" onchange="vaultFilterModule=this.value;renderVaultTable()"
-          style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;min-width:160px">
+          style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;min-width:160px">
           <option value="">Все модули</option>
           ${modules.map(m => `<option value="${m}" ${vaultFilterModule===m?'selected':''}>${m} (${byModule[m]})</option>`).join('')}
         </select>
 
         <!-- Type filter -->
         <select id="vaultTypeFilter" onchange="vaultFilterType=this.value;renderVaultTable()"
-          style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;min-width:130px">
+          style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;min-width:130px">
           <option value="">Все типы</option>
           <option value="pdf" ${vaultFilterType==='pdf'?'selected':''}>PDF</option>
           <option value="excel" ${vaultFilterType==='excel'?'selected':''}>Excel</option>
@@ -219,7 +219,7 @@ async function renderVaultPage() {
 
         <!-- Upload shortcut -->
         <button onclick="navigateTo('documents')"
-          style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">
+          style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">
           <i class="fas fa-upload" style="margin-right:5px"></i>Загрузить файл
         </button>
       </div>
@@ -228,8 +228,8 @@ async function renderVaultPage() {
     <!-- Table -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-database" style="color:#3b82f6;margin-right:6px"></i>Все файлы CRM</span>
-        <span id="vaultFileCount" style="font-size:12px;color:#8a9bbf">...</span>
+        <span class="card-title"><i class="fas fa-database" style="color:#14b8a6;margin-right:6px"></i>Все файлы CRM</span>
+        <span id="vaultFileCount" style="font-size:12px;color:#8abfbb">...</span>
       </div>
       <div id="vaultTableWrap"></div>
     </div>`;
@@ -316,7 +316,7 @@ function vaultFileRow(f) {
   const previewBtn = canPreview
     ? `<button onclick="vaultPreview('${escapeAttr(f.key)}')"
          title="Предпросмотр"
-         style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
+         style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px">
          <i class="fas fa-eye"></i>
        </button>`
     : `<button disabled title="Предпросмотр недоступен для этого типа файла"
@@ -355,8 +355,8 @@ function vaultFileRow(f) {
         </span>
       </td>
       <td style="font-size:12px;color:#94a3b8;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.client}">${f.client}</td>
-      <td style="font-size:12px;color:#8a9bbf;white-space:nowrap">${f.size}</td>
-      <td style="font-size:12px;color:#8a9bbf;white-space:nowrap">${f.date}</td>
+      <td style="font-size:12px;color:#8abfbb;white-space:nowrap">${f.size}</td>
+      <td style="font-size:12px;color:#8abfbb;white-space:nowrap">${f.date}</td>
       <td>
         <div style="display:flex;gap:5px;justify-content:center;align-items:center">
           ${previewBtn}
@@ -397,8 +397,8 @@ function vaultPreview(key) {
         style="max-width:100%;max-height:70vh;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.5);object-fit:contain" />
     </div>`;
   } else {
-    html = `<div style="padding:40px;text-align:center;color:#8a9bbf">
-      <i class="fas fa-file-alt" style="font-size:48px;margin-bottom:12px;display:block;color:#3b82f6"></i>
+    html = `<div style="padding:40px;text-align:center;color:#8abfbb">
+      <i class="fas fa-file-alt" style="font-size:48px;margin-bottom:12px;display:block;color:#14b8a6"></i>
       <div style="font-size:14px;margin-bottom:8px">${f.name}</div>
       <div style="font-size:12px">Предпросмотр недоступен для этого типа файла</div>
     </div>`;

@@ -38,7 +38,7 @@ function attachPasswordStrengthMeter(inputEl) {
   meter.style.cssText = 'margin-top:4px';
   meter.innerHTML = '<div style="height:4px;border-radius:2px;background:#1e293b;overflow:hidden">'
     + '<div class="pw-strength-bar" style="height:100%;width:0;border-radius:2px;transition:width .15s ease,background .15s ease"></div></div>'
-    + '<div class="pw-strength-label" style="font-size:10px;color:#5a6b8a;margin-top:3px"></div>';
+    + '<div class="pw-strength-label" style="font-size:10px;color:#5a8a85;margin-top:3px"></div>';
   inputEl.insertAdjacentElement('afterend', meter);
 
   const bar = meter.querySelector('.pw-strength-bar');

@@ -84,7 +84,7 @@ function renderKycRenewalPage() {
     <div class="card">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-sync-alt" style="color:#8b5cf6;margin-right:6px"></i>KYC Renewal Schedule</span>
-        <span style="font-size:11px;color:#8a9bbf">Обновление каждые 12 месяцев · Правила AML регулятора</span>
+        <span style="font-size:11px;color:#8abfbb">Обновление каждые 12 месяцев · Правила AML регулятора</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -100,7 +100,7 @@ function renderKycRenewalPage() {
                 <td style="font-size:12px">${item.type}</td>
                 <td><span class="task-type-badge">${item.category}</span></td>
                 <td style="font-size:12px;color:${item.kycStatus==='Одобрен'?'#22c55e':'#f97316'};font-weight:700">${item.kycStatus}</td>
-                <td style="font-size:12px;color:#8a9bbf">${item.kycDate ? new Date(item.kycDate).toLocaleDateString('ru-RU') : '—'}</td>
+                <td style="font-size:12px;color:#8abfbb">${item.kycDate ? new Date(item.kycDate).toLocaleDateString('ru-RU') : '—'}</td>
                 <td style="font-size:12px;color:${item.renewal.color};font-weight:600">
                   ${item.renewal.renewDue ? new Date(item.renewal.renewDue).toLocaleDateString('ru-RU') : '—'}
                 </td>
@@ -109,7 +109,7 @@ function renderKycRenewalPage() {
                     ${item.renewal.status==='overdue'?'⚠️ ':item.renewal.status==='warning'?'⏰ ':'✅ '}${item.renewal.label}
                   </span>
                 </td>
-                <td style="font-size:11px;color:#8a9bbf">${(item.rm||'').split(' ')[0]}</td>
+                <td style="font-size:11px;color:#8abfbb">${(item.rm||'').split(' ')[0]}</td>
                 <td>
                   <button onclick="startKycRenewal('${item.id}','${item.name.replace(/'/g,"\\'")}')"
                     style="background:rgba(139,92,246,0.12);border:1px solid #8b5cf6;color:#a78bfa;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;white-space:nowrap">
@@ -155,7 +155,7 @@ function buildCalendarEvents() {
     events.push({
       date: r.deadline, label: `Отчёт ${r.period} (${r.reportType})`,
       category: 'afsa', status: r.status, resp: r.resp,
-      color: r.status === 'Отправлен' ? '#22c55e' : r.status === 'В процессе' ? '#f97316' : '#3b82f6',
+      color: r.status === 'Отправлен' ? '#22c55e' : r.status === 'В процессе' ? '#f97316' : '#14b8a6',
       action: () => navigateTo('calendar'),
     });
   });
@@ -198,7 +198,7 @@ function buildCalendarEvents() {
 }
 
 const CAL_CATEGORIES = {
-  afsa:    { label: 'Отчётность регулятору', icon: 'fa-landmark', color: '#3b82f6'  },
+  afsa:    { label: 'Отчётность регулятору', icon: 'fa-landmark', color: '#14b8a6'  },
   capital: { label: 'Capital Calls',   icon: 'fa-coins',          color: '#22c55e'  },
   kyc:     { label: 'KYC Renewal',     icon: 'fa-shield-alt',     color: '#8b5cf6'  },
 };
@@ -232,7 +232,7 @@ function renderComplianceCalendar() {
     <div class="kpi-row" style="margin-bottom:20px">
       ${[
         ['fa-exclamation-triangle','red',  'Просрочено',   overdue.length,  overdue.length>0?'#ef4444':'#22c55e'],
-        ['fa-calendar-week',       'blue', 'Ближайшие 30д',upcoming.filter(e=>new Date(e.date)<=new Date(today.getTime()+30*86400000)).length, '#3b82f6'],
+        ['fa-calendar-week',       'blue', 'Ближайшие 30д',upcoming.filter(e=>new Date(e.date)<=new Date(today.getTime()+30*86400000)).length, '#14b8a6'],
         ['fa-calendar',            'purple','Ближайшие 90д',upcoming.length, '#8b5cf6'],
         ['fa-list',                'green', 'Всего событий', events.length,  '#22c55e'],
       ].map(([icon,color,label,val,vc]) => `
@@ -275,7 +275,7 @@ function renderAfsaReportsTable() {
   return `
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-landmark" style="color:#3b82f6;margin-right:6px"></i>Отчётность регулятору</span>
+        <span class="card-title"><i class="fas fa-landmark" style="color:#14b8a6;margin-right:6px"></i>Отчётность регулятору</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -284,14 +284,14 @@ function renderAfsaReportsTable() {
             ${reports.map(r => `
               <tr>
                 <td>${r.period}</td>
-                <td style="font-size:12px;color:#8a9bbf">${r.reportType}</td>
+                <td style="font-size:12px;color:#8abfbb">${r.reportType}</td>
                 <td>${formatDate(r.deadline)}</td>
                 <td><span class="badge ${statusMap[r.status] || 'badge-gray'}">${r.status}</span></td>
-                <td style="font-size:12px;color:#8a9bbf">${r.resp || '—'}</td>
+                <td style="font-size:12px;color:#8abfbb">${r.resp || '—'}</td>
                 <td>${
                   r.status === 'Отправлен'
                     ? (r.documentUrl
-                        ? `<a href="#" onclick="event.preventDefault();window.open(resolveDocUrl('${r.documentUrl}'),'_blank')" style="font-size:11px;color:#60a5fa">Открыть файл</a>`
+                        ? `<a href="#" onclick="event.preventDefault();window.open(resolveDocUrl('${r.documentUrl}'),'_blank')" style="font-size:11px;color:#5eead4">Открыть файл</a>`
                         : `<span style="font-size:11px;color:#64748b">${r.submittedAt || ''}</span>`)
                     : (canSubmit
                         ? `<button onclick="submitAfsaReport(${r.id})" class="btn-ghost" style="font-size:11px;padding:4px 10px"><i class="fas fa-paperclip"></i> Загрузить и отметить</button>`
@@ -324,7 +324,7 @@ async function submitAfsaReport(id) {
 }
 
 function renderCalendarByMonth(events) {
-  if (!events.length) return '<div class="card"><div style="padding:30px;text-align:center;color:#8a9bbf">Нет предстоящих событий</div></div>';
+  if (!events.length) return '<div class="card"><div style="padding:30px;text-align:center;color:#8abfbb">Нет предстоящих событий</div></div>';
   const byMonth = {};
   events.forEach(e => {
     const m = e.date.slice(0,7);
@@ -337,8 +337,8 @@ function renderCalendarByMonth(events) {
     return `
       <div class="card" style="margin-bottom:12px">
         <div class="card-header">
-          <span class="card-title"><i class="fas fa-calendar-alt" style="color:#3b82f6;margin-right:6px"></i>${label}</span>
-          <span style="font-size:11px;color:#8a9bbf">${evts.length} событий</span>
+          <span class="card-title"><i class="fas fa-calendar-alt" style="color:#14b8a6;margin-right:6px"></i>${label}</span>
+          <span style="font-size:11px;color:#8abfbb">${evts.length} событий</span>
         </div>
         ${evts.map(e => renderCalEvent(e, false)).join('')}
       </div>`;
@@ -364,11 +364,11 @@ function renderCalEvent(e, isOverdue) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.label}</div>
-        <div style="font-size:11px;color:#8a9bbf;margin-top:2px">${cat.label} · ${e.resp||'—'} · ${e.status}</div>
+        <div style="font-size:11px;color:#8abfbb;margin-top:2px">${cat.label} · ${e.resp||'—'} · ${e.status}</div>
       </div>
       ${clickable ? '<i class="fas fa-chevron-right" style="color:#475569;font-size:11px;flex-shrink:0"></i>' : ''}
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;font-weight:700;color:${isOverdue?'#ef4444':daysFromNow<=7?'#f97316':'#8a9bbf'}">${dStr}</div>
+        <div style="font-size:12px;font-weight:700;color:${isOverdue?'#ef4444':daysFromNow<=7?'#f97316':'#8abfbb'}">${dStr}</div>
         <div style="font-size:10px;color:${isOverdue?'#ef4444':daysFromNow<=7?'#f97316':'#94a3b8'}">
           ${isOverdue ? `${Math.abs(daysFromNow)}д назад` : daysFromNow===0 ? 'Сегодня' : `через ${daysFromNow}д`}
         </div>
@@ -475,11 +475,11 @@ function renderICList() {
           <div class="wf-row-meta">
             <span style="color:#f97316;font-size:11px;font-weight:700">$${m.amount}M ${m.type}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">${m.sector}</span>
+            <span style="font-size:11px;color:#8abfbb">${m.sector}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">IC: ${m.meetingDate ? new Date(m.meetingDate).toLocaleDateString('ru-RU') : '—'}</span>
+            <span style="font-size:11px;color:#8abfbb">IC: ${m.meetingDate ? new Date(m.meetingDate).toLocaleDateString('ru-RU') : '—'}</span>
             <span class="wf-meta-sep">·</span>
-            <span style="font-size:11px;color:#8a9bbf">Голоса: ${votedCount}/${m.votes.length} (${approveCount} за)</span>
+            <span style="font-size:11px;color:#8abfbb">Голоса: ${votedCount}/${m.votes.length} (${approveCount} за)</span>
           </div>
           <div class="wf-progress-bar">
             <div class="wf-progress-fill" style="width:${Math.round(votedCount/m.votes.length*100)}%;background:#f97316"></div>
@@ -487,7 +487,7 @@ function renderICList() {
         </div>
         <span class="task-status-pill" style="background:${statusCfg.bg};color:${statusCfg.color}">${statusCfg.label}</span>
       </div>`;
-  }).join('') || '<div style="padding:40px;text-align:center;color:#8a9bbf">Нет IC меморандумов</div>';
+  }).join('') || '<div style="padding:40px;text-align:center;color:#8abfbb">Нет IC меморандумов</div>';
 }
 
 function openICModal(id) {
@@ -514,7 +514,7 @@ function closeICModal() {
 
 const RISK_CONCLUSIONS = {
   'No Objection':        { label: 'Возражений нет',      color: '#22c55e' },
-  'Conditional Approval': { label: 'Условное одобрение', color: '#3b82f6' },
+  'Conditional Approval': { label: 'Условное одобрение', color: '#14b8a6' },
   'Veto':                 { label: 'Вето',                color: '#ef4444' },
 };
 
@@ -533,17 +533,17 @@ function renderICModalContent(m) {
   const anyVotableByMe = m.status === 'pending' && m.votes.some(canCastVote);
 
   const votesHtml = m.votes.map((v, i) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #2a3448;font-size:12px">
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #2a4846;font-size:12px">
       <div style="width:28px;height:28px;border-radius:8px;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:800;color:#94a3b8;font-size:10px;flex-shrink:0">
         ${(v.name||v.role).slice(0,2).toUpperCase()}
       </div>
       <div style="flex:1;min-width:0">
         <div style="color:#e2e8f0;font-weight:600">${v.role}</div>
-        <div style="color:#5a6b8a;font-size:10px">${escapeHtml(v.name)}</div>
+        <div style="color:#5a8a85;font-size:10px">${escapeHtml(v.name)}</div>
       </div>
       ${v.vote ? `
         <span style="color:${IC_VOTES[v.vote]?.color};font-weight:700">${IC_VOTES[v.vote]?.label}</span>
-        ${v.comment ? `<span style="color:#8a9bbf;font-style:italic;font-size:11px;max-width:160px">"${escapeHtml(v.comment)}"</span>` : ''}
+        ${v.comment ? `<span style="color:#8abfbb;font-style:italic;font-size:11px;max-width:160px">"${escapeHtml(v.comment)}"</span>` : ''}
       ` : canCastVote(v) ? `
         <div style="display:flex;gap:4px">
           ${Object.entries(IC_VOTES).map(([k,cfg]) => `
@@ -552,7 +552,7 @@ function renderICModalContent(m) {
               ${cfg.label}
             </button>`).join('')}
         </div>
-      ` : '<span style="color:#2a3448;font-style:italic">Ожидает...</span>'}
+      ` : '<span style="color:#2a4846;font-style:italic">Ожидает...</span>'}
     </div>`).join('');
 
   const quorum = m.status === 'pending' ? icQuorumMet(m.votes) : m.quorumMet;
@@ -573,10 +573,10 @@ function renderICModalContent(m) {
     ${[
       ['fa-lightbulb','#22c55e','Инвестиционный тезис', m.thesis],
       ['fa-exclamation-circle','#ef4444','Риски', m.risks],
-      ['fa-chart-bar','#3b82f6','Финансовые показатели', m.financials],
+      ['fa-chart-bar','#14b8a6','Финансовые показатели', m.financials],
       ['fa-sign-out-alt','#8b5cf6','Стратегия выхода', m.exitPlan],
     ].map(([icon,color,title,text]) => `
-      <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="background:#1c3332;border-radius:10px;padding:12px 14px;margin-bottom:10px">
         <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
           <i class="fas ${icon}" style="margin-right:5px"></i>${title}
         </div>
@@ -584,16 +584,16 @@ function renderICModalContent(m) {
       </div>`).join('')}
 
     <!-- Risk Manager conclusion (independent of the IC vote) -->
-    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1px solid ${m.riskVeto?'rgba(239,68,68,0.4)':'#2a3448'}">
-      <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
+    <div style="background:#1c3332;border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1px solid ${m.riskVeto?'rgba(239,68,68,0.4)':'#2a4846'}">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:6px;letter-spacing:.5px">
         <i class="fas fa-shield-alt" style="margin-right:5px"></i>Заключение Risk Manager (независимое вето)
       </div>
-      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a6b8a'};font-weight:700;margin-bottom:${currentUserPermission('riskVeto') ? '10px' : '0'}">
+      <div style="font-size:13px;color:${m.riskConclusion ? RISK_CONCLUSIONS[m.riskConclusion]?.color : '#5a8a85'};font-weight:700;margin-bottom:${currentUserPermission('riskVeto') ? '10px' : '0'}">
         ${m.riskConclusion ? (RISK_CONCLUSIONS[m.riskConclusion]?.label || m.riskConclusion) : 'Ещё не рассмотрено'}
       </div>
       ${currentUserPermission('riskVeto') ? `
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <select id="icRiskConclusionSelect_${m.id}" style="background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px">
+          <select id="icRiskConclusionSelect_${m.id}" style="background:#0f1623;border:1px solid #2a4846;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px">
             <option value="">— Выбрать заключение —</option>
             ${Object.keys(RISK_CONCLUSIONS).map(k => `<option value="${k}" ${m.riskConclusion===k?'selected':''}>${RISK_CONCLUSIONS[k].label}</option>`).join('')}
           </select>
@@ -605,9 +605,9 @@ function renderICModalContent(m) {
 
     <!-- Votes -->
     <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Голосование IC</div>
+      <div style="font-size:12px;font-weight:700;color:#8abfbb;margin-bottom:10px;text-transform:uppercase">Голосование IC</div>
       ${m.status !== 'pending' ? `
-        <div style="font-size:11px;color:#5a6b8a;font-style:italic;margin-bottom:8px">
+        <div style="font-size:11px;color:#5a8a85;font-style:italic;margin-bottom:8px">
           Голосование завершено, меморандум переведён в статус «${IC_MEMO_STATUS_LABELS[m.status] || m.status}» — записи ниже финальны.
         </div>` : !anyVotableByMe ? `
         <div style="font-size:11px;color:#f97316;margin-bottom:8px">
@@ -622,12 +622,12 @@ function renderICModalContent(m) {
         <div style="font-size:13px;color:#94a3b8">${m.resolution}</div>
       </div>` : ''}
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846">
       <button onclick="printICMemo(${m.id})"
-        style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-print" style="margin-right:6px"></i>Печать / PDF</button>
       <button onclick="closeICModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
+        style="background:#14b8a6;border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
     </div>`;
 }
 
@@ -893,7 +893,7 @@ function openNewICMemo() {
       </div>
       <div>
         <div style="font-size:15px;font-weight:800;color:#f1f5f9">Новый IC Меморандум</div>
-        <div style="font-size:11px;color:#8a9bbf">Заполните все обязательные поля и отправьте на голосование IC</div>
+        <div style="font-size:11px;color:#8abfbb">Заполните все обязательные поля и отправьте на голосование IC</div>
       </div>
     </div>
 
@@ -902,11 +902,11 @@ function openNewICMemo() {
 
       <!-- Deal / Company -->
       <div style="grid-column:1/-1">
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">
           <i class="fas fa-handshake" style="color:#f97316;margin-right:4px"></i>Компания / Сделка <span style="color:#ef4444">*</span>
         </label>
         <select id="icNewDealId" onchange="icFormSyncDeal()"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           <option value="">— Выберите из pipeline или введите вручную —</option>
           ${dealOptions}
           <option value="manual">✏️ Ввести вручную...</option>
@@ -915,51 +915,51 @@ function openNewICMemo() {
 
       <!-- Manual company name (hidden by default) -->
       <div id="icManualNameWrap" style="grid-column:1/-1;display:none">
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">
           Название компании <span style="color:#ef4444">*</span>
         </label>
         <input id="icNewCompany" type="text" placeholder="Название компании..."
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
       </div>
 
       <!-- Amount -->
       <div>
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">
           <i class="fas fa-dollar-sign" style="color:#22c55e;margin-right:4px"></i>Сумма ($M) <span style="color:#ef4444">*</span>
         </label>
         <input id="icNewAmount" type="number" step="0.1" min="0" placeholder="напр. 3.5"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
       </div>
 
       <!-- Type -->
       <div>
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">
-          <i class="fas fa-layer-group" style="color:#3b82f6;margin-right:4px"></i>Тип инструмента
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">
+          <i class="fas fa-layer-group" style="color:#14b8a6;margin-right:4px"></i>Тип инструмента
         </label>
         <select id="icNewType"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
         </select>
       </div>
 
       <!-- Sector -->
       <div>
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">
           <i class="fas fa-tag" style="color:#8b5cf6;margin-right:4px"></i>Сектор
         </label>
         <select id="icNewSector"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${SECTORS.map(s => `<option value="${s}">${s}</option>`).join('')}
         </select>
       </div>
 
       <!-- Meeting date -->
       <div>
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">
           <i class="fas fa-calendar" style="color:#f97316;margin-right:4px"></i>Дата заседания IC
         </label>
         <input id="icNewMeetingDate" type="date" value="${new Date(Date.now()+14*86400000).toISOString().slice(0,10)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
       </div>
     </div>
 
@@ -969,7 +969,7 @@ function openNewICMemo() {
         <i class="fas fa-lightbulb" style="margin-right:4px"></i>Инвестиционный тезис <span style="color:#ef4444">*</span>
       </label>
       <textarea id="icNewThesis" rows="3" placeholder="Опишите инвестиционный кейс, конкурентные преимущества, рыночную возможность..."
-        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
     </div>
 
     <!-- Risks -->
@@ -978,16 +978,16 @@ function openNewICMemo() {
         <i class="fas fa-exclamation-circle" style="margin-right:4px"></i>Ключевые риски <span style="color:#ef4444">*</span>
       </label>
       <textarea id="icNewRisks" rows="2" placeholder="Рыночные, операционные, регуляторные, технологические риски..."
-        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
     </div>
 
     <!-- Financials -->
     <div style="margin-bottom:12px">
-      <label style="font-size:11px;font-weight:700;color:#3b82f6;display:block;margin-bottom:4px;text-transform:uppercase">
+      <label style="font-size:11px;font-weight:700;color:#14b8a6;display:block;margin-bottom:4px;text-transform:uppercase">
         <i class="fas fa-chart-bar" style="margin-right:4px"></i>Финансовые показатели
       </label>
       <textarea id="icNewFinancials" rows="2" placeholder="Выручка, EBITDA, ARR, прогноз, оценка компании (pre/post-money)..."
-        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
     </div>
 
     <!-- Exit plan -->
@@ -996,12 +996,12 @@ function openNewICMemo() {
         <i class="fas fa-sign-out-alt" style="margin-right:4px"></i>Стратегия выхода
       </label>
       <textarea id="icNewExit" rows="2" placeholder="M&A, IPO, вторичная продажа — временной горизонт и целевые мультипликаторы..."
-        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+        style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
     </div>
 
     <!-- IC Members panel -->
-    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">
+    <div style="background:#1c3332;border-radius:10px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:10px;text-transform:uppercase">
         <i class="fas fa-users" style="margin-right:5px"></i>Состав IC — проголосуют после создания
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -1009,15 +1009,15 @@ function openNewICMemo() {
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
             <input type="checkbox" id="icMember_${role.replace(/\s/g,'_')}" checked
               style="accent-color:#f97316;width:14px;height:14px" />
-            <span>${role} <span style="color:#5a6b8a">(${name})</span></span>
+            <span>${role} <span style="color:#5a8a85">(${name})</span></span>
           </label>`).join('')}
       </div>
     </div>
 
     <!-- Buttons -->
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846">
       <button onclick="closeICModal()"
-        style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
+        style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
         Отмена
       </button>
       <button onclick="saveNewICMemo()"

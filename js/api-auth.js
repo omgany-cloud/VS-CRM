@@ -258,7 +258,7 @@ async function attachUploadedFile(inputId, saveFn) {
 function docUploadBtn(inputId, saveCallExpr) {
   const args = saveCallExpr ? `'${inputId}',()=>{${saveCallExpr}}` : `'${inputId}'`;
   return `<button type="button" onclick="attachUploadedFile(${args})"
-    style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:0 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0"
+    style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:0 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0"
     title="Загрузить файл с компьютера"><i class="fas fa-paperclip"></i></button>`;
 }
 

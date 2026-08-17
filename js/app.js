@@ -128,27 +128,27 @@ function openChangePasswordModal(mandatory = false) {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-key" style="color:#3b82f6;margin-right:8px"></i>Сменить пароль';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-key" style="color:#14b8a6;margin-right:8px"></i>Сменить пароль';
   const closeBtn = document.getElementById('obNewModalCloseBtn');
   if (closeBtn) closeBtn.style.display = mandatory ? 'none' : '';
   document.getElementById('obNewModalContent').innerHTML = `
-    ${mandatory ? `<div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px">
+    ${mandatory ? `<div style="background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.3);color:#93c5fd;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px">
       <i class="fas fa-circle-info" style="margin-right:6px"></i>Это первый вход с временным паролем — установите свой личный пароль, чтобы продолжить.
     </div>` : ''}
     <div style="display:grid;gap:12px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Текущий пароль</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Текущий пароль</label>
         <input type="password" id="pw_current"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (мин. 8 символов)</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (мин. 8 символов)</label>
         <input type="password" id="pw_new"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Повторите новый пароль</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Повторите новый пароль</label>
         <input type="password" id="pw_confirm"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      ${mandatory ? '' : `<button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>`}
-      <button onclick="saveChangePassword()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      ${mandatory ? '' : `<button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>`}
+      <button onclick="saveChangePassword()" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
@@ -498,7 +498,7 @@ function renderDashboardCharts() {
             label: 'Накопленный ($M)',
             data: jc.cashflow.reduce((acc, v, i) => { acc.push((acc[i-1]||0)+v); return acc; }, []),
             type: 'line',
-            borderColor: '#3b82f6',
+            borderColor: '#14b8a6',
             backgroundColor: 'transparent',
             tension: 0.4,
             pointRadius: 4,
@@ -509,10 +509,10 @@ function renderDashboardCharts() {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#8a9bbf', font:{size:11} } } },
+        plugins: { legend: { labels: { color: '#8abfbb', font:{size:11} } } },
         scales: {
-          x: { ticks:{color:'#5a6b8a'}, grid:{color:'#2a3448'} },
-          y: { ticks:{color:'#5a6b8a', callback: v=>currencySymbol(currencyForFundId(activeFundId))+v+'M'}, grid:{color:'#2a3448'} }
+          x: { ticks:{color:'#5a8a85'}, grid:{color:'#2a4846'} },
+          y: { ticks:{color:'#5a8a85', callback: v=>currencySymbol(currencyForFundId(activeFundId))+v+'M'}, grid:{color:'#2a4846'} }
         }
       }
     });
@@ -527,11 +527,11 @@ function renderDashboardCharts() {
       type: 'doughnut',
       data: {
         labels: lt.labels,
-        datasets: [{ data: lt.data, backgroundColor: COLORS, borderColor:'#1c2333', borderWidth:2, hoverOffset:6 }]
+        datasets: [{ data: lt.data, backgroundColor: COLORS, borderColor:'#1c3332', borderWidth:2, hoverOffset:6 }]
       },
       options: {
         responsive: true, maintainAspectRatio: false, cutout:'62%',
-        plugins: { legend: { position:'bottom', labels:{color:'#8a9bbf',font:{size:10},padding:10} } }
+        plugins: { legend: { position:'bottom', labels:{color:'#8abfbb',font:{size:10},padding:10} } }
       }
     });
   }
@@ -601,10 +601,10 @@ function renderClosing() {
   const overallColor  = t5ok ? '#22c55e'  : t3ok ? '#f97316'    : '#8b5cf6';
 
   /* ── helpers ── */
-  const inpStyle  = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:6px 10px;color:#e2e8f0;font-size:12px;flex:1;min-width:0`;
+  const inpStyle  = `background:#0f1623;border:1px solid #2a4846;border-radius:7px;padding:6px 10px;color:#e2e8f0;font-size:12px;flex:1;min-width:0`;
   const saveBtnS  = `background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap`;
   const prevBtnS  = `background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap`;
-  const navBtnS   = `background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap`;
+  const navBtnS   = `background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap`;
 
   const statusDot = (ok) => ok
     ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:6px"></span>`
@@ -620,7 +620,7 @@ function renderClosing() {
       </div>
       ${badgeText ? `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;
         background:${statusOk?'rgba(34,197,94,0.12)':'rgba(100,116,139,0.15)'};
-        color:${statusOk?'#4ade80':'#64748b'};border:1px solid ${statusOk?'rgba(34,197,94,0.3)':'#2a3448'}">
+        color:${statusOk?'#4ade80':'#64748b'};border:1px solid ${statusOk?'rgba(34,197,94,0.3)':'#2a4846'}">
         ${statusOk ? '✓ ' : ''}${badgeText}
       </span>` : ''}
     </div>`;
@@ -636,7 +636,7 @@ function renderClosing() {
         color:${ok?'#22c55e':active?'#f97316':'#475569'}">
         ${ok?'<i class="fas fa-check"></i>':active?'<i class="fas fa-circle-notch fa-spin" style="font-size:12px"></i>':'<span style="font-size:11px">○</span>'}
       </div>
-      <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-top:6px;text-align:center">${label}</div>
+      <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-top:6px;text-align:center">${label}</div>
       <div style="font-size:11px;font-weight:700;color:${ok?'#22c55e':active?'#f97316':'#94a3b8'};text-align:center;margin-top:2px">${title}</div>
       <div style="font-size:10px;color:#64748b;text-align:center;margin-top:4px;line-height:1.5">${desc}</div>
       <div style="font-size:9px;color:#475569;margin-top:4px;font-style:italic">${resp}</div>
@@ -687,9 +687,9 @@ function renderClosing() {
             <div style="font-size:10px;color:#64748b">${lp.registerId} · ${sent?'<span style="color:#22c55e">Letter отправлен</span>':'<span style="color:#eab308">Ожидает</span>'}</div>
           </div>
           <button onclick="fcGenerateWelcomeLetter(${lp.id})"
-            style="background:${sent?'rgba(34,197,94,0.08)':'rgba(59,130,246,0.12)'};
-              border:1px solid ${sent?'rgba(34,197,94,0.2)':'rgba(59,130,246,0.3)'};
-              color:${sent?'#4ade80':'#60a5fa'};
+            style="background:${sent?'rgba(34,197,94,0.08)':'rgba(20,184,166,0.12)'};
+              border:1px solid ${sent?'rgba(34,197,94,0.2)':'rgba(20,184,166,0.3)'};
+              color:${sent?'#4ade80':'#5eead4'};
               padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
             <i class="fas fa-${sent?'redo':'envelope-open-text'}" style="margin-right:4px"></i>${sent?'Повторно':'Сгенерировать'}
           </button>
@@ -809,7 +809,7 @@ function renderClosing() {
           ${docUploadBtn('fc_certUrl', "fcSaveUrl('closingCertUrl','fc_certUrl')")}
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <label style="font-size:11px;color:#8a9bbf;white-space:nowrap">Дата закрытия:</label>
+          <label style="font-size:11px;color:#8abfbb;white-space:nowrap">Дата закрытия:</label>
           <input type="date" id="fc_closingDate" value="${fcs.closingDate}"
             style="${inpStyle};max-width:160px" />
           <button onclick="fcSaveClosingDate()" style="${saveBtnS}">
@@ -848,7 +848,7 @@ function renderClosing() {
                 {l:'Получено',      v:fmtUSD(firstCC.lineItems.reduce((s,li)=>s+(li.paid||0),0)), c:'#22c55e'},
               ].map(k=>`
                 <div>
-                  <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700">${k.l}</div>
+                  <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700">${k.l}</div>
                   <div style="font-size:11px;font-weight:700;color:${k.c}">${k.v}</div>
                 </div>`).join('')}
             </div>
@@ -903,7 +903,7 @@ function renderClosing() {
           <div style="background:#0f1623;border-radius:8px;padding:10px 14px;margin-bottom:12px">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               ${[
-                {l:'Активных LP',     v:activeLP.length,                                   c:'#3b82f6'},
+                {l:'Активных LP',     v:activeLP.length,                                   c:'#14b8a6'},
                 {l:'Total Commitment',v:fmtUSD(totalCommit),                               c:'#22c55e'},
                 {l:'Min. Commitment', v:`$${fp.firstClosingMin}M`,                         c:commitOk?'#22c55e':'#ef4444'},
                 {l:'Выполнение',      v:commitOk?'✓ Порог достигнут':'✗ Ниже минимума',   c:commitOk?'#22c55e':'#ef4444'},
@@ -912,7 +912,7 @@ function renderClosing() {
                                       c:activeLP.filter(l=>l.ownershipPct>20&&!l.afsaNotified).length===0?'#22c55e':'#f97316'},
               ].map(k=>`
                 <div>
-                  <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700">${k.l}</div>
+                  <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700">${k.l}</div>
                   <div style="font-size:11px;font-weight:700;color:${k.c}">${k.v}</div>
                 </div>`).join('')}
             </div>
@@ -934,15 +934,15 @@ function renderClosing() {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
-            <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Дата отправки</label>
+            <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата отправки</label>
             <input type="date" id="fc_afsaDate" value="${fcs.afsaNotifDate}" style="${inpStyle};width:100%" />
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">№ письма / Reference</label>
+            <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">№ письма / Reference</label>
             <input type="text" id="fc_afsaNum" placeholder="№ письма" value="${fcs.afsaNotifNum}" style="${inpStyle};width:100%" />
           </div>
           <div>
-            <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">URL подтверждения</label>
+            <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">URL подтверждения</label>
             <div style="display:flex;gap:6px">
               <input type="text" id="fc_afsaUrl" placeholder="https://... или файл" value="${fcs.afsaConfirmUrl}" style="${inpStyle};width:100%" />
               ${docUploadBtn('fc_afsaUrl')}
@@ -1059,7 +1059,7 @@ const STAGE_COLORS = {
   'IC Review':    '#f97316',
   'Due Diligence':'#8b5cf6',
   'Term Sheet':   '#eab308',
-  'Переговоры':   '#3b82f6',
+  'Переговоры':   '#14b8a6',
   'Закрыта':      '#22c55e',
   'Отклонена':    '#64748b',
   'Отклонена IC': '#ef4444',
@@ -1097,7 +1097,7 @@ function dealCard(d) {
   const icColor    = icColors[d.ic] || '#64748b';
 
   const tagsHtml = (d.tags||[]).slice(0,3).map(t =>
-    `<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;font-weight:600">${t}</span>`
+    `<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(20,184,166,0.1);color:#5eead4;font-weight:600">${t}</span>`
   ).join('');
 
   const nextActionHtml = d.nextAction ? `
@@ -1130,7 +1130,7 @@ function dealCard(d) {
           color:${icColor}">IC: ${d.ic}</span>
         ${tagsHtml}
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#5a6b8a;margin-top:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#5a8a85;margin-top:4px">
         <span><i class="fas fa-user" style="margin-right:3px"></i>${d.manager}</span>
         ${d.updatedAt ? `<span>${d.updatedAt}</span>` : ''}
       </div>
@@ -1189,8 +1189,8 @@ function _renderDealModal(d) {
     { id:'dd',         icon:'fa-microscope',     label:'Due Dil.'   },
   ];
 
-  const iS = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
-  const lS = `font-size:10px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:3px;text-transform:uppercase`;
+  const iS = `background:#0f1623;border:1px solid #2a4846;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
+  const lS = `font-size:10px;font-weight:700;color:#8abfbb;display:block;margin-bottom:3px;text-transform:uppercase`;
   const gS = `margin-bottom:12px`;
 
 
@@ -1259,7 +1259,7 @@ function _renderDealModal(d) {
           <span style="font-size:10px;color:#8b5cf6;font-weight:700;min-width:60px">${c.role}</span>
           <span style="font-size:12px;color:#e2e8f0;font-weight:600">${c.name}</span>
           <span style="font-size:11px;color:#64748b">${c.phone||''}</span>
-          <a href="mailto:${c.email||''}" style="font-size:11px;color:#3b82f6">${c.email||''}</a>
+          <a href="mailto:${c.email||''}" style="font-size:11px;color:#14b8a6">${c.email||''}</a>
         </div>`).join('')}
       <button onclick="addFounderContact(${d.id})"
         style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;
@@ -1381,15 +1381,15 @@ function _renderDealModal(d) {
   else if (_activeDealTab === 'dd') {
     tabContent = `
       <!-- ── DATA ROOM ── -->
-      <div style="margin-bottom:16px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
-        <label style="${lS}"><i class="fas fa-database" style="margin-right:5px;color:#60a5fa"></i>Data Room — ссылка для DD</label>
+      <div style="margin-bottom:16px;padding:12px 14px;background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:9px">
+        <label style="${lS}"><i class="fas fa-database" style="margin-right:5px;color:#5eead4"></i>Data Room — ссылка для DD</label>
         <div style="display:flex;gap:8px;margin-top:4px">
           <input style="${iS}" value="${d.dataRoomUrl||''}" placeholder="https://dataroom.intralinks.com/... или загрузите файл"
             id="dataRoomUrl_${d.id}"
             onchange="dealField(${d.id},'dataRoomUrl',this.value)" />
           ${docUploadBtn('dataRoomUrl_' + d.id)}
           ${d.dataRoomUrl ? `<button onclick="window.open('${resolveDocUrl(d.dataRoomUrl||'').replace(/'/g,"\\'")}','_blank')"
-            style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
+            style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;
               padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
             <i class="fas fa-external-link-alt" style="margin-right:4px"></i>Открыть</button>` : ''}
         </div>
@@ -1453,7 +1453,7 @@ function _renderDealModal(d) {
         </div>` : ''}
 
       <!-- Лог встреч -->
-      <div style="font-size:10px;font-weight:700;color:#3b82f6;text-transform:uppercase;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:#14b8a6;text-transform:uppercase;margin-bottom:8px">
         <i class="fas fa-calendar-alt" style="margin-right:5px"></i>Лог встреч / звонков
       </div>
       ${!(d.negMeetings||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:8px">Встреч нет</div>` :
@@ -1466,7 +1466,7 @@ function _renderDealModal(d) {
             <div style="font-size:11px;color:#94a3b8">${m.outcome}</div>
           </div>`).join('')}
       <button onclick="dealAddMeeting(${d.id})"
-        style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;
+        style="background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.25);color:#5eead4;
           padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:14px">
         <i class="fas fa-plus" style="margin-right:4px"></i>Добавить встречу
       </button>
@@ -1514,7 +1514,7 @@ function _renderDealModal(d) {
 
   document.getElementById('dealDetailContent').innerHTML = `
     <!-- ── HEADER ── -->
-    <div style="padding:20px 24px 0;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#1c2333;z-index:10">
+    <div style="padding:20px 24px 0;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#1c3332;z-index:10">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1544,7 +1544,7 @@ function _renderDealModal(d) {
         </div>
         <div style="display:flex;gap:6px;align-items:flex-start;flex-shrink:0">
           <select onchange="dealMoveStage(${d.id},this.value)"
-            style="background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
+            style="background:#0f1623;border:1px solid #2a4846;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
             ${DEAL_STAGES.map(s=>`
               <option value="${s}" ${d.stage===s?'selected':''}>${s}</option>`).join('')}
           </select>
@@ -1552,7 +1552,7 @@ function _renderDealModal(d) {
             style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;width:32px;height:32px;
               border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-trash"></i></button>
           <button onclick="closeDealDetailModal()"
-            style="background:#1c2333;border:1px solid #2a3448;color:#64748b;width:32px;height:32px;
+            style="background:#1c3332;border:1px solid #2a4846;color:#64748b;width:32px;height:32px;
               border-radius:7px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
       </div>
@@ -1710,7 +1710,7 @@ async function dealMoveStage(id, stage) {
    gpConclusionVerdict is 'Рекомендовано к IC'.
 ═══════════════════════════════════════════════════════════ */
 const DD_CONCLUSION_CATEGORIES = [
-  { key: 'Legal',      title: 'Юридическое DD', color: '#3b82f6' },
+  { key: 'Legal',      title: 'Юридическое DD', color: '#14b8a6' },
   { key: 'Financial',  title: 'Финансовое DD',  color: '#22c55e' },
   { key: 'Tech',       title: 'Техническое DD', color: '#8b5cf6' },
   { key: 'Commercial', title: 'Коммерческое DD',color: '#f97316' },
@@ -1722,8 +1722,8 @@ const DD_CONCLUSION_CATEGORIES = [
 function ddConclusionsSection(d) {
   const conclusions = d.ddConclusions || [];
   return `
-    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a3448">
-      <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #2a4846">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:10px">
         <i class="fas fa-file-signature" style="margin-right:5px"></i>Заключения ответственных лиц
       </div>
       ${DD_CONCLUSION_CATEGORIES.map(cat => {
@@ -1736,24 +1736,24 @@ function ddConclusionsSection(d) {
             ${c ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${verdictColor}22;color:${verdictColor}">${c.verdict || 'Без вердикта'}</span>` : ''}
           </div>
           ${c ? `
-            <div style="font-size:11px;color:#5a6b8a;margin-bottom:6px">${escapeHtml(c.author)} · ${c.updatedAt}</div>
+            <div style="font-size:11px;color:#5a8a85;margin-bottom:6px">${escapeHtml(c.author)} · ${c.updatedAt}</div>
             ${(c.documents||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-              ${c.documents.map((doc,i) => `<span style="font-size:10px;background:#1c2333;border-radius:5px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px">
-                <a href="${resolveDocUrl(doc.url)}" target="_blank" rel="noopener" style="color:#60a5fa;text-decoration:none"><i class="fas fa-link" style="margin-right:3px"></i>${escapeHtml(doc.name||doc.url)}</a>
+              ${c.documents.map((doc,i) => `<span style="font-size:10px;background:#1c3332;border-radius:5px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px">
+                <a href="${resolveDocUrl(doc.url)}" target="_blank" rel="noopener" style="color:#5eead4;text-decoration:none"><i class="fas fa-link" style="margin-right:3px"></i>${escapeHtml(doc.name||doc.url)}</a>
                 <span onclick="removeDDConclusionDoc(${d.id},'${cat.key}',${i})" style="cursor:pointer;color:#64748b">✕</span>
               </span>`).join('')}
             </div>` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:6px">Документы не приложены</div>`}
           ` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:6px">Заключение ещё не внесено</div>`}
           <details>
-            <summary style="font-size:10px;color:#60a5fa;cursor:pointer">${c ? 'Изменить' : 'Внести заключение'}</summary>
+            <summary style="font-size:10px;color:#5eead4;cursor:pointer">${c ? 'Изменить' : 'Внести заключение'}</summary>
             <div style="margin-top:8px">
-              <select id="ddConclVerdict_${d.id}_${cat.key}" style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:11px;margin-bottom:6px;box-sizing:border-box">
+              <select id="ddConclVerdict_${d.id}_${cat.key}" style="width:100%;background:#1c3332;border:1px solid #2a4846;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:11px;margin-bottom:6px;box-sizing:border-box">
                 <option value="">— Вердикт —</option>
                 ${['Без замечаний','Есть замечания','Критично'].map(v => `<option value="${v}" ${c?.verdict===v?'selected':''}>${v}</option>`).join('')}
               </select>
               <div style="display:flex;gap:6px;margin-bottom:6px">
-                <input id="ddConclDocName_${d.id}_${cat.key}" placeholder="Название документа" style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
-                <input id="ddConclDocUrl_${d.id}_${cat.key}" placeholder="https://... или загрузите файл" style="flex:1;background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
+                <input id="ddConclDocName_${d.id}_${cat.key}" placeholder="Название документа" style="flex:1;background:#1c3332;border:1px solid #2a4846;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
+                <input id="ddConclDocUrl_${d.id}_${cat.key}" placeholder="https://... или загрузите файл" style="flex:1;background:#1c3332;border:1px solid #2a4846;border-radius:6px;padding:5px 8px;color:#e2e8f0;font-size:11px;box-sizing:border-box" />
                 ${docUploadBtn(`ddConclDocUrl_${d.id}_${cat.key}`)}
               </div>
               <button onclick="saveDDConclusion(${d.id},'${cat.key}')" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700"><i class="fas fa-save" style="margin-right:4px"></i>Сохранить</button>
@@ -1816,36 +1816,36 @@ function gpConclusionSection(d) {
   const signed = !!d.gpConclusionSignedAt;
   const verdictColor = d.gpConclusionVerdict === 'Рекомендовано к IC' ? '#22c55e' : d.gpConclusionVerdict === 'Не рекомендовано' ? '#ef4444' : '#f97316';
   return `
-    <div style="margin-top:18px;padding-top:14px;border-top:2px solid #3b82f6;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;margin-bottom:10px">
+    <div style="margin-top:18px;padding-top:14px;border-top:2px solid #14b8a6;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#14b8a6;text-transform:uppercase;margin-bottom:10px">
         <i class="fas fa-stamp" style="margin-right:5px"></i>Заключение УК для Инвестиционного комитета
       </div>
       ${signed ? `
-        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+        <div style="background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <span style="font-size:12px;font-weight:700;color:#e2e8f0">${escapeHtml(d.gpConclusionSignedBy)}</span>
             <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${verdictColor}22;color:${verdictColor}">${d.gpConclusionVerdict}</span>
           </div>
-          <div style="font-size:11px;color:#5a6b8a;margin-bottom:6px">${d.gpConclusionSignedAt}</div>
+          <div style="font-size:11px;color:#5a8a85;margin-bottom:6px">${d.gpConclusionSignedAt}</div>
           <div style="font-size:12px;color:#94a3b8;white-space:pre-wrap">${escapeHtml(d.gpConclusionSummary||'')}</div>
         </div>` : `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Заключение УК ещё не подписано — меморандум для IC по этой сделке создать нельзя.</div>`}
       <button onclick="openGpConclusionDocument(${d.id})"
-        style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;margin-right:8px">
+        style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;margin-right:8px">
         <i class="fas fa-file-alt" style="margin-right:5px"></i>Собрать документ
       </button>
       ${currentUserPermission('authorICMemo') ? `
       <details style="display:inline-block;vertical-align:middle">
-        <summary style="font-size:11px;color:#60a5fa;cursor:pointer;display:inline">${signed ? 'Переподписать' : 'Подписать заключение'}</summary>
+        <summary style="font-size:11px;color:#5eead4;cursor:pointer;display:inline">${signed ? 'Переподписать' : 'Подписать заключение'}</summary>
         <div style="margin-top:10px;max-width:420px">
           <button type="button" onclick="draftGpConclusion(${d.id})"
             style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-bottom:8px">
             <i class="fas fa-wand-magic-sparkles" style="margin-right:5px"></i>Сгенерировать черновик
           </button>
-          <select id="gpConclVerdict_${d.id}" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;margin-bottom:6px;box-sizing:border-box">
+          <select id="gpConclVerdict_${d.id}" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;margin-bottom:6px;box-sizing:border-box">
             <option value="">— Вердикт —</option>
             ${['Рекомендовано к IC','Не рекомендовано','Требует доработки'].map(v => `<option value="${v}" ${d.gpConclusionVerdict===v?'selected':''}>${v}</option>`).join('')}
           </select>
-          <textarea id="gpConclSummary_${d.id}" rows="3" placeholder="Обоснование позиции УК..." style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;resize:vertical;margin-bottom:6px;box-sizing:border-box">${escapeHtml(d.gpConclusionSummary||'')}</textarea>
+          <textarea id="gpConclSummary_${d.id}" rows="3" placeholder="Обоснование позиции УК..." style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:6px;padding:6px 8px;color:#e2e8f0;font-size:12px;resize:vertical;margin-bottom:6px;box-sizing:border-box">${escapeHtml(d.gpConclusionSummary||'')}</textarea>
           <button onclick="signGpConclusion(${d.id})" style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700"><i class="fas fa-signature" style="margin-right:5px"></i>Подписать</button>
         </div>
       </details>` : ''}
@@ -2054,8 +2054,8 @@ function dealRejectionBlock(d) {
   const headerColor = isRejected ? '#ef4444' : '#64748b';
   const bgColor     = isRejected ? 'rgba(239,68,68,0.07)' : 'rgba(15,22,35,0.6)';
   const gS = `margin-bottom:12px`;
-  const lS = `font-size:10px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:3px;text-transform:uppercase`;
-  const iS = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
+  const lS = `font-size:10px;font-weight:700;color:#8abfbb;display:block;margin-bottom:3px;text-transform:uppercase`;
+  const iS = `background:#0f1623;border:1px solid #2a4846;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
   return `
     <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:14px;margin-top:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -2524,16 +2524,16 @@ async function generatePortalPassword(id) {
   overlay.id = 'genPortalPwOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
-    <div style="background:#1c2333;border:1px solid #2a3448;border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+    <div style="background:#1c3332;border:1px solid #2a4846;border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
       <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-bottom:6px"><i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>Пароль портала — ${escapeHtml(p.name)}</div>
       <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">BIN для входа: <b>${escapeHtml(p.bin || '—')}</b>. Пароль показывается один раз — сообщите его LP лично, повторно посмотреть будет нельзя.</div>
-      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 12px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:10px 12px;margin-bottom:16px">
         <code id="genPortalPw" style="flex:1;font-size:15px;color:#22c55e;font-weight:700;letter-spacing:0.5px;user-select:all">${escapeHtml(password)}</code>
         <button onclick="navigator.clipboard.writeText(document.getElementById('genPortalPw').textContent).then(()=>showToast('📋 Скопировано','green'))"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-copy"></i></button>
+          style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-copy"></i></button>
       </div>
       <button onclick="document.getElementById('genPortalPwOverlay').remove()"
-        style="width:100%;background:#3b82f6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил пароль</button>
+        style="width:100%;background:#14b8a6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил пароль</button>
     </div>`;
   document.body.appendChild(overlay);
 }
@@ -2599,7 +2599,7 @@ function renderPortfolio(data) {
       const st    = portAutoStatus(p);
       const stCol = portStatusColor(st);
       const moic  = portMOIC(p);
-      const moicColor = moic >= 2 ? '#22c55e' : moic >= 1.5 ? '#60a5fa' : moic >= 1 ? '#f97316' : '#ef4444';
+      const moicColor = moic >= 2 ? '#22c55e' : moic >= 1.5 ? '#5eead4' : moic >= 1 ? '#f97316' : '#ef4444';
       const docBad= portDocBadge(p);
       const dsL   = daysSince(p.monitoring?.lastVisitDate);
       const overdue = p.financials?.overduePayment;
@@ -2659,7 +2659,7 @@ function renderPortfolio(data) {
           </div>` : ''}
 
           <!-- Manager + last contact -->
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:10px;color:#5a6b8a">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:10px;color:#5a8a85">
             <span><i class="fas fa-user" style="margin-right:3px"></i>${p.manager}</span>
             <span style="color:${dsL>60?'#ef4444':dsL>30?'#eab308':'#64748b'}">
               ${dsL<999 ? `${dsL}д назад` : '—'}
@@ -2684,7 +2684,7 @@ function renderPortfolio(data) {
         <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:${stCol}22;color:${stCol}">${portStatusLabel(st)}</span>
         <div style="font-weight:700">${currencySymbol(currencyForEntity(p))}${p.invested}M</div>
         <div style="color:#22c55e;font-weight:700">${currencySymbol(currencyForEntity(p))}${p.value}M</div>
-        <div style="color:#60a5fa;font-weight:800">${moic}x</div>
+        <div style="color:#5eead4;font-weight:800">${moic}x</div>
         <div>${p.exitStrategy} · ${p.exitYear}</div>
         <div class="action-btns">
           ${p.archived
@@ -2721,8 +2721,8 @@ function _renderPortfolioModal(p) {
   const mon = p.monitoring || {};
   const docs = p.documents || { files:[] };
 
-  const iS = `background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
-  const lS = `font-size:10px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:3px;text-transform:uppercase`;
+  const iS = `background:#0f1623;border:1px solid #2a4846;border-radius:7px;padding:7px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box`;
+  const lS = `font-size:10px;font-weight:700;color:#8abfbb;display:block;margin-bottom:3px;text-transform:uppercase`;
   const gS = `margin-bottom:12px`;
 
   const requiredTypes = [
@@ -2758,7 +2758,7 @@ function _renderPortfolioModal(p) {
       </div>
       <textarea id="monConclText_${p.id}" rows="5" style="${iS};height:110px;resize:vertical"
         placeholder="Нажмите «Сгенерировать черновик» или напишите заключение вручную...">${selConclusion?.text||''}</textarea>
-      ${selConclusion?.editedBy ? `<div style="font-size:10px;color:#8a9bbf;margin-top:6px">Последнее изменение: ${selConclusion.editedBy}, ${selConclusion.editedAt}</div>` : ''}
+      ${selConclusion?.editedBy ? `<div style="font-size:10px;color:#8abfbb;margin-top:6px">Последнее изменение: ${selConclusion.editedBy}, ${selConclusion.editedAt}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button onclick="draftMonitoringConclusion(${p.id})"
           style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;
@@ -2773,7 +2773,7 @@ function _renderPortfolioModal(p) {
       </div>
       ${conclusionHistory.length ? `
         <details style="margin-top:12px">
-          <summary style="font-size:10px;color:#8a9bbf;cursor:pointer;text-transform:uppercase;font-weight:700">Прошлые кварталы (${conclusionHistory.length})</summary>
+          <summary style="font-size:10px;color:#8abfbb;cursor:pointer;text-transform:uppercase;font-weight:700">Прошлые кварталы (${conclusionHistory.length})</summary>
           ${conclusionHistory.map(c=>`
             <div style="background:#0f1623;border-radius:8px;padding:10px 12px;margin-top:8px">
               <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-bottom:4px">
@@ -2785,22 +2785,22 @@ function _renderPortfolioModal(p) {
     </div>
 
     <!-- ── Drive link ── -->
-    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:9px">
-      <label style="${lS}"><i class="fas fa-folder" style="margin-right:5px;color:#60a5fa"></i>Ссылка на папку Google Drive</label>
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:9px">
+      <label style="${lS}"><i class="fas fa-folder" style="margin-right:5px;color:#5eead4"></i>Ссылка на папку Google Drive</label>
       <div style="display:flex;gap:8px;margin-top:4px">
         <input style="${iS}" value="${docs.driveUrl||''}" placeholder="https://drive.google.com/... или загрузите файл"
           id="portDriveUrl_${p.id}"
           onchange="portNestedField(${p.id},'documents','driveUrl',this.value)" />
         ${docUploadBtn('portDriveUrl_' + p.id)}
         ${docs.driveUrl?`<button onclick="window.open('${resolveDocUrl(docs.driveUrl).replace(/'/g,"\\'")}','_blank')"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
+          style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;
             padding:5px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
           <i class="fas fa-external-link-alt"></i></button>`:''}
       </div>
     </div>
 
     <!-- ── Required docs checklist ── -->
-    <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+    <div style="font-size:10px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:8px">
       <i class="fas fa-clipboard-check" style="margin-right:5px"></i>Обязательные документы
     </div>
     ${requiredTypes.map(rt => {
@@ -2818,7 +2818,7 @@ function _renderPortfolioModal(p) {
     }).join('')}
 
     <!-- ── All docs list ── -->
-    <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin:14px 0 8px">
+    <div style="font-size:10px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin:14px 0 8px">
       <i class="fas fa-folder-open" style="margin-right:5px"></i>Все документы (${(docs.files||[]).length})
     </div>
     ${!(docs.files||[]).length ? `<div style="font-size:11px;color:#475569;font-style:italic;margin-bottom:10px">Нет документов</div>` :
@@ -2827,7 +2827,7 @@ function _renderPortfolioModal(p) {
         const expired  = f.expiryDate && new Date(f.expiryDate) < new Date();
         return `
         <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#0f1623;border-radius:8px;margin-bottom:6px;
-          border-left:3px solid ${expired?'#ef4444':expiring?'#eab308':'#2a3448'}">
+          border-left:3px solid ${expired?'#ef4444':expiring?'#eab308':'#2a4846'}">
           <i class="fas fa-file-alt" style="color:${expired?'#ef4444':expiring?'#eab308':'#64748b'};font-size:13px"></i>
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;font-weight:700;color:#e2e8f0">${f.name}</div>
@@ -2837,7 +2837,7 @@ function _renderPortfolioModal(p) {
             </div>`:''}
           </div>
           ${f.url?`<button onclick="window.open('${resolveDocUrl(f.url).replace(/'/g,"\\'")}','_blank')"
-            style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#60a5fa;
+            style="background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.25);color:#5eead4;
               padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px" title="Открыть файл"><i class="fas fa-eye"></i></button>`:''}
           <button onclick="deletePortDoc(${p.id},${i})"
             style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;
@@ -2879,11 +2879,11 @@ function _renderPortfolioModal(p) {
 
 
   /* ── Assemble modal ── */
-  const moicColor = moic>=2?'#22c55e':moic>=1.5?'#60a5fa':moic>=1?'#f97316':'#ef4444';
+  const moicColor = moic>=2?'#22c55e':moic>=1.5?'#5eead4':moic>=1?'#f97316':'#ef4444';
 
   document.getElementById('portDetailContent').innerHTML = `
     <!-- ── HEADER ── -->
-    <div style="padding:20px 24px 0;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#1c2333;z-index:10">
+    <div style="padding:20px 24px 0;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#1c3332;z-index:10">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -2908,7 +2908,7 @@ function _renderPortfolioModal(p) {
         </div>
         <div style="display:flex;gap:6px;align-items:flex-start;flex-shrink:0">
           <select onchange="portChangeStatus(${p.id},this.value)"
-            style="background:#0f1623;border:1px solid #2a3448;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
+            style="background:#0f1623;border:1px solid #2a4846;border-radius:7px;padding:5px 8px;color:#e2e8f0;font-size:11px;cursor:pointer">
             ${['Active','Monitoring','Problem'].map(s=>`<option value="${s}" ${p.status===s?'selected':''}>${portStatusLabel(s)}</option>`).join('')}
           </select>
           <button onclick="generatePortalPassword(${p.id})" title="Сгенерировать пароль портала"
@@ -2916,7 +2916,7 @@ function _renderPortfolioModal(p) {
               border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-key"></i></button>
           ${p.archived
             ? `<button onclick="restorePortfolioCompany(${p.id})" title="Восстановить из архива"
-                style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;width:32px;height:32px;
+                style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;width:32px;height:32px;
                   border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-box-open"></i></button>`
             : `<button onclick="archivePortfolioCompany(${p.id})" title="В архив"
                 style="background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.3);color:#94a3b8;width:32px;height:32px;
@@ -2925,7 +2925,7 @@ function _renderPortfolioModal(p) {
             style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;width:32px;height:32px;
               border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center"><i class="fas fa-trash"></i></button>
           <button onclick="closePortfolioModal()"
-            style="background:#1c2333;border:1px solid #2a3448;color:#64748b;width:32px;height:32px;
+            style="background:#1c3332;border:1px solid #2a4846;color:#64748b;width:32px;height:32px;
               border-radius:7px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
       </div>

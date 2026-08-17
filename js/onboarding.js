@@ -294,7 +294,7 @@ function renderObKPIs() {
 
   el.innerHTML = `
     <div class="kpi-card" onclick="obStatusFilter='';obSearch='';renderObKPIs();renderObContent();"
-      style="cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 0 0 1px #3b82f6'" onmouseout="this.style.boxShadow=''">
+      style="cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 0 0 1px #14b8a6'" onmouseout="this.style.boxShadow=''">
       <div class="kpi-icon blue"><i class="fas fa-users"></i></div>
       <div class="kpi-body">
         <span class="kpi-label">${obDirFilter ? obDirFilter + ' клиентов' : 'Всего клиентов'}</span>
@@ -336,7 +336,7 @@ function renderObKPIs() {
       </div>
     </div>
     <div class="kpi-card" style="padding:14px 16px;gap:0;flex-direction:column;align-items:flex-start;min-width:180px">
-      <div style="font-size:10px;font-weight:700;color:#5a6b8a;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#5a8a85;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">
         <i class="fas fa-filter" style="margin-right:5px;color:#475569"></i>Фильтр по направлению
       </div>
       <div style="display:flex;gap:8px;width:100%">
@@ -347,16 +347,16 @@ function renderObKPIs() {
                  border:1px solid ${obDirFilter==='CF&A'?'rgba(139,92,246,0.5)':'rgba(139,92,246,0.2)'}">
           <span style="font-size:18px;font-weight:800;color:#a78bfa">${cfaCount}</span>
           <span style="font-size:10px;font-weight:700;color:#8b5cf6">CF&A</span>
-          <span style="font-size:9px;color:#5a6b8a">${obClients.filter(c=>c.direction==='CF&A'&&!c.activated).length} актив.</span>
+          <span style="font-size:9px;color:#5a8a85">${obClients.filter(c=>c.direction==='CF&A'&&!c.activated).length} актив.</span>
         </button>
         <button onclick="obDirFilter='FM';renderObKPIs();renderObContent();"
           style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 6px;
                  border-radius:10px;cursor:pointer;transition:all .15s;
-                 background:${obDirFilter==='FM'?'rgba(59,130,246,0.18)':'rgba(59,130,246,0.07)'};
-                 border:1px solid ${obDirFilter==='FM'?'rgba(59,130,246,0.5)':'rgba(59,130,246,0.2)'}">
-          <span style="font-size:18px;font-weight:800;color:#60a5fa">${fmCount}</span>
-          <span style="font-size:10px;font-weight:700;color:#3b82f6">FM</span>
-          <span style="font-size:9px;color:#3b82f6;font-weight:600">${fmtCurrency(fmCommitment, currencyForFundId(activeFundId))}</span>
+                 background:${obDirFilter==='FM'?'rgba(20,184,166,0.18)':'rgba(20,184,166,0.07)'};
+                 border:1px solid ${obDirFilter==='FM'?'rgba(20,184,166,0.5)':'rgba(20,184,166,0.2)'}">
+          <span style="font-size:18px;font-weight:800;color:#5eead4">${fmCount}</span>
+          <span style="font-size:10px;font-weight:700;color:#14b8a6">FM</span>
+          <span style="font-size:9px;color:#14b8a6;font-weight:600">${fmtCurrency(fmCommitment, currencyForFundId(activeFundId))}</span>
         </button>
         ${obDirFilter ? `
         <button onclick="obDirFilter='';renderObKPIs();renderObContent();"
@@ -417,10 +417,10 @@ function renderObContent() {
           <i class="fas fa-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#4a5568;font-size:12px"></i>
           <input type="text" placeholder="Поиск клиента..." value="${obSearch}"
             oninput="obSearch=this.value;renderObContent()"
-            style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
         <select onchange="obStatusFilter=this.value;renderObKPIs();renderObContent()"
-          style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
+          style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
           <option value="">Все статусы</option>
           <option value="__active__" ${obStatusFilter==='__active__'?'selected':''}>⏳ В процессе</option>
           <option value="On Track" ${obStatusFilter==='On Track'?'selected':''}>✅ On Track</option>
@@ -434,7 +434,7 @@ function renderObContent() {
           <span onclick="obDirFilter='';renderObContent()" style="margin-left:5px;cursor:pointer;color:#ef4444">✕</span>
         </span>` : ''}
         <button onclick="openNewObClientModal()"
-          style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap">
+          style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap">
           <i class="fas fa-plus" style="margin-right:6px"></i>Новый клиент
           ${obDirFilter ? `<span style="font-size:10px;opacity:.8">(${obDirFilter})</span>` : ''}
         </button>
@@ -449,8 +449,8 @@ function renderObContent() {
     <!-- Client list table -->
     <div class="card" style="margin-top:16px">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-list" style="color:#3b82f6;margin-right:6px"></i>Реестр клиентов</span>
-        <span style="font-size:12px;color:#8a9bbf">${clients.length} клиентов</span>
+        <span class="card-title"><i class="fas fa-list" style="color:#14b8a6;margin-right:6px"></i>Реестр клиентов</span>
+        <span style="font-size:12px;color:#8abfbb">${clients.length} клиентов</span>
       </div>
       ${renderObClientTable(clients)}
     </div>`;
@@ -462,7 +462,7 @@ function renderObPhaseBoard(clients) {
   const PHASES = [
     { num:1, label:'Phase 1', sub:'Conflict Check',    color:'#8b5cf6', icon:'fa-search' },
     { num:2, label:'Phase 2', sub:'Documentation',     color:'#f97316', icon:'fa-folder-open' },
-    { num:3, label:'Phase 3', sub:'KYC/Classification',color:'#3b82f6', icon:'fa-shield-alt' },
+    { num:3, label:'Phase 3', sub:'KYC/Classification',color:'#14b8a6', icon:'fa-shield-alt' },
     { num:4, label:'Phase 4', sub:'Engagement Letter', color:'#22c55e', icon:'fa-file-signature' },
     { num:5, label:'Phase 5', sub:'Activation',        color:'#eab308', icon:'fa-rocket' },
   ];
@@ -475,30 +475,30 @@ function renderObPhaseBoard(clients) {
         ? clients.filter(c => c.activated || (c.phase === 5 && !c.activated))
         : clients.filter(c => c.phase === p.num && !c.activated);
       return `
-        <div style="background:#1c2333;border-radius:10px;padding:12px;border-top:3px solid ${p.color}">
+        <div style="background:#1c3332;border-radius:10px;padding:12px;border-top:3px solid ${p.color}">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
             <div style="width:28px;height:28px;background:${p.color}18;border-radius:8px;display:flex;align-items:center;justify-content:center">
               <i class="fas ${p.icon}" style="color:${p.color};font-size:11px"></i>
             </div>
             <div>
               <div style="font-size:11px;font-weight:800;color:#e2e8f0">${p.label}</div>
-              <div style="font-size:10px;color:#8a9bbf">${p.sub}</div>
+              <div style="font-size:10px;color:#8abfbb">${p.sub}</div>
             </div>
             <span style="margin-left:auto;background:${p.color}20;color:${p.color};border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700">${inPhase.length}</span>
           </div>
           ${inPhase.map(c => `
             <div onclick="openObClientModal(${c.id})"
               style="background:#0f1623;border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;
-                     border:1px solid ${c.activated ? 'rgba(34,197,94,0.3)' : '#2a3448'};transition:border-color 0.2s"
-              onmouseover="this.style.borderColor='${p.color}'" onmouseout="this.style.borderColor='${c.activated ? 'rgba(34,197,94,0.3)' : '#2a3448'}'">
+                     border:1px solid ${c.activated ? 'rgba(34,197,94,0.3)' : '#2a4846'};transition:border-color 0.2s"
+              onmouseover="this.style.borderColor='${p.color}'" onmouseout="this.style.borderColor='${c.activated ? 'rgba(34,197,94,0.3)' : '#2a4846'}'">
               <div style="font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</div>
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <span style="font-size:10px;color:#8a9bbf">${c.clientId}</span>
+                <span style="font-size:10px;color:#8abfbb">${c.clientId}</span>
                 ${c.activated
                   ? '<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(34,197,94,0.15);color:#22c55e">✅ Active</span>'
                   : obStatusBadge(c.onboardingStatus)}
                 ${c.direction==='FM' && c.commitment
-                  ? `<span style="font-size:9px;color:#3b82f6;font-weight:700">${fmtCurrency(c.commitment, currencyForFundId(activeFundId))}</span>`
+                  ? `<span style="font-size:9px;color:#14b8a6;font-weight:700">${fmtCurrency(c.commitment, currencyForFundId(activeFundId))}</span>`
                   : c.serviceType && c.direction==='CF&A'
                     ? `<span style="font-size:9px;color:#8b5cf6;font-weight:700">${c.serviceType}</span>`
                     : ''}
@@ -531,7 +531,7 @@ function renderObClientTable(clients) {
             const overdue = tasks.some(t => t.status === 'open' && new Date(t.dueDate) < today);
             const isFm = c.direction === 'FM';
             const detailLine = isFm
-              ? `<div style="font-size:10px;color:#3b82f6">${c.lpType||'LP'} · ${c.commitment?fmtCurrency(c.commitment, currencyForFundId(activeFundId)):'—'}</div>`
+              ? `<div style="font-size:10px;color:#14b8a6">${c.lpType||'LP'} · ${c.commitment?fmtCurrency(c.commitment, currencyForFundId(activeFundId)):'—'}</div>`
               : `<div style="font-size:10px;color:#8b5cf6">${c.serviceType||'—'} · ${c.classification||'—'}</div>`;
             return `
               <tr onclick="openObClientModal(${c.id})" style="cursor:pointer">
@@ -542,17 +542,17 @@ function renderObClientTable(clients) {
                   ${c.restrictedMatch ? '<div style="font-size:10px;color:#ef4444;font-weight:700">⚠ Restricted List</div>' : ''}
                 </td>
                 <td style="font-size:12px">${statusLabel(c.type)}</td>
-                <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:${isFm?'rgba(59,130,246,0.12)':'rgba(139,92,246,0.12)'};color:${isFm?'#3b82f6':'#8b5cf6'}">${c.direction}</span></td>
+                <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:${isFm?'rgba(20,184,166,0.12)':'rgba(139,92,246,0.12)'};color:${isFm?'#14b8a6':'#8b5cf6'}">${c.direction}</span></td>
                 <td><span style="font-size:11px;font-weight:700;color:#f97316">Phase ${c.phase}</span></td>
                 <td>${obStatusBadge(c.onboardingStatus)}</td>
                 <td>${obRiskBadge(c.riskRating)}</td>
                 <td style="font-size:11px;color:#94a3b8">${c.rm.split(' ')[0]}</td>
-                <td style="font-size:12px;color:#8a9bbf">${c.startDate}</td>
-                <td style="font-size:12px;color:${new Date(c.targetDate)<today&&!c.activated?'#ef4444':'#8a9bbf'}">${c.targetDate}</td>
+                <td style="font-size:12px;color:#8abfbb">${c.startDate}</td>
+                <td style="font-size:12px;color:${new Date(c.targetDate)<today&&!c.activated?'#ef4444':'#8abfbb'}">${c.targetDate}</td>
                 <td style="text-align:center">
                   <div style="font-size:11px;font-weight:700;color:${overdue?'#ef4444':done===7?'#22c55e':'#f97316'}">${done}/7 ${overdue?'⚠':''}</div>
-                  <div style="width:60px;height:4px;background:#2a3448;border-radius:2px;margin:3px auto">
-                    <div style="width:${Math.round(done/7*100)}%;height:4px;background:${done===7?'#22c55e':'#3b82f6'};border-radius:2px"></div>
+                  <div style="width:60px;height:4px;background:#2a4846;border-radius:2px;margin:3px auto">
+                    <div style="width:${Math.round(done/7*100)}%;height:4px;background:${done===7?'#22c55e':'#14b8a6'};border-radius:2px"></div>
                   </div>
                 </td>
               </tr>`;
@@ -568,13 +568,13 @@ function obStatusBadge(s) {
     'On Track':  { bg:'rgba(34,197,94,0.12)',  c:'#22c55e' },
     'At Risk':   { bg:'rgba(249,115,22,0.12)', c:'#f97316' },
     'Delayed':   { bg:'rgba(239,68,68,0.12)',  c:'#ef4444' },
-    'Completed': { bg:'rgba(59,130,246,0.12)', c:'#3b82f6' },
+    'Completed': { bg:'rgba(20,184,166,0.12)', c:'#14b8a6' },
   }[s] || { bg:'rgba(100,116,139,0.12)', c:'#94a3b8' };
   return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg};color:${cfg.c};white-space:nowrap">${s}</span>`;
 }
 function obRiskBadge(r) {
   const cfg = { Low:{ bg:'rgba(34,197,94,0.12)', c:'#22c55e' }, Medium:{ bg:'rgba(249,115,22,0.12)', c:'#f97316' }, High:{ bg:'rgba(239,68,68,0.12)', c:'#ef4444' } }[r] || {};
-  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg||'#1c2333'};color:${cfg.c||'#94a3b8'}">${r ? statusLabel(r) : '—'}</span>`;
+  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg||'#1c3332'};color:${cfg.c||'#94a3b8'}">${r ? statusLabel(r) : '—'}</span>`;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -627,9 +627,9 @@ function renderObClientModal(clientId) {
 
   el.innerHTML = `
     <!-- Client header -->
-    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2a3448">
-      <div style="width:52px;height:52px;border-radius:14px;background:${c.direction==='FM'?'rgba(59,130,246,0.15)':'rgba(139,92,246,0.15)'};
-        display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:${c.direction==='FM'?'#3b82f6':'#8b5cf6'};flex-shrink:0">
+    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2a4846">
+      <div style="width:52px;height:52px;border-radius:14px;background:${c.direction==='FM'?'rgba(20,184,166,0.15)':'rgba(139,92,246,0.15)'};
+        display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:${c.direction==='FM'?'#14b8a6':'#8b5cf6'};flex-shrink:0">
         ${c.name.slice(0,2).toUpperCase()}
       </div>
       <div style="flex:1;min-width:0">
@@ -638,12 +638,12 @@ function renderObClientModal(clientId) {
           ${c.restrictedMatch ? '<span style="font-size:11px;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:2px 8px;font-weight:700">⚠ Restricted List</span>' : ''}
           ${c.activated ? '<span style="font-size:11px;background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:2px 8px;font-weight:700">✅ Активен</span>' : ''}
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8a9bbf">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8abfbb">
           <span style="color:#8b5cf6;font-weight:700">${c.clientId}</span>
           <span>${statusLabel(c.type)}</span>
-          <span style="font-weight:700;color:${c.direction==='FM'?'#3b82f6':'#8b5cf6'}">${c.direction}</span>
+          <span style="font-weight:700;color:${c.direction==='FM'?'#14b8a6':'#8b5cf6'}">${c.direction}</span>
           ${c.direction==='FM'
-            ? `<span style="background:rgba(59,130,246,0.1);color:#60a5fa;border-radius:5px;padding:1px 7px;font-weight:700">🏦 LP · ${c.lpType||'HNWI'}</span>
+            ? `<span style="background:rgba(20,184,166,0.1);color:#5eead4;border-radius:5px;padding:1px 7px;font-weight:700">🏦 LP · ${c.lpType||'HNWI'}</span>
                <span>${c.classification}</span>`
             : `<span style="background:rgba(139,92,246,0.1);color:#a78bfa;border-radius:5px;padding:1px 7px;font-weight:700">📊 ${c.serviceType||'CF&A'}</span>
                <span>${c.classification}</span>`}
@@ -651,7 +651,7 @@ function renderObClientModal(clientId) {
       </div>
       <div style="text-align:right;flex-shrink:0">
         ${obStatusBadge(c.onboardingStatus)}
-        <div style="font-size:11px;color:${daysLeft<0?'#ef4444':daysLeft<3?'#f97316':'#8a9bbf'};margin-top:4px">
+        <div style="font-size:11px;color:${daysLeft<0?'#ef4444':daysLeft<3?'#f97316':'#8abfbb'};margin-top:4px">
           ${c.activated ? 'Завершён' : daysLeft >= 0 ? `Осталось ${daysLeft}д` : `Просрочено ${Math.abs(daysLeft)}д`}
         </div>
       </div>
@@ -670,7 +670,7 @@ function renderObClientModal(clientId) {
         ['Следующий шаг', c.nextAction],
       ].map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:10px 12px">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k}</div>
           <div style="font-size:13px;color:#e2e8f0;font-weight:600">${escapeHtml(v)||'—'}</div>
         </div>`).join('') : [
         ['RM', c.rm.split('(')[0].trim()],
@@ -683,32 +683,32 @@ function renderObClientModal(clientId) {
         ['Следующий шаг', c.nextAction],
       ].map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:10px 12px">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k}</div>
           <div style="font-size:13px;color:#e2e8f0;font-weight:600">${escapeHtml(v)||'—'}</div>
         </div>`).join('')}
     </div>
 
     <!-- Notes -->
-    ${c.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6">${escapeHtml(c.notes)}</div>` : ''}
+    ${c.notes ? `<div style="background:#1c3332;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#94a3b8;border-left:3px solid #14b8a6">${escapeHtml(c.notes)}</div>` : ''}
 
     <!-- KYC Checklist (Onboarding Templates package: Identity/SOF/SOW/PEP/
          Sanctions/Professional Client/CRS) — summary projected from the
          2.2 (dd_outcome) and 3.1 (classification) task forms below; full
          detail (which list, which tool, notes) lives in each task's data. -->
-    <div style="font-size:12px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:12px">
-      <i class="fas fa-shield-alt" style="margin-right:6px;color:#3b82f6"></i>KYC чек-лист
+    <div style="font-size:12px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:12px">
+      <i class="fas fa-shield-alt" style="margin-right:6px;color:#14b8a6"></i>KYC чек-лист
     </div>
-    <div style="background:#1c2333;border-radius:10px;padding:0 14px;margin-bottom:20px">
+    <div style="background:#1c3332;border-radius:10px;padding:0 14px;margin-bottom:20px">
       ${kycChecklistItems(c).map((item, i, arr) => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;${i<arr.length-1?'border-bottom:1px solid #2a3448;':''}font-size:12px">
-          <i class="fas ${item.done?'fa-check-circle':'fa-times-circle'}" style="color:${item.done?'#22c55e':'#5a6b8a'};width:16px;flex-shrink:0;text-align:center"></i>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;${i<arr.length-1?'border-bottom:1px solid #2a4846;':''}font-size:12px">
+          <i class="fas ${item.done?'fa-check-circle':'fa-times-circle'}" style="color:${item.done?'#22c55e':'#5a8a85'};width:16px;flex-shrink:0;text-align:center"></i>
           <span style="flex:1;color:#e2e8f0">${item.label}</span>
-          <span style="color:#8a9bbf;font-size:11px">${item.extra||''}</span>
+          <span style="color:#8abfbb;font-size:11px">${item.extra||''}</span>
         </div>`).join('')}
     </div>
 
     <!-- 7 Tasks timeline -->
-    <div style="font-size:12px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:12px">
       <i class="fas fa-tasks" style="margin-right:6px;color:#f97316"></i>7 задач онбординга
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
@@ -716,10 +716,10 @@ function renderObClientModal(clientId) {
     </div>
 
     <!-- Footer actions -->
-    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a4846">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="openNewObClientModal(${c.id})"
-          style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-edit"></i> Редактировать
         </button>
         ${!c.activated ? `<button onclick="deleteObClient(${c.id})"
@@ -728,7 +728,7 @@ function renderObClientModal(clientId) {
         </button>` : ''}
       </div>
       <button onclick="closeObClientModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         Закрыть
       </button>
     </div>`;
@@ -746,15 +746,15 @@ function renderObTaskRow(task, client) {
     escalated: { icon:'fa-arrow-up',     color:'#eab308',  bg:'rgba(234,179,8,0.12)',  label:'Эскалирована' },
   }[task.status] || {};
 
-  const PHASE_COLORS = ['','#8b5cf6','#f97316','#3b82f6','#22c55e','#eab308'];
+  const PHASE_COLORS = ['','#8b5cf6','#f97316','#14b8a6','#22c55e','#eab308'];
 
   return `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0f1623;border-radius:10px;
-      border:1px solid ${isOverdue?'rgba(239,68,68,0.3)':'#2a3448'};border-left:3px solid ${PHASE_COLORS[task.phase]||'#2a3448'};
+      border:1px solid ${isOverdue?'rgba(239,68,68,0.3)':'#2a4846'};border-left:3px solid ${PHASE_COLORS[task.phase]||'#2a4846'};
       ${task.status !== 'locked' ? 'cursor:pointer;' : ''}"
       ${task.status !== 'locked' ? `onclick="openObTaskForm(${task.id})"
-        onmouseover="this.style.borderColor='${PHASE_COLORS[task.phase]||'#3b82f6'}'"
-        onmouseout="this.style.borderColor='${isOverdue?'rgba(239,68,68,0.3)':'#2a3448'}'"`  : ''}>
+        onmouseover="this.style.borderColor='${PHASE_COLORS[task.phase]||'#14b8a6'}'"
+        onmouseout="this.style.borderColor='${isOverdue?'rgba(239,68,68,0.3)':'#2a4846'}'"`  : ''}>
       <div style="width:30px;height:30px;border-radius:8px;background:${statusCfg.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0">
         <i class="fas ${statusCfg.icon}" style="color:${statusCfg.color};font-size:13px"></i>
       </div>
@@ -763,7 +763,7 @@ function renderObTaskRow(task, client) {
           <span style="font-size:10px;font-weight:800;color:${PHASE_COLORS[task.phase]};letter-spacing:.5px">TASK ${task.taskNum}</span>
           <span style="font-size:13px;font-weight:600;color:${task.status==='locked'?'#4a5568':'#e2e8f0'}">${task.title}</span>
         </div>
-        <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;font-size:11px;color:#5a6b8a">
+        <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;font-size:11px;color:#5a8a85">
           <span><i class="fas fa-user" style="margin-right:3px"></i>${task.role}</span>
           <span><i class="fas fa-calendar" style="margin-right:3px"></i>${task.dueDate}</span>
           ${isOverdue ? '<span style="color:#ef4444;font-weight:700">⚠ Просрочено</span>' : ''}
@@ -821,19 +821,19 @@ function openObTaskForm(taskId) {
   const el = document.getElementById('obClientModalContent');
   if (!el) return;
 
-  const PHASE_COLORS = ['','#8b5cf6','#f97316','#3b82f6','#22c55e','#eab308'];
+  const PHASE_COLORS = ['','#8b5cf6','#f97316','#14b8a6','#22c55e','#eab308'];
   const isCompleted  = task.status === 'completed' || task.status === 'rejected';
 
   el.innerHTML = `
     <!-- ← Назад к задачам -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a3448">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a4846">
       <button onclick="closeObTaskForm()" title="Назад к задачам"
-        style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;
+        style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;
                padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px">
         <i class="fas fa-arrow-left"></i> Назад
       </button>
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;color:#8a9bbf;margin-bottom:1px">${client.name} · ${client.clientId}</div>
+        <div style="font-size:11px;color:#8abfbb;margin-bottom:1px">${client.name} · ${client.clientId}</div>
         <div style="font-size:14px;font-weight:800;color:#f1f5f9">
           <span style="color:${PHASE_COLORS[task.phase]};margin-right:6px">TASK ${task.taskNum}</span>${task.title}
         </div>
@@ -921,9 +921,9 @@ function closeObTaskForm() {
 function renderObTaskComments(task) {
   const comments = task.comments || [];
   return `
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #2a3448">
-      <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
-        <i class="fas fa-comment-dots" style="margin-right:5px;color:#3b82f6"></i>Комментарии (${comments.length})
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #2a4846">
+      <div style="font-size:10px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:10px">
+        <i class="fas fa-comment-dots" style="margin-right:5px;color:#14b8a6"></i>Комментарии (${comments.length})
       </div>
       ${!comments.length ? `<div style="font-size:12px;color:#475569;font-style:italic;padding:12px 0;text-align:center">Комментариев нет</div>` :
         [...comments].reverse().map(c => `
@@ -936,10 +936,10 @@ function renderObTaskComments(task) {
           </div>`).join('')}
       <div style="background:#0f1623;border-radius:10px;padding:12px 14px;margin-top:8px">
         <textarea id="obTaskCommentText_${task.id}" rows="2"
-          style="width:100%;background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:8px 10px;color:#e2e8f0;font-size:12px;resize:vertical;box-sizing:border-box;margin-bottom:8px"
+          style="width:100%;background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:8px 10px;color:#e2e8f0;font-size:12px;resize:vertical;box-sizing:border-box;margin-bottom:8px"
           placeholder="Комментарий к задаче..."></textarea>
         <button onclick="obAddTaskComment(${task.id})"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
+          style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-paper-plane" style="margin-right:5px"></i>Добавить
         </button>
       </div>
@@ -971,7 +971,7 @@ async function obAddTaskComment(taskId) {
 // without scrolling) and buildTaskForm's footer (bottom, next to Submit).
 function obTaskPdfButtonHtml(task, client) {
   return task.formKey === 'dd_outcome'
-    ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
+    ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
     : (task.formKey === 'engagement_letter')
     ? '<button onclick="obGenerateTermSheet(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Term Sheet PDF</button>'
     : (task.formKey === 'subscription_agreement')
@@ -988,13 +988,13 @@ function buildTaskForm(task, client) {
   const fd = task.formData || {};
   const isCompleted = task.status === 'completed' || task.status === 'rejected';
   const disabledAttr = isCompleted ? 'disabled' : '';
-  const inputStyle = `width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;${isCompleted?'opacity:.7;':''}`;
+  const inputStyle = `width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;${isCompleted?'opacity:.7;':''}`;
   const selectStyle = inputStyle;
-  const labelStyle  = `font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase`;
+  const labelStyle  = `font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase`;
   const formGroupStyle = `margin-bottom:14px`;
 
   // Header (краткая полоска, без дублирования — основной заголовок в openObTaskForm)
-  const PHASE_COLORS = ['','#8b5cf6','#f97316','#3b82f6','#22c55e','#eab308'];
+  const PHASE_COLORS = ['','#8b5cf6','#f97316','#14b8a6','#22c55e','#eab308'];
   let html = ``; // без отдельного header-блока
 
   // Form body by type
@@ -1003,7 +1003,7 @@ function buildTaskForm(task, client) {
     /* ─── ФОРМА 2 — Conflict Pre-Check (1.1) ──────── */
     case 'conflict_precheck': {
       const isFM_cp = client.direction === 'FM';
-      const cpColor = isFM_cp ? '#3b82f6' : '#8b5cf6';
+      const cpColor = isFM_cp ? '#14b8a6' : '#8b5cf6';
       const cpLabel = isFM_cp ? '🏦 FM — LP Conflict Pre-Check' : '📊 CF&A — Conflict Pre-Check';
 
       html += `
@@ -1102,7 +1102,7 @@ function buildTaskForm(task, client) {
 
       // ── Direction label for the header badge ─────────────────────────────
       const dirLabel  = isFM ? '🏦 FM — LP Documents' : '📊 CF&A — Client Documents';
-      const dirColor  = isFM ? '#3b82f6' : '#8b5cf6';
+      const dirColor  = isFM ? '#14b8a6' : '#8b5cf6';
       const typeLabel = isFM
         ? (isCorp ? 'Corporate LP' : `Individual LP · ${client.lpType||'HNWI'}`)
         : client.type;
@@ -1177,7 +1177,7 @@ function buildTaskForm(task, client) {
             <span style="flex:1;font-size:12px;color:${s.tc};font-weight:600">${d.name}</span>
             <select id="f_doc_${i}" ${disabledAttr}
               onchange="obDocStatusChange(${i},this.value,${reqCount},${isCompleted})"
-              style="background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;
+              style="background:#0f1623;border:1px solid #2a4846;border-radius:6px;padding:5px 8px;
                      color:#e2e8f0;font-size:11px;min-width:130px;cursor:pointer">
               ${['Получен','Ожидается','Отсутствует'].map(o =>
                 `<option value="${o}" ${st===o?'selected':''}>${o}</option>`
@@ -1206,7 +1206,7 @@ function buildTaskForm(task, client) {
               <span style="font-size:10px;color:#475569;font-weight:400"> — опционально</span></span>
             <select id="f_doc_${idx}" ${disabledAttr}
               onchange="obDocStatusChange(${idx},this.value,${reqCount},${isCompleted})"
-              style="background:#0f1623;border:1px solid #2a3448;border-radius:6px;padding:5px 8px;
+              style="background:#0f1623;border:1px solid #2a4846;border-radius:6px;padding:5px 8px;
                      color:#94a3b8;font-size:11px;min-width:130px;cursor:pointer">
               ${['Получен','Ожидается','Отсутствует'].map(o =>
                 `<option value="${o}" ${st===o?'selected':''}>${o}</option>`
@@ -1217,8 +1217,8 @@ function buildTaskForm(task, client) {
         </div>` : ''}
 
         <!-- ══ Summary + dates ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:10px">
             <i class="fas fa-clipboard-check" style="margin-right:5px"></i>Итог сбора документов
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1248,7 +1248,7 @@ function buildTaskForm(task, client) {
     case 'dd_outcome': {
       const isFM_dd = client.direction === 'FM';
       const ddTitle  = isFM_dd ? '🏦 AML / KYC Due Diligence — LP' : '📊 Client Due Diligence Outcome — CF&A';
-      const ddColor  = isFM_dd ? '#3b82f6' : '#8b5cf6';
+      const ddColor  = isFM_dd ? '#14b8a6' : '#8b5cf6';
 
       // Carry-over: doc_collection status
       const prevDoc  = obTasks.find(t => t.clientId === client.id && t.taskNum === '2.1');
@@ -1268,7 +1268,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- Section 1: Identification -->
-        <div style="font-size:11px;font-weight:700;color:#3b82f6;margin-bottom:8px;text-transform:uppercase">
+        <div style="font-size:11px;font-weight:700;color:#14b8a6;margin-bottom:8px;text-transform:uppercase">
           Раздел 1 — ${isFM_dd ? 'Идентификация LP' : 'Идентификация клиента'}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
@@ -1293,14 +1293,14 @@ function buildTaskForm(task, client) {
              this just queues them instead of making the officer repeat
              the single-field flow per document. -->
         ${currentUserPermission('aiAssist') ? `
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:10px 14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:8px">
             <i class="fas fa-wand-magic-sparkles" style="margin-right:5px;color:#a78bfa"></i>AI — извлечение данных из документов
           </div>
           <div id="aiDocQueue_${task.id}" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${aiDocQueueHtml(task.id)}</div>
           <div style="display:flex;gap:8px">
             <button type="button" ${disabledAttr} onclick="addAiDocs(${task.id})"
-              style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+              style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
               <i class="fas fa-paperclip" style="margin-right:5px"></i>Добавить документы
             </button>
             <button type="button" ${disabledAttr} onclick="aiExtractAllDocs(${task.id})"
@@ -1385,9 +1385,9 @@ function buildTaskForm(task, client) {
           <textarea id="f_mlroNote" rows="2" ${disabledAttr} style="${inputStyle};resize:vertical" placeholder="Пояснение MLRO по рискам LP...">${fd.mlroNote||''}</textarea></div>` : ''}
         <div style="${formGroupStyle}"><label style="${labelStyle}">Additional Comments / Observations <span style="font-size:10px;color:#64748b;text-transform:none;font-weight:400">(будет включён в PDF-отчёт)</span></label>
           <textarea id="f_coComment" rows="4" ${disabledAttr} style="${inputStyle};resize:vertical" placeholder="${isFM_dd?'Additional observations, risk justification, or AML/KYC notes for the record...':'Additional observations or compliance notes for the record...'}">${fd.coComment||''}</textarea></div>
-        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
-            <i class="fas fa-pen-nib" style="margin-right:5px;color:#3b82f6"></i>Имена для PDF <span style="font-size:10px;color:#4a5568;font-weight:400;text-transform:none"> — физическая подпись ставится вручную после печати</span>
+        <div style="background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:8px">
+            <i class="fas fa-pen-nib" style="margin-right:5px;color:#14b8a6"></i>Имена для PDF <span style="font-size:10px;color:#4a5568;font-weight:400;text-transform:none"> — физическая подпись ставится вручную после печати</span>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div><label style="${labelStyle}">Имя CCO (для PDF)</label><input type="text" id="f_signCO" value="${fd.signCO||''}" ${disabledAttr} style="${inputStyle}" placeholder="Full name of CCO" /></div>
@@ -1410,8 +1410,8 @@ function buildTaskForm(task, client) {
 
       html += `
         <!-- DD Risk carry-over banner -->
-        ${ddRisk ? `<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px">
-          <i class="fas fa-link" style="color:#3b82f6;flex-shrink:0"></i>
+        ${ddRisk ? `<div style="background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px">
+          <i class="fas fa-link" style="color:#14b8a6;flex-shrink:0"></i>
           <span>Из задачи 2.2: <b>DD Риск — ${ddRisk}</b> · Заключение: <b>${ddConcl}</b></span>
         </div>` : ''}
 
@@ -1425,16 +1425,16 @@ function buildTaskForm(task, client) {
           <input type="date" id="f_classDate" value="${fd.classDate||today()}" ${disabledAttr} style="${inputStyle}" /></div>
 
         <!-- ══ Company policy notice ══ -->
-        <div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
-          <i class="fas fa-info-circle" style="color:#3b82f6;margin-right:6px"></i>
+        <div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
+          <i class="fas fa-info-circle" style="color:#14b8a6;margin-right:6px"></i>
           Компания оказывает услуги исключительно <b>Professional Clients</b> и <b>Market Counterparties</b>.
           Retail Clients не принимаются на обслуживание.
         </div>
 
         ${isIndiv ? `
         <!-- ══ INDIVIDUAL: Professional Client — any 1 of 3 ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-user-tie"></i> Критерии Professional Client — физическое лицо
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:10px">Достаточно выполнения <b>любого 1</b> из 3 критериев</div>
@@ -1449,13 +1449,13 @@ function buildTaskForm(task, client) {
               '③ Проф. квалификация / опыт ≥ 3 лет (CFA / CPA / FRM / senior mgmt / portfolio mgmt / trading)',
               ['Нет','Да'], fd.indExperience3y, disabledAttr, selectStyle, labelStyle)}
           </div>
-          <div id="profScoreInd_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c2333;color:#64748b">
+          <div id="profScoreInd_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c3332;color:#64748b">
             <i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта
           </div>
         </div>` : `
         <!-- ══ CORPORATE: Professional Client — any 1 of 4 ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-building"></i> Критерии Professional Client — юридическое лицо
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:10px">Достаточно выполнения <b>любого 1</b> из 4 критериев (или субкритерия IV)</div>
@@ -1471,7 +1471,7 @@ function buildTaskForm(task, client) {
               ['Нет','Да'], fd.corpRegulated, disabledAttr, selectStyle, labelStyle)}
           </div>
           <!-- Sub-criterion IV: large corp 2-of-3 -->
-          <div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+          <div style="background:#1c3332;border-radius:8px;padding:10px 12px;margin-bottom:12px">
             <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;font-weight:700">
               ④ Крупная корпорация — необходимо выполнение <b>2 из 3</b> подкритериев:
             </div>
@@ -1487,13 +1487,13 @@ function buildTaskForm(task, client) {
                 ['Нет','Да'], fd.corpEmployees50, disabledAttr, selectStyle, labelStyle)}
             </div>
           </div>
-          <div id="profScoreCorp_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c2333;color:#64748b">
+          <div id="profScoreCorp_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c3332;color:#64748b">
             <i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта
           </div>
         </div>`}
 
         <!-- ══ MARKET COUNTERPARTY criteria ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#8b5cf6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-landmark"></i> Критерии Market Counterparty
           </div>
@@ -1512,7 +1512,7 @@ function buildTaskForm(task, client) {
               ['Нет','Да'], fd.mcpSupranational, disabledAttr, selectStyle, labelStyle)}
           </div>
           <!-- Sub-criterion IV: large corp AND -->
-          <div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+          <div style="background:#1c3332;border-radius:8px;padding:10px 12px;margin-bottom:12px">
             <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;font-weight:700">
               ④ Крупная корпорация — все <b>3 условия обязательны одновременно:</b>
             </div>
@@ -1528,7 +1528,7 @@ function buildTaskForm(task, client) {
                 ['Нет','Да'], fd.mcpEquity2m, disabledAttr, selectStyle, labelStyle)}
             </div>
           </div>
-          <div id="mcpScore_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c2333;color:#64748b">
+          <div id="mcpScore_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c3332;color:#64748b">
             <i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта
           </div>
         </div>
@@ -1546,7 +1546,7 @@ function buildTaskForm(task, client) {
           <textarea id="f_coComment" rows="2" ${disabledAttr} style="${inputStyle};resize:vertical">${fd.coComment||''}</textarea></div>
 
         <!-- ══ Client notification ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-bell"></i> Уведомление клиента
           </div>
@@ -1556,7 +1556,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Opt-up / Opt-down ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:4px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:4px">
           <div style="font-size:11px;font-weight:800;color:#eab308;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-arrow-up-down"></i> Opt-up / Opt-down
           </div>
@@ -1594,7 +1594,7 @@ function buildTaskForm(task, client) {
         </div>` : ''}
 
         <!-- Assessment type info banner -->
-        <div style="background:#1c2333;border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:12px;font-weight:700;color:#f97316;display:flex;align-items:center;gap:8px">
+        <div style="background:#1c3332;border-radius:8px;padding:10px 14px;margin-bottom:6px;font-size:12px;font-weight:700;color:#f97316;display:flex;align-items:center;gap:8px">
           <i class="fas fa-balance-scale"></i>
           Тип оценки: ${isAdvising
             ? '🎯 Suitability Assessment (Section 3.2) — услуга: Advising on Investments'
@@ -1604,7 +1604,7 @@ function buildTaskForm(task, client) {
         <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:8px;padding:8px 14px;margin-bottom:14px;font-size:11px;color:#94a3b8">
           ${isAdvising
             ? '<i class="fas fa-info-circle" style="margin-right:5px;color:#f97316"></i>Advising: компания предоставляет персональные инвестиционные рекомендации. Требуется <b>полная Suitability-оценка</b> (профиль клиента, финансовое положение, знания и опыт).'
-            : '<i class="fas fa-info-circle" style="margin-right:5px;color:#3b82f6"></i>Arranging: компания организует сделку без выдачи инвестиционных рекомендаций. Достаточно <b>Appropriateness-оценки</b> (знания клиента, опыт с инструментами, финансовая способность).'}
+            : '<i class="fas fa-info-circle" style="margin-right:5px;color:#14b8a6"></i>Arranging: компания организует сделку без выдачи инвестиционных рекомендаций. Достаточно <b>Appropriateness-оценки</b> (знания клиента, опыт с инструментами, финансовая способность).'}
         </div>
 
         <div style="${formGroupStyle}"><label style="${labelStyle}">Дата оценки *</label>
@@ -1621,7 +1621,7 @@ function buildTaskForm(task, client) {
         ══════════════════════════════════════════════ -->
 
         <!-- ── Block A: Client Profile Assessment ──────────────────── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-crosshairs"></i>Блок A — Client Profile Assessment
           </div>
@@ -1637,7 +1637,7 @@ function buildTaskForm(task, client) {
                 ['f_objGrowth',       'Capital Growth — долгосрочный рост стоимости'],
                 ['f_objSpeculation',  'Speculation — высокий риск / высокая доходность'],
               ].map(([fid, lbl]) => `
-                <label style="display:flex;align-items:flex-start;gap:8px;background:#1c2333;border-radius:6px;padding:8px 10px;cursor:${isCompleted?'default':'pointer'};border:1px solid rgba(42,52,72,0.8)">
+                <label style="display:flex;align-items:flex-start;gap:8px;background:#1c3332;border-radius:6px;padding:8px 10px;cursor:${isCompleted?'default':'pointer'};border:1px solid rgba(42,52,72,0.8)">
                   <input type="checkbox" id="${fid}" ${fd[fid.replace('f_','')]===true||fd[fid]===true||fd[fid]==='true'?'checked':''} ${disabledAttr}
                     style="margin-top:2px;flex-shrink:0;accent-color:#22c55e" />
                   <span style="font-size:11px;color:#cbd5e1;line-height:1.4">${lbl}</span>
@@ -1669,7 +1669,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ── Block B: Financial Situation Analysis ─────────────────── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-wallet"></i>Блок B — Financial Situation Analysis
             <span style="font-size:10px;font-weight:400;text-transform:none;color:#64748b;margin-left:4px">${isIndivS ? '(Individual)' : '(Corporate)'}</span>
@@ -1678,7 +1678,7 @@ function buildTaskForm(task, client) {
 
           ${isIndivS ? `
           <!-- B — Individual: Net Worth + Income Analysis -->
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">Net Worth Assessment</div>
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:8px;text-transform:uppercase">Net Worth Assessment</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             ${buildSelect('f_totalAssets',   'Совокупные активы (без жилья и пенсии)',
               ['< $100K','$100K – $500K','$500K – $1M','$1M – $5M','> $5M'],
@@ -1693,7 +1693,7 @@ function buildTaskForm(task, client) {
               ['< 5%','5% – 20%','20% – 50%','> 50%'],
               fd.dealPctWealth, disabledAttr, selectStyle, labelStyle)}
           </div>
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">Income Analysis</div>
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:8px;text-transform:uppercase">Income Analysis</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             ${buildSelect('f_annualIncome',   'Годовой доход из всех источников',
               ['< $50K','$50K – $200K','$200K – $500K','> $500K'],
@@ -1709,7 +1709,7 @@ function buildTaskForm(task, client) {
               fd.lossCapacity, disabledAttr, selectStyle, labelStyle)}
           </div>` : `
           <!-- B — Corporate: Revenue / EBITDA / Debt + Deal context -->
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">Financial Position (Corporate)</div>
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:8px;text-transform:uppercase">Financial Position (Corporate)</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
             ${buildSelect('f_corpRevenue',  'Годовая выручка',
               ['< $1M','$1M – $10M','$10M – $50M','> $50M'],
@@ -1730,13 +1730,13 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ── Block C: Knowledge and Experience Evaluation ──────────── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-graduation-cap"></i>Блок C — Knowledge and Experience Evaluation
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:12px">Section 3.2C — инвестиционный опыт и профессиональный бэкграунд</div>
 
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">C.1 Investment Experience</div>
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:8px;text-transform:uppercase">C.1 Investment Experience</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             ${buildSelect('f_expEquity',    'Опыт в акциях (публичных / частных)',
               ['Нет','Базовый (< 1 yr)','Средний (1–5 yr)','Продвинутый (5+ yr)'],
@@ -1755,7 +1755,7 @@ function buildTaskForm(task, client) {
               fd.expIntl, disabledAttr, selectStyle, labelStyle)}
           </div>
 
-          <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:8px;text-transform:uppercase">C.2 Professional Background</div>
+          <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:8px;text-transform:uppercase">C.2 Professional Background</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             ${buildSelect('f_bgEducation',  'Образование в области финансов / инвестиций',
               ['Нет','Профильное образование (бакалавр/магистр)','Профессиональный сертификат (CFA / CPA / FRM и др.)'],
@@ -1773,7 +1773,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ── Block D: Recommendation & Suitability Conclusion ──────── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-lightbulb"></i>Блок D — Recommendation & Suitability Conclusion
           </div>
@@ -1806,8 +1806,8 @@ function buildTaskForm(task, client) {
         ══════════════════════════════════════════════ -->
 
         <!-- ── Appropriateness Block 1: Knowledge of Relevant Instruments ── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-chart-bar"></i>Блок 1 — Knowledge of Relevant Instruments
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:12px">Section 3.3 — знание инструментов, используемых в организуемой сделке</div>
@@ -1831,8 +1831,8 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ── Appropriateness Block 2: Transaction Experience ───────── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-handshake"></i>Блок 2 — Transaction Experience
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:12px">Section 3.3 — опыт участия в аналогичных сделках и понимание процессов</div>
@@ -1853,8 +1853,8 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ── Appropriateness Block 3: Financial Capacity ───────────── -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-coins"></i>Блок 3 — Financial Capacity
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:12px">Section 3.3 — способность самостоятельно оценить инвестицию и выполнить обязательства</div>
@@ -1878,7 +1878,7 @@ function buildTaskForm(task, client) {
         `}
 
         <!-- ══ Four-Eyes Review (Section 3.4) ══ -->
-        <div style="background:#1c2333;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#1c3332;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#eab308;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-user-friends"></i>Four-Eyes Review (Section 3.4)
           </div>
@@ -1898,7 +1898,7 @@ function buildTaskForm(task, client) {
 
           <!-- Level 1: Investment Adviser -->
           <div style="background:#0f1623;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-            <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+            <div style="font-size:10px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:8px">
               <i class="fas fa-user" style="margin-right:4px"></i>Level 1 — Investment Adviser / RM
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1915,7 +1915,7 @@ function buildTaskForm(task, client) {
 
           <!-- Level 2: Compliance Officer -->
           <div style="background:#0f1623;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-            <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+            <div style="font-size:10px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:8px">
               <i class="fas fa-shield-alt" style="margin-right:4px"></i>Level 2 — Senior Adviser / Compliance Officer (Four-Eyes Review)
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1931,7 +1931,7 @@ function buildTaskForm(task, client) {
 
           <!-- Client Acknowledgment -->
           <div style="background:#0f1623;border-radius:8px;padding:10px 12px">
-            <div style="font-size:10px;font-weight:700;color:#8a9bbf;text-transform:uppercase;margin-bottom:8px">
+            <div style="font-size:10px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:8px">
               <i class="fas fa-file-signature" style="margin-right:4px"></i>Client Acknowledgment
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1974,7 +1974,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 1: TS Identification ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-hashtag"></i>Реквизиты Term Sheet
           </div>
@@ -1993,7 +1993,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 2: Scope of Engagement ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-briefcase"></i>Предмет и объём услуг
           </div>
@@ -2013,7 +2013,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 3: Commercial Terms ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-dollar-sign"></i>Коммерческие условия (Commercial Terms)
           </div>
@@ -2038,7 +2038,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 4: Conditions Precedent ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-clipboard-check"></i>Условия, предшествующие подписанию договора (CPs)
           </div>
@@ -2053,7 +2053,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 5: RM Notes for Legal Counsel ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-gavel"></i>Комментарии RM для юридического отдела
           </div>
@@ -2066,7 +2066,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 6: Signing Status ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-signature"></i>Статус подписания Term Sheet
           </div>
@@ -2141,8 +2141,8 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- Prior tasks summary -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#8a9bbf;text-transform:uppercase;margin-bottom:10px">📋 Сводка по онбордингу</div>
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#8abfbb;text-transform:uppercase;margin-bottom:10px">📋 Сводка по онбордингу</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
             ${[
               ['DD Заключение', ddTask?.formData?.f_conclusion||'—', ddTask?.formData?.f_riskTotal||''],
@@ -2150,10 +2150,10 @@ function buildTaskForm(task, client) {
               [suitLabel,  suitVal,  ''],
               [engLabel,   engVal,   engSub],
             ].map(([k,v,sub]) => `
-              <div style="background:#1c2333;border-radius:6px;padding:8px 10px">
-                <div style="font-size:10px;color:#5a6b8a;margin-bottom:2px;text-transform:uppercase">${k}</div>
+              <div style="background:#1c3332;border-radius:6px;padding:8px 10px">
+                <div style="font-size:10px;color:#5a8a85;margin-bottom:2px;text-transform:uppercase">${k}</div>
                 <div style="font-weight:700;color:#e2e8f0">${v}</div>
-                ${sub ? `<div style="font-size:10px;color:#8a9bbf">${sub}</div>` : ''}
+                ${sub ? `<div style="font-size:10px;color:#8abfbb">${sub}</div>` : ''}
               </div>`).join('')}
           </div>
         </div>
@@ -2163,7 +2163,7 @@ function buildTaskForm(task, client) {
         <!-- ══ CF&A 5.1: Contract Upload + Key Terms + Amendments ══ -->
 
         <!-- Section 1: Contract Key Terms -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-file-signature"></i> Секция 1 — Реквизиты подписанного договора
           </div>
@@ -2186,11 +2186,11 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- Section 2: Signed Contract Document -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-link"></i> Секция 2 — Подписанный договор (ссылка)
           </div>
-          <div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd">
+          <div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd">
             <i class="fas fa-info-circle" style="margin-right:5px"></i>
             Укажите ссылку на подписанный обеими сторонами PDF договор (Google Drive, SharePoint, OneDrive, корпоративный сервер и т.д.)
           </div>
@@ -2201,16 +2201,16 @@ function buildTaskForm(task, client) {
             </div>
           </div>
           ${!isCompleted ? `
-          <button type="button" onclick="obViewContract()" style="margin-top:4px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+          <button type="button" onclick="obViewContract()" style="margin-top:4px;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.35);color:#5eead4;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">
             <i class="fas fa-eye"></i> Предпросмотр договора
           </button>` : `
-          <button type="button" onclick="obViewContract()" style="margin-top:4px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+          <button type="button" onclick="obViewContract()" style="margin-top:4px;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.35);color:#5eead4;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">
             <i class="fas fa-eye"></i> Открыть договор
           </button>`}
         </div>
 
         <!-- Section 3: Amendments -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#8b5cf6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-file-alt"></i> Секция 3 — Дополнительные соглашения
           </div>
@@ -2218,7 +2218,7 @@ function buildTaskForm(task, client) {
             ${_obRenderSavedAmendments(savedAmendments, isCompleted)}
           </div>
           ${!isCompleted ? `
-          <div style="background:#1c2333;border-radius:8px;padding:10px;margin-bottom:8px" id="ob_amend_input_row">
+          <div style="background:#1c3332;border-radius:8px;padding:10px;margin-bottom:8px" id="ob_amend_input_row">
             <div style="font-size:11px;color:#8b5cf6;font-weight:700;margin-bottom:8px">Новое доп. соглашение:</div>
             <div style="display:grid;grid-template-columns:90px 130px 1fr 200px;gap:8px;align-items:end">
               <div><label style="${labelStyle}">Номер ДС</label>
@@ -2241,7 +2241,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- Section 4: Activation -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-user-check"></i> Секция 4 — Активация клиента
           </div>
@@ -2263,12 +2263,12 @@ function buildTaskForm(task, client) {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             ${[
               ['Статус клиента', 'Active ✅', '#22c55e'],
-              ['Онбординг', 'Completed 🏁', '#3b82f6'],
+              ['Онбординг', 'Completed 🏁', '#14b8a6'],
               [`AML Review (${client.riskRating})`, amlDate, client.riskRating==='High'?'#ef4444':'#f97316'],
               ['Ре-классификация', reClassDate, '#8b5cf6'],
             ].map(([l,v,c]) => `
               <div style="background:#0f1623;border-radius:6px;padding:8px 10px">
-                <div style="font-size:10px;color:#5a6b8a;margin-bottom:2px">${l}</div>
+                <div style="font-size:10px;color:#5a8a85;margin-bottom:2px">${l}</div>
                 <div style="font-weight:700;color:${c};font-size:12px">${v}</div>
               </div>`).join('')}
           </div>
@@ -2285,18 +2285,18 @@ function buildTaskForm(task, client) {
 
       html += `
         <!-- DD Risk carry-over -->
-        ${ddRisk ? `<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:8px">
-          <i class="fas fa-link" style="color:#3b82f6;flex-shrink:0"></i>
+        ${ddRisk ? `<div style="background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-link" style="color:#14b8a6;flex-shrink:0"></i>
           Из AML/KYC (2.2): <b>Риск — ${ddRisk}</b>
         </div>` : ''}
 
         <!-- LP type + policy notice -->
-        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px">
-          <i class="fas fa-id-card" style="color:#3b82f6"></i>
-          <span>Тип LP: <b style="color:#60a5fa">${statusLabel(client.type)}</b> · LP Type: <b style="color:#60a5fa">${client.lpType||'HNWI'}</b></span>
+        <div style="background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px">
+          <i class="fas fa-id-card" style="color:#14b8a6"></i>
+          <span>Тип LP: <b style="color:#5eead4">${statusLabel(client.type)}</b> · LP Type: <b style="color:#5eead4">${client.lpType||'HNWI'}</b></span>
         </div>
 
-        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
+        <div style="background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
           <i class="fas fa-info-circle" style="margin-right:6px"></i>
           Компания принимает LP с категорией <b>Qualified Investor</b> или <b>Professional Investor</b>.
           Критерии квалификации аналогичны критериям Professional Client.
@@ -2307,8 +2307,8 @@ function buildTaskForm(task, client) {
 
         ${isIndivLP ? `
         <!-- ══ INDIVIDUAL LP: Qualified Investor — any 1 of 3 ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-user-tie"></i> Критерии Qualified Investor — физическое лицо (LP)
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:10px">Достаточно выполнения <b>любого 1</b> из 3 критериев</div>
@@ -2323,13 +2323,13 @@ function buildTaskForm(task, client) {
               '③ Проф. квалификация / опыт ≥ 3 лет (CFA / CPA / FRM / senior mgmt / portfolio mgmt / trading)',
               ['Нет','Да'], fd.indExperience3y, disabledAttr, selectStyle, labelStyle)}
           </div>
-          <div id="lpScoreInd_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c2333;color:#64748b">
+          <div id="lpScoreInd_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c3332;color:#64748b">
             <i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта
           </div>
         </div>` : `
         <!-- ══ CORPORATE LP: Qualified Investor — any 1 of 4 ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-building"></i> Критерии Qualified Investor — юридическое лицо (LP)
           </div>
           <div style="font-size:11px;color:#64748b;margin-bottom:10px">Достаточно выполнения <b>любого 1</b> из 4 критериев (или субкритерия IV)</div>
@@ -2345,7 +2345,7 @@ function buildTaskForm(task, client) {
               ['Нет','Да'], fd.corpRegulated, disabledAttr, selectStyle, labelStyle)}
           </div>
           <!-- Sub-criterion IV: large corp 2-of-3 -->
-          <div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:12px">
+          <div style="background:#1c3332;border-radius:8px;padding:10px 12px;margin-bottom:12px">
             <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;font-weight:700">
               ④ Крупная корпорация — необходимо выполнение <b>2 из 3</b> подкритериев:
             </div>
@@ -2361,13 +2361,13 @@ function buildTaskForm(task, client) {
                 ['Нет','Да'], fd.corpEmployees50, disabledAttr, selectStyle, labelStyle)}
             </div>
           </div>
-          <div id="lpScoreCorp_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c2333;color:#64748b">
+          <div id="lpScoreCorp_${tid}" style="padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;background:#1c3332;color:#64748b">
             <i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта
           </div>
         </div>`}
 
         <!-- ══ Qualification result + FM-specific fields ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-check-double"></i> Итог квалификации LP
           </div>
@@ -2382,7 +2382,7 @@ function buildTaskForm(task, client) {
           <input type="number" id="f_commitmentAmount" value="${fd.commitmentAmount||client.commitment||''}" ${disabledAttr} style="${inputStyle}" placeholder="1000000" /></div>
 
         <!-- ══ Client notification ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-bell"></i> Уведомление LP
           </div>
@@ -2403,12 +2403,12 @@ function buildTaskForm(task, client) {
       const qualResult = prevQual?.formData?.f_lpQualResult || '';
 
       html += `
-        ${prevQual ? `<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:8px">
-          <i class="fas fa-link" style="color:#3b82f6;flex-shrink:0"></i>
+        ${prevQual ? `<div style="background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-link" style="color:#14b8a6;flex-shrink:0"></i>
           Квалификация LP (3.1): <b style="color:${qualResult.includes('Не')?'#ef4444':'#22c55e'}">${qualResult||'—'}</b>
         </div>` : ''}
 
-        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
+        <div style="background:rgba(20,184,166,0.06);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd">
           <i class="fas fa-info-circle" style="margin-right:6px"></i>
           FM: инвестиционный профиль LP для определения соответствия стратегии фонда (Fund Suitability для FM — оценка пригодности инвестиционной стратегии для конкретного LP).
         </div>
@@ -2417,7 +2417,7 @@ function buildTaskForm(task, client) {
           <input type="date" id="f_profileDate" value="${fd.profileDate||today()}" ${disabledAttr} style="${inputStyle}" /></div>
 
         <!-- Инвестиционный профиль LP -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px">
             <i class="fas fa-chart-pie" style="margin-right:5px"></i>Инвестиционный профиль LP
           </div>
@@ -2430,7 +2430,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- Соответствие стратегии фонда -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px">
             <i class="fas fa-bullseye" style="margin-right:5px"></i>Соответствие стратегии фонда
           </div>
@@ -2461,9 +2461,9 @@ function buildTaskForm(task, client) {
 
       html += `
         <!-- Carry-over banners -->
-        ${prevQual ? `<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px">
-          <i class="fas fa-link" style="color:#3b82f6;flex-shrink:0"></i>
-          LP Квалификация (3.1): <b style="color:#60a5fa">${qualResult||'—'}</b>
+        ${prevQual ? `<div style="background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:8px">
+          <i class="fas fa-link" style="color:#14b8a6;flex-shrink:0"></i>
+          LP Квалификация (3.1): <b style="color:#5eead4">${qualResult||'—'}</b>
         </div>` : ''}
         ${prevProfile ? `<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:8px">
           <i class="fas fa-link" style="color:#22c55e;flex-shrink:0"></i>
@@ -2471,14 +2471,14 @@ function buildTaskForm(task, client) {
         </div>` : ''}
 
         <!-- SA info banner -->
-        <div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd;display:flex;align-items:center;gap:8px">
+        <div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:12px;color:#93c5fd;display:flex;align-items:center;gap:8px">
           <i class="fas fa-info-circle" style="flex-shrink:0"></i>
           <span>SA служит юридическим основанием для юристов при составлении <b>LP Agreement</b>. После подписания SA → ссылка на LP Agreement фиксируется в задаче 5.1.</span>
         </div>
 
         <!-- ══ Section 1: SA Identification ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-file-signature"></i> Секция 1 — Реквизиты Subscription Agreement
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -2493,12 +2493,12 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 2: LP данные ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#8b5cf6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-user-tie"></i> Секция 2 — LP: данные подписанта
           </div>
-          <div style="background:#1c2333;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#94a3b8">
-            <b style="color:#c4b5fd">${client.name}</b> · ${client.type} · Commitment: <b style="color:#60a5fa">${fmtCurrency(client.commitment||0, currencyForFundId(activeFundId))}</b>
+          <div style="background:#1c3332;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#94a3b8">
+            <b style="color:#c4b5fd">${client.name}</b> · ${client.type} · Commitment: <b style="color:#5eead4">${fmtCurrency(client.commitment||0, currencyForFundId(activeFundId))}</b>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="${formGroupStyle}"><label style="${labelStyle}">ФИО Директора / CEO LP (подписант) *</label>
@@ -2511,7 +2511,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 3: Коммерческие условия ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-dollar-sign"></i> Секция 3 — Коммерческие условия
           </div>
@@ -2526,7 +2526,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 4: Банковские реквизиты LP ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-university"></i> Секция 4 — Банковские реквизиты LP (для перечисления)
           </div>
@@ -2549,7 +2549,7 @@ function buildTaskForm(task, client) {
         </div>
 
         <!-- ══ Section 5: Статус подписания ══ -->
-        <div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-signature"></i> Секция 5 — Статус подписания SA
           </div>
@@ -2562,7 +2562,7 @@ function buildTaskForm(task, client) {
         <div style="${formGroupStyle}"><label style="${labelStyle}">Комментарий RM</label>
           <textarea id="f_rmComment" rows="2" ${disabledAttr} style="${inputStyle};resize:vertical">${fd.rmComment||''}</textarea></div>
 
-        <div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:10px 14px;font-size:11px;color:#93c5fd">
+        <div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.15);border-radius:8px;padding:10px 14px;font-size:11px;color:#93c5fd">
           <i class="fas fa-info-circle" style="margin-right:5px"></i>
           После завершения: SA попадает в <b>Реестр договоров</b>. Юристы используют SA для составления LP Agreement → ссылка на LPA фиксируется в задаче <b>5.1</b>.
         </div>`;
@@ -2570,7 +2570,7 @@ function buildTaskForm(task, client) {
     }
 
     default:
-      html += `<div style="padding:40px;text-align:center;color:#8a9bbf">Форма: ${task.formKey}</div>`;
+      html += `<div style="padding:40px;text-align:center;color:#8abfbb">Форма: ${task.formKey}</div>`;
   }
 
   const pdfBtn = obTaskPdfButtonHtml(task, client);
@@ -2606,7 +2606,7 @@ function buildTaskForm(task, client) {
     const submitLabel  = wallBlocked ? 'Заблокировано' : 'Завершить задачу';
     const submitTitle  = wallBlocked ? 'title="Китайская стена: запрещено"' : '';
     html += `
-      <div style="padding-top:14px;border-top:1px solid #2a3448;margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
+      <div style="padding-top:14px;border-top:1px solid #2a4846;margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
         ${isDocForm ? `<span id="obSubmitDocHint" style="font-size:11px;color:#eab308;flex:1;display:none">
           <i class="fas fa-exclamation-triangle" style="margin-right:4px"></i>Получите все обязательные документы
         </span>` : ''}
@@ -2679,7 +2679,7 @@ const _aiDocQueue = {};
 function aiDocQueueHtml(taskId) {
   const docs = _aiDocQueue[taskId] || [];
   return docs.map(d => `
-    <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#93c5fd;border-radius:6px;padding:3px 8px;font-size:11px">
+    <span style="display:inline-flex;align-items:center;gap:6px;background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.25);color:#93c5fd;border-radius:6px;padding:3px 8px;font-size:11px">
       <i class="fas fa-file"></i>${escapeHtml(d.name)}
       <button type="button" onclick="removeAiDoc(${taskId}, ${d.id})" title="Убрать из очереди"
         style="background:none;border:none;color:#93c5fd;cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
@@ -3367,13 +3367,13 @@ function _obRenderSavedAmendments(arr, isCompleted) {
     return '<div style="font-size:12px;color:#4a5568;padding:8px;text-align:center">Доп. соглашений нет</div>';
   }
   return arr.map(function(am, i) {
-    var urlCell = am.url ? '<a href="' + escapeAttr(resolveDocUrl(am.url)) + '" target="_blank" style="color:#60a5fa">' + escapeHtml(am.url) + '</a>' : '—';
+    var urlCell = am.url ? '<a href="' + escapeAttr(resolveDocUrl(am.url)) + '" target="_blank" style="color:#5eead4">' + escapeHtml(am.url) + '</a>' : '—';
     var delBtn  = isCompleted ? '' : '<button type="button" onclick="obRemoveAmendment(' + i + ')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px">🗑</button>';
-    return '<div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c2333;border-radius:8px;padding:8px 10px" data-amend-idx="' + i + '">'
+    return '<div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c3332;border-radius:8px;padding:8px 10px" data-amend-idx="' + i + '">'
       + '<div style="font-size:11px;font-weight:700;color:#c4b5fd">' + escapeHtml(am.num || '—') + '</div>'
       + '<div style="font-size:11px;color:#94a3b8">' + (am.date || '—') + '</div>'
       + '<div style="font-size:11px;color:#e2e8f0">' + (escapeHtml(am.description) || '—') + '</div>'
-      + '<div style="font-size:11px;color:#60a5fa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + urlCell + '</div>'
+      + '<div style="font-size:11px;color:#5eead4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + urlCell + '</div>'
       + delBtn + '</div>';
   }).join('');
 }
@@ -3387,7 +3387,7 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
   var dis    = disabledAttr || '';
   var previewBtnLabel = isCompleted ? 'Открыть LPA' : 'Предпросмотр LPA';
   var amendInputBlock = isCompleted ? '' :
-    '<div style="background:#1c2333;border-radius:8px;padding:10px;margin-bottom:8px" id="ob_amend_input_row">'
+    '<div style="background:#1c3332;border-radius:8px;padding:10px;margin-bottom:8px" id="ob_amend_input_row">'
     + '<div style="font-size:11px;color:#8b5cf6;font-weight:700;margin-bottom:8px">Новое доп. соглашение:</div>'
     + '<div style="display:grid;grid-template-columns:90px 130px 1fr 200px;gap:8px;align-items:end">'
     + '<div><label style="' + labelStyle + '">Номер ДС</label><input type="text" id="ob_amend_num" style="' + inputStyle + '" placeholder="ДС-1" /></div>'
@@ -3400,19 +3400,19 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
 
   return ''
     // Section 1: LPA URL
-    + '<div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">'
-    + '<div style="font-size:11px;font-weight:800;color:#3b82f6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-link"></i> Секция 1 — Соглашение с LP (ссылка на LPA)</div>'
-    + '<div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd"><i class="fas fa-info-circle" style="margin-right:5px"></i>Вставьте ссылку на подписанный LP Agreement (LPA), подготовленный юристами на основе Subscription Agreement.</div>'
+    + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
+    + '<div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-link"></i> Секция 1 — Соглашение с LP (ссылка на LPA)</div>'
+    + '<div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd"><i class="fas fa-info-circle" style="margin-right:5px"></i>Вставьте ссылку на подписанный LP Agreement (LPA), подготовленный юристами на основе Subscription Agreement.</div>'
     + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">🔗 Ссылка на подписанный LP Agreement (LPA) *</label>'
     + '<div style="display:flex;gap:6px">'
     + '<input type="url" id="f_lpaUrl" value="' + (fd.lpaUrl || '') + '" ' + dis + ' style="' + inputStyle + '" placeholder="https://drive.google.com/file/d/... или загрузите файл" />'
     + (dis ? '' : docUploadBtn('f_lpaUrl'))
     + '</div></div>'
-    + '<button type="button" onclick="obViewLpaContract()" style="margin-top:4px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-eye"></i> ' + previewBtnLabel + '</button>'
+    + '<button type="button" onclick="obViewLpaContract()" style="margin-top:4px;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.35);color:#5eead4;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-eye"></i> ' + previewBtnLabel + '</button>'
     + '</div>'
 
     // Section 2: Key LPA Parameters
-    + '<div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">'
+    + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
     + '<div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-file-signature"></i> Секция 2 — Ключевые параметры LPA</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Номер SA / LPA *</label><input type="text" id="f_contractNum" value="' + saNum + '" ' + dis + ' style="' + inputStyle + '" placeholder="SA-2025-001" /></div>'
@@ -3427,7 +3427,7 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
     + '</div>'
 
     // Section 3: Amendments
-    + '<div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">'
+    + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
     + '<div style="font-size:11px;font-weight:800;color:#8b5cf6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-file-alt"></i> Секция 3 — Дополнительные соглашения (к SA / LPA)</div>'
     + '<div id="ob_amendments_list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">'
     + _obRenderSavedAmendments(savedAmendments, isCompleted)
@@ -3436,7 +3436,7 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
     + '</div>'
 
     // Section 4: Activation
-    + '<div style="background:#0f1623;border:1px solid #2a3448;border-radius:10px;padding:14px;margin-bottom:14px">'
+    + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
     + '<div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-user-check"></i> Секция 4 — Активация LP</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Дата активации *</label><input type="date" id="f_activationDate" value="' + (fd.activationDate || today()) + '" ' + dis + ' style="' + inputStyle + '" /></div>'
@@ -3483,19 +3483,19 @@ function _obRenderAmendments(taskId) {
   if (!list) return;
   list.setAttribute('data-task-id', taskId || 0);
   const ams = window._obAmendments || [];
-  const inputStyle = 'background:#1c2333;border:1px solid #2a3448;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box';
-  const labelStyle = 'font-size:10px;color:#8a9bbf;margin-bottom:3px;display:block;text-transform:uppercase;font-weight:700';
+  const inputStyle = 'background:#1c3332;border:1px solid #2a4846;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px;width:100%;box-sizing:border-box';
+  const labelStyle = 'font-size:10px;color:#8abfbb;margin-bottom:3px;display:block;text-transform:uppercase;font-weight:700';
   if (ams.length === 0) {
     list.innerHTML = '<div style="font-size:12px;color:#4a5568;padding:8px;text-align:center">Доп. соглашений нет</div>';
     return;
   }
   list.innerHTML = ams.map((am, i) => `
-    <div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c2333;border-radius:8px;padding:8px 10px" data-amend-idx="${i}">
+    <div style="display:grid;grid-template-columns:80px 120px 1fr 200px auto;gap:8px;align-items:center;background:#1c3332;border-radius:8px;padding:8px 10px" data-amend-idx="${i}">
       <div style="font-size:11px;font-weight:700;color:#c4b5fd">${escapeHtml(am.num)||'—'}</div>
       <div style="font-size:11px;color:#94a3b8">${am.date||'—'}</div>
       <div style="font-size:11px;color:#e2e8f0">${escapeHtml(am.description)||'—'}</div>
-      <div style="font-size:11px;color:#60a5fa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        ${am.url ? `<a href="${escapeAttr(am.url)}" target="_blank" style="color:#60a5fa">${escapeHtml(am.url)}</a>` : '—'}
+      <div style="font-size:11px;color:#5eead4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        ${am.url ? `<a href="${escapeAttr(am.url)}" target="_blank" style="color:#5eead4">${escapeHtml(am.url)}</a>` : '—'}
       </div>
       <button type="button" onclick="obRemoveAmendment(${i})" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:11px">🗑</button>
     </div>`).join('');
@@ -3528,13 +3528,13 @@ function _obOpenPreviewModal(previewUrl, originalUrl) {
   modal.id = 'ob_contract_modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
-    <div style="width:100%;max-width:960px;height:85vh;background:#1c2333;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;border:1px solid #2a3448">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f1623;border-bottom:1px solid #2a3448;flex-shrink:0">
+    <div style="width:100%;max-width:960px;height:85vh;background:#1c3332;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;border:1px solid #2a4846">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f1623;border-bottom:1px solid #2a4846;flex-shrink:0">
         <div style="font-size:13px;font-weight:700;color:#e2e8f0;display:flex;align-items:center;gap:8px">
           <i class="fas fa-file-pdf" style="color:#ef4444"></i> Просмотр договора
         </div>
         <div style="display:flex;gap:8px">
-          <a href="${originalUrl}" target="_blank" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+          <a href="${originalUrl}" target="_blank" style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
             <i class="fas fa-external-link-alt"></i> Открыть в новой вкладке
           </a>
           <button onclick="document.getElementById('ob_contract_modal').remove()" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">
@@ -3546,8 +3546,8 @@ function _obOpenPreviewModal(previewUrl, originalUrl) {
       <div id="ob_contract_fallback" style="display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:40px">
         <i class="fas fa-exclamation-triangle" style="font-size:32px;color:#f97316"></i>
         <div style="font-size:14px;color:#e2e8f0;text-align:center">Предпросмотр недоступен (X-Frame-Options)</div>
-        <div style="font-size:12px;color:#8a9bbf;text-align:center">Нажмите «Открыть в новой вкладке» для просмотра</div>
-        <a href="${originalUrl}" target="_blank" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;text-decoration:none">
+        <div style="font-size:12px;color:#8abfbb;text-align:center">Нажмите «Открыть в новой вкладке» для просмотра</div>
+        <a href="${originalUrl}" target="_blank" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;text-decoration:none">
           <i class="fas fa-external-link-alt" style="margin-right:6px"></i>Открыть договор
         </a>
       </div>
@@ -4016,7 +4016,7 @@ function obClassScoreInit(taskId, clientType) {
       const el = document.getElementById(id); return el && el.value === 'Да';
     }).length;
     if (yes === 0) {
-      box.style.background = '#1c2333'; box.style.color = '#64748b';
+      box.style.background = '#1c3332'; box.style.color = '#64748b';
       box.innerHTML = '<i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта';
     } else {
       box.style.background = 'rgba(34,197,94,0.1)'; box.style.color = '#22c55e';
@@ -4041,7 +4041,7 @@ function obClassScoreInit(taskId, clientType) {
     const largeCorp = subYes >= 2;
     const qualifies = simpleYes >= 1 || largeCorp;
     if (simpleYes === 0 && subYes === 0) {
-      box.style.background = '#1c2333'; box.style.color = '#64748b';
+      box.style.background = '#1c3332'; box.style.color = '#64748b';
       box.innerHTML = '<i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта';
     } else if (qualifies) {
       const reason = simpleYes >= 1
@@ -4075,7 +4075,7 @@ function obClassScoreInit(taskId, clientType) {
     const qualifies = simpleYes >= 1 || largeCorp;
     const anyFilled = simpleYes > 0 || andYes > 0;
     if (!anyFilled) {
-      box.style.background = '#1c2333'; box.style.color = '#64748b';
+      box.style.background = '#1c3332'; box.style.color = '#64748b';
       box.innerHTML = '<i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта';
     } else if (qualifies) {
       const reason = simpleYes >= 1
@@ -4147,7 +4147,7 @@ function obLpQualScoreInit(taskId, clientType) {
       const el = document.getElementById(id); return el && el.value === 'Да';
     }).length;
     if (yes === 0) {
-      box.style.background = '#1c2333'; box.style.color = '#64748b';
+      box.style.background = '#1c3332'; box.style.color = '#64748b';
       box.innerHTML = '<i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта';
     } else {
       box.style.background = 'rgba(34,197,94,0.1)'; box.style.color = '#22c55e';
@@ -4172,7 +4172,7 @@ function obLpQualScoreInit(taskId, clientType) {
     const largeCorp = subYes >= 2;
     const qualifies = simpleYes >= 1 || largeCorp;
     if (simpleYes === 0 && subYes === 0) {
-      box.style.background = '#1c2333'; box.style.color = '#64748b';
+      box.style.background = '#1c3332'; box.style.color = '#64748b';
       box.innerHTML = '<i class="fas fa-calculator" style="margin-right:5px"></i>Выберите критерии для расчёта';
     } else if (qualifies) {
       const reason = simpleYes >= 1
@@ -4747,13 +4747,13 @@ function obGenerateDDReport(taskId) {
   const sofSection = isFM ? `
     <div style="margin-bottom:28px">
       <h3 style="font-size:13px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:.5px;
-                 border-bottom:2px solid #3b82f6;padding-bottom:6px;margin-bottom:14px">
+                 border-bottom:2px solid #14b8a6;padding-bottom:6px;margin-bottom:14px">
         Section 4 — Source of Funds / Wealth Verification (LP)
       </h3>
       <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">
         <thead><tr style="background:#eff6ff">
-          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;border-bottom:2px solid #dbeafe">Verification Item</th>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;border-bottom:2px solid #dbeafe">Result</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#14b8a6;text-transform:uppercase;border-bottom:2px solid #dbeafe">Verification Item</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#14b8a6;text-transform:uppercase;border-bottom:2px solid #dbeafe">Result</th>
         </tr></thead>
         <tbody>
           <tr><td style="padding:7px 12px;border-bottom:1px solid #e2e8f0;font-size:12px">Source of Funds Verified</td>
@@ -5040,17 +5040,17 @@ function openNewObClientModal(editId) {
 
   // Update modal header title
   var hdr = document.getElementById('obNewModalTitle');
-  if (hdr) hdr.innerHTML = '<i class="fas fa-' + (isEdit ? 'edit' : 'user-plus') + '" style="color:#3b82f6;margin-right:8px"></i>' + (isEdit ? 'Редактировать: ' + client.name : 'Новый клиент');
+  if (hdr) hdr.innerHTML = '<i class="fas fa-' + (isEdit ? 'edit' : 'user-plus') + '" style="color:#14b8a6;margin-right:8px"></i>' + (isEdit ? 'Редактировать: ' + client.name : 'Новый клиент');
 
-  var cfaBorder = isFM ? '#2a3448' : '#8b5cf6';
+  var cfaBorder = isFM ? '#2a4846' : '#8b5cf6';
   var cfaBg     = isFM ? 'transparent' : 'rgba(139,92,246,0.12)';
-  var cfaColor  = isFM ? '#8a9bbf' : '#a78bfa';
-  var fmBorder  = isFM ? '#3b82f6' : '#2a3448';
-  var fmBg      = isFM ? 'rgba(59,130,246,0.12)' : 'transparent';
-  var fmColor   = isFM ? '#60a5fa' : '#8a9bbf';
+  var cfaColor  = isFM ? '#8abfbb' : '#a78bfa';
+  var fmBorder  = isFM ? '#14b8a6' : '#2a4846';
+  var fmBg      = isFM ? 'rgba(20,184,166,0.12)' : 'transparent';
+  var fmColor   = isFM ? '#5eead4' : '#8abfbb';
 
-  var inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
-  var labelStyle = 'font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase';
+  var inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
+  var labelStyle = 'font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase';
 
   function sel(id, label, opts, val) {
     var v = val || opts[0];
@@ -5089,7 +5089,7 @@ function openNewObClientModal(editId) {
 
     // CF&A fields
     + '<div id="obNewFieldsCFA" style="display:' + (isFM ? 'none' : 'block') + ';margin-top:12px">'
-    +   '<div style="font-size:11px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-top:1px solid #2a3448;padding-top:10px">'
+    +   '<div style="font-size:11px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-top:1px solid #2a4846;padding-top:10px">'
     +     '<i class="fas fa-briefcase" style="margin-right:5px"></i>CF&A — тип услуги и классификация клиента'
     +   '</div>'
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
@@ -5100,7 +5100,7 @@ function openNewObClientModal(editId) {
     +         '<option value="Arranging"' + ((client && client.serviceType === 'Arranging') ? ' selected' : '') + '>Arranging</option>'
     +         '<option value="Both"' + ((client && client.serviceType === 'Both') ? ' selected' : '') + '>Both</option>'
     +       '</select>'
-    +       '<div style="font-size:10px;color:#5a6b8a;margin-top:3px">Advising → Suitability · Arranging → Appropriateness</div>'
+    +       '<div style="font-size:10px;color:#5a8a85;margin-top:3px">Advising → Suitability · Arranging → Appropriateness</div>'
     +     '</div>'
     +     '<div>'
     +       '<label style="' + labelStyle + '">Классификация клиента</label>'
@@ -5115,7 +5115,7 @@ function openNewObClientModal(editId) {
 
     // FM fields
     + '<div id="obNewFieldsFM" style="display:' + (isFM ? 'block' : 'none') + ';margin-top:12px">'
-    +   '<div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-top:1px solid #2a3448;padding-top:10px">'
+    +   '<div style="font-size:11px;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;border-top:1px solid #2a4846;padding-top:10px">'
     +     '<i class="fas fa-landmark" style="margin-right:5px"></i>FM — параметры Limited Partner'
     +   '</div>'
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
@@ -5130,7 +5130,7 @@ function openNewObClientModal(editId) {
     +     '<div style="grid-column:1/-1">'
     +       '<label style="' + labelStyle + '">Commitment (' + currencyForFundId(activeFundId) + ') *</label>'
     +       '<input type="number" id="ob_commitment" value="' + ((client && client.commitment) || '') + '" placeholder="1000000" style="' + inputStyle + '" />'
-    +       '<div style="font-size:10px;color:#5a6b8a;margin-top:3px">Минимум $500K для Qualified Investor</div>'
+    +       '<div style="font-size:10px;color:#5a8a85;margin-top:3px">Минимум $500K для Qualified Investor</div>'
     +     '</div>'
     +   '</div>'
     + '</div>'
@@ -5142,13 +5142,13 @@ function openNewObClientModal(editId) {
     + '</div>'
 
     // Footer buttons
-    + '<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">'
     +   '<button type="button" onclick="closeObNewModal()"'
-    +     ' style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">'
+    +     ' style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">'
     +     'Отмена'
     +   '</button>'
     +   '<button type="button" onclick="obSubmitNewClient()"'
-    +     ' style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">'
+    +     ' style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">'
     +     '<i class="fas fa-' + (isEdit ? 'save' : 'user-plus') + '" style="margin-right:6px"></i>'
     +     (isEdit ? 'Сохранить' : 'Создать клиента')
     +   '</button>'
@@ -5171,8 +5171,8 @@ function obSubmitNewClient() {
 
 function obNewSelect(id, label, options, selected) {
   return `<div>
-    <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">${label}</label>
-    <select id="${id}" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+    <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">${label}</label>
+    <select id="${id}" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
       ${options.map(o => `<option value="${o}" ${(selected||options[0])===o?'selected':''}>${statusLabel(o)}</option>`).join('')}
     </select>
   </div>`;
@@ -5186,14 +5186,14 @@ function switchObNewDirection(dir) {
   const btnCFA = document.getElementById('obDirBtnCFA');
   const btnFM  = document.getElementById('obDirBtnFM');
   if (btnCFA) {
-    btnCFA.style.border      = dir==='CF&A' ? '2px solid #8b5cf6' : '2px solid #2a3448';
+    btnCFA.style.border      = dir==='CF&A' ? '2px solid #8b5cf6' : '2px solid #2a4846';
     btnCFA.style.background  = dir==='CF&A' ? 'rgba(139,92,246,0.12)' : 'transparent';
-    btnCFA.style.color       = dir==='CF&A' ? '#a78bfa' : '#8a9bbf';
+    btnCFA.style.color       = dir==='CF&A' ? '#a78bfa' : '#8abfbb';
   }
   if (btnFM) {
-    btnFM.style.border       = dir==='FM' ? '2px solid #3b82f6' : '2px solid #2a3448';
-    btnFM.style.background   = dir==='FM' ? 'rgba(59,130,246,0.12)' : 'transparent';
-    btnFM.style.color        = dir==='FM' ? '#60a5fa' : '#8a9bbf';
+    btnFM.style.border       = dir==='FM' ? '2px solid #14b8a6' : '2px solid #2a4846';
+    btnFM.style.background   = dir==='FM' ? 'rgba(20,184,166,0.12)' : 'transparent';
+    btnFM.style.color        = dir==='FM' ? '#5eead4' : '#8abfbb';
   }
   // Показать/скрыть блоки полей
   const cfaFields = document.getElementById('obNewFieldsCFA');
@@ -5326,7 +5326,7 @@ function renderRestrictedListPage() {
               <tr>
                 <td style="font-weight:700;color:#ef4444">${escapeHtml(r.company)}</td>
                 <td style="font-size:12px">${r.sector}</td>
-                <td style="font-size:12px;color:#3b82f6">${r.fund}</td>
+                <td style="font-size:12px;color:#14b8a6">${r.fund}</td>
                 <td style="font-weight:700">${r.ownershipPct}%</td>
                 <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;
                   background:${r.restrictionType==='Full Restriction'?'rgba(239,68,68,0.12)':'rgba(249,115,22,0.12)'};
@@ -5334,7 +5334,7 @@ function renderRestrictedListPage() {
                 <td>${r.cfaAllowed
                   ? '<span style="color:#22c55e;font-weight:700">✅ Да (с согласованием)</span>'
                   : '<span style="color:#ef4444;font-weight:700">❌ Нет</span>'}</td>
-                <td style="font-size:11px;color:#8a9bbf">${r.addedAt} · ${r.addedBy}</td>
+                <td style="font-size:11px;color:#8abfbb">${r.addedAt} · ${r.addedBy}</td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -5346,7 +5346,7 @@ function renderRestrictedListPage() {
       <div class="card-header">
         <span class="card-title"><i class="fas fa-exclamation-triangle" style="color:#f97316;margin-right:6px"></i>Реестр конфликтов интересов (COI)</span>
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:12px;color:#8a9bbf">${coiRegistry.length} записей</span>
+          <span style="font-size:12px;color:#8abfbb">${coiRegistry.length} записей</span>
           <button onclick="openAddCoiModal()"
             style="background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.3);color:#fb923c;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
             <i class="fas fa-plus"></i> Добавить запись
@@ -5385,8 +5385,8 @@ function openAddRestrictedModal() {
   if (overlay) overlay.style.display = 'block';
   document.body.style.overflow = 'hidden';
 
-  const inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
-  const labelStyle = 'font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase';
+  const inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
+  const labelStyle = 'font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase';
 
   document.getElementById('restrictedAddModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -5428,9 +5428,9 @@ function openAddRestrictedModal() {
         </select>
       </div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
       <button type="button" onclick="closeAddRestrictedModal()"
-        style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
+        style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
         Отмена
       </button>
       <button type="button" onclick="saveNewRestrictedEntry()"
@@ -5495,8 +5495,8 @@ function openAddCoiModal() {
   if (overlay) overlay.style.display = 'block';
   document.body.style.overflow = 'hidden';
 
-  const inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
-  const labelStyle = 'font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase';
+  const inputStyle = 'width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
+  const labelStyle = 'font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase';
 
   document.getElementById('coiAddModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -5530,9 +5530,9 @@ function openAddCoiModal() {
         <input type="text" id="coi_responsible" value="CO" style="${inputStyle}" />
       </div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
       <button type="button" onclick="closeAddCoiModal()"
-        style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
+        style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
         Отмена
       </button>
       <button type="button" onclick="saveNewCoiEntry()"
@@ -5683,9 +5683,9 @@ function renderEngagementsPage() {
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <input type="text" placeholder="🔍 Поиск по клиенту, договору..." value="${engFilter}"
         oninput="engFilter=this.value;renderEngagementsPage()"
-        style="flex:1;min-width:180px;background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px" />
+        style="flex:1;min-width:180px;background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px" />
       <select onchange="engStatusFilter=this.value;renderEngagementsPage()"
-        style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
+        style="background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
         <option value="" ${engStatusFilter===''?'selected':''}>Все статусы</option>
         <option value="Active"      ${engStatusFilter==='Active'?'selected':''}>Активен</option>
         <option value="Draft"       ${engStatusFilter==='Draft'?'selected':''}>Черновик</option>
@@ -5693,16 +5693,16 @@ function renderEngagementsPage() {
         <option value="Terminated"  ${engStatusFilter==='Terminated'?'selected':''}>Прекращён</option>
       </select>
       <select onchange="engDirFilter=this.value;renderEngagementsPage()"
-        style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
+        style="background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
         <option value=""    ${engDirFilter===''?'selected':''}>Все направления</option>
         <option value="CFA" ${engDirFilter==='CFA'?'selected':''}>CF&A</option>
         <option value="FM"  ${engDirFilter==='FM'?'selected':''}>FM (LP)</option>
       </select>
       ${(engFilter||engStatusFilter||engDirFilter) ? `<button onclick="engFilter='';engStatusFilter='';engDirFilter='';renderEngagementsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
-      <span style="font-size:11px;color:#5a6b8a;white-space:nowrap">${filtered.length} из ${engagements.length}</span>
+      <span style="font-size:11px;color:#5a8a85;white-space:nowrap">${filtered.length} из ${engagements.length}</span>
       <button onclick="openNewEngagementModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-plus"></i> Новый договор</button>
+        style="background:#14b8a6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-plus"></i> Новый договор</button>
     </div>
 
     <!-- Table -->
@@ -5723,9 +5723,9 @@ function renderEngagementsPage() {
             filtered.map(e => {
               const balance   = (e.invoiced||0) - (e.paid||0);
               const isFM      = e.serviceType === 'LP Investment (FM)';
-              const statusCfg = {Active:{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},Draft:{c:'#8a9bbf',bg:'rgba(100,116,139,0.12)'},Completed:{c:'#3b82f6',bg:'rgba(59,130,246,0.12)'},Terminated:{c:'#ef4444',bg:'rgba(239,68,68,0.12)'}}[e.status]||{c:'#8a9bbf',bg:'rgba(100,116,139,0.12)'};
-              const dirColor  = isFM ? '#3b82f6' : '#8b5cf6';
-              const dirBg     = isFM ? 'rgba(59,130,246,0.12)' : 'rgba(139,92,246,0.12)';
+              const statusCfg = {Active:{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},Draft:{c:'#8abfbb',bg:'rgba(100,116,139,0.12)'},Completed:{c:'#14b8a6',bg:'rgba(20,184,166,0.12)'},Terminated:{c:'#ef4444',bg:'rgba(239,68,68,0.12)'}}[e.status]||{c:'#8abfbb',bg:'rgba(100,116,139,0.12)'};
+              const dirColor  = isFM ? '#14b8a6' : '#8b5cf6';
+              const dirBg     = isFM ? 'rgba(20,184,166,0.12)' : 'rgba(139,92,246,0.12)';
               const dirLabel  = isFM ? 'FM · LP' : 'CF&A';
               const docUrl    = isFM ? (e.lpaUrl||'') : (e.contractUrl||'');
               const signed    = e.signedDate || e.date || '—';
@@ -5733,14 +5733,14 @@ function renderEngagementsPage() {
                 <tr onclick="openEngagementModal(${e.id})" style="cursor:pointer">
                   <td>
                     <div style="font-size:11px;color:#22c55e;font-weight:700">${e.engId}</div>
-                    <div style="font-size:10px;color:#5a6b8a">${e.contractNum}</div>
+                    <div style="font-size:10px;color:#5a8a85">${e.contractNum}</div>
                   </td>
                   <td>
                     <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(e.clientName)}</div>
-                    <div style="font-size:10px;color:#8a9bbf">${e.rm.split('(')[0].trim()}</div>
+                    <div style="font-size:10px;color:#8abfbb">${e.rm.split('(')[0].trim()}</div>
                   </td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${dirBg};color:${dirColor}">${dirLabel}</span>
-                    <div style="font-size:10px;color:#5a6b8a;margin-top:2px">${e.serviceType}</div>
+                    <div style="font-size:10px;color:#5a8a85;margin-top:2px">${e.serviceType}</div>
                   </td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${statusCfg.bg};color:${statusCfg.c}">${statusLabel(e.status)}</span>
                     ${e.activationDate ? `<div style="font-size:9px;color:#22c55e;margin-top:2px">✓ ${e.activationDate}</div>` : ''}
@@ -5748,7 +5748,7 @@ function renderEngagementsPage() {
                   <td style="font-size:12px;color:#94a3b8">${signed}</td>
                   <td>
                     <div style="font-weight:700;color:#22c55e;font-size:13px">${fmtCurrency(e.feeAmount||0, e.currency||'USD')}</div>
-                    <div style="font-size:10px;color:#5a6b8a">${statusLabel(e.feeType)}</div>
+                    <div style="font-size:10px;color:#5a8a85">${statusLabel(e.feeType)}</div>
                   </td>
                   <td style="font-size:12px;color:#f97316">${fmtCurrency(e.invoiced||0, e.currency||'USD')}</td>
                   <td style="font-size:12px;color:#22c55e">${fmtCurrency(e.paid||0, e.currency||'USD')}</td>
@@ -5790,7 +5790,7 @@ function openEngagementModal(engId) {
   let paymentHistoryArr = [];
   try { paymentHistoryArr = e.paymentHistory ? (typeof e.paymentHistory === 'string' ? JSON.parse(e.paymentHistory) : e.paymentHistory) : []; } catch(_) {}
   const docUrl = isFM ? (e.lpaUrl || '') : (e.contractUrl || '');
-  const balanceColor = balance > 0 ? '#ef4444' : balance < 0 ? '#60a5fa' : '#22c55e';
+  const balanceColor = balance > 0 ? '#ef4444' : balance < 0 ? '#5eead4' : '#22c55e';
 
   // Build info rows dynamically (skip empty optional fields)
   const infoRows = [
@@ -5812,7 +5812,7 @@ function openEngagementModal(engId) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       ${infoRows.map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:9px 12px">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
           <div style="font-size:13px;color:#e2e8f0;font-weight:600">${escapeHtml(v)}</div>
         </div>`).join('')}
     </div>
@@ -5820,7 +5820,7 @@ function openEngagementModal(engId) {
     ${docUrl ? `
     <div style="background:#0f1623;border-radius:8px;padding:9px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-left:3px solid #8b5cf6">
       <div style="min-width:0">
-        <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${isFM ? 'LP Agreement (LPA)' : 'Ссылка на договор'}</div>
+        <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${isFM ? 'LP Agreement (LPA)' : 'Ссылка на договор'}</div>
         <div style="font-size:11px;color:#a78bfa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(docUrl.length>65 ? docUrl.slice(0,65)+'…' : docUrl)}</div>
       </div>
       <button onclick="_obOpenPreviewModal('${escapeAttr(docUrl)}','${escapeAttr(docUrl)}')"
@@ -5837,13 +5837,13 @@ function openEngagementModal(engId) {
           <span style="color:#c4b5fd;font-weight:700;min-width:55px">${a.num||'—'}</span>
           <span style="color:#94a3b8;min-width:95px">${a.date||'—'}</span>
           <span style="color:#e2e8f0;flex:1">${escapeHtml(a.description)||'—'}</span>
-          ${a.url ? `<a href="${a.url}" target="_blank" style="color:#60a5fa;font-size:10px"><i class="fas fa-external-link-alt"></i></a>` : ''}
+          ${a.url ? `<a href="${a.url}" target="_blank" style="color:#5eead4;font-size:10px"><i class="fas fa-external-link-alt"></i></a>` : ''}
         </div>`).join('')}
     </div>` : ''}
 
 
     <!-- Financials -->
-    <div style="background:#1c2333;border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="background:#1c3332;border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;margin-bottom:10px">Финансы</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
         ${[
@@ -5853,32 +5853,32 @@ function openEngagementModal(engId) {
           [balance < 0 ? 'Переплата' : 'Остаток', fmtCurrency(Math.abs(balance), e.currency||'USD'), balanceColor],
         ].map(([l,v,c]) => `
           <div style="text-align:center;background:#0f1623;border-radius:8px;padding:10px">
-            <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">${l}</div>
+            <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">${l}</div>
             <div style="font-size:15px;font-weight:800;color:${c}">${v}</div>
           </div>`).join('')}
       </div>
       <div style="margin-top:12px">
-        <div style="font-size:11px;color:#5a6b8a;margin-bottom:4px">Прогресс оплаты</div>
-        <div style="height:6px;background:#2a3448;border-radius:3px">
+        <div style="font-size:11px;color:#5a8a85;margin-bottom:4px">Прогресс оплаты</div>
+        <div style="height:6px;background:#2a4846;border-radius:3px">
           <div style="width:${e.invoiced>0?Math.min(100,Math.round(e.paid/e.invoiced*100)):0}%;height:6px;background:#22c55e;border-radius:3px"></div>
         </div>
       </div>
       <!-- Quick update: payment + deal ref -->
       <div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end;flex-wrap:wrap">
         <div style="flex:1;min-width:110px">
-          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Оплачено" (${currencySymbol(e.currency||'USD')})</div>
+          <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">Обновить "Оплачено" (${currencySymbol(e.currency||'USD')})</div>
           <input type="number" id="engPaidUpdate" value="${e.paid}" min="0"
-            style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
         <div style="flex:1;min-width:110px">
-          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Обновить "Инвойсировано" (${currencySymbol(e.currency||'USD')})</div>
+          <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">Обновить "Инвойсировано" (${currencySymbol(e.currency||'USD')})</div>
           <input type="number" id="engInvoicedUpdate" value="${e.invoiced}" min="0"
-            style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
         <div style="flex:1;min-width:130px">
-          <div style="font-size:10px;color:#5a6b8a;margin-bottom:4px">Deal Ref</div>
+          <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">Deal Ref</div>
           <input type="text" id="engDealRefUpdate" value="${e.dealRef ? e.dealRef.replace(/"/g,'&quot;') : ''}" placeholder="DEAL-XXX-2026"
-            style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
         <button onclick="updateEngPayment(${e.id})"
           style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">
@@ -5897,15 +5897,15 @@ function openEngagementModal(engId) {
         </div>`).join('')}
     </div>` : ''}
 
-    ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c2333;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${escapeHtml(e.notes)}</div>` : ''}
+    ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c3332;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${escapeHtml(e.notes)}</div>` : ''}
 
-    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:12px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:12px;border-top:1px solid #2a4846">
       <button onclick="deleteEngagement(${e.id})"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
         <i class="fas fa-trash"></i> Удалить
       </button>
       <button onclick="closeEngagementModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         Закрыть
       </button>
     </div>`;
@@ -5993,35 +5993,35 @@ function openNewEngagementModal() {
     <div style="font-size:14px;font-weight:800;color:#f1f5f9;margin-bottom:16px">
       <i class="fas fa-file-contract" style="color:#22c55e;margin-right:8px"></i>Новый договор
     </div>
-    <div style="font-size:11px;color:#5a6b8a;margin-bottom:12px">Только для клиентов CF&amp;A — договоры FM (LP Investment) создаются автоматически на этапе онбординга LP.</div>
+    <div style="font-size:11px;color:#5a8a85;margin-bottom:12px">Только для клиентов CF&amp;A — договоры FM (LP Investment) создаются автоматически на этапе онбординга LP.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div style="grid-column:1/-1">
-        <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
-        <select id="eng_clientId" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
+        <select id="eng_clientId" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${clientOptions || '<option value="">— Нет активированных клиентов CF&A —</option>'}
         </select>
       </div>
       ${obNewSelect('eng_serviceType','Тип услуги',['Advising','Arranging','Both'],null)}
       ${obNewSelect('eng_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'],null)}
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Сумма *</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Сумма *</label>
         <input type="number" id="eng_feeAmount" placeholder="50000" min="0"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Валюта *</label>
-        <select id="eng_currency" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Валюта *</label>
+        <select id="eng_currency" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${code==='USD'?' selected':''}>${c.label}</option>`).join('')}
         </select></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
         <input type="date" id="eng_date" value="${today()}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref (опционально)</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref (опционально)</label>
         <input type="text" id="eng_dealRef" placeholder="DEAL-XXX-2026"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
-        <div style="font-size:10px;color:#5a6b8a;margin-top:3px">Если у клиента уже есть договор с тем же Deal Ref, система считает это Dual-Mandate — требует рассмотрения CF Deal Committee.</div></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Примечания</label>
-        <textarea id="eng_notes" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+        <div style="font-size:10px;color:#5a8a85;margin-top:3px">Если у клиента уже есть договор с тем же Deal Ref, система считает это Dual-Mandate — требует рассмотрения CF Deal Committee.</div></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Примечания</label>
+        <textarea id="eng_notes" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
       <button onclick="saveNewEngagement()" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Создать договор
       </button>
@@ -6100,7 +6100,7 @@ function conflictRiskStyle(risk) {
     Medium:   { c: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
     High:     { c: '#f97316', bg: 'rgba(249,115,22,0.12)' },
     Critical: { c: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-  }[risk] || { c: '#8a9bbf', bg: 'rgba(100,116,139,0.12)' };
+  }[risk] || { c: '#8abfbb', bg: 'rgba(100,116,139,0.12)' };
 }
 
 function conflictStatusStyle(status) {
@@ -6108,7 +6108,7 @@ function conflictStatusStyle(status) {
   if (status === 'Escalated') return { c: '#ef4444', bg: 'rgba(239,68,68,0.15)' };
   if (status === 'Rejected') return { c: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
   if (status === 'Approved') return { c: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
-  return { c: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }; // Approved with conditions, etc.
+  return { c: '#14b8a6', bg: 'rgba(20,184,166,0.12)' }; // Approved with conditions, etc.
 }
 
 function renderConflictApprovalsPage() {
@@ -6157,9 +6157,9 @@ function renderConflictApprovalsPage() {
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <input type="text" placeholder="🔍 Поиск по клиенту, deal ref, типу..." value="${conflictFilter}"
         oninput="conflictFilter=this.value;renderConflictApprovalsPage()"
-        style="flex:1;min-width:180px;background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px" />
+        style="flex:1;min-width:180px;background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px" />
       <select onchange="conflictStatusFilter=this.value;renderConflictApprovalsPage()"
-        style="background:#1c2333;border:1px solid #2a3448;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
+        style="background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
         <option value="" ${conflictStatusFilter===''?'selected':''}>Все статусы</option>
         <option value="Pending" ${conflictStatusFilter==='Pending'?'selected':''}>На рассмотрении</option>
         <option value="Escalated" ${conflictStatusFilter==='Escalated'?'selected':''}>Эскалировано (CEO)</option>
@@ -6169,7 +6169,7 @@ function renderConflictApprovalsPage() {
       </select>
       ${(conflictFilter||conflictStatusFilter) ? `<button onclick="conflictFilter='';conflictStatusFilter='';renderConflictApprovalsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
-      <span style="font-size:11px;color:#5a6b8a;white-space:nowrap">${filtered.length} из ${list.length}</span>
+      <span style="font-size:11px;color:#5a8a85;white-space:nowrap">${filtered.length} из ${list.length}</span>
       <button onclick="openNewConflictApprovalModal()"
         style="background:#f97316;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-plus"></i> Завести решение</button>
     </div>
@@ -6196,14 +6196,14 @@ function renderConflictApprovalsPage() {
                 <tr onclick="openConflictApprovalDetail(${a.id})" style="cursor:pointer">
                   <td style="font-weight:700;color:#e2e8f0;font-size:13px">${statusLabel(a.decisionType)}</td>
                   <td style="font-size:12px;color:#94a3b8">${client ? client.name : '—'}</td>
-                  <td style="font-size:11px;color:#5a6b8a">${a.dealRef || '—'}</td>
+                  <td style="font-size:11px;color:#5a8a85">${a.dealRef || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${risk.bg};color:${risk.c}">${statusLabel(a.riskLevel)}</span></td>
                   <td style="font-size:12px;color:#22c55e">${a.feeAmount ? fmtCurrency(a.feeAmount, a.currency||'USD') : '—'}</td>
                   <td style="font-size:11px;color:#94a3b8">${a.decisionMaker || '—'}</td>
-                  <td style="font-size:11px;color:#8a9bbf">${a.requiredTimeline || '—'}</td>
+                  <td style="font-size:11px;color:#8abfbb">${a.requiredTimeline || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${statusLabel(a.status)}</span></td>
-                  <td style="font-size:11px;color:#5a6b8a">${a.decidedAt || '—'}</td>
-                  <td style="font-size:11px;color:#5a6b8a">${a.decidedBy || '—'}</td>
+                  <td style="font-size:11px;color:#5a8a85">${a.decidedAt || '—'}</td>
+                  <td style="font-size:11px;color:#5a8a85">${a.decidedBy || '—'}</td>
                 </tr>`;
             }).join('')}
           </tbody>
@@ -6237,37 +6237,37 @@ function openNewConflictApprovalModal() {
   document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-gavel" style="color:#f97316;margin-right:8px"></i>Новое решение по конфликту';
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
-        <select id="ca_clientId" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
+        <select id="ca_clientId" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           <option value="">— Не выбран —</option>${clientOptions}
         </select></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Договор (опционально)</label>
-        <select id="ca_engagementId" onchange="updateCaCurrencyFromEngagement()" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Договор (опционально)</label>
+        <select id="ca_engagementId" onchange="updateCaCurrencyFromEngagement()" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           <option value="">— Без привязки к договору —</option>${engOptions}
         </select></div>
       ${obNewSelect('ca_decisionType','Тип конфликта',['Internal Client','Dual-Mandate','Routine Conflict','Other'],null)}
       ${obNewSelect('ca_riskLevel','Уровень риска',['Low','Medium','High','Critical'],null)}
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref</label>
         <input type="text" id="ca_dealRef" placeholder="DEAL-XXX-2026"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Fee</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Fee</label>
         <input type="number" id="ca_feeAmount" placeholder="90000"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Валюта</label>
-        <select id="ca_currency" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Валюта</label>
+        <select id="ca_currency" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${code==='USD'?' selected':''}>${c.label}</option>`).join('')}
         </select></div>
       ${obNewSelect('ca_decisionMaker','Кто принимает решение',['Compliance Officer','CF Deal Committee','Board'],null)}
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Срок рассмотрения</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Срок рассмотрения</label>
         <input type="text" id="ca_requiredTimeline" placeholder="Convened within 48 hours"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Описание конфликта</label>
-        <textarea id="ca_description" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Rationale / условия одобрения</label>
-        <textarea id="ca_rationale" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Описание конфликта</label>
+        <textarea id="ca_description" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Rationale / условия одобрения</label>
+        <textarea id="ca_rationale" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
       <button onclick="saveNewConflictApproval()" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Завести решение
       </button>
@@ -6342,23 +6342,23 @@ function openConflictApprovalDetail(id) {
     ${a.status === 'Escalated' ? `<div style="margin-bottom:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:12px;color:#fca5a5">
       <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>Риск ${statusLabel(a.riskLevel)} — решение может принять только CEO.</div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#94a3b8;margin-bottom:14px">
-      <div><b style="color:#8a9bbf">Клиент:</b> ${client ? client.name : '—'}</div>
-      <div><b style="color:#8a9bbf">Договор:</b> ${eng ? eng.engId : '—'}</div>
-      <div><b style="color:#8a9bbf">Deal Ref:</b> ${a.dealRef || '—'}</div>
-      <div><b style="color:#8a9bbf">Fee:</b> ${a.feeAmount ? currencySymbol(a.currency||'USD') + a.feeAmount.toLocaleString() : '—'}</div>
-      <div><b style="color:#8a9bbf">Кто решает:</b> ${a.decisionMaker || '—'}</div>
-      <div><b style="color:#8a9bbf">Срок:</b> ${a.requiredTimeline || '—'}</div>
-      <div><b style="color:#8a9bbf">Дата решения:</b> ${a.decidedAt || '—'}</div>
-      <div><b style="color:#8a9bbf">Кто решил:</b> ${a.decidedBy || '—'}</div>
+      <div><b style="color:#8abfbb">Клиент:</b> ${client ? client.name : '—'}</div>
+      <div><b style="color:#8abfbb">Договор:</b> ${eng ? eng.engId : '—'}</div>
+      <div><b style="color:#8abfbb">Deal Ref:</b> ${a.dealRef || '—'}</div>
+      <div><b style="color:#8abfbb">Fee:</b> ${a.feeAmount ? currencySymbol(a.currency||'USD') + a.feeAmount.toLocaleString() : '—'}</div>
+      <div><b style="color:#8abfbb">Кто решает:</b> ${a.decisionMaker || '—'}</div>
+      <div><b style="color:#8abfbb">Срок:</b> ${a.requiredTimeline || '—'}</div>
+      <div><b style="color:#8abfbb">Дата решения:</b> ${a.decidedAt || '—'}</div>
+      <div><b style="color:#8abfbb">Кто решил:</b> ${a.decidedBy || '—'}</div>
     </div>
-    ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.description)}</p></div>` : ''}
-    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8a9bbf;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.rationale)}</p></div>` : ''}
+    ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8abfbb;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.description)}</p></div>` : ''}
+    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8abfbb;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.rationale)}</p></div>` : ''}
     ${canDecide ? `
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
       <button onclick="decideConflictApproval(${a.id},'Rejected')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-xmark"></i> Отклонить</button>
-      <button onclick="decideConflictApproval(${a.id},'Approved with conditions')" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-check"></i> Одобрить с условиями</button>
+      <button onclick="decideConflictApproval(${a.id},'Approved with conditions')" style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-check"></i> Одобрить с условиями</button>
       <button onclick="decideConflictApproval(${a.id},'Approved')" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700"><i class="fas fa-check-double"></i> Одобрить</button>
-    </div>` : (isDecidable ? `<div style="padding-top:14px;border-top:1px solid #2a3448;margin-top:16px;font-size:12px;color:#64748b;text-align:right">
+    </div>` : (isDecidable ? `<div style="padding-top:14px;border-top:1px solid #2a4846;margin-top:16px;font-size:12px;color:#64748b;text-align:right">
       <i class="fas fa-lock" style="margin-right:5px"></i>У вас нет прав на это решение</div>` : '')}`;
 
   modal.style.display = 'flex';
@@ -6409,7 +6409,7 @@ function renderDashboardObWidget() {
   const pctDelayed = Math.round(delayed.length  / total * 100);
 
   const phaseCounts = [1,2,3,4,5].map(p => active.filter(c => c.phase === p).length);
-  const phaseColors = ['#8b5cf6','#f97316','#3b82f6','#22c55e','#eab308'];
+  const phaseColors = ['#8b5cf6','#f97316','#14b8a6','#22c55e','#eab308'];
   const phaseLabels = ['Conflict','Docs','KYC/Class','Engagement','Activation'];
 
   el.innerHTML = `
@@ -6418,8 +6418,8 @@ function renderDashboardObWidget() {
       <!-- Status summary bar (On Track / At Risk / Delayed) -->
       <div style="margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase">Онбординг в процессе</span>
-          <span style="font-size:11px;color:#8a9bbf">${active.length} клиентов</span>
+          <span style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase">Онбординг в процессе</span>
+          <span style="font-size:11px;color:#8abfbb">${active.length} клиентов</span>
         </div>
         <!-- Segmented status bar -->
         <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#1e293b;gap:1px">
@@ -6434,12 +6434,12 @@ function renderDashboardObWidget() {
             ['On Track',  onTrack.length,  '#22c55e', 'fa-check-circle'],
             ['At Risk',   atRisk.length,   '#f97316', 'fa-exclamation-circle'],
             ['Delayed',   delayed.length,  '#ef4444', 'fa-times-circle'],
-            ['Completed', completed.length,'#3b82f6', 'fa-flag-checkered'],
+            ['Completed', completed.length,'#14b8a6', 'fa-flag-checkered'],
           ].map(([l,v,c,icon]) => `
             <div style="display:flex;align-items:center;gap:5px;cursor:pointer" onclick="obStatusFilter='${l==='Completed'?'':l}';navigateTo('ob-clients')" title="${l}: ${v}">
               <i class="fas ${icon}" style="color:${c};font-size:11px"></i>
               <span style="font-size:12px;font-weight:700;color:${c}">${v}</span>
-              <span style="font-size:11px;color:#5a6b8a">${l}</span>
+              <span style="font-size:11px;color:#5a8a85">${l}</span>
             </div>`).join('')}
           ${overdueTasks.length ? `
             <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
@@ -6451,7 +6451,7 @@ function renderDashboardObWidget() {
 
       <!-- Phase mini-chart -->
       ${active.length ? `
-        <div style="font-size:10px;color:#5a6b8a;margin-bottom:6px;text-transform:uppercase;font-weight:700;letter-spacing:.5px">По фазам онбординга</div>
+        <div style="font-size:10px;color:#5a8a85;margin-bottom:6px;text-transform:uppercase;font-weight:700;letter-spacing:.5px">По фазам онбординга</div>
         <div style="display:flex;gap:3px;margin-bottom:12px;align-items:flex-end;height:36px">
           ${[0,1,2,3,4].map(i => {
             const maxCount = Math.max(...phaseCounts, 1);
@@ -6471,27 +6471,27 @@ function renderDashboardObWidget() {
         const done    = tasks.filter(t => t.status === 'completed').length;
         const pct     = Math.round(done / 7 * 100);
         const daysLeft= Math.ceil((new Date(c.targetDate) - todayD) / 86400000);
-        const sCfg    = {'On Track':{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},'At Risk':{c:'#f97316',bg:'rgba(249,115,22,0.12)'},'Delayed':{c:'#ef4444',bg:'rgba(239,68,68,0.12)'}}[c.onboardingStatus]||{c:'#94a3b8',bg:'#1c2333'};
+        const sCfg    = {'On Track':{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},'At Risk':{c:'#f97316',bg:'rgba(249,115,22,0.12)'},'Delayed':{c:'#ef4444',bg:'rgba(239,68,68,0.12)'}}[c.onboardingStatus]||{c:'#94a3b8',bg:'#1c3332'};
         return `
           <div onclick="navigateTo('ob-clients');setTimeout(()=>openObClientModal(${c.id}),300)"
             style="padding:8px 0;border-bottom:1px solid #1e293b;cursor:pointer"
-            onmouseover="this.style.background='rgba(59,130,246,0.04)'" onmouseout="this.style.background=''">
+            onmouseover="this.style.background='rgba(20,184,166,0.04)'" onmouseout="this.style.background=''">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-              <div style="width:22px;height:22px;border-radius:6px;background:${c.direction==='FM'?'rgba(59,130,246,0.15)':'rgba(139,92,246,0.15)'};
+              <div style="width:22px;height:22px;border-radius:6px;background:${c.direction==='FM'?'rgba(20,184,166,0.15)':'rgba(139,92,246,0.15)'};
                 display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;
-                color:${c.direction==='FM'?'#3b82f6':'#8b5cf6'};flex-shrink:0">${c.name.slice(0,2).toUpperCase()}</div>
+                color:${c.direction==='FM'?'#14b8a6':'#8b5cf6'};flex-shrink:0">${c.name.slice(0,2).toUpperCase()}</div>
               <span style="flex:1;font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</span>
               <span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;background:${sCfg.bg};color:${sCfg.c};flex-shrink:0">${c.onboardingStatus}</span>
-              <span style="font-size:10px;color:${daysLeft<0?'#ef4444':daysLeft<3?'#f97316':'#5a6b8a'};flex-shrink:0;min-width:40px;text-align:right">
+              <span style="font-size:10px;color:${daysLeft<0?'#ef4444':daysLeft<3?'#f97316':'#5a8a85'};flex-shrink:0;min-width:40px;text-align:right">
                 ${daysLeft<0?`⚠${Math.abs(daysLeft)}д`:daysLeft===0?'Сегодня':`${daysLeft}д`}
               </span>
             </div>
             <!-- Mini task progress bar -->
             <div style="display:flex;align-items:center;gap:6px">
               <div style="flex:1;height:4px;background:#1e293b;border-radius:2px">
-                <div style="width:${pct}%;height:4px;background:${pct===100?'#22c55e':c.onboardingStatus==='Delayed'?'#ef4444':c.onboardingStatus==='At Risk'?'#f97316':'#3b82f6'};border-radius:2px;transition:width .3s"></div>
+                <div style="width:${pct}%;height:4px;background:${pct===100?'#22c55e':c.onboardingStatus==='Delayed'?'#ef4444':c.onboardingStatus==='At Risk'?'#f97316':'#14b8a6'};border-radius:2px;transition:width .3s"></div>
               </div>
-              <span style="font-size:10px;color:#5a6b8a;flex-shrink:0">${done}/7</span>
+              <span style="font-size:10px;color:#5a8a85;flex-shrink:0">${done}/7</span>
             </div>
           </div>`;
       }).join('') : `
@@ -6512,12 +6512,12 @@ function renderDashboardCoiWidget() {
         const sevCfg = {Low:{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},Medium:{c:'#f97316',bg:'rgba(249,115,22,0.12)'},High:{c:'#ef4444',bg:'rgba(239,68,68,0.12)'},Critical:{c:'#dc2626',bg:'rgba(220,38,38,0.15)'}}[r.severity]||{};
         return `
           <div onclick="navigateTo('ob-restricted')" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1e293b;cursor:pointer">
-            <div style="width:28px;height:28px;border-radius:8px;background:${sevCfg.bg||'#1c2333'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <div style="width:28px;height:28px;border-radius:8px;background:${sevCfg.bg||'#1c3332'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
               <i class="fas fa-exclamation" style="color:${sevCfg.c||'#94a3b8'};font-size:12px"></i>
             </div>
             <div style="flex:1;min-width:0">
               <div style="font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.parties}</div>
-              <div style="font-size:10px;color:#5a6b8a">${r.coiId} · ${r.date}</div>
+              <div style="font-size:10px;color:#5a8a85">${r.coiId} · ${r.date}</div>
             </div>
             <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:${sevCfg.bg};color:${sevCfg.c};flex-shrink:0">${r.severity}</span>
           </div>`;
@@ -6571,7 +6571,7 @@ function renderDashboardRmWidget() {
 
   el.innerHTML = `
     <div style="padding:14px 16px">
-      <div style="font-size:10px;font-weight:700;color:#5a6b8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#5a8a85;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
         Нагрузка по RM · ${todayD.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}
       </div>
       ${rmStats.length ? rmStats.map(s => {
@@ -6582,27 +6582,27 @@ function renderDashboardRmWidget() {
           return c && c.rm === s.rm && t.status === 'open';
         }).length;
         return `
-          <div style="background:#0f1623;border-radius:10px;padding:11px 13px;margin-bottom:8px;border:1px solid #2a3448;border-left:3px solid ${cfg.c}">
+          <div style="background:#0f1623;border-radius:10px;padding:11px 13px;margin-bottom:8px;border:1px solid #2a4846;border-left:3px solid ${cfg.c}">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
               <div style="width:30px;height:30px;border-radius:8px;background:${cfg.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0">
                 <i class="fas ${cfg.icon}" style="color:${cfg.c};font-size:12px"></i>
               </div>
               <div style="flex:1">
                 <div style="font-size:13px;font-weight:700;color:#e2e8f0">${rmShort}</div>
-                <div style="font-size:10px;color:#5a6b8a">${s.rm}</div>
+                <div style="font-size:10px;color:#5a8a85">${s.rm}</div>
               </div>
               <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg};color:${cfg.c}">${s.load} load</span>
             </div>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center">
               ${[
-                ['Активных клиентов', s.activeClients.length, '#3b82f6'],
+                ['Активных клиентов', s.activeClients.length, '#14b8a6'],
                 ['Открытых задач',    totalTasksActive,       '#f97316'],
                 ['Под риском',        s.atRisk.length,        s.atRisk.length>0?'#ef4444':'#22c55e'],
                 ['Завершено (мес.)',   s.completedThisMonth.length, '#22c55e'],
               ].map(([l,v,c]) => `
-                <div style="background:#1c2333;border-radius:6px;padding:6px 4px">
+                <div style="background:#1c3332;border-radius:6px;padding:6px 4px">
                   <div style="font-size:14px;font-weight:800;color:${c}">${v}</div>
-                  <div style="font-size:9px;color:#5a6b8a;line-height:1.3">${l}</div>
+                  <div style="font-size:9px;color:#5a8a85;line-height:1.3">${l}</div>
                 </div>`).join('')}
             </div>
             ${s.overdue.length ? `

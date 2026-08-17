@@ -60,9 +60,9 @@ function switchUsersTab(tab) {
   for (const [t, id] of Object.entries(tabButtons)) {
     const btn = document.getElementById(id);
     if (!btn) continue;
-    btn.style.background = tab === t ? '#3b82f6' : 'transparent';
-    btn.style.border = tab === t ? 'none' : '1px solid #2a3448';
-    btn.style.color = tab === t ? '#fff' : '#8a9bbf';
+    btn.style.background = tab === t ? '#14b8a6' : 'transparent';
+    btn.style.border = tab === t ? 'none' : '1px solid #2a4846';
+    btn.style.color = tab === t ? '#fff' : '#8abfbb';
     btn.setAttribute('aria-selected', String(tab === t));
   }
   const content = document.getElementById('usersContent');
@@ -97,10 +97,10 @@ function renderUsersPage() {
   el.innerHTML = `
     <div class="card" style="margin-bottom:20px">
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-        <span class="card-title"><i class="fas fa-building" style="color:#3b82f6;margin-right:6px"></i>Компания</span>
+        <span class="card-title"><i class="fas fa-building" style="color:#14b8a6;margin-right:6px"></i>Компания</span>
         ${currentUserPermission('manageUsers') ? `
         <button onclick="openEditCompanyModal()" title="Переименовать компанию"
-          style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px">
+          style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px">
           <i class="fas fa-edit"></i> Изменить</button>` : ''}
       </div>
       <div style="padding:14px 18px;font-size:15px;font-weight:700;color:#e2e8f0">${escapeHtml(companyName)}</div>
@@ -123,13 +123,13 @@ function renderUsersPage() {
 
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
       <button onclick="openNewUserModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">
+        style="background:#14b8a6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">
         <i class="fas fa-user-plus"></i> Новый пользователь</button>
     </div>
 
     <div class="card">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-users-cog" style="color:#3b82f6;margin-right:6px"></i>Пользователи тенанта</span>
+        <span class="card-title"><i class="fas fa-users-cog" style="color:#14b8a6;margin-right:6px"></i>Пользователи тенанта</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -147,15 +147,15 @@ function renderUsersPage() {
                   ? `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(34,197,94,0.12);color:#4ade80">Активен</span>`
                   : `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(239,68,68,0.12);color:#f87171">Отключён</span>`}
                 </td>
-                <td style="color:#8a9bbf;font-size:12px">${u.createdAt ? u.createdAt.slice(0, 10) : '—'}</td>
+                <td style="color:#8abfbb;font-size:12px">${u.createdAt ? u.createdAt.slice(0, 10) : '—'}</td>
                 <td style="white-space:nowrap">
                   <button onclick="openEditUserModal(${u.id})" title="Редактировать"
-                    style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>
+                    style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>
                   <button onclick="toggleUserActive(${u.id}, ${!u.active})" title="${u.active ? 'Деактивировать' : 'Активировать'}"
-                    style="background:transparent;border:1px solid #2a3448;color:${u.active ? '#f87171' : '#4ade80'};padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px">
+                    style="background:transparent;border:1px solid #2a4846;color:${u.active ? '#f87171' : '#4ade80'};padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px">
                     <i class="fas ${u.active ? 'fa-user-slash' : 'fa-user-check'}"></i></button>
                   <button onclick="deleteUser(${u.id})" title="Удалить (только если нет истории действий)"
-                    style="background:transparent;border:1px solid #2a3448;color:#f87171;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px"><i class="fas fa-trash"></i></button>
+                    style="background:transparent;border:1px solid #2a4846;color:#f87171;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px"><i class="fas fa-trash"></i></button>
                 </td>
               </tr>`;
             }).join('')}
@@ -169,32 +169,32 @@ function openNewUserModal() {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-user-plus" style="color:#3b82f6;margin-right:8px"></i>Новый пользователь';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-user-plus" style="color:#14b8a6;margin-right:8px"></i>Новый пользователь';
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Фамилия</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Фамилия</label>
         <input type="text" id="u_lastName" placeholder="Иванов"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
         <input type="text" id="u_firstName" placeholder="Иван"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Email *</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Email *</label>
         <input type="email" id="u_email" placeholder="user@turancapital.kz"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Пароль *</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Пароль *</label>
         <input type="password" id="u_password" placeholder="мин. 8 символов"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Повторите пароль *</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Повторите пароль *</label>
         <input type="password" id="u_passwordConfirm"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Роль *</label>
-        <select id="u_role" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Роль *</label>
+        <select id="u_role" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${roleOptionsHtml('ANALYST')}
         </select></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
-      <button onclick="saveNewUser()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveNewUser()" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
     </div>`;
   modal.style.display = 'flex';
@@ -230,14 +230,14 @@ function openEditCompanyModal() {
   if (!modal) return;
   const auth = getAuth();
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-building" style="color:#3b82f6;margin-right:8px"></i>Название компании';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-building" style="color:#14b8a6;margin-right:8px"></i>Название компании';
   document.getElementById('obNewModalContent').innerHTML = `
-    <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название компании</label>
+    <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Название компании</label>
       <input type="text" id="company_name" value="${escapeHtml(auth && auth.tenant ? auth.tenant.name : '')}"
-        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
-      <button onclick="saveCompanyName()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveCompanyName()" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
@@ -267,32 +267,32 @@ function openEditUserModal(id) {
   if (!modal) return;
   const { lastName, firstName } = splitFullName(u.name);
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-user-edit" style="color:#3b82f6;margin-right:8px"></i>${escapeHtml(u.email)}`;
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-user-edit" style="color:#14b8a6;margin-right:8px"></i>${escapeHtml(u.email)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Фамилия</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Фамилия</label>
         <input type="text" id="u_editLastName" value="${escapeHtml(lastName)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Имя</label>
         <input type="text" id="u_editFirstName" value="${escapeHtml(firstName)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Email</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Email</label>
         <input type="email" id="u_editEmail" value="${escapeHtml(u.email)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Роль</label>
-        <select id="u_editRole" style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Роль</label>
+        <select id="u_editRole" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
           ${roleOptionsHtml(u.role)}
         </select></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (опционально)</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Новый пароль (опционально)</label>
         <input type="password" id="u_editPassword" placeholder="Оставьте пустым, чтобы не менять"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Повторите новый пароль</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Повторите новый пароль</label>
         <input type="password" id="u_editPasswordConfirm" placeholder="Только если меняете пароль"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
-      <button onclick="saveUserEdit(${u.id})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveUserEdit(${u.id})" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
@@ -366,12 +366,12 @@ function renderRolesPage() {
   el.innerHTML = `
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
       <button onclick="openNewRoleModal()"
-        style="background:#3b82f6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">
+        style="background:#14b8a6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">
         <i class="fas fa-shield-halved"></i> Новая роль</button>
     </div>
     <div class="card">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:6px"></i>Роли тенанта</span>
+        <span class="card-title"><i class="fas fa-shield-halved" style="color:#14b8a6;margin-right:6px"></i>Роли тенанта</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -380,17 +380,17 @@ function renderRolesPage() {
             ${roles.map(r => `
               <tr>
                 <td><span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:${escapeHtml(r.color)}22;color:${escapeHtml(r.color)}"><i class="fas ${escapeHtml(r.icon)}"></i> ${escapeHtml(r.label)}</span>
-                  ${r.isSystem ? '<span style="margin-left:6px;font-size:9px;color:#5a6b8a;border:1px solid #2a3448;border-radius:4px;padding:1px 5px">system</span>' : ''}</td>
-                <td style="font-family:monospace;font-size:11px;color:#8a9bbf">${escapeHtml(r.code)}</td>
+                  ${r.isSystem ? '<span style="margin-left:6px;font-size:9px;color:#5a8a85;border:1px solid #2a4846;border-radius:4px;padding:1px 5px">system</span>' : ''}</td>
+                <td style="font-family:monospace;font-size:11px;color:#8abfbb">${escapeHtml(r.code)}</td>
                 <td>${PERMISSION_DEFS.filter(p => r[p.key]).map(p =>
-                  `<span title="${p.hint}" style="display:inline-block;margin:1px 3px 1px 0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(59,130,246,0.12);color:#60a5fa">${p.label}</span>`
+                  `<span title="${p.hint}" style="display:inline-block;margin:1px 3px 1px 0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;background:rgba(20,184,166,0.12);color:#5eead4">${p.label}</span>`
                 ).join('') || '<span style="color:#4a5568;font-size:11px">—</span>'}</td>
-                <td style="font-size:11px;color:#8a9bbf">${r.icSeat || '—'}</td>
+                <td style="font-size:11px;color:#8abfbb">${r.icSeat || '—'}</td>
                 <td style="white-space:nowrap">
                   <button onclick="openEditRoleModal(${r.id})" title="Редактировать"
-                    style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>
+                    style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>
                   <button onclick="deleteRole(${r.id})" title="${r.isSystem ? 'Системная роль — удаление недоступно' : 'Удалить'}" ${r.isSystem ? 'disabled' : ''}
-                    style="background:transparent;border:1px solid #2a3448;color:${r.isSystem ? '#3d4a63' : '#f87171'};padding:5px 9px;border-radius:6px;cursor:${r.isSystem ? 'not-allowed' : 'pointer'};font-size:11px"><i class="fas fa-trash"></i></button>
+                    style="background:transparent;border:1px solid #2a4846;color:${r.isSystem ? '#3d4a63' : '#f87171'};padding:5px 9px;border-radius:6px;cursor:${r.isSystem ? 'not-allowed' : 'pointer'};font-size:11px"><i class="fas fa-trash"></i></button>
                 </td>
               </tr>`).join('')}
           </tbody>
@@ -403,7 +403,7 @@ function permissionCheckboxesHtml(idPrefix, role) {
   return PERMISSION_DEFS.map(p => `
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
       <input type="checkbox" id="${idPrefix}_${p.key}" ${role && role[p.key] ? 'checked' : ''}
-        style="accent-color:#3b82f6;width:14px;height:14px" />
+        style="accent-color:#14b8a6;width:14px;height:14px" />
       <span title="${p.hint}">${p.label}</span>
     </label>`).join('');
 }
@@ -417,7 +417,7 @@ function icSeatOptionsHtml(idPrefix, role) {
     return `<option value="${seat}" ${current === seat ? 'selected' : ''}>${label}</option>`;
   }).join('');
   return `<select id="${idPrefix}_icSeat" onchange="warnIcSeatTaken('${idPrefix}')"
-      style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+      style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
       <option value="">— нет —</option>${options}
     </select>
     <div id="${idPrefix}_icSeatWarning" style="font-size:11px;color:#f97316;margin-top:4px"></div>`;
@@ -440,33 +440,33 @@ function openNewRoleModal() {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:8px"></i>Новая роль';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-shield-halved" style="color:#14b8a6;margin-right:8px"></i>Новая роль';
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Код *</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Код *</label>
         <input type="text" id="r_new_code" placeholder="JUNIOR_RM"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;text-transform:uppercase" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название *</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box;text-transform:uppercase" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Название *</label>
         <input type="text" id="r_new_label" placeholder="Junior RM"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
         <input type="text" id="r_new_icon" value="fa-user" placeholder="fa-user"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
         <input type="color" id="r_new_color" value="#64748b"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
     </div>
-    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Права</div>
+    <div style="background:#1c3332;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:10px;text-transform:uppercase">Права</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${permissionCheckboxesHtml('r_new', null)}</div>
     </div>
     <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Место в Investment Committee</label>
+      <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Место в Investment Committee</label>
       ${icSeatOptionsHtml('r_new', null)}
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
-      <button onclick="saveNewRole()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveNewRole()" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
     </div>`;
   modal.style.display = 'flex';
@@ -507,33 +507,33 @@ function openEditRoleModal(id) {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
-  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-shield-halved" style="color:#3b82f6;margin-right:8px"></i>${escapeHtml(r.label)}`;
+  document.getElementById('obNewModalTitle').innerHTML = `<i class="fas fa-shield-halved" style="color:#14b8a6;margin-right:8px"></i>${escapeHtml(r.label)}`;
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Код (неизменяем после создания)</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Код (неизменяем после создания)</label>
         <input type="text" id="r_edit_code" value="${escapeHtml(r.code)}" readonly
-          style="width:100%;background:#0a0f18;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#5a6b8a;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название</label>
+          style="width:100%;background:#0a0f18;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#5a8a85;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Название</label>
         <input type="text" id="r_edit_label" value="${escapeHtml(r.label)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Иконка (FontAwesome класс)</label>
         <input type="text" id="r_edit_icon" value="${escapeHtml(r.icon)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Цвет</label>
         <input type="color" id="r_edit_color" value="${escapeHtml(r.color)}"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:4px;height:38px;box-sizing:border-box" /></div>
     </div>
-    <div style="background:#1c2333;border-radius:10px;padding:12px 14px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:#8a9bbf;margin-bottom:10px;text-transform:uppercase">Права</div>
+    <div style="background:#1c3332;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:10px;text-transform:uppercase">Права</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${permissionCheckboxesHtml('r_edit', r)}</div>
     </div>
     <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Место в Investment Committee</label>
+      <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Место в Investment Committee</label>
       ${icSeatOptionsHtml('r_edit', r)}
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
-      <button onclick="saveRoleEdit(${r.id})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+      <button onclick="saveRoleEdit(${r.id})" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Сохранить</button>
     </div>`;
   modal.style.display = 'flex';
@@ -597,7 +597,7 @@ const API_KEY_SCOPES = [
 async function renderApiKeysPage() {
   const el = document.getElementById('usersContent');
   if (!el) return;
-  el.innerHTML = `<div style="padding:40px;text-align:center;color:#8a9bbf"><i class="fas fa-spinner fa-spin"></i></div>`;
+  el.innerHTML = `<div style="padding:40px;text-align:center;color:#8abfbb"><i class="fas fa-spinner fa-spin"></i></div>`;
 
   let apiKeys = [];
   try {
@@ -617,7 +617,7 @@ async function renderApiKeysPage() {
           <i class="fas fa-plus"></i> Создать ключ
         </button>
       </div>
-      <div style="padding:10px 20px 0;font-size:12px;color:#8a9bbf">
+      <div style="padding:10px 20px 0;font-size:12px;color:#8abfbb">
         Для внешних интеграций (в перспективе — ИИ-агентов), которым нужен доступ только к чтению определённых данных, без человеческого логина.
         Только для чтения — API-ключ не может ничего создавать/менять/удалять.
       </div>
@@ -629,10 +629,10 @@ async function renderApiKeysPage() {
             apiKeys.map(k => `
               <tr>
                 <td style="font-weight:700;color:#e2e8f0">${escapeHtml(k.name)}</td>
-                <td style="font-family:monospace;font-size:11px;color:#8a9bbf">${escapeHtml(k.keyPrefix)}...</td>
+                <td style="font-family:monospace;font-size:11px;color:#8abfbb">${escapeHtml(k.keyPrefix)}...</td>
                 <td>${k.scopes.map(s => `<span class="badge badge-blue" style="font-size:9px;margin-right:3px">${escapeHtml(s)}</span>`).join('')}</td>
-                <td style="font-size:11px;color:#8a9bbf">${k.createdAt ? k.createdAt.slice(0,10) : '—'} · ${escapeHtml(k.createdBy)||'—'}</td>
-                <td style="font-size:11px;color:#8a9bbf">${k.lastUsedAt ? k.lastUsedAt.slice(0,16).replace('T',' ') : 'Ещё не использован'}</td>
+                <td style="font-size:11px;color:#8abfbb">${k.createdAt ? k.createdAt.slice(0,10) : '—'} · ${escapeHtml(k.createdBy)||'—'}</td>
+                <td style="font-size:11px;color:#8abfbb">${k.lastUsedAt ? k.lastUsedAt.slice(0,16).replace('T',' ') : 'Ещё не использован'}</td>
                 <td>${k.revokedAt
                   ? `<span class="badge badge-gray">Отозван ${k.revokedAt.slice(0,10)}</span>`
                   : `<span class="badge badge-green">Активен</span>`}</td>
@@ -651,19 +651,19 @@ function openNewApiKeyModal() {
   document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>Новый API-ключ';
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase">Название *</label>
+      <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Название *</label>
       <input type="text" id="ak_name" placeholder="Например: AI Reporting Agent"
-        style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+        style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
     </div>
     <div>
-      <label style="font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:6px;text-transform:uppercase">Права доступа (только чтение) *</label>
+      <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:6px;text-transform:uppercase">Права доступа (только чтение) *</label>
       ${API_KEY_SCOPES.map(s => `
         <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;color:#e2e8f0;cursor:pointer">
           <input type="checkbox" class="ak_scope" value="${s.key}" /> ${escapeHtml(s.label)}
         </label>`).join('')}
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a3448;margin-top:16px">
-      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a3448;color:#8a9bbf;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
+      <button onclick="closeObNewModal()" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
       <button onclick="saveNewApiKey()" style="background:linear-gradient(135deg,#eab308,#ca8a04);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-save" style="margin-right:6px"></i>Создать</button>
     </div>`;
@@ -699,16 +699,16 @@ function showApiKeyRevealDialog(created) {
   overlay.id = 'apiKeyRevealOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
-    <div style="background:#1c2333;border:1px solid #2a3448;border-radius:14px;max-width:520px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+    <div style="background:#1c3332;border:1px solid #2a4846;border-radius:14px;max-width:520px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
       <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-bottom:6px"><i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>API-ключ создан — ${escapeHtml(created.name)}</div>
       <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">Ключ показывается один раз. Скопируйте и сохраните его в надёжном месте — повторно посмотреть будет нельзя.</div>
-      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 12px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:10px 12px;margin-bottom:16px">
         <code id="revealedApiKey" style="flex:1;font-size:12px;color:#22c55e;font-weight:700;word-break:break-all;user-select:all">${escapeHtml(created.key)}</code>
         <button onclick="navigator.clipboard.writeText(document.getElementById('revealedApiKey').textContent).then(()=>showToast('📋 Скопировано','green'))"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0"><i class="fas fa-copy"></i></button>
+          style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0"><i class="fas fa-copy"></i></button>
       </div>
       <button onclick="document.getElementById('apiKeyRevealOverlay').remove()"
-        style="width:100%;background:#3b82f6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил ключ</button>
+        style="width:100%;background:#14b8a6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил ключ</button>
     </div>`;
   document.body.appendChild(overlay);
 }

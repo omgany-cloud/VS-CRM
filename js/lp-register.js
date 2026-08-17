@@ -80,7 +80,7 @@ function kycBadge(s) {
 
 function riskBadge(r) {
   const cfg = { Low:{ bg:'rgba(34,197,94,0.12)', c:'#22c55e' }, Medium:{ bg:'rgba(249,115,22,0.12)', c:'#f97316' }, High:{ bg:'rgba(239,68,68,0.12)', c:'#ef4444' } }[r] || {};
-  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg||'#1c2333'};color:${cfg.c||'#94a3b8'}">${r||'—'}</span>`;
+  return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg||'#1c3332'};color:${cfg.c||'#94a3b8'}">${r||'—'}</span>`;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -176,17 +176,17 @@ function renderLPRegisterPage() {
     <!-- KPI Row -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       ${[
-        { label:'Активных LP', val: activeCount, sub:`${fundLps.length} всего в реестре`, color:'#3b82f6', icon:'fa-users' },
+        { label:'Активных LP', val: activeCount, sub:`${fundLps.length} всего в реестре`, color:'#14b8a6', icon:'fa-users' },
         { label:'Общий Commitment', val: fmtUSD(totalCommit), sub:`Цель: ${fmtUSD(FUND_PARAMS.targetSize*1e6)}`, color:'#22c55e', icon:'fa-dollar-sign' },
         { label:'Вызвано (Called)', val: fmtUSD(totalCalled), sub:`${fmtPctLP(totalCommit?totalCalled/totalCommit*100:0)} от commitment`, color:'#f97316', icon:'fa-coins' },
         { label:'Остаток (Unfunded)', val: fmtUSD(totalUnfund), sub:`Доступно к вызову`, color:'#8b5cf6', icon:'fa-piggy-bank' },
       ].map(k => `
-        <div style="background:#1c2333;border-radius:10px;padding:14px 16px;border-top:3px solid ${k.color}">
+        <div style="background:#1c3332;border-radius:10px;padding:14px 16px;border-top:3px solid ${k.color}">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <div style="width:30px;height:30px;background:${k.color}18;border-radius:8px;display:flex;align-items:center;justify-content:center">
               <i class="fas ${k.icon}" style="color:${k.color};font-size:13px"></i>
             </div>
-            <span style="font-size:11px;color:#8a9bbf;font-weight:700;text-transform:uppercase">${k.label}</span>
+            <span style="font-size:11px;color:#8abfbb;font-weight:700;text-transform:uppercase">${k.label}</span>
           </div>
           <div style="font-size:20px;font-weight:800;color:#f1f5f9;margin-bottom:2px">${k.val}</div>
           <div style="font-size:11px;color:#64748b">${k.sub}</div>
@@ -194,15 +194,15 @@ function renderLPRegisterPage() {
     </div>
 
     <!-- Fund Commitment Bar -->
-    <div style="background:#1c2333;border-radius:10px;padding:14px 16px;margin-bottom:20px">
+    <div style="background:#1c3332;border-radius:10px;padding:14px 16px;margin-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:12px;font-weight:700;color:#e2e8f0">
-          <i class="fas fa-chart-bar" style="color:#3b82f6;margin-right:6px"></i>Capital Call Progress — ${fmtUSD(totalCalled)} из ${fmtUSD(totalCommit)}
+          <i class="fas fa-chart-bar" style="color:#14b8a6;margin-right:6px"></i>Capital Call Progress — ${fmtUSD(totalCalled)} из ${fmtUSD(totalCommit)}
         </span>
         <span style="font-size:11px;color:#64748b">${fmtPctLP(totalCommit ? totalCalled/totalCommit*100 : 0)} вызвано</span>
       </div>
       <div style="height:10px;background:#0f1623;border-radius:5px;overflow:hidden">
-        <div style="height:100%;width:${totalCommit ? Math.min(100, totalCalled/totalCommit*100) : 0}%;background:linear-gradient(90deg,#3b82f6,#22c55e);border-radius:5px;transition:width 0.5s"></div>
+        <div style="height:100%;width:${totalCommit ? Math.min(100, totalCalled/totalCommit*100) : 0}%;background:linear-gradient(90deg,#14b8a6,#22c55e);border-radius:5px;transition:width 0.5s"></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:#64748b">
         <span>$0</span><span>Первое Закрытие: ${fmtUSD(FUND_PARAMS.firstClosingMin*1e6)}</span><span>Цель: ${fmtUSD(FUND_PARAMS.targetSize*1e6)}</span>
@@ -210,15 +210,15 @@ function renderLPRegisterPage() {
     </div>
 
     <!-- Info banner: LP enters register via Onboarding only -->
-    <div style="background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
-      <i class="fas fa-info-circle" style="color:#3b82f6;font-size:15px;flex-shrink:0"></i>
+    <div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:10px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+      <i class="fas fa-info-circle" style="color:#14b8a6;font-size:15px;flex-shrink:0"></i>
       <div style="font-size:12px;color:#94a3b8;flex:1">
         LP попадает в реестр <b style="color:#e2e8f0">автоматически</b> после завершения онбординга
         (<b style="color:#e2e8f0">Задача 5.1 — LP Activation</b>).
         Прямое добавление в обход KYC/AML не допускается.
       </div>
       <button onclick="navigateTo('ob-clients')"
-        style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0">
+        style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0">
         <i class="fas fa-user-check" style="margin-right:5px"></i>Перейти в Онбординг
       </button>
     </div>
@@ -229,17 +229,17 @@ function renderLPRegisterPage() {
         <i class="fas fa-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#4a5568;font-size:12px"></i>
         <input type="text" placeholder="Поиск LP..." value="${lpRegFilter}"
           oninput="lpRegFilter=this.value;renderLPRegisterPage()"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
       </div>
       <select onchange="lpRegStatus=this.value;renderLPRegisterPage()"
-        style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
+        style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
         <option value="">Все статусы</option>
         <option value="Active"    ${lpRegStatus==='Active'?'selected':''}>✅ Активен</option>
         <option value="Exited"    ${lpRegStatus==='Exited'?'selected':''}>🚪 Вышел</option>
         <option value="Suspended" ${lpRegStatus==='Suspended'?'selected':''}>⏸ Приостановлен</option>
       </select>
       <button onclick="renderLPRegisterPage()"
-        style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px"
+        style="background:#1c3332;border:1px solid #2a4846;color:#94a3b8;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px"
         title="Обновить">
         <i class="fas fa-sync-alt"></i>
       </button>
@@ -248,8 +248,8 @@ function renderLPRegisterPage() {
     <!-- LP Register Table -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title"><i class="fas fa-book" style="color:#3b82f6;margin-right:6px"></i>Реестр ограниченных партнёров (LP Register)</span>
-        <span style="font-size:12px;color:#8a9bbf">${filtered.length} LP · Хранение 6 лет</span>
+        <span class="card-title"><i class="fas fa-book" style="color:#14b8a6;margin-right:6px"></i>Реестр ограниченных партнёров (LP Register)</span>
+        <span style="font-size:12px;color:#8abfbb">${filtered.length} LP · Хранение 6 лет</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -286,7 +286,7 @@ function renderLPRegisterPage() {
                   <td style="font-size:11px;color:#8b5cf6;font-weight:700">${lp.registerId}</td>
                   <td>
                     <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(lp.name)}</div>
-                    <div style="font-size:10px;color:${lp.type==='Corporate'?'#3b82f6':'#f97316'}">${lp.lpType||lp.type}</div>
+                    <div style="font-size:10px;color:${lp.type==='Corporate'?'#14b8a6':'#f97316'}">${lp.lpType||lp.type}</div>
                     ${lp.lpacMember ? '<div style="font-size:9px;color:#8b5cf6;font-weight:700">★ LPAC</div>' : ''}
                     ${lp.saNumber ? `<div style="font-size:10px;color:#64748b">${lp.saNumber}</div>` : ''}
                   </td>
@@ -300,7 +300,7 @@ function renderLPRegisterPage() {
                   </td>
                   <td>
                     <div style="font-size:12px;font-weight:700;color:#f97316">${fmtUSD(lp.calledAmount)}</div>
-                    <div style="width:60px;height:4px;background:#2a3448;border-radius:2px;margin-top:3px">
+                    <div style="width:60px;height:4px;background:#2a4846;border-radius:2px;margin-top:3px">
                       <div style="width:${Math.min(100,callRate)}%;height:4px;background:#f97316;border-radius:2px"></div>
                     </div>
                     <div style="font-size:10px;color:#64748b;margin-top:2px">${fmtPctLP(callRate)}</div>
@@ -316,7 +316,7 @@ function renderLPRegisterPage() {
                     ${kycWarn ? `<div style="font-size:9px;color:#ef4444;margin-top:2px">⚠ Обновить KYC</div>` : `<div style="font-size:10px;color:#64748b;margin-top:2px">До: ${lp.kycNextReview||'—'}</div>`}
                   </td>
                   <td style="font-size:10px;color:#94a3b8;max-width:120px;white-space:normal">${lp.professionalClient||'—'}</td>
-                  <td style="font-size:12px;color:#8a9bbf">${lp.admissionDate||'—'}</td>
+                  <td style="font-size:12px;color:#8abfbb">${lp.admissionDate||'—'}</td>
                   <td>
                     ${isAfsaWarn
                       ? `<span style="font-size:9px;font-weight:700;color:#ef4444;background:rgba(239,68,68,0.12);padding:2px 6px;border-radius:4px">⚠ Ожидает</span>`
@@ -327,7 +327,7 @@ function renderLPRegisterPage() {
                   <td>${lpRegStatusBadge(lp.status)}</td>
                   <td style="text-align:center">
                     <button onclick="event.stopPropagation();openLPDetail(${lp.id})"
-                      style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px">
+                      style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px">
                       <i class="fas fa-eye"></i>
                     </button>
                     <button onclick="event.stopPropagation();openCapitalAccountStatement(${lp.id})"
@@ -376,9 +376,9 @@ function openLPDetail(lpId) {
 
   document.getElementById('lpDetailContent').innerHTML = `
     <!-- Header -->
-    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2a3448">
-      <div style="width:52px;height:52px;border-radius:14px;background:rgba(59,130,246,0.15);
-        display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#3b82f6;flex-shrink:0">
+    <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2a4846">
+      <div style="width:52px;height:52px;border-radius:14px;background:rgba(20,184,166,0.15);
+        display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#14b8a6;flex-shrink:0">
         ${lp.name.slice(0,2).toUpperCase()}
       </div>
       <div style="flex:1">
@@ -388,7 +388,7 @@ function openLPDetail(lpId) {
           ${lp.lpacMember ? '<span style="font-size:11px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);border-radius:6px;padding:2px 8px;font-weight:700">★ LPAC Member</span>' : ''}
           ${lp.afsaNotified ? '<span style="font-size:11px;background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:2px 8px">Регулятор ✓</span>' : ''}
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8a9bbf">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8abfbb">
           <span style="color:#8b5cf6;font-weight:700">${lp.registerId}</span>
           <span>${lp.type} · ${lp.lpType}</span>
           <span>${lp.country}</span>
@@ -398,7 +398,7 @@ function openLPDetail(lpId) {
     </div>
 
     <!-- Capital Account Summary -->
-    <div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;color:#14b8a6;text-transform:uppercase;margin-bottom:10px">
       <i class="fas fa-wallet" style="margin-right:5px"></i>Capital Account — Лицевой счёт LP
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
@@ -406,10 +406,10 @@ function openLPDetail(lpId) {
         { label:'Total Commitment', val:fmtUSD(lp.commitment), color:'#22c55e' },
         { label:'Called to Date',   val:fmtUSD(totalPaid),     color:'#f97316' },
         { label:'Unfunded',         val:fmtUSD(unfunded),      color:'#8b5cf6' },
-        { label:'Distributions',    val:fmtUSD(lp.distributions||0), color:'#3b82f6' },
+        { label:'Distributions',    val:fmtUSD(lp.distributions||0), color:'#14b8a6' },
       ].map(k => `
         <div style="background:#0f1623;border-radius:8px;padding:10px 12px;border-left:3px solid ${k.color}">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:4px">${k.label}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:4px">${k.label}</div>
           <div style="font-size:16px;font-weight:800;color:${k.color}">${k.val}</div>
         </div>`).join('')}
     </div>
@@ -419,7 +419,7 @@ function openLPDetail(lpId) {
         <span>Capital Call Rate</span><span>${fmtPctLP(callRate)} вызвано</span>
       </div>
       <div style="height:8px;background:#1e293b;border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${Math.min(100,callRate)}%;background:linear-gradient(90deg,#3b82f6,#22c55e);border-radius:4px"></div>
+        <div style="height:100%;width:${Math.min(100,callRate)}%;background:linear-gradient(90deg,#14b8a6,#22c55e);border-radius:4px"></div>
       </div>
     </div>
 
@@ -441,7 +441,7 @@ function openLPDetail(lpId) {
         ['Contract №',      lp.contractNum || '—'],
       ].map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:8px 12px">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
           <div style="font-size:12px;color:#e2e8f0;font-weight:600">${v||'—'}</div>
         </div>`).join('')}
     </div>
@@ -456,9 +456,9 @@ function openLPDetail(lpId) {
     <div style="background:#0f1623;border-radius:8px;padding:12px;margin-bottom:18px;display:grid;gap:10px">
       <div style="display:flex;gap:8px;align-items:center">
         <div style="flex:1">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">LP Agreement (LPA)</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:3px">LP Agreement (LPA)</div>
           <input type="text" id="lpDocLpaUrl_${lp.id}" value="${escapeAttr(lp.lpaUrl || '')}" placeholder="Ссылка на LPA (Google Drive и т.п.)"
-            style="width:100%;background:#131c2e;border:1px solid #2a3448;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px" />
+            style="width:100%;background:#131c2e;border:1px solid #2a4846;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px" />
         </div>
         ${lp.lpaUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${escapeAttr(lp.lpaUrl)}','${escapeAttr(lp.lpaUrl)}')" title="Открыть"
           style="background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0;margin-top:16px">
@@ -466,16 +466,16 @@ function openLPDetail(lpId) {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <div style="flex:1">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">Subscription Agreement</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:3px">Subscription Agreement</div>
           <input type="text" id="lpDocSaUrl_${lp.id}" value="${escapeAttr(lp.saUrl || '')}" placeholder="Ссылка на Subscription Agreement"
-            style="width:100%;background:#131c2e;border:1px solid #2a3448;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px" />
+            style="width:100%;background:#131c2e;border:1px solid #2a4846;border-radius:6px;padding:6px 10px;color:#e2e8f0;font-size:12px" />
         </div>
         ${lp.saUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${escapeAttr(lp.saUrl)}','${escapeAttr(lp.saUrl)}')" title="Открыть"
           style="background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0;margin-top:16px">
           <i class="fas fa-external-link-alt"></i></button>` : ''}
       </div>
       <button onclick="event.stopPropagation();saveLpDocuments(${lp.id})"
-        style="justify-self:start;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#60a5fa;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">
+        style="justify-self:start;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.35);color:#5eead4;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">
         <i class="fas fa-save" style="margin-right:5px"></i>Сохранить документы
       </button>
     </div>
@@ -488,7 +488,7 @@ function openLPDetail(lpId) {
     <div style="margin-bottom:18px">
       <table style="width:100%;border-collapse:collapse">
         <thead>
-          <tr style="font-size:10px;font-weight:700;color:#5a6b8a;text-transform:uppercase">
+          <tr style="font-size:10px;font-weight:700;color:#5a8a85;text-transform:uppercase">
             <th style="padding:6px 8px;text-align:left">CC №</th>
             <th style="padding:6px 8px;text-align:left">Дата уведомл.</th>
             <th style="padding:6px 8px;text-align:left">Цель</th>
@@ -517,17 +517,17 @@ function openLPDetail(lpId) {
       </table>
     </div>`}
 
-    ${lp.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #3b82f6"><i class="fas fa-sticky-note" style="margin-right:6px;color:#3b82f6"></i>${escapeHtml(lp.notes)}</div>` : ''}
+    ${lp.notes ? `<div style="background:#1c3332;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #14b8a6"><i class="fas fa-sticky-note" style="margin-right:6px;color:#14b8a6"></i>${escapeHtml(lp.notes)}</div>` : ''}
 
     <!-- Footer actions -->
-    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a4846">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="openCapitalAccountStatement(${lp.id})"
           style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-file-invoice-dollar"></i> Capital Account Statement
         </button>
         <button onclick="generateLPWelcomeLetter(${lp.id})"
-          style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-envelope-open-text"></i> Welcome Letter
         </button>
         <button onclick="generateLpPortalPassword(${lp.id})" ${lp.email ? '' : 'disabled'}
@@ -555,7 +555,7 @@ function openLPDetail(lpId) {
         </button>
       </div>
       <button onclick="closeLPDetail()"
-        style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         Закрыть
       </button>
     </div>`;
@@ -606,16 +606,16 @@ async function generateLpPortalPassword(id) {
   overlay.id = 'genLpPortalPwOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
-    <div style="background:#1c2333;border:1px solid #2a3448;border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+    <div style="background:#1c3332;border:1px solid #2a4846;border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
       <div style="font-size:15px;font-weight:800;color:#f1f5f9;margin-bottom:6px"><i class="fas fa-key" style="color:#eab308;margin-right:8px"></i>Пароль LP-портала — ${escapeHtml(lp.name)}</div>
       <div style="font-size:12px;color:#94a3b8;margin-bottom:14px">Email для входа: <b>${escapeHtml(lp.email)}</b>. Пароль показывается один раз — сообщите его LP лично, повторно посмотреть будет нельзя.</div>
-      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:10px 12px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;align-items:center;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:10px 12px;margin-bottom:16px">
         <code id="genLpPortalPw" style="flex:1;font-size:15px;color:#22c55e;font-weight:700;letter-spacing:0.5px;user-select:all">${escapeHtml(password)}</code>
         <button onclick="navigator.clipboard.writeText(document.getElementById('genLpPortalPw').textContent).then(()=>showToast('📋 Скопировано','green'))"
-          style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-copy"></i></button>
+          style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px"><i class="fas fa-copy"></i></button>
       </div>
       <button onclick="document.getElementById('genLpPortalPwOverlay').remove()"
-        style="width:100%;background:#3b82f6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил пароль</button>
+        style="width:100%;background:#14b8a6;border:none;color:#fff;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Готово, я сохранил пароль</button>
     </div>`;
   document.body.appendChild(overlay);
 }
@@ -704,10 +704,10 @@ function openCapitalAccountStatement(lpId) {
 
   document.getElementById('capitalStatementContent').innerHTML = `
     <!-- Statement Header -->
-    <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #2a3448">
+    <div style="text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #2a4846">
       <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Capital Account Statement</div>
       <div style="font-size:18px;font-weight:800;color:#f1f5f9;margin-bottom:4px">${escapeHtml(fp.name)}</div>
-      <div style="font-size:12px;color:#8a9bbf">${escapeHtml(fp.gp)} · GP · Лицензия: ${escapeHtml(fp.license)}</div>
+      <div style="font-size:12px;color:#8abfbb">${escapeHtml(fp.gp)} · GP · Лицензия: ${escapeHtml(fp.license)}</div>
       <div style="font-size:11px;color:#64748b;margin-top:6px">Дата выписки: <b>${statementDate}</b></div>
     </div>
 
@@ -725,7 +725,7 @@ function openCapitalAccountStatement(lpId) {
           ['Tax ID / TIN',    lp.taxId||'—'],
         ].map(([k,v]) => `
           <div>
-            <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
+            <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k}</div>
             <div style="font-size:12px;color:#e2e8f0;font-weight:600">${escapeHtml(v)||'—'}</div>
           </div>`).join('')}
       </div>
@@ -741,7 +741,7 @@ function openCapitalAccountStatement(lpId) {
         { label:'Capital Called to Date',         val:fmtUSD(totalPaid),            color:'#f97316', bold:true  },
         { label:'Unfunded Commitment (Remaining)',val:fmtUSD(unfunded),             color:'#8b5cf6', bold:true  },
         { label:'Distributions Received to Date', val:fmtUSD(distributions),        color:'#22c55e', bold:false },
-        { label:'NAV per Unit (последняя оценка)',val:'$1.00 (2024-12-31)',          color:'#3b82f6', bold:false },
+        { label:'NAV per Unit (последняя оценка)',val:'$1.00 (2024-12-31)',          color:'#14b8a6', bold:false },
         { label:'Fund Term Remaining',            val:`${(getFundById(lp.fundId)?.fundTerm ?? 10) - (getFundById(lp.fundId)?.phaseYear ?? FUND_PARAMS.currentYear)} лет`, color:'#eab308', bold:false },
       ].map((row, i) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;${i%2===0?'background:#0f1623':'background:#131c2e'};border-bottom:1px solid #1e293b">
@@ -751,7 +751,7 @@ function openCapitalAccountStatement(lpId) {
     </div>
 
     <!-- Call Rate Visual -->
-    <div style="background:#1c2333;border-radius:10px;padding:14px 16px;margin-bottom:18px">
+    <div style="background:#1c3332;border-radius:10px;padding:14px 16px;margin-bottom:18px">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:8px">
         <span><i class="fas fa-coins" style="color:#f97316;margin-right:4px"></i>Capital Call Progress</span>
         <span>${fmtPctLP(lp.commitment ? totalPaid/lp.commitment*100 : 0)} от Commitment</span>
@@ -770,10 +770,10 @@ function openCapitalAccountStatement(lpId) {
       <i class="fas fa-list" style="margin-right:5px"></i>Транзакционный журнал Capital Calls
     </div>
     ${ccHistory.length === 0 ? `<div style="padding:20px;text-align:center;color:#4a5568;font-size:12px">Транзакций нет</div>` : `
-    <div style="margin-bottom:18px;border-radius:10px;overflow:hidden;border:1px solid #2a3448">
+    <div style="margin-bottom:18px;border-radius:10px;overflow:hidden;border:1px solid #2a4846">
       <table style="width:100%;border-collapse:collapse">
         <thead style="background:#131c2e">
-          <tr style="font-size:10px;font-weight:700;color:#5a6b8a;text-transform:uppercase">
+          <tr style="font-size:10px;font-weight:700;color:#5a8a85;text-transform:uppercase">
             <th style="padding:8px 10px;text-align:left">CC №</th>
             <th style="padding:8px 10px;text-align:left">Дата уведомл.</th>
             <th style="padding:8px 10px;text-align:left">Дата платежа</th>
@@ -805,7 +805,7 @@ function openCapitalAccountStatement(lpId) {
         </tbody>
         <tfoot style="background:#131c2e">
           <tr>
-            <td colspan="4" style="padding:8px 10px;font-size:11px;font-weight:700;color:#8a9bbf">ИТОГО</td>
+            <td colspan="4" style="padding:8px 10px;font-size:11px;font-weight:700;color:#8abfbb">ИТОГО</td>
             <td style="padding:8px 10px;font-size:13px;font-weight:800;color:#f97316;text-align:right">${fmtUSD(totalCalled)}</td>
             <td style="padding:8px 10px;font-size:13px;font-weight:800;color:#22c55e;text-align:right">${fmtUSD(totalPaid)}</td>
             <td colspan="3"></td>
@@ -824,23 +824,23 @@ function openCapitalAccountStatement(lpId) {
       ].map(k => `
         <div style="background:#0f1623;border-radius:9px;padding:10px 12px;text-align:center">
           <div style="font-size:18px;margin-bottom:4px;color:${k.color}"><i class="fas ${k.icon}"></i></div>
-          <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k.label}</div>
+          <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:3px">${k.label}</div>
           <div style="font-size:13px;font-weight:800;color:${k.color}">${k.val}</div>
         </div>`).join('')}
     </div>
 
     <!-- Legal Note -->
-    <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:10px 14px;font-size:10px;color:#64748b;margin-bottom:16px">
-      <i class="fas fa-info-circle" style="color:#3b82f6;margin-right:6px"></i>
+    <div style="background:rgba(20,184,166,0.05);border:1px solid rgba(20,184,166,0.15);border-radius:8px;padding:10px 14px;font-size:10px;color:#64748b;margin-bottom:16px">
+      <i class="fas fa-info-circle" style="color:#14b8a6;margin-right:6px"></i>
       Выписка подготовлена: ${statementDate} · ${escapeHtml(fp.gp)} (GP) · ${escapeHtml(fp.name)} · Лицензия: ${escapeHtml(fp.license)} ·
       Конфиденциально. Только для авторизованных получателей. Хранение: 6 лет.
     </div>
 
     <!-- Footer -->
-    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid #2a3448;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid #2a4846;flex-wrap:wrap">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="closeCapitalAccountStatement()"
-          style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
+          style="background:#1c3332;border:1px solid #2a4846;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">
           Закрыть
         </button>
         ${totalCalled > totalPaid ? `
@@ -1582,17 +1582,17 @@ function renderCapitalCallsPage() {
     <!-- KPI Row -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       ${[
-        { label:'Capital Calls (всего)', val: fundCCs.length,    sub:`${pendingCCs} ожидают оплаты`,  color:'#3b82f6', icon:'fa-coins'           },
+        { label:'Capital Calls (всего)', val: fundCCs.length,    sub:`${pendingCCs} ожидают оплаты`,  color:'#14b8a6', icon:'fa-coins'           },
         { label:'Всего вызвано',         val: fmtUSD(totalCalled),        sub:`из ${fmtUSD(totalCommit)}`,     color:'#22c55e', icon:'fa-arrow-up'         },
         { label:'Management Fee',        val: fmtUSD(totalMgmtFee),       sub:`2% p.a. от AUM (полугодовые)`, color:'#f97316', icon:'fa-percentage'       },
         { label:'Просроченных',          val: overdueCCs,                  sub:`требуют проверки`,             color: overdueCCs>0?'#ef4444':'#22c55e', icon:'fa-clock' },
       ].map(k => `
-        <div style="background:#1c2333;border-radius:10px;padding:14px 16px;border-top:3px solid ${k.color}">
+        <div style="background:#1c3332;border-radius:10px;padding:14px 16px;border-top:3px solid ${k.color}">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <div style="width:30px;height:30px;background:${k.color}18;border-radius:8px;display:flex;align-items:center;justify-content:center">
               <i class="fas ${k.icon}" style="color:${k.color};font-size:13px"></i>
             </div>
-            <span style="font-size:11px;color:#8a9bbf;font-weight:700;text-transform:uppercase">${k.label}</span>
+            <span style="font-size:11px;color:#8abfbb;font-weight:700;text-transform:uppercase">${k.label}</span>
           </div>
           <div style="font-size:20px;font-weight:800;color:#f1f5f9;margin-bottom:2px">${k.val}</div>
           <div style="font-size:11px;color:#64748b">${k.sub}</div>
@@ -1605,10 +1605,10 @@ function renderCapitalCallsPage() {
         <i class="fas fa-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#4a5568;font-size:12px"></i>
         <input type="text" placeholder="Поиск Capital Call..." value="${ccFilter}"
           oninput="ccFilter=this.value;renderCapitalCallsPage()"
-          style="width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px 8px 32px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
       </div>
       <select onchange="ccStatusF=this.value;renderCapitalCallsPage()"
-        style="background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
+        style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px">
         <option value="">Все статусы</option>
         <option value="Completed" ${ccStatusF==='Completed'?'selected':''}>✅ Завершён</option>
         <option value="Pending"   ${ccStatusF==='Pending'?'selected':''}>⏳ На рассмотрении</option>
@@ -1622,7 +1622,7 @@ function renderCapitalCallsPage() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-coins" style="color:#f97316;margin-right:6px"></i>Журнал Capital Calls</span>
-        <span style="font-size:12px;color:#8a9bbf">${filtered.length} записей · 10 рабочих дней уведомление</span>
+        <span style="font-size:12px;color:#8abfbb">${filtered.length} записей · 10 рабочих дней уведомление</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -1661,7 +1661,7 @@ function renderCapitalCallsPage() {
                   <td style="font-size:12px;color:#e2e8f0">${cc.pctOfCommit}%</td>
                   <td style="font-size:11px;color:#e2e8f0;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cc.purpose}</td>
                   <td>
-                    <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cc.managementFee?'rgba(234,179,8,0.12)':'rgba(59,130,246,0.12)'};color:${cc.managementFee?'#eab308':'#3b82f6'}">
+                    <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cc.managementFee?'rgba(234,179,8,0.12)':'rgba(20,184,166,0.12)'};color:${cc.managementFee?'#eab308':'#14b8a6'}">
                       ${cc.managementFee ? 'Mgmt Fee' : 'Investment'}
                     </span>
                     ${cc.lineItems.length === 1 ? `<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;background:rgba(249,115,22,0.15);color:#fb923c;margin-left:4px">IND</span>` : ''}
@@ -1687,8 +1687,8 @@ function renderCapitalCallsPage() {
               }).join('')}
           </tbody>
           <tfoot>
-            <tr style="background:#0f1623;border-top:2px solid #2a3448">
-              <td colspan="3" style="padding:10px 12px;font-size:11px;font-weight:700;color:#8a9bbf;text-transform:uppercase">ИТОГО по журналу</td>
+            <tr style="background:#0f1623;border-top:2px solid #2a4846">
+              <td colspan="3" style="padding:10px 12px;font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase">ИТОГО по журналу</td>
               <td style="padding:10px 12px;font-size:14px;font-weight:800;color:#22c55e">${fmtUSD(filtered.reduce((s,c)=>s+c.totalAmount,0))}</td>
               <td style="padding:10px 12px;font-size:11px;color:#64748b">—</td>
               <td style="padding:10px 12px;font-size:11px;color:#64748b">${filtered.length} CC</td>
@@ -1719,7 +1719,7 @@ function renderUnfundedSummaryTable() {
     <div class="card">
       <div class="card-header">
         <span class="card-title"><i class="fas fa-piggy-bank" style="color:#8b5cf6;margin-right:6px"></i>Unfunded Commitment — Остаток к вызову</span>
-        <span style="font-size:12px;color:#8a9bbf">Итого: ${fmtUSD(totalUF)} · ${fmtPctLP(totalC ? totalUF/totalC*100 : 0)} от общего Commitment</span>
+        <span style="font-size:12px;color:#8abfbb">Итого: ${fmtUSD(totalUF)} · ${fmtPctLP(totalC ? totalUF/totalC*100 : 0)} от общего Commitment</span>
       </div>
       <div class="table-scroll">
         <table class="data-table">
@@ -1768,7 +1768,7 @@ function renderUnfundedSummaryTable() {
           </tbody>
           <tfoot>
             <tr style="background:#131c2e">
-              <td colspan="3" style="padding:10px 12px;font-size:12px;font-weight:700;color:#8a9bbf">ИТОГО (Active LP)</td>
+              <td colspan="3" style="padding:10px 12px;font-size:12px;font-weight:700;color:#8abfbb">ИТОГО (Active LP)</td>
               <td style="padding:10px 12px;font-size:13px;font-weight:800;color:#22c55e">${fmtUSD(totalC)}</td>
               <td style="padding:10px 12px;font-size:13px;font-weight:800;color:#f97316">${fmtUSD(totalCalled)}</td>
               <td style="padding:10px 12px;font-size:13px;font-weight:800;color:#22c55e">${fmtUSD(totalCalled)}</td>
@@ -1803,7 +1803,7 @@ function openCCDetail(ccId) {
 
   document.getElementById('ccDetailContent').innerHTML = `
     <!-- Header -->
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2a3448">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2a4846">
       <div style="width:46px;height:46px;background:rgba(249,115,22,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center">
         <i class="fas fa-coins" style="color:#f97316;font-size:18px"></i>
       </div>
@@ -1847,7 +1847,7 @@ function openCCDetail(ccId) {
         { label:'Создал',              val:cc.createdBy||'CFO', color:'#94a3b8' },
       ].map(k => `
         <div style="background:#0f1623;border-radius:8px;padding:8px 12px">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k.label}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${k.label}</div>
           <div style="font-size:12px;font-weight:700;color:${k.color}">${k.val}</div>
         </div>`).join('')}
     </div>
@@ -1856,10 +1856,10 @@ function openCCDetail(ccId) {
     <div style="font-size:11px;font-weight:700;color:#f97316;text-transform:uppercase;margin-bottom:10px">
       <i class="fas fa-users" style="margin-right:5px"></i>Pro-Rata по LP (${cc.lineItems.length} участников)
     </div>
-    <div style="border-radius:10px;overflow:hidden;border:1px solid #2a3448;margin-bottom:16px">
+    <div style="border-radius:10px;overflow:hidden;border:1px solid #2a4846;margin-bottom:16px">
       <table style="width:100%;border-collapse:collapse">
         <thead style="background:#131c2e">
-          <tr style="font-size:10px;font-weight:700;color:#5a6b8a;text-transform:uppercase">
+          <tr style="font-size:10px;font-weight:700;color:#5a8a85;text-transform:uppercase">
             <th style="padding:8px 10px;text-align:left">LP</th>
             <th style="padding:8px 10px;text-align:right">Commitment</th>
             <th style="padding:8px 10px;text-align:right">К оплате (${cc.pctOfCommit}%)</th>
@@ -1899,7 +1899,7 @@ function openCCDetail(ccId) {
                           style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700">
                           Получено ✓
                         </button>`
-                      : `<span style="font-size:9px;color:#5a6b8a;font-style:italic">Ожидает CFO/CEO</span>`)
+                      : `<span style="font-size:9px;color:#5a8a85;font-style:italic">Ожидает CFO/CEO</span>`)
                   : ccStatusBadge(li.status)}
               </td>
               <td style="padding:8px 10px;text-align:center">
@@ -1913,7 +1913,7 @@ function openCCDetail(ccId) {
         </tbody>
         <tfoot style="background:#131c2e">
           <tr>
-            <td colspan="2" style="padding:8px 10px;font-size:11px;font-weight:700;color:#8a9bbf">ИТОГО</td>
+            <td colspan="2" style="padding:8px 10px;font-size:11px;font-weight:700;color:#8abfbb">ИТОГО</td>
             <td style="padding:8px 10px;font-size:13px;font-weight:800;color:#f97316;text-align:right">${fmtUSD(cc.totalAmount)}</td>
             <td style="padding:8px 10px;font-size:13px;font-weight:800;color:#22c55e;text-align:right">${fmtUSD(received)}</td>
             <td colspan="5"></td>
@@ -1922,10 +1922,10 @@ function openCCDetail(ccId) {
       </table>
     </div>
 
-    ${cc.notes ? `<div style="background:#1c2333;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #f97316"><i class="fas fa-sticky-note" style="margin-right:6px;color:#f97316"></i>${escapeHtml(cc.notes)}</div>` : ''}
+    ${cc.notes ? `<div style="background:#1c3332;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#94a3b8;border-left:3px solid #f97316"><i class="fas fa-sticky-note" style="margin-right:6px;color:#f97316"></i>${escapeHtml(cc.notes)}</div>` : ''}
 
     <!-- Footer -->
-    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a3448">
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:14px;border-top:1px solid #2a4846">
       <div>
         ${cc.status === 'Draft' ? `
         <button onclick="deleteCC(${ccId})"
@@ -1934,7 +1934,7 @@ function openCCDetail(ccId) {
         </button>` : ''}
       </div>
       <button onclick="closeCCDetail()"
-        style="background:#3b82f6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
+        style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
     </div>`;
 
   modal.style.display = 'flex';
@@ -2129,8 +2129,8 @@ function openIndividualCCModal(lpId) {
 
   const noticeDate = today();
   const payDate    = addBusinessDays(noticeDate, 10);
-  const inpStyle   = `width:100%;background:#0f1623;border:1px solid #2a3448;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box`;
-  const lblStyle   = `font-size:11px;font-weight:700;color:#8a9bbf;display:block;margin-bottom:4px;text-transform:uppercase`;
+  const inpStyle   = `width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box`;
+  const lblStyle   = `font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase`;
   const grpStyle   = `margin-bottom:14px`;
 
   const modal   = document.getElementById('modal-cc-new');
@@ -2150,15 +2150,15 @@ function openIndividualCCModal(lpId) {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">
         <div>
-          <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700">Commitment</div>
+          <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700">Commitment</div>
           <div style="font-size:12px;font-weight:700;color:#22c55e">${fmtUSD(lp.commitment)}</div>
         </div>
         <div>
-          <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700">Unfunded</div>
+          <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700">Unfunded</div>
           <div style="font-size:12px;font-weight:700;color:#8b5cf6">${fmtUSD(unfunded)}</div>
         </div>
         <div>
-          <div style="font-size:9px;color:#5a6b8a;text-transform:uppercase;font-weight:700">Задолженность</div>
+          <div style="font-size:9px;color:#5a8a85;text-transform:uppercase;font-weight:700">Задолженность</div>
           <div style="font-size:12px;font-weight:700;color:${totalDebt > 0 ? '#ef4444' : '#22c55e'}">${totalDebt > 0 ? fmtUSD(totalDebt) : '✓ Нет'}</div>
         </div>
       </div>
@@ -2207,7 +2207,7 @@ function openIndividualCCModal(lpId) {
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeNewCCModal()"
-        style="background:#1c2333;border:1px solid #2a3448;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
+        style="background:#1c3332;border:1px solid #2a4846;color:#94a3b8;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px">Отмена</button>
       <button onclick="saveIndividualCC(${lp.id})"
         style="background:linear-gradient(135deg,#f97316,#dc2626);border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
         <i class="fas fa-file-signature" style="margin-right:6px"></i>Сохранить как черновик
@@ -2320,12 +2320,12 @@ function renderDashboardLPWidget() {
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
       ${[
-        { label:'Активных LP',    val:activeLP.length, color:'#3b82f6', sub:`из ${lpRegister.filter(l=>l.fundId===activeFundId).length} в реестре`  },
+        { label:'Активных LP',    val:activeLP.length, color:'#14b8a6', sub:`из ${lpRegister.filter(l=>l.fundId===activeFundId).length} в реестре`  },
         { label:'Total Commit',   val:fmtUSD(totalC),  color:'#22c55e', sub:`Unfunded: ${fmtUSD(totalUnfund)}`   },
         { label:'Pending CC',     val:pendingCC,        color:overdueCC>0?'#ef4444':'#f97316', sub:overdueCC>0?`${overdueCC} просрочено`:'Ожидают оплаты' },
       ].map(k => `
         <div style="background:#0f1623;border-radius:8px;padding:10px 12px;border-left:3px solid ${k.color}">
-          <div style="font-size:10px;color:#5a6b8a;text-transform:uppercase;font-weight:700;margin-bottom:4px">${k.label}</div>
+          <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:4px">${k.label}</div>
           <div style="font-size:16px;font-weight:800;color:${k.color}">${k.val}</div>
           <div style="font-size:10px;color:#64748b">${k.sub}</div>
         </div>`).join('')}
@@ -2350,7 +2350,7 @@ function renderDashboardLPWidget() {
         return `
         <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#0f1623;border-radius:8px;cursor:pointer"
           onclick="navigateTo('lp-register');setTimeout(()=>openLPDetail(${lp.id}),200)">
-          <div style="width:28px;height:28px;background:rgba(59,130,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#3b82f6;flex-shrink:0">${lp.name.slice(0,2).toUpperCase()}</div>
+          <div style="width:28px;height:28px;background:rgba(20,184,166,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#14b8a6;flex-shrink:0">${lp.name.slice(0,2).toUpperCase()}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:700;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(lp.name)}</div>
             <div style="font-size:10px;color:#64748b">${fmtUSD(lp.commitment)} · ${lp.lpType}</div>
@@ -2372,7 +2372,7 @@ function renderDashboardLPWidget() {
 
     <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="navigateTo('lp-register')"
-        style="flex:1;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">
+        style="flex:1;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">
         <i class="fas fa-book" style="margin-right:4px"></i>LP Register
       </button>
       <button onclick="navigateTo('lp-capital-calls')"
