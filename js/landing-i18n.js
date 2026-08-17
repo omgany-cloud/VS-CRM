@@ -22,7 +22,6 @@ const LANDING_TRANSLATIONS = {
 
   stat1_label: { ru: 'Основана на МФЦА', en: 'Established at AIFC' },
   stat2_label: { ru: 'Лицензированных вида деятельности', en: 'Licensed activities' },
-  stat3_label: { ru: 'Человек в команде', en: 'Senior team members' },
 
   services_eyebrow: { ru: 'Чем мы занимаемся', en: 'What We Do' },
   about_title: { ru: 'Лицензированные виды деятельности', en: 'Licensed Activities' },

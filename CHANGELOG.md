@@ -2,6 +2,16 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.1.1] - 2026-08-17
+
+### Changed
+- Landing page typography unified: Fraunces (serif) now used for team
+  member names and the footer/header wordmark, IBM Plex Mono for role
+  labels, IBM Plex Sans for bio text — previously only the hero and
+  services sections had the editorial font pairing.
+- Removed the "team size" stat from the hero stats row; only founding
+  year and licensed-activities count remain.
+
 ## [1.1.0] - 2026-08-17
 
 ### Changed
