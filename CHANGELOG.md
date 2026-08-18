@@ -2,6 +2,16 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.2.2] - 2026-08-18
+
+### Fixed
+- Uploaded contract documents in the Engagements Registry couldn't be
+  previewed (external links like Google Drive worked, masking the bug).
+  Uploaded-file links need an auth token appended before they'll load;
+  the registry's preview buttons were skipping that step. Fixed by
+  routing both preview buttons through the same token-resolving helper
+  every other document-preview button in the app already uses.
+
 ## [1.2.1] - 2026-08-18
 
 ### Changed

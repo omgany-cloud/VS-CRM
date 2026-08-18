@@ -5768,7 +5768,7 @@ function renderEngagementsPage() {
                   <td style="font-weight:700;color:${balance>0?'#f97316':'#22c55e'};font-size:12px">${fmtCurrency(balance, e.currency||'USD')}</td>
                   <td style="text-align:center">
                     ${docUrl
-                      ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${docUrl.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${docUrl.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')"
+                      ? `<button onclick="event.stopPropagation();engOpenDocPreview(${e.id})"
                           title="Открыть документ"
                           style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#c4b5fd;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">
                           <i class="fas fa-file-contract"></i>
@@ -5786,6 +5786,30 @@ function renderEngagementsPage() {
 /* ── Engagement modal ──────────────────────────── */
 let activeEngId = null;
 let engEditMode = false;
+
+// Uploaded-file links are served from the authenticated GET
+// /api/uploads/:id route (no cookie/session to ride on for a bare
+// iframe/anchor), so they need resolveDocUrl()'s ?token=... appended
+// before they'll actually load — same treatment already applied to
+// every other document-preview button in this file (see obViewContract
+// and friends above). The table/modal buttons here used to pass the
+// raw stored URL straight to _obOpenPreviewModal and skip that step,
+// which is why an uploaded contract preview would fail (external links
+// like Google Drive happened to still work, masking the bug).
+function engOpenDocPreview(engId) {
+  const e = engagements.find(x => x.id === engId);
+  if (!e) return;
+  const isFM = e.serviceType === 'LP Investment (FM)';
+  const rawUrl = isFM ? (e.lpaUrl || '') : (e.contractUrl || '');
+  if (!rawUrl) return;
+  const url = resolveDocUrl(rawUrl);
+  let previewUrl = url;
+  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if (driveMatch) {
+    previewUrl = 'https://drive.google.com/file/d/' + driveMatch[1] + '/preview';
+  }
+  _obOpenPreviewModal(previewUrl, url);
+}
 
 function openEngagementModal(engId) {
   activeEngId = engId;
@@ -5880,7 +5904,7 @@ function openEngagementModal(engId) {
         <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${isFM ? 'LP Agreement (LPA)' : 'Ссылка на договор'}</div>
         <div style="font-size:11px;color:#a78bfa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(docUrl.length>65 ? docUrl.slice(0,65)+'…' : docUrl)}</div>
       </div>
-      <button onclick="_obOpenPreviewModal('${escapeAttr(docUrl)}','${escapeAttr(docUrl)}')"
+      <button onclick="engOpenDocPreview(${e.id})"
         style="flex-shrink:0;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);color:#c4b5fd;padding:6px 12px;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700">
         <i class="fas fa-eye"></i> Открыть
       </button>
