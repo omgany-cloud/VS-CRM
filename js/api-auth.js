@@ -282,7 +282,7 @@ const READONLY_GATED_FN_NAMES = [
   'saveNewConflictApproval', 'decideConflictApproval', 'saveNewCoiEntry', 'saveNewUser',
   'saveUserEdit', 'toggleUserActive', 'deleteUser', 'saveCompanyName', 'saveNewRole', 'saveNewApiKey', 'revokeApiKey',
   'saveRoleEdit', 'deleteRole', 'wfAction', 'withdrawWf', 'startWorkflow',
-  'saveNewEngagement', 'updateEngPayment', 'obAddTaskComment',
+  'saveNewEngagement', 'saveEngagementEdit', 'updateEngPayment', 'obAddTaskComment',
   'saveDDConclusion', 'removeDDConclusionDoc', 'signGpConclusion',
   'dealField', 'dealMoveStage', 'dealAddMeeting', 'addTSVersion', 'dealTSVersionUrl',
   'addSignedDoc', 'dealSignedDocUrl', 'addFounderContact', 'deleteTSVersion',

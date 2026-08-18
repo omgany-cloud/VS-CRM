@@ -2,6 +2,22 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.2.0] - 2026-08-18
+
+### Added
+- Contracts in the Engagements Registry (Реестр договоров) can now be
+  edited after creation — contract number, signed date, service type,
+  fee type, status, amount, currency, contract dates, document link,
+  and notes. Previously the detail view was read-only aside from a
+  payment quick-update.
+- "New contract" form now has a document-link field (with the paperclip
+  file-upload button, same as elsewhere in the app) so a Drive/SharePoint
+  link can be attached at creation time, not just after the fact.
+
+### Fixed
+- Removed the dollar-sign icon from the "Инвойсировано" KPI card at the
+  top of the Engagements Registry.
+
 ## [1.1.2] - 2026-08-17
 
 ### Changed

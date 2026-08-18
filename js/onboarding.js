@@ -5666,7 +5666,7 @@ function renderEngagementsPage() {
           <span class="kpi-delta">По направлениям</span></div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-icon orange"><i class="fas fa-file-invoice-dollar"></i></div>
+        <div class="kpi-icon orange"><i class="fas fa-file-invoice"></i></div>
         <div class="kpi-body"><span class="kpi-label">Инвойсировано</span>
           <span class="kpi-value">$${(totalInvoiced/1000).toFixed(0)}K</span>
           <span class="kpi-delta">${totalPaid>0?'Частично оплачено':'Ожидает'}</span></div>
@@ -5772,6 +5772,7 @@ function renderEngagementsPage() {
 
 /* ── Engagement modal ──────────────────────────── */
 let activeEngId = null;
+let engEditMode = false;
 
 function openEngagementModal(engId) {
   activeEngId = engId;
@@ -5809,6 +5810,49 @@ function openEngagementModal(engId) {
   ];
 
   document.getElementById('engagementModalContent').innerHTML = `
+    ${engEditMode ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Договор №</label>
+        <input type="text" id="engEdit_contractNum" value="${escapeAttr(e.contractNum||'')}"
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата подписания</label>
+        <input type="date" id="engEdit_signedDate" value="${escapeAttr(e.signedDate || e.date || '')}"
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      ${isFM
+        ? `<div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Тип услуги</label>
+             <div style="padding:9px 12px;color:#8abfbb;font-size:13px">${escapeHtml(e.serviceType)} <span style="font-size:10px">(FM — не редактируется)</span></div></div>`
+        : obNewSelect('engEdit_serviceType','Тип услуги',['Advising','Arranging','Both'], e.serviceType)}
+      ${obNewSelect('engEdit_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'], e.feeType)}
+      ${obNewSelect('engEdit_status','Статус',['Draft','Active','Completed','Terminated'], e.status)}
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Сумма гонорара</label>
+        <input type="number" id="engEdit_feeAmount" value="${e.feeAmount||0}" min="0"
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Валюта</label>
+        <select id="engEdit_currency" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+          ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${(e.currency||'USD')===code?' selected':''}>${c.label}</option>`).join('')}
+        </select></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Начало срока</label>
+        <input type="date" id="engEdit_startDate" value="${escapeAttr(e.startDate||'')}"
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Окончание срока</label>
+        <input type="date" id="engEdit_endDate" value="${escapeAttr(e.endDate||'')}"
+          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">${isFM ? 'Ссылка на LPA' : 'Ссылка на договор'}</label>
+        <div style="display:flex;gap:6px">
+          <input type="url" id="engEdit_docUrl" value="${escapeAttr(docUrl)}" placeholder="https://drive.google.com/..."
+            style="flex:1;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          ${docUploadBtn('engEdit_docUrl')}
+        </div></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Примечания</label>
+        <textarea id="engEdit_notes" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box">${escapeHtml(e.notes||'')}</textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px">
+      <button onclick="engEditMode=false;openEngagementModal(${e.id})" style="background:transparent;border:1px solid #2a4846;color:#8abfbb;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px">Отмена</button>
+      <button onclick="saveEngagementEdit(${e.id})" style="background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#fff;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+        <i class="fas fa-save" style="margin-right:6px"></i>Сохранить изменения
+      </button>
+    </div>
+    ` : `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       ${infoRows.map(([k,v]) => `
         <div style="background:#0f1623;border-radius:8px;padding:9px 12px">
@@ -5828,6 +5872,7 @@ function openEngagementModal(engId) {
         <i class="fas fa-eye"></i> Открыть
       </button>
     </div>` : ''}
+    `}
 
     ${amendArr.length > 0 ? `
     <div style="background:#0f1623;border-radius:8px;padding:9px 12px;margin-bottom:12px">
@@ -5897,18 +5942,25 @@ function openEngagementModal(engId) {
         </div>`).join('')}
     </div>` : ''}
 
-    ${e.notes ? `<div style="font-size:12px;color:#94a3b8;background:#1c3332;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${escapeHtml(e.notes)}</div>` : ''}
+    ${(!engEditMode && e.notes) ? `<div style="font-size:12px;color:#94a3b8;background:#1c3332;border-radius:8px;padding:10px;margin-bottom:14px;border-left:3px solid #22c55e">${escapeHtml(e.notes)}</div>` : ''}
 
+    ${!engEditMode ? `
     <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;padding-top:12px;border-top:1px solid #2a4846">
       <button onclick="deleteEngagement(${e.id})"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
         <i class="fas fa-trash"></i> Удалить
       </button>
-      <button onclick="closeEngagementModal()"
-        style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-        Закрыть
-      </button>
-    </div>`;
+      <div style="display:flex;gap:8px">
+        <button onclick="engEditMode=true;openEngagementModal(${e.id})"
+          style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.35);color:#5eead4;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
+          <i class="fas fa-pen"></i> Редактировать
+        </button>
+        <button onclick="closeEngagementModal()"
+          style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+          Закрыть
+        </button>
+      </div>
+    </div>` : ''}`;
 
   modal.style.display = 'flex';
 }
@@ -5920,6 +5972,42 @@ function closeEngagementModal() {
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
   activeEngId = null;
+  engEditMode = false;
+}
+
+async function saveEngagementEdit(engId) {
+  const e = engagements.find(x => x.id === engId);
+  if (!e) return;
+  const isFM = e.serviceType === 'LP Investment (FM)';
+
+  const feeAmount = parseFloat(document.getElementById('engEdit_feeAmount')?.value);
+  if (!Number.isFinite(feeAmount) || feeAmount <= 0) { showToast('⚠️ Сумма гонорара должна быть больше 0', 'red'); return; }
+
+  const prev = { ...e };
+  e.contractNum  = document.getElementById('engEdit_contractNum')?.value.trim() || e.contractNum;
+  e.signedDate   = document.getElementById('engEdit_signedDate')?.value || null;
+  e.serviceType  = isFM ? e.serviceType : (document.getElementById('engEdit_serviceType')?.value || e.serviceType);
+  e.feeType      = document.getElementById('engEdit_feeType')?.value || e.feeType;
+  e.status       = document.getElementById('engEdit_status')?.value || e.status;
+  e.feeAmount    = feeAmount;
+  e.currency     = document.getElementById('engEdit_currency')?.value || e.currency;
+  e.startDate    = document.getElementById('engEdit_startDate')?.value || null;
+  e.endDate      = document.getElementById('engEdit_endDate')?.value || null;
+  e.notes        = document.getElementById('engEdit_notes')?.value || '';
+  const docUrl   = document.getElementById('engEdit_docUrl')?.value.trim() || '';
+  if (isFM) e.lpaUrl = docUrl; else e.contractUrl = docUrl;
+
+  try {
+    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(e) });
+    Object.assign(e, updated);
+    engEditMode = false;
+    openEngagementModal(engId);
+    renderEngagementsPage();
+    showToast('✅ Договор обновлён', 'green');
+  } catch (err) {
+    Object.assign(e, prev);
+    showToast('⚠️ Не удалось сохранить изменения: ' + err.message, 'red');
+  }
 }
 
 async function deleteEngagement(id) {
@@ -6017,6 +6105,12 @@ function openNewEngagementModal() {
         <input type="text" id="eng_dealRef" placeholder="DEAL-XXX-2026"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         <div style="font-size:10px;color:#5a8a85;margin-top:3px">Если у клиента уже есть договор с тем же Deal Ref, система считает это Dual-Mandate — требует рассмотрения CF Deal Committee.</div></div>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Ссылка на договор (опционально)</label>
+        <div style="display:flex;gap:6px">
+          <input type="url" id="eng_contractUrl" placeholder="https://drive.google.com/... или загрузите файл"
+            style="flex:1;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+          ${docUploadBtn('eng_contractUrl')}
+        </div></div>
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Примечания</label>
         <textarea id="eng_notes" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
     </div>
@@ -6069,6 +6163,7 @@ async function saveNewEngagement() {
     endDate:     '',
     rm:          currentUserDisplayName(),
     notes:       document.getElementById('eng_notes')?.value || '',
+    contractUrl: document.getElementById('eng_contractUrl')?.value.trim() || '',
     dealRef,
   };
   try {
