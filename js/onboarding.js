@@ -5617,6 +5617,19 @@ let engFilter = '';
 let engStatusFilter = '';
 let engDirFilter = '';
 
+// No currency symbol — these KPI totals mix engagements in different
+// currencies (see comment below), so a single "$" prefix would be
+// misleading. K/M suffix + thousands separator so the magnitude is
+// unambiguous at a glance.
+function fmtCompactAmount(amount) {
+  if (amount == null || Number.isNaN(amount)) return '—';
+  const sign = amount < 0 ? '-' : '';
+  const abs = Math.abs(amount);
+  if (abs >= 1000000) return sign + (abs / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2}) + 'M';
+  if (abs >= 1000)    return sign + (abs / 1000).toLocaleString(undefined, {maximumFractionDigits: 1}) + 'K';
+  return sign + abs.toLocaleString();
+}
+
 function renderEngagementsPage() {
   const el = document.getElementById('engagementsContent');
   if (!el) return;
@@ -5668,13 +5681,13 @@ function renderEngagementsPage() {
       <div class="kpi-card">
         <div class="kpi-icon orange"><i class="fas fa-file-invoice"></i></div>
         <div class="kpi-body"><span class="kpi-label">Инвойсировано</span>
-          <span class="kpi-value">$${(totalInvoiced/1000).toFixed(0)}K</span>
+          <span class="kpi-value">${fmtCompactAmount(totalInvoiced)}</span>
           <span class="kpi-delta">${totalPaid>0?'Частично оплачено':'Ожидает'}</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon red"><i class="fas fa-balance-scale"></i></div>
         <div class="kpi-body"><span class="kpi-label">Остаток</span>
-          <span class="kpi-value" style="color:${totalBalance>0?'#f97316':'#22c55e'}">$${(totalBalance/1000).toFixed(0)}K</span>
+          <span class="kpi-value" style="color:${totalBalance>0?'#f97316':'#22c55e'}">${fmtCompactAmount(totalBalance)}</span>
           <span class="kpi-delta ${totalBalance>0?'warning':'up'}">${totalBalance>0?'К оплате':'Всё оплачено'}</span></div>
       </div>
     </div>

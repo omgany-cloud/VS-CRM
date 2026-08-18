@@ -2,6 +2,15 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.2.1] - 2026-08-18
+
+### Changed
+- "Инвойсировано" and "Остаток" KPI cards in the Engagements Registry no
+  longer show a "$" (these totals mix engagements in different
+  currencies, so a single symbol was misleading). Values now use a
+  thousands separator plus a clear K/M suffix (e.g. "45,2K" / "2,45M")
+  instead of always showing "K" regardless of actual magnitude.
+
 ## [1.2.0] - 2026-08-18
 
 ### Added
