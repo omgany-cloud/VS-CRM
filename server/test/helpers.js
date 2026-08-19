@@ -97,7 +97,7 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
     }
   }
 
-  return { baseUrl, token, apiFetch, stop };
+  return { baseUrl, token, apiFetch, stop, dbPath };
 }
 
 module.exports = { createTestServer, SEED_EMAIL, SEED_PASSWORD };

@@ -2,6 +2,22 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.4.0] - 2026-08-19
+
+### Added
+- Proactive email notifications: new `server/notifications/` module
+  (mailer/recipients/notify/triggers/scheduler) with a `notification_log`
+  dedup ledger so the same event never re-notifies the same recipient
+  twice. SMTP is optional — if `SMTP_HOST` is unset, notifications log to
+  the console instead of sending, same "safe default" as the JWT secret.
+  Two starter instant triggers wired in: a Capital Call moving Draft →
+  Pending emails the LP and CEO/CFO; a workflow instance being created or
+  advancing to its next step emails whoever holds that step's role.
+  Digest-style triggers (KYC renewal, overdue payments, ...) are scoped
+  for a later round — `scheduler.js` ships as infrastructure only for now.
+  `.env.example`/`DEPLOYMENT.md` document the new `SMTP_*`/`EMAIL_FROM`/
+  `DIGEST_HOUR` variables.
+
 ## [1.3.0] - 2026-08-19
 
 ### Added

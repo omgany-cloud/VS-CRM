@@ -47,6 +47,8 @@ const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL:
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
 const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
+const { notifyCapitalCallCreated, notifyWorkflowStepAssigned } = require('./notifications/triggers');
+const notificationsScheduler = require('./notifications/scheduler');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
@@ -1214,6 +1216,16 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
   const cc = rowToCC(row);
   cc.lineItems = lineItemsStmt.all(existing.id, req.tenantId).map(rowToLineItem);
   res.json(cc);
+
+  // Fired here (Draft -> Pending), not at creation: a Draft is still
+  // freely editable/deletable and isn't a real cash call on any LP yet
+  // (see the ccApprove gate just above) — emailing LPs about one would be
+  // premature and confusing. Fire-and-forget after the response is
+  // already sent; notifyOnce() never throws, but .catch defensively in
+  // case something upstream of it does.
+  if (existing.status === 'Draft' && cc.status === 'Pending') {
+    notifyCapitalCallCreated(req.tenantId, cc).catch((err) => console.error('[notify] capital_call_created failed:', err.message));
+  }
 });
 
 // Delete: unlike the other hybrid-delete routes, this isn't a cross-table
@@ -2608,7 +2620,13 @@ app.post('/api/workflow', requireAuth, requireInternal, (req, res) => {
     stepsJson: JSON.stringify(steps),
   }));
   const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
-  res.status(201).json(rowToWfInstance(row));
+  const instance = rowToWfInstance(row);
+  res.status(201).json(instance);
+
+  // "Your turn" for whoever holds step 0's role — fire-and-forget after
+  // the response is sent (see the matching call in PUT /api/workflow/:id
+  // for why this never throws back into the request).
+  notifyWorkflowStepAssigned(req.tenantId, instance).catch((err) => console.error('[notify] workflow_step_assigned failed:', err.message));
 });
 
 // The security-critical one: approve/reject the CURRENT step. Every
@@ -2659,7 +2677,17 @@ app.put('/api/workflow/:id', requireAuth, requireInternal, (req, res) => {
     id: existing.id, tenantId: req.tenantId,
   }));
   const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
-  res.json(rowToWfInstance(row));
+  const instance = rowToWfInstance(row);
+  res.json(instance);
+
+  // Only meaningful if this approval advanced to a NEW step (still
+  // active) — a rejection or the final approval has no next holder to
+  // notify. notifyWorkflowStepAssigned itself also no-ops if status isn't
+  // 'active', this check just avoids the wasted DB round-trips in the
+  // common "chain just finished" case.
+  if (instance.status === 'active') {
+    notifyWorkflowStepAssigned(req.tenantId, instance).catch((err) => console.error('[notify] workflow_step_assigned failed:', err.message));
+  }
 });
 
 app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) => {
@@ -2702,6 +2730,11 @@ app.use((err, req, res, next) => {
 // as the process stays up — see server/backup.js.
 try { runBackup(); } catch (err) { console.error('[backup] startup backup failed:', err.message); }
 scheduleBackups();
+
+// Empty until Stage 2 adds a digest trigger (server/notifications/
+// scheduler.js) — starting it now anyway means that stage is a pure
+// content change, no new server.js wiring.
+notificationsScheduler.start();
 
 // Plain HTTP unless TLS_CERT_PATH/TLS_KEY_PATH are both set (see
 // .env.example / DEPLOYMENT.md) — there's no domain to get a real

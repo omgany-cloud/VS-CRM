@@ -853,6 +853,32 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 CREATE INDEX IF NOT EXISTS idx_api_keys_tenant ON api_keys(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+
+-- Idempotency ledger for server/notifications/* — one row per email
+-- actually sent (or console-logged, when SMTP isn't configured; see
+-- mailer.js), so the same event never re-notifies the same person twice.
+-- An instant trigger (e.g. "Capital Call created") checks for an existing
+-- row with this exact (event_type, entity_id, recipient_email) before ever
+-- sending; a digest trigger additionally scopes by day (see notify.js)
+-- since the same underlying condition legitimately re-fires once per day
+-- until resolved.
+-- Keyed by recipient_email rather than a recipient_id FK on purpose: a
+-- recipient can be a users row (CEO/CFO/Compliance) OR an lp_register
+-- row (an LP being notified about their own Capital Call/Distribution) —
+-- two different id spaces that would otherwise collide (LP #5 and User #5
+-- are unrelated people). What actually matters for "don't double-email
+-- someone" is the address itself, which every recipient has either way.
+CREATE TABLE IF NOT EXISTS notification_log (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id        INTEGER NOT NULL REFERENCES tenants(id),
+  event_type       TEXT NOT NULL,
+  entity_type      TEXT NOT NULL,
+  entity_id        INTEGER NOT NULL,
+  recipient_email  TEXT NOT NULL,
+  sent_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notification_log_tenant ON notification_log(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_notification_log_dedup ON notification_log(tenant_id, event_type, entity_id, recipient_email);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —
