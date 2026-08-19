@@ -179,6 +179,48 @@ CREATE TABLE IF NOT EXISTS capital_call_line_items (
   aml_ok         INTEGER
 );
 
+-- Distributions: the reverse cash flow (fund -> LP), mirroring capital_calls/
+-- capital_call_line_items above. roc_amount (return of capital) and
+-- profit_amount are entered separately because they're taxed/carried
+-- differently downstream (see server/waterfallEngine.js, not yet built —
+-- for now POST /api/distributions either takes lineItems verbatim from the
+-- caller, or — only when profit_amount is 0 — auto-splits roc_amount
+-- pro-rata by ownership, since ROC never carries GP carry and needs no
+-- waterfall math to distribute correctly).
+CREATE TABLE IF NOT EXISTS distributions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id           INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id             INTEGER REFERENCES funds(id),
+  dist_number         TEXT NOT NULL,
+  notice_date         TEXT,
+  payment_date        TEXT,
+  total_amount        REAL NOT NULL DEFAULT 0,
+  source_type         TEXT,
+  source_portfolio_id INTEGER REFERENCES portfolio(id),
+  roc_amount          REAL NOT NULL DEFAULT 0,
+  profit_amount       REAL NOT NULL DEFAULT 0,
+  status              TEXT NOT NULL DEFAULT 'Draft',
+  created_by          TEXT,
+  notes               TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS distribution_line_items (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id        INTEGER NOT NULL REFERENCES tenants(id),
+  distribution_id  INTEGER NOT NULL REFERENCES distributions(id),
+  lp_id            INTEGER NOT NULL REFERENCES lp_register(id),
+  pct              REAL NOT NULL DEFAULT 0,
+  gross_amount     REAL NOT NULL DEFAULT 0,
+  gp_carry_amount  REAL NOT NULL DEFAULT 0,
+  net_amount       REAL NOT NULL DEFAULT 0,
+  payment_date     TEXT,
+  status           TEXT NOT NULL DEFAULT 'Pending',
+  wire_ref         TEXT,
+  wire_confirm_url TEXT
+);
+
 -- Deals: scalar/filterable fields as real columns; the deal detail modal's
 -- list-shaped sub-sections (tags, founder contacts, DD checklists, IC votes,
 -- comments, etc.) are stored as JSON text columns rather than fully
@@ -546,6 +588,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_global ON users(email);
 CREATE INDEX IF NOT EXISTS idx_capital_calls_tenant ON capital_calls(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_cc_line_items_call ON capital_call_line_items(call_id);
 CREATE INDEX IF NOT EXISTS idx_cc_line_items_tenant ON capital_call_line_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_distributions_tenant ON distributions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_dist_line_items_dist ON distribution_line_items(distribution_id);
+CREATE INDEX IF NOT EXISTS idx_dist_line_items_tenant ON distribution_line_items(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_deals_tenant ON deals(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_tenant ON portfolio(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_restricted_list_tenant ON restricted_list(tenant_id);
@@ -909,6 +954,12 @@ if (!columnExists('lp_register', 'portal_password_hash')) db.exec("ALTER TABLE l
 for (const col of ['lpa_url', 'sa_url', 'contract_num']) {
   if (!columnExists('lp_register', col)) db.exec(`ALTER TABLE lp_register ADD COLUMN ${col} TEXT`);
 }
+// Waterfall parameters (server/waterfallEngine.js, not yet built) — every
+// fund gets a sane closed-end default (full catch-up, European/whole-fund
+// hurdle) rather than NULL, so a fund created before this column existed
+// doesn't silently compute as "no catch-up, no hurdle".
+if (!columnExists('funds', 'catch_up_pct'))   db.exec("ALTER TABLE funds ADD COLUMN catch_up_pct REAL DEFAULT 100");
+if (!columnExists('funds', 'waterfall_type')) db.exec("ALTER TABLE funds ADD COLUMN waterfall_type TEXT DEFAULT 'european'");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

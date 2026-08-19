@@ -908,7 +908,7 @@ app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manag
 // activity must be set to status 'closed' instead (already a real
 // status value in this app's vocabulary — js/funds.js's
 // getFundStatusLabel — just never had a UI action to set it before now).
-const FUND_FOOTPRINT_TABLES = ['lp_register', 'capital_calls', 'deals', 'portfolio', 'ic_memos', 'first_closing', 'afsa_reports'];
+const FUND_FOOTPRINT_TABLES = ['lp_register', 'capital_calls', 'distributions', 'deals', 'portfolio', 'ic_memos', 'first_closing', 'afsa_reports'];
 app.delete('/api/funds/:id', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
   const existing = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Fund not found in this tenant' });
@@ -1303,6 +1303,254 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   const cc = rowToCC(row);
   cc.lineItems = lineItemsStmt.all(call.id, req.tenantId).map(rowToLineItem);
   res.json(cc);
+});
+
+/* ===== Distributions API — tenant-scoped =====
+   The reverse cash flow (fund -> LP), mirroring Capital Calls above.
+   Stage 1 (this file): tables + CRUD only, no waterfall math — a
+   distribution's line items either come verbatim from the caller, or —
+   only for a pure return-of-capital distribution (profitAmount === 0,
+   which never carries GP carry) — get auto pro-rated by LP ownership.
+   Splitting profit_amount without an explicit lineItems body requires
+   server/waterfallEngine.js, not yet built; POST rejects that case with
+   a clear error rather than guessing. */
+function rowToDist(r) {
+  return {
+    id: r.id,
+    fundId: r.fund_id,
+    distNumber: r.dist_number,
+    noticeDate: r.notice_date,
+    paymentDate: r.payment_date,
+    totalAmount: r.total_amount,
+    sourceType: r.source_type,
+    sourcePortfolioId: r.source_portfolio_id,
+    rocAmount: r.roc_amount,
+    profitAmount: r.profit_amount,
+    status: r.status,
+    createdBy: r.created_by,
+    notes: r.notes,
+  };
+}
+
+function rowToDistLineItem(r) {
+  return {
+    lpId: r.lp_id,
+    lpName: r.lp_name,
+    pct: r.pct,
+    grossAmount: r.gross_amount,
+    gpCarryAmount: r.gp_carry_amount,
+    netAmount: r.net_amount,
+    paymentDate: r.payment_date,
+    status: r.status,
+    wireRef: r.wire_ref,
+    wireConfirmUrl: r.wire_confirm_url,
+  };
+}
+
+const distLineItemsStmt = db.prepare(`
+  SELECT li.*, lp.name AS lp_name
+  FROM distribution_line_items li
+  JOIN lp_register lp ON lp.id = li.lp_id
+  WHERE li.distribution_id = ? AND li.tenant_id = ?
+  ORDER BY li.id
+`);
+
+app.get('/api/distributions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const dists = db.prepare('SELECT * FROM distributions WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
+  const result = dists.map(d => {
+    const dist = rowToDist(d);
+    dist.lineItems = distLineItemsStmt.all(d.id, req.tenantId).map(rowToDistLineItem);
+    return dist;
+  });
+  res.json({ tenant: req.tenantSlug, distributions: result });
+});
+
+app.post('/api/distributions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  const rocAmount = b.rocAmount || 0;
+  const profitAmount = b.profitAmount || 0;
+  const totalAmount = b.totalAmount != null ? b.totalAmount : (rocAmount + profitAmount);
+  if (totalAmount <= 0) return res.status(400).json({ error: 'totalAmount (or rocAmount/profitAmount) must be greater than 0' });
+
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM distributions WHERE tenant_id = ?').get(req.tenantId);
+  const distNumber = b.distNumber || `DIST-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(2, '0')}`;
+
+  let lineItems = b.lineItems;
+  if (!lineItems) {
+    if (profitAmount > 0) {
+      return res.status(400).json({ error: 'profitAmount requires explicit lineItems — automatic profit-split (waterfall) is not available yet. Provide lineItems manually, or set profitAmount to 0 for a pure return-of-capital distribution.' });
+    }
+    // Pure return-of-capital: no carry, so a straight pro-rata-by-ownership
+    // split is always correct — no waterfall math needed.
+    const activeLps = b.fundId
+      ? db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND fund_id = ? AND status = 'Active'").all(req.tenantId, b.fundId)
+      : db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND status = 'Active'").all(req.tenantId);
+    const totalCommit = activeLps.reduce((s, l) => s + l.commitment, 0);
+    lineItems = activeLps.map(l => {
+      const pct = totalCommit ? (l.commitment / totalCommit) * 100 : 0;
+      const gross = totalCommit ? (l.commitment / totalCommit) * rocAmount : 0;
+      return { lpId: l.id, pct, grossAmount: gross, gpCarryAmount: 0, netAmount: gross, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '' };
+    });
+  }
+
+  // Reconciliation guard (also the acceptance criterion the eventual
+  // waterfallEngine.js unit tests will check): net + carry paid out to
+  // LPs/GP must equal what's actually being distributed, whether the
+  // split was auto-generated above or supplied by the caller.
+  const sumNet   = lineItems.reduce((s, li) => s + (li.netAmount != null ? li.netAmount : (li.grossAmount || 0) - (li.gpCarryAmount || 0)), 0);
+  const sumCarry = lineItems.reduce((s, li) => s + (li.gpCarryAmount || 0), 0);
+  if (Math.abs((sumNet + sumCarry) - totalAmount) > 0.5) {
+    return res.status(400).json({ error: `lineItems don't reconcile: sum(netAmount)+sum(gpCarryAmount) = ${(sumNet + sumCarry).toFixed(2)}, expected totalAmount = ${totalAmount.toFixed(2)}` });
+  }
+
+  db.exec('BEGIN');
+  try {
+    const info = db.prepare(`
+      INSERT INTO distributions
+        (tenant_id, fund_id, dist_number, notice_date, payment_date, total_amount, source_type, source_portfolio_id,
+         roc_amount, profit_amount, status, created_by, notes)
+      VALUES
+        (@tenantId, @fundId, @distNumber, @noticeDate, @paymentDate, @totalAmount, @sourceType, @sourcePortfolioId,
+         @rocAmount, @profitAmount, @status, @createdBy, @notes)
+    `).run(at({
+      tenantId: req.tenantId, fundId: b.fundId || null, distNumber,
+      noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
+      totalAmount, sourceType: b.sourceType || 'other', sourcePortfolioId: b.sourcePortfolioId || null,
+      rocAmount, profitAmount,
+      // Always Draft on creation, same reasoning as Capital Calls always
+      // starting Draft — it isn't a real payment commitment to LPs yet.
+      status: 'Draft', createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+    }));
+    const distId = info.lastInsertRowid;
+    const insertItem = db.prepare(`
+      INSERT INTO distribution_line_items
+        (tenant_id, distribution_id, lp_id, pct, gross_amount, gp_carry_amount, net_amount, payment_date, status, wire_ref)
+      VALUES
+        (@tenantId, @distId, @lpId, @pct, @grossAmount, @gpCarryAmount, @netAmount, @paymentDate, @status, @wireRef)
+    `);
+    for (const li of lineItems) {
+      insertItem.run(at({
+        tenantId: req.tenantId, distId, lpId: li.lpId,
+        pct: li.pct || 0, grossAmount: li.grossAmount || 0, gpCarryAmount: li.gpCarryAmount || 0,
+        netAmount: li.netAmount != null ? li.netAmount : (li.grossAmount || 0) - (li.gpCarryAmount || 0),
+        paymentDate: li.paymentDate || null, status: li.status || 'Pending', wireRef: li.wireRef || '',
+      }));
+    }
+    db.exec('COMMIT');
+    const row = db.prepare('SELECT * FROM distributions WHERE id = ?').get(distId);
+    const dist = rowToDist(row);
+    dist.lineItems = distLineItemsStmt.all(distId, req.tenantId).map(rowToDistLineItem);
+    res.status(201).json(dist);
+  } catch (err) {
+    db.exec('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/distributions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM distributions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Distribution not found in this tenant' });
+  const b = req.body || {};
+  // Same reasoning as Capital Calls' Draft -> Pending gate: the moment a
+  // distribution leaves Draft it becomes a real payment commitment to
+  // every LP on it, so only CEO/CFO can send it.
+  if (existing.status === 'Draft' && b.status === 'Sent' && !req.user.permissions.ccApprove) {
+    return res.status(403).json({ error: 'Forbidden: only CEO/CFO may approve and send a Distribution' });
+  }
+  // Once Paid, a distribution is a closed, permanent record — same as a
+  // sent Capital Call Notice; nothing left to edit on the header.
+  if (existing.status === 'Paid') {
+    return res.status(409).json({ error: 'Cannot edit: distribution is already Paid — this is a permanent record.' });
+  }
+  const merged = Object.assign(rowToDist(existing), b);
+  db.prepare(`
+    UPDATE distributions SET
+      fund_id=@fundId, dist_number=@distNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
+      source_type=@sourceType, source_portfolio_id=@sourcePortfolioId, roc_amount=@rocAmount, profit_amount=@profitAmount,
+      status=@status, created_by=@createdBy, notes=@notes, updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    fundId: merged.fundId || null,
+    distNumber: merged.distNumber, noticeDate: merged.noticeDate, paymentDate: merged.paymentDate,
+    totalAmount: merged.totalAmount, sourceType: merged.sourceType, sourcePortfolioId: merged.sourcePortfolioId || null,
+    rocAmount: merged.rocAmount, profitAmount: merged.profitAmount, status: merged.status,
+    createdBy: merged.createdBy, notes: merged.notes,
+    id: existing.id, tenantId: req.tenantId,
+  }));
+  const row = db.prepare('SELECT * FROM distributions WHERE id = ?').get(existing.id);
+  const dist = rowToDist(row);
+  dist.lineItems = distLineItemsStmt.all(existing.id, req.tenantId).map(rowToDistLineItem);
+  res.json(dist);
+});
+
+// Delete: only while still Draft (never sent to any LP) and no line item
+// has moved past Pending — same "permanent regulatory record once real"
+// reasoning as DELETE /api/capital-calls/:id.
+app.delete('/api/distributions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM distributions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Distribution not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot delete: distribution is ${existing.status}, not Draft. A sent Distribution is a permanent record.` });
+  }
+  const movedItems = db.prepare("SELECT id FROM distribution_line_items WHERE tenant_id = ? AND distribution_id = ? AND status != 'Pending'").all(req.tenantId, existing.id);
+  if (movedItems.length) {
+    return res.status(409).json({ error: `Cannot delete: ${movedItems.length} line item(s) already sent/confirmed.`, footprint: [{ table: 'distribution_line_items', column: 'status', count: movedItems.length }] });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM distribution_line_items WHERE tenant_id = ? AND distribution_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM distributions WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  res.json({ ok: true, deleted: true });
+});
+
+// Confirm payment against one LP's line item within a distribution — the
+// day-to-day action, mirroring PUT /api/capital-calls/:id/line-items/:lpId.
+app.put('/api/distributions/:id/line-items/:lpId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const dist = db.prepare('SELECT * FROM distributions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!dist) return res.status(404).json({ error: 'Distribution not found in this tenant' });
+  const item = db.prepare('SELECT * FROM distribution_line_items WHERE distribution_id = ? AND lp_id = ? AND tenant_id = ?')
+    .get(dist.id, req.params.lpId, req.tenantId);
+  if (!item) return res.status(404).json({ error: 'Line item not found' });
+  if (dist.status === 'Draft') {
+    return res.status(409).json({ error: 'This Distribution is still a draft — approve it before recording payments' });
+  }
+
+  const b = req.body || {};
+  // Confirming payment is a bank-reconciliation judgment, same restriction
+  // and evidence requirement as Capital Call payment confirmation.
+  const confirmingPayment = b.status === 'Confirmed' && item.status !== 'Confirmed';
+  if (confirmingPayment) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may confirm a Distribution payment' });
+    }
+    if (!b.wireRef || !b.wireRef.trim()) {
+      return res.status(400).json({ error: 'wireRef is required to confirm payment' });
+    }
+    if (!b.wireConfirmUrl || !b.wireConfirmUrl.trim()) {
+      return res.status(400).json({ error: 'wireConfirmUrl (payment order document link) is required to confirm payment' });
+    }
+  }
+  db.prepare(`
+    UPDATE distribution_line_items SET
+      status=@status, wire_ref=@wireRef, wire_confirm_url=@wireConfirmUrl, payment_date=@paymentDate
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: item.id, tenantId: req.tenantId,
+    status: b.status || item.status,
+    wireRef: b.wireRef != null ? b.wireRef : item.wire_ref,
+    wireConfirmUrl: b.wireConfirmUrl != null ? b.wireConfirmUrl : item.wire_confirm_url,
+    paymentDate: b.paymentDate || item.payment_date,
+  }));
+
+  const row = db.prepare('SELECT * FROM distributions WHERE id = ?').get(dist.id);
+  const result = rowToDist(row);
+  result.lineItems = distLineItemsStmt.all(dist.id, req.tenantId).map(rowToDistLineItem);
+  res.json(result);
 });
 
 /* ===== AFSA Regulatory Reports — tenant-scoped =====

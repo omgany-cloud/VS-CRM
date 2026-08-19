@@ -150,6 +150,23 @@ test('Capital call isolation (Draft only, since PUT/DELETE both apply to a Draft
   await server.apiFetch(`/api/lp/${lp.id}`, { method: 'DELETE' }).catch(() => {});
 });
 
+test('Distribution isolation (Draft only, since PUT/DELETE both apply to a Draft-safe id)', async () => {
+  const fundId = await createTestFund();
+  const lp = await (await server.apiFetch('/api/lp', {
+    method: 'POST', body: JSON.stringify({ fundId, name: 'ZZZ_ISO_DIST_LP', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'ISO-3' }),
+  })).json();
+
+  await assertEntityIsolation({
+    name: 'Distribution',
+    createPath: '/api/distributions',
+    createBody: { fundId, totalAmount: 100, rocAmount: 100, profitAmount: 0, lineItems: [{ lpId: lp.id, pct: 100, grossAmount: 100, gpCarryAmount: 0, netAmount: 100 }] },
+    listPath: '/api/distributions', listKey: 'distributions',
+    idPath: (id) => `/api/distributions/${id}`,
+  });
+
+  await server.apiFetch(`/api/lp/${lp.id}`, { method: 'DELETE' }).catch(() => {});
+});
+
 test('Users isolation: tenant B cannot list, edit, or delete tenant A\'s users', async () => {
   const aUsers = await (await server.apiFetch('/api/users')).json();
   const aUserId = aUsers.users[0].id;

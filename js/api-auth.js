@@ -492,6 +492,24 @@ async function loadCapitalCallsFromApi() {
   }
 }
 
+/* ===== Distributions — backed by the real API =====
+   Mirrors loadCapitalCallsFromApi() above — the fund->LP reverse cash flow.
+   No dedicated page/renderer yet (Stage 1: data + API only, per the
+   Distributions module roadmap), so this just keeps distributionsLog in
+   sync; a future renderDistributionsPage() call slots in the same way
+   renderCapitalCallsPage() does above once the frontend page exists. */
+async function loadDistributionsFromApi() {
+  try {
+    const data = await apiFetch('/api/distributions');
+    if (typeof distributionsLog === 'undefined') return;
+    distributionsLog.length = 0;
+    distributionsLog.push(...data.distributions);
+  } catch (err) {
+    console.error('Failed to load distributions from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить распределения из API: ' + err.message, 'red');
+  }
+}
+
 /* ===== Regulatory Reports — backed by the real API =====
    Replaces the old static js/data.js `reportSchedule` array. */
 let afsaReports = [];
@@ -734,6 +752,7 @@ async function loadAllApiData() {
   await loadFundsFromApi();
   loadLpRegisterFromApi();
   loadCapitalCallsFromApi();
+  loadDistributionsFromApi();
   loadFirstClosingFromApi();
   loadDealsFromApi();
   loadPortfolioFromApi();

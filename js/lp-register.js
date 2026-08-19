@@ -22,6 +22,14 @@ let lpRegister = [];  // populated at runtime by js/api-auth.js via GET /api/lp 
  */
 let capitalCallsLog = [];  // populated at runtime by js/api-auth.js via GET /api/capital-calls (see server/index.js)
 
+/**
+ * distributionsLog[] — the reverse cash flow (fund -> LP), same shape as
+ * capitalCallsLog above. Each distribution has line items per LP (ROC
+ * pro-rated automatically server-side when profitAmount is 0; profit-split
+ * requires explicit lineItems until server/waterfallEngine.js exists).
+ */
+let distributionsLog = [];  // populated at runtime by js/api-auth.js via GET /api/distributions (see server/index.js)
+
 /* ── Utility ─────────────────────────────────────────── */
 // Deprecated shim — kept so any call site this currency sweep missed
 // degrades to today's USD behavior instead of throwing. Every fund-scoped

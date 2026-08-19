@@ -2,6 +2,19 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.3.0] - 2026-08-19
+
+### Added
+- Distributions module, Stage 1 (data + API, no waterfall math yet): new
+  `distributions`/`distribution_line_items` tables mirroring Capital
+  Calls, full CRUD API (`/api/distributions`, `.../line-items/:lpId`)
+  with the same permission gates and hybrid-delete rules, and
+  `funds.catch_up_pct`/`waterfall_type` columns for the upcoming
+  waterfall engine. Pure return-of-capital distributions auto pro-rate
+  by LP ownership; profit-split distributions require explicit line
+  items until the waterfall engine exists (rejected otherwise, rather
+  than guessing). Wired into the frontend's data-loading cycle.
+
 ## [1.2.2] - 2026-08-18
 
 ### Fixed

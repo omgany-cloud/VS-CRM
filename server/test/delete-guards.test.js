@@ -104,6 +104,54 @@ test('Capital call: Draft deletes cleanly; Pending is blocked permanently (no so
   assert.equal(del.status, 409);
 });
 
+test('Distribution: Draft deletes cleanly; Sent is blocked permanently (no soft alternative)', async () => {
+  const lp = await (await server.apiFetch('/api/lp', {
+    method: 'POST', body: JSON.stringify({ fundId, name: 'TEST_LP_FOR_DIST', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'T-3b' }),
+  })).json();
+
+  const draft = await (await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ fundId, totalAmount: 50, rocAmount: 50, profitAmount: 0, lineItems: [{ lpId: lp.id, pct: 100, grossAmount: 50, gpCarryAmount: 0, netAmount: 50 }] }),
+  })).json();
+  assert.equal((await server.apiFetch(`/api/distributions/${draft.id}`, { method: 'DELETE' })).status, 200);
+
+  const sent = await (await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ fundId, totalAmount: 50, rocAmount: 50, profitAmount: 0, lineItems: [{ lpId: lp.id, pct: 100, grossAmount: 50, gpCarryAmount: 0, netAmount: 50 }] }),
+  })).json();
+  await server.apiFetch(`/api/distributions/${sent.id}`, { method: 'PUT', body: JSON.stringify({ status: 'Sent' }) });
+  const del = await server.apiFetch(`/api/distributions/${sent.id}`, { method: 'DELETE' });
+  assert.equal(del.status, 409);
+});
+
+test('Distribution: pure ROC auto pro-rates by ownership; profit without lineItems is rejected', async () => {
+  // A dedicated fund, not the shared file-level `fundId` — earlier tests
+  // in this file leave their LPs Active under that fund (by design, they
+  // only clean up what each test itself needs to), so reusing it here
+  // would pull unrelated LPs into the pro-rata pool and throw off the
+  // expected split.
+  const distFund = await (await server.apiFetch('/api/funds', {
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND_DIST_PRORATA', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+  })).json();
+  const lpA = await (await server.apiFetch('/api/lp', {
+    method: 'POST', body: JSON.stringify({ fundId: distFund.id, name: 'TEST_LP_DIST_A', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 3000, status: 'Active', registerId: 'T-3c' }),
+  })).json();
+  const lpB = await (await server.apiFetch('/api/lp', {
+    method: 'POST', body: JSON.stringify({ fundId: distFund.id, name: 'TEST_LP_DIST_B', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'T-3d' }),
+  })).json();
+
+  const auto = await (await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ fundId: distFund.id, rocAmount: 400, profitAmount: 0 }),
+  })).json();
+  const liA = auto.lineItems.find(li => li.lpId === lpA.id);
+  const liB = auto.lineItems.find(li => li.lpId === lpB.id);
+  assert.equal(liA.netAmount, 300, 'LP A (3000/4000 commitment) gets 75% of the ROC pro-rata');
+  assert.equal(liB.netAmount, 100, 'LP B (1000/4000 commitment) gets 25% of the ROC pro-rata');
+
+  const rejected = await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ fundId: distFund.id, profitAmount: 100 }),
+  });
+  assert.equal(rejected.status, 400, 'profit without explicit lineItems must be rejected, not silently mis-split');
+});
+
 test('Engagement: clean delete succeeds', async () => {
   const clean = await (await server.apiFetch('/api/engagements', {
     method: 'POST', body: JSON.stringify({ clientName: 'TEST_ENG_CLEAN', serviceType: 'Advisory', direction: 'CFA', status: 'Draft' }),
