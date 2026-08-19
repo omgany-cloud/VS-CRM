@@ -987,6 +987,13 @@ for (const col of ['lpa_url', 'sa_url', 'contract_num']) {
 if (!columnExists('funds', 'catch_up_pct'))   db.exec("ALTER TABLE funds ADD COLUMN catch_up_pct REAL DEFAULT 100");
 if (!columnExists('funds', 'waterfall_type')) db.exec("ALTER TABLE funds ADD COLUMN waterfall_type TEXT DEFAULT 'european'");
 
+// Expiry of the primary identity document (passport / certificate of
+// incorporation, ...) reviewed during DD Outcome (2.2) — set from
+// f_idDocExpiry in that task's form, not required at client creation, so
+// this stays nullable rather than backfilled to a fake default. Powers
+// the document-expiry digest check (server/notifications/digestChecks.js).
+if (!columnExists('ob_clients', 'id_document_expiry')) db.exec("ALTER TABLE ob_clients ADD COLUMN id_document_expiry TEXT");
+
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
 // This helper lets the rest of the codebase pass plain camelCase keys.

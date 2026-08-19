@@ -1,11 +1,10 @@
 // server/notifications/scheduler.js
 //
-// Drives Stage 2 (digest) triggers — KYC renewal, overdue payments,
-// document expiry, regulator deadlines, ... — none of which exist yet;
-// Stage 1 only shipped the two instant triggers (fired directly from
-// their own route handlers in server/index.js, not from here). This file
-// exists now so adding the first digest check later is just pushing a
-// function onto DIGEST_CHECKS, not new plumbing.
+// Drives Stage 2 (digest) triggers — KYC renewal, overdue Capital Call
+// payments, ID document expiry, regulator deadlines, pending conflict
+// decisions (server/notifications/digestChecks.js). Stage 1's two instant
+// triggers still fire directly from their own route handlers in
+// server/index.js, not from here.
 //
 // No new dependency: a plain hourly setInterval is enough, since this
 // server already runs as a long-lived process under systemd (see
@@ -17,25 +16,39 @@
 // Notifications roadmap doc's open question about tenant timezones) — a
 // deliberate MVP simplification, not an oversight.
 const { db } = require('../db');
+const {
+  checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
+  checkConflictDecisionsPending, checkDocumentExpiry,
+} = require('./digestChecks');
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR) || 8; // 24h, local server time
 
-// Each entry: async (tenantId) => void. Stage 2 populates this, e.g.
-// DIGEST_CHECKS.push(checkKycRenewals) once that function exists.
-const DIGEST_CHECKS = [];
+// Each entry: async (tenantId) => void.
+const DIGEST_CHECKS = [
+  checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
+  checkConflictDecisionsPending, checkDocumentExpiry,
+];
+
+// Shared by the hourly tick below and the manual POST
+// /api/notifications/run-digest route (server/index.js) — ops shouldn't
+// have to wait for DIGEST_HOUR to confirm a digest actually fires, and a
+// manual run for one tenant must never touch any other tenant's data.
+async function runDigestChecksForTenant(tenantId) {
+  for (const check of DIGEST_CHECKS) {
+    try {
+      await check(tenantId);
+    } catch (err) {
+      // One check's failure must never block the rest — same
+      // "best-effort side-effect" reasoning as notify.js.
+      console.error('[scheduler] digest check failed:', err.message);
+    }
+  }
+}
 
 async function runDigestChecksForAllTenants() {
   const tenants = db.prepare('SELECT id FROM tenants').all();
-  for (const check of DIGEST_CHECKS) {
-    for (const t of tenants) {
-      try {
-        await check(t.id);
-      } catch (err) {
-        // One tenant's/check's failure must never block the rest — same
-        // "best-effort side-effect" reasoning as notify.js.
-        console.error('[scheduler] digest check failed:', err.message);
-      }
-    }
+  for (const t of tenants) {
+    await runDigestChecksForTenant(t.id);
   }
 }
 
@@ -44,7 +57,6 @@ function start() {
   if (intervalHandle) return; // idempotent — a second start() is a no-op
   intervalHandle = setInterval(() => {
     if (new Date().getHours() !== DIGEST_HOUR) return;
-    if (DIGEST_CHECKS.length === 0) return; // nothing to run yet (Stage 1)
     runDigestChecksForAllTenants();
   }, 60 * 60 * 1000);
 }
@@ -53,4 +65,4 @@ function stop() {
   if (intervalHandle) { clearInterval(intervalHandle); intervalHandle = null; }
 }
 
-module.exports = { start, stop, DIGEST_CHECKS, runDigestChecksForAllTenants };
+module.exports = { start, stop, DIGEST_CHECKS, runDigestChecksForAllTenants, runDigestChecksForTenant };

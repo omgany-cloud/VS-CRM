@@ -2,6 +2,21 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.5.0] - 2026-08-19
+
+### Added
+- Proactive email notifications, Stage 2 — daily digest triggers:
+  `server/notifications/digestChecks.js` covers KYC review coming due,
+  overdue Capital Call payments, upcoming regulator (AFSA) report
+  deadlines, pending conflict-of-interest decisions, and an LP/client's
+  identity document nearing expiry. Each re-notifies once per calendar day
+  while the underlying condition stays true (`notification_log`'s
+  `scope: 'daily'`), instead of firing once and going silent. New
+  `ob_clients.id_document_expiry` column plus a matching date field in the
+  DD Outcome (2.2) task form feed the document-expiry check. New
+  `POST /api/notifications/run-digest` (CEO-only) lets ops force a digest
+  run for their own tenant without waiting for `DIGEST_HOUR`.
+
 ## [1.4.0] - 2026-08-19
 
 ### Added

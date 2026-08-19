@@ -2699,6 +2699,19 @@ app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) 
   res.json(rowToWfInstance(row));
 });
 
+// Manual digest run for the caller's own tenant only — lets ops confirm a
+// digest actually fires without waiting for DIGEST_HOUR, and gives the
+// digest checks (server/notifications/digestChecks.js) a real HTTP entry
+// point to test against, same as every other route in this app. Gated on
+// manageUsers (CEO) since there's no more specific "notifications admin"
+// permission yet and this is an ops action, not a business one; Auditor
+// also holds manageUsers but is blocked here anyway by the app-wide
+// readOnly mutation gate (server/auth.js).
+app.post('/api/notifications/run-digest', requireAuth, requireInternal, requirePermission('manageUsers'), async (req, res) => {
+  await notificationsScheduler.runDigestChecksForTenant(req.tenantId);
+  res.json({ ok: true });
+});
+
 /* ===== Curated external API (machine callers — see server/externalApi.js) ===== */
 app.use('/api/v1/external', externalApiRouter);
 
@@ -2731,9 +2744,8 @@ app.use((err, req, res, next) => {
 try { runBackup(); } catch (err) { console.error('[backup] startup backup failed:', err.message); }
 scheduleBackups();
 
-// Empty until Stage 2 adds a digest trigger (server/notifications/
-// scheduler.js) — starting it now anyway means that stage is a pure
-// content change, no new server.js wiring.
+// Drives the Stage 2 digest checks (server/notifications/digestChecks.js)
+// on an hourly tick, gated to DIGEST_HOUR — see scheduler.js.
 notificationsScheduler.start();
 
 // Plain HTTP unless TLS_CERT_PATH/TLS_KEY_PATH are both set (see

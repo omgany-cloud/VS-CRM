@@ -1278,6 +1278,8 @@ function buildTaskForm(task, client) {
           }
           <div><label style="${labelStyle}">Источник проверки</label>
             <input type="text" id="f_verifySource" value="${fd.verifySource||'Kompra.kz'}" ${disabledAttr} style="${inputStyle}" placeholder="Kompra.kz, гос. реестр..." /></div>
+          <div><label style="${labelStyle}">Срок действия документа (паспорт / устав)</label>
+            <input type="date" id="f_idDocExpiry" value="${fd.idDocExpiry||client.idDocumentExpiry||''}" ${disabledAttr} style="${inputStyle}" /></div>
           ${isFM_dd ? buildSelect('f_lpDocsVerified','Документы LP верифицированы (2.1)',['Да','Нет','Частично'],fd.lpDocsVerified,disabledAttr,selectStyle,labelStyle) : ''}
           ${isFM_dd && client.type==='Corporate' ? buildSelect('f_uboVerified','UBO верифицированы (все ≥10%)',['Да','Нет','Частично'],fd.uboVerified,disabledAttr,selectStyle,labelStyle) : ''}
         </div>
@@ -2877,6 +2879,7 @@ async function submitObTask(taskId) {
     client.pepStatus          = fd.f_pepClient || client.pepStatus;
     client.sanctionsCleared   = fd.f_sanctionTotal === 'Чисто';
     client.sanctionsCheckedAt = fd.f_ddDate || today();
+    client.idDocumentExpiry   = fd.f_idDocExpiry || client.idDocumentExpiry;
     if (client.direction === 'FM') {
       client.sofVerified = fd.f_sofVerified === 'Да';
       client.sowVerified = fd.f_sowVerified === 'Да';

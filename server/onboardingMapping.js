@@ -56,7 +56,7 @@ const OB_CLIENT_SCALARS = [
   'clientId', 'name', 'type', 'classification', 'serviceType', 'lpType', 'commitment',
   'direction', 'rm', 'phase', 'onboardingStatus', 'riskRating', 'startDate', 'targetDate',
   'nextAction', 'notes', 'contractUrl', 'activatedBy', 'lpaUrl', 'amlReviewDate', 'reClassDate',
-  'internalPortfolioId', 'pepStatus', 'sanctionsCheckedAt',
+  'internalPortfolioId', 'pepStatus', 'sanctionsCheckedAt', 'idDocumentExpiry',
 ];
 function obClientToParams(c) {
   const out = {};
@@ -86,6 +86,7 @@ function rowToObClient(row) {
     sowVerified: !!row.sow_verified, pepStatus: row.pep_status,
     sanctionsCleared: !!row.sanctions_cleared, sanctionsCheckedAt: row.sanctions_checked_at,
     professionalClientVerified: !!row.professional_client_verified,
+    idDocumentExpiry: row.id_document_expiry,
   };
 }
 const OB_CLIENT_INSERT_SQL = `
@@ -94,13 +95,13 @@ const OB_CLIENT_INSERT_SQL = `
      phase, onboarding_status, risk_rating, start_date, target_date, next_action, notes,
      restricted_match, activated, contract_url, activated_by, lpa_url, aml_review_date, re_class_date,
      is_internal_client, internal_portfolio_id, identity_verified, sof_verified, sow_verified,
-     pep_status, sanctions_cleared, sanctions_checked_at, professional_client_verified)
+     pep_status, sanctions_cleared, sanctions_checked_at, professional_client_verified, id_document_expiry)
   VALUES
     (@tenantId, @clientId, @name, @type, @classification, @serviceType, @lpType, @commitment, @direction, @rm,
      @phase, @onboardingStatus, @riskRating, @startDate, @targetDate, @nextAction, @notes,
      @restrictedMatch, @activated, @contractUrl, @activatedBy, @lpaUrl, @amlReviewDate, @reClassDate,
      @isInternalClient, @internalPortfolioId, @identityVerified, @sofVerified, @sowVerified,
-     @pepStatus, @sanctionsCleared, @sanctionsCheckedAt, @professionalClientVerified)
+     @pepStatus, @sanctionsCleared, @sanctionsCheckedAt, @professionalClientVerified, @idDocumentExpiry)
 `;
 const OB_CLIENT_UPDATE_SQL = `
   UPDATE ob_clients SET
@@ -112,7 +113,7 @@ const OB_CLIENT_UPDATE_SQL = `
     re_class_date=@reClassDate, is_internal_client=@isInternalClient, internal_portfolio_id=@internalPortfolioId,
     identity_verified=@identityVerified, sof_verified=@sofVerified, sow_verified=@sowVerified,
     pep_status=@pepStatus, sanctions_cleared=@sanctionsCleared, sanctions_checked_at=@sanctionsCheckedAt,
-    professional_client_verified=@professionalClientVerified
+    professional_client_verified=@professionalClientVerified, id_document_expiry=@idDocumentExpiry
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
