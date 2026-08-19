@@ -493,17 +493,18 @@ async function loadCapitalCallsFromApi() {
 }
 
 /* ===== Distributions — backed by the real API =====
-   Mirrors loadCapitalCallsFromApi() above — the fund->LP reverse cash flow.
-   No dedicated page/renderer yet (Stage 1: data + API only, per the
-   Distributions module roadmap), so this just keeps distributionsLog in
-   sync; a future renderDistributionsPage() call slots in the same way
-   renderCapitalCallsPage() does above once the frontend page exists. */
+   Mirrors loadCapitalCallsFromApi() above — the fund->LP reverse cash
+   flow, page + renderer in js/distributions.js. */
 async function loadDistributionsFromApi() {
   try {
     const data = await apiFetch('/api/distributions');
     if (typeof distributionsLog === 'undefined') return;
     distributionsLog.length = 0;
     distributionsLog.push(...data.distributions);
+    const page = document.getElementById('page-lp-distributions');
+    if (page && page.classList.contains('active') && typeof renderDistributionsPage === 'function') {
+      renderDistributionsPage();
+    }
   } catch (err) {
     console.error('Failed to load distributions from API:', err);
     if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить распределения из API: ' + err.message, 'red');
@@ -728,6 +729,7 @@ async function loadRolesFromApi() {
     originalNavigateTo(page);
     if (page === 'lp-register') loadLpRegisterFromApi();
     if (page === 'lp-capital-calls') loadCapitalCallsFromApi();
+    if (page === 'lp-distributions') loadDistributionsFromApi();
     if (page === 'ob-clients' || page === 'ob-restricted' || page === 'engagements') { loadOnboardingFromApi(); loadConflictApprovalsFromApi(); }
     if (page === 'conflict-approvals') loadConflictApprovalsFromApi();
     if (page === 'ic') loadIcMemosFromApi();

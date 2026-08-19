@@ -60,11 +60,16 @@ function notificationRows(eventType, entityId) {
 // The route fires notifyCapitalCallCreated/notifyWorkflowStepAssigned
 // fire-and-forget, after its own response is already sent — poll briefly
 // rather than assuming any fixed delay is enough on a loaded machine.
-async function waitFor(fn, timeoutMs = 3000) {
+// minLength matters, not just "any row yet": notifyCapitalCallCreated()
+// writes the LP's row and the officer's row via two sequential awaits in
+// the same call, so under enough contention the first row alone can be
+// visible for a while before the second one lands — stopping at length
+// >= 1 would then race a genuine second write, not a real absence of one.
+async function waitFor(fn, { timeoutMs = 8000, minLength = 1 } = {}) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const result = fn();
-    if (result && result.length) return result;
+    if (result && result.length >= minLength) return result;
     if (Date.now() >= deadline) return result || [];
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -80,7 +85,7 @@ test('Capital Call: Draft->Pending notifies the LP and cc_approve officers exact
   const putRes = await server.apiFetch(`/api/capital-calls/${cc.id}`, { method: 'PUT', body: JSON.stringify({ status: 'Pending' }) });
   assert.equal(putRes.status, 200);
 
-  const rows = await waitFor(() => notificationRows('capital_call_created', cc.id));
+  const rows = await waitFor(() => notificationRows('capital_call_created', cc.id), { minLength: 2 });
   const recipients = rows.map((r) => r.recipient_email).sort();
   // The LP (real email set above) + the seeded CEO admin (has ccApprove) —
   // the COMPLIANCE_OFFICER test user created in before() does NOT have

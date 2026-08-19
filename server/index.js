@@ -31,7 +31,7 @@ const {
   blocksPermissions: chineseWallBlocks, filterClientsForPermissions,
   blocksDocumentCategory, filterDocumentsForPermissions,
 } = require('./chineseWall');
-const { rowToLp, rowToLpPortalView } = require('./lpMapping');
+const { rowToLp, rowToLpPortalView, withLiveFinancials } = require('./lpMapping');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
@@ -49,6 +49,8 @@ const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } 
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { notifyCapitalCallCreated, notifyWorkflowStepAssigned } = require('./notifications/triggers');
 const notificationsScheduler = require('./notifications/scheduler');
+const { computeDistributionSplit } = require('./waterfallEngine');
+const { computeFundMetrics, computeLpMetrics } = require('./metricsEngine');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
@@ -372,7 +374,7 @@ app.post('/api/portal/lp/login', authRateLimit, (req, res) => {
     return res.status(401).json({ error: 'Неверный email или пароль' });
   }
   const token = signLpPortalToken(row);
-  res.json({ token, lp: rowToLpPortalView(row) });
+  res.json({ token, lp: withLiveFinancials(db, row.tenant_id, row.id, rowToLpPortalView(row)) });
 });
 
 // Internal-staff action: (re)generates a random password for an LP's
@@ -390,7 +392,15 @@ app.put('/api/lp/:id/portal-password', requireAuth, requireInternal, requirePerm
 });
 
 app.get('/api/portal/lp/me', requireLpPortalAuth, (req, res) => {
-  res.json({ lp: rowToLpPortalView(req.portalLp) });
+  res.json({ lp: withLiveFinancials(db, req.portalLp.tenant_id, req.portalLp.id, rowToLpPortalView(req.portalLp)) });
+});
+
+// This LP's own DPI/RVPI/TVPI/IRR — the Capital Account Statement tab
+// (lp-portal.html), same computeLpMetrics() as the internal
+// GET /api/lp/:id/metrics (server/metricsEngine.js), scoped to the
+// authenticated LP only (never a client-supplied id).
+app.get('/api/portal/lp/metrics', requireLpPortalAuth, (req, res) => {
+  res.json(computeLpMetrics(db, req.portalLp.tenant_id, req.portalLp.id));
 });
 
 // Read-only capital call history for the authenticated LP — line items
@@ -882,7 +892,7 @@ app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUs
   // unnoticed until a more minimal caller (the automated test suite) hit
   // it — same bug class as POST /api/deals and /api/portfolio already
   // guard against, just missing three of the four fields here.
-  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, status: 'fundraising', color: '#3b82f6', icon: 'fa-landmark', ...b }) }));
+  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, status: 'fundraising', color: '#3b82f6', icon: 'fa-landmark', catchUpPct: 100, ...b }) }));
   const row = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   const f = rowToFund(row);
   f.lpCount = 0;
@@ -902,6 +912,15 @@ app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manag
   f.lpCount = lpCount;
   f.deployed = deployed;
   res.json(f);
+});
+
+// Real DPI/RVPI/TVPI/IRR — see server/metricsEngine.js for definitions
+// and why every field can come back null instead of a fake 0. Read-only,
+// same accessFM gate as GET /api/funds and GET /api/lp.
+app.get('/api/funds/:id/metrics', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const fund = db.prepare('SELECT id FROM funds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+  res.json(computeFundMetrics(db, req.tenantId, fund.id));
 });
 
 // Hybrid delete (same shape as DELETE /api/users/:id and every other
@@ -929,7 +948,7 @@ app.delete('/api/funds/:id', requireAuth, requireInternal, requirePermission('ma
 
 app.get('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const rows = db.prepare('SELECT * FROM lp_register WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
-  res.json({ tenant: req.tenantSlug, lp: rows.map(rowToLp) });
+  res.json({ tenant: req.tenantSlug, lp: rows.map(r => withLiveFinancials(db, req.tenantId, r.id, rowToLp(r))) });
 });
 
 app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
@@ -998,7 +1017,7 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
   }));
 
   const row = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
-  res.status(201).json(rowToLp(row));
+  res.status(201).json(withLiveFinancials(db, req.tenantId, row.id, rowToLp(row)));
 });
 
 app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
@@ -1040,7 +1059,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
   }));
 
   const row = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
-  res.json(rowToLp(row));
+  res.json(withLiveFinancials(db, req.tenantId, row.id, rowToLp(row)));
 });
 
 // Hybrid delete (same shape as DELETE /api/users/:id): hard-delete only if
@@ -1060,6 +1079,13 @@ app.delete('/api/lp/:id', requireAuth, requireInternal, requirePermission('acces
   }
   db.prepare('DELETE FROM lp_register WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
   res.json({ ok: true, deleted: true });
+});
+
+// This LP's own DPI/RVPI/TVPI/IRR — see server/metricsEngine.js.
+app.get('/api/lp/:id/metrics', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const metrics = computeLpMetrics(db, req.tenantId, req.params.id);
+  if (!metrics) return res.status(404).json({ error: 'LP not found in this tenant' });
+  res.json(metrics);
 });
 
 /* ===== Capital Calls API — tenant-scoped ===== */
@@ -1319,13 +1345,13 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
 
 /* ===== Distributions API — tenant-scoped =====
    The reverse cash flow (fund -> LP), mirroring Capital Calls above.
-   Stage 1 (this file): tables + CRUD only, no waterfall math — a
-   distribution's line items either come verbatim from the caller, or —
-   only for a pure return-of-capital distribution (profitAmount === 0,
-   which never carries GP carry) — get auto pro-rated by LP ownership.
-   Splitting profit_amount without an explicit lineItems body requires
-   server/waterfallEngine.js, not yet built; POST rejects that case with
-   a clear error rather than guessing. */
+   A distribution's line items either come verbatim from the caller, or
+   get computed automatically: a pure return-of-capital distribution
+   (profitAmount === 0, which never carries GP carry) is auto pro-rated
+   by LP ownership; profitAmount > 0 runs through the real waterfall
+   (server/waterfallEngine.js — preferred return -> GP catch-up -> carry
+   split), which needs fundId to look up that fund's terms. Frontend page:
+   js/distributions.js. */
 function rowToDist(r) {
   return {
     id: r.id,
@@ -1389,26 +1415,60 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
 
   let lineItems = b.lineItems;
   if (!lineItems) {
-    if (profitAmount > 0) {
-      return res.status(400).json({ error: 'profitAmount requires explicit lineItems — automatic profit-split (waterfall) is not available yet. Provide lineItems manually, or set profitAmount to 0 for a pure return-of-capital distribution.' });
-    }
-    // Pure return-of-capital: no carry, so a straight pro-rata-by-ownership
-    // split is always correct — no waterfall math needed.
     const activeLps = b.fundId
       ? db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND fund_id = ? AND status = 'Active'").all(req.tenantId, b.fundId)
       : db.prepare("SELECT * FROM lp_register WHERE tenant_id = ? AND status = 'Active'").all(req.tenantId);
-    const totalCommit = activeLps.reduce((s, l) => s + l.commitment, 0);
-    lineItems = activeLps.map(l => {
-      const pct = totalCommit ? (l.commitment / totalCommit) * 100 : 0;
-      const gross = totalCommit ? (l.commitment / totalCommit) * rocAmount : 0;
-      return { lpId: l.id, pct, grossAmount: gross, gpCarryAmount: 0, netAmount: gross, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '' };
-    });
+
+    if (profitAmount <= 0) {
+      // Pure return-of-capital: no carry, so a straight pro-rata-by-commitment
+      // split is always correct — no waterfall math needed.
+      const totalCommit = activeLps.reduce((s, l) => s + l.commitment, 0);
+      lineItems = activeLps.map(l => {
+        const pct = totalCommit ? (l.commitment / totalCommit) * 100 : 0;
+        const gross = totalCommit ? (l.commitment / totalCommit) * rocAmount : 0;
+        return { lpId: l.id, pct, grossAmount: gross, gpCarryAmount: 0, netAmount: gross, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '' };
+      });
+    } else {
+      // A profit split needs a specific fund's waterfall parameters
+      // (preferred return / carry / catch-up) — can't run the waterfall
+      // fund-agnostically the way pure ROC can.
+      if (!b.fundId) return res.status(400).json({ error: 'profitAmount requires fundId — the waterfall needs a specific fund\'s preferredReturn/carriedInterest/catchUpPct' });
+      const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(b.fundId, req.tenantId);
+      if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+
+      // Ledger for the preferred-return accrual: every paid, dated
+      // contribution (capital in) from a non-Draft Capital Call, and every
+      // non-Draft prior distribution's rocAmount (capital back out) —
+      // profit/preferred/carry payouts never reduce outstanding capital,
+      // see waterfallEngine.js's file header.
+      const contributions = db.prepare(`
+        SELECT li.paid AS amount, li.payment_date AS date
+        FROM capital_call_line_items li JOIN capital_calls cc ON cc.id = li.call_id
+        WHERE li.tenant_id = ? AND cc.fund_id = ? AND cc.status != 'Draft' AND li.paid > 0 AND li.payment_date IS NOT NULL
+      `).all(req.tenantId, b.fundId);
+      const priorDistRows = db.prepare(`
+        SELECT status, profit_amount AS profitAmount, roc_amount AS rocAmount,
+               COALESCE(payment_date, notice_date) AS date
+        FROM distributions WHERE tenant_id = ? AND fund_id = ?
+      `).all(req.tenantId, b.fundId);
+      const ledgerEvents = [
+        ...contributions.map(c => ({ date: c.date, delta: c.amount })),
+        ...priorDistRows.filter(d => d.status !== 'Draft' && d.date).map(d => ({ date: d.date, delta: -(d.rocAmount || 0) })),
+      ];
+
+      const { lineItems: split } = computeDistributionSplit({
+        fund: { preferredReturn: fund.preferred_return, carriedInterest: fund.carried_interest, catchUpPct: fund.catch_up_pct },
+        activeLps, ledgerEvents, priorDistributions: priorDistRows,
+        rocAmount, profitAmount, distDate: b.paymentDate || b.noticeDate || new Date().toISOString().slice(0, 10),
+      });
+      lineItems = split.map(li => ({ ...li, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '' }));
+    }
   }
 
-  // Reconciliation guard (also the acceptance criterion the eventual
-  // waterfallEngine.js unit tests will check): net + carry paid out to
-  // LPs/GP must equal what's actually being distributed, whether the
-  // split was auto-generated above or supplied by the caller.
+  // Reconciliation guard (also the acceptance criterion waterfallEngine.js
+  // is tested against): net + carry paid out to LPs/GP must equal what's
+  // actually being distributed, whether the split was auto-generated
+  // above (pure ROC, or the waterfall) or supplied by the caller.
   const sumNet   = lineItems.reduce((s, li) => s + (li.netAmount != null ? li.netAmount : (li.grossAmount || 0) - (li.gpCarryAmount || 0)), 0);
   const sumCarry = lineItems.reduce((s, li) => s + (li.gpCarryAmount || 0), 0);
   if (Math.abs((sumNet + sumCarry) - totalAmount) > 0.5) {

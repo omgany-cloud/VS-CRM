@@ -24,9 +24,10 @@ let capitalCallsLog = [];  // populated at runtime by js/api-auth.js via GET /ap
 
 /**
  * distributionsLog[] — the reverse cash flow (fund -> LP), same shape as
- * capitalCallsLog above. Each distribution has line items per LP (ROC
- * pro-rated automatically server-side when profitAmount is 0; profit-split
- * requires explicit lineItems until server/waterfallEngine.js exists).
+ * capitalCallsLog above. Each distribution has line items per LP, computed
+ * server-side: ROC pro-rated by commitment, profit run through the real
+ * waterfall (server/waterfallEngine.js) — see js/distributions.js for the
+ * page/renderer.
  */
 let distributionsLog = [];  // populated at runtime by js/api-auth.js via GET /api/distributions (see server/index.js)
 
@@ -63,6 +64,10 @@ function lpRegStatusBadge(s) {
     <i class="fas ${cfg.icon}" style="margin-right:3px;font-size:9px"></i>${statusLabel(s)}</span>`;
 }
 
+// Shared status-badge helper — despite the cc-specific name (kept to
+// avoid rippling a rename through every existing call site), this covers
+// both Capital Call and Distribution status vocabularies, since neither
+// module's tokens collide (js/distributions.js reuses it directly).
 function ccStatusBadge(s) {
   const cfg = {
     'Completed': { bg:'rgba(34,197,94,0.12)',  c:'#22c55e' },
@@ -70,6 +75,8 @@ function ccStatusBadge(s) {
     'Overdue':   { bg:'rgba(239,68,68,0.12)',  c:'#ef4444' },
     'Draft':     { bg:'rgba(100,116,139,0.12)',c:'#94a3b8' },
     'Paid':      { bg:'rgba(34,197,94,0.12)',  c:'#22c55e' },
+    'Sent':      { bg:'rgba(249,115,22,0.12)', c:'#f97316' },
+    'Confirmed': { bg:'rgba(34,197,94,0.12)',  c:'#22c55e' },
     'Default':   { bg:'rgba(239,68,68,0.12)',  c:'#ef4444' },
   }[s] || { bg:'rgba(100,116,139,0.12)', c:'#94a3b8' };
   return `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${cfg.bg};color:${cfg.c}">${statusLabel(s)}</span>`;
@@ -1976,6 +1983,10 @@ async function deleteCC(ccId) {
 // server/index.js), same as this button only rendering for those roles
 // (openCCDetail()). Only now does each LP's calledAmount actually count
 // this call — a draft that never gets approved never touched it.
+// lpRegister's calledAmount/paidAmount/distributions are all live-computed
+// server-side (server/lpMapping.js's withLiveFinancials()), so refreshing
+// from the API after the status change is enough — no client-side
+// bookkeeping to keep in sync (and nothing to silently drift if it fails).
 async function approveCC(ccId) {
   const cc = capitalCallsLog.find(c => c.id === ccId);
   if (!cc || cc.status !== 'Draft') return;
@@ -1985,14 +1996,7 @@ async function approveCC(ccId) {
   try {
     const updated = await apiFetch(`/api/capital-calls/${ccId}`, { method: 'PUT', body: JSON.stringify({ status: 'Pending' }) });
     Object.assign(cc, updated);
-
-    cc.lineItems.forEach(li => {
-      const lp = lpRegister.find(l => l.id === li.lpId);
-      if (!lp) return;
-      lp.calledAmount = (lp.calledAmount || 0) + li.called;
-      apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: lp.calledAmount }) })
-        .catch(err => showToast(`⚠️ CC отправлен, но не обновлён итог LP ${lp.name}: ` + err.message, 'orange'));
-    });
+    await loadLpRegisterFromApi();
 
     showToast(`✅ Capital Call ${cc.ccNumber} подтверждён и отправлен · ${fmtUSD(cc.totalAmount)}`, 'green');
   } catch (err) {
@@ -2053,16 +2057,10 @@ async function markLPPayment(ccId, lpId) {
     });
     Object.assign(cc, updatedCC);
 
-    // Update LP Register calledAmount + paidAmount — best-effort, doesn't
-    // block the payment's own success if this second call fails.
-    const lp = lpRegister.find(l => l.id === lpId);
-    if (lp) {
-      const totalPaidForLP = capitalCallsLog.flatMap(c => c.lineItems.filter(x => x.lpId === lpId && x.status === 'Paid')).reduce((s, x) => s + x.paid, 0);
-      lp.calledAmount = totalPaidForLP;
-      lp.paidAmount   = totalPaidForLP;
-      apiFetch(`/api/lp/${lp.id}`, { method: 'PUT', body: JSON.stringify({ calledAmount: totalPaidForLP, paidAmount: totalPaidForLP }) })
-        .catch(err => showToast('⚠️ Платёж сохранён, но не обновлён итог LP: ' + err.message, 'orange'));
-    }
+    // lpRegister's calledAmount/paidAmount are live-computed server-side
+    // (server/lpMapping.js's withLiveFinancials()) — a refresh here is
+    // enough, no client-side bookkeeping to keep in sync.
+    await loadLpRegisterFromApi();
 
     // Авто-закрытие CC если все LP оплатили
     const allPaid = cc.lineItems.every(l => l.status === 'Paid');

@@ -15,7 +15,7 @@ const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const { z } = require('zod');
 const { db } = require('./db');
-const { rowToLp } = require('./lpMapping');
+const { rowToLp, withLiveFinancials } = require('./lpMapping');
 const { rowToDeal } = require('./dealMapping');
 const { rowToPortfolio } = require('./portfolioMapping');
 const { rowToFund } = require('./fundMapping');
@@ -49,7 +49,7 @@ function buildMcpServer(req) {
   }, async () => {
     if (!hasScope('read:lp')) return scopeErrorResult('read:lp');
     const rows = db.prepare('SELECT * FROM lp_register WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
-    return jsonResult(rows.map(rowToLp));
+    return jsonResult(rows.map(r => withLiveFinancials(db, req.tenantId, r.id, rowToLp(r))));
   });
 
   server.registerTool('list_portfolio', {

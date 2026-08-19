@@ -121,3 +121,46 @@ test('LP portal: login, curated self-service view, and per-LP data isolation', a
   await server.apiFetch(`/api/lp/${lpB.id}`, { method: 'DELETE' }).catch(() => {});
   await server.apiFetch(`/api/lp/${lpNoEmail.id}`, { method: 'DELETE' }).catch(() => {});
 });
+
+test('LP portal: Capital Account Statement (GET /api/portal/lp/metrics) matches the internal metrics route, scoped to the caller only', async () => {
+  const lp = await (await server.apiFetch('/api/lp', {
+    method: 'POST',
+    body: JSON.stringify({ fundId, name: 'ZZZ_LPPORTAL_METRICS', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'LPP-M', email: 'lpp-metrics@example.com' }),
+  })).json();
+
+  const cc = await (await server.apiFetch('/api/capital-calls', {
+    method: 'POST',
+    body: JSON.stringify({ fundId, purpose: 'metrics test', lineItems: [{ lpId: lp.id, commitment: 1000, pct: 100, called: 500, paid: 500, paymentDate: '2025-01-01' }] }),
+  })).json();
+  await server.apiFetch(`/api/capital-calls/${cc.id}`, { method: 'PUT', body: JSON.stringify({ status: 'Pending' }) });
+
+  const dist = await (await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ fundId, rocAmount: 200, profitAmount: 0, paymentDate: '2025-12-31' }),
+  })).json();
+  await server.apiFetch(`/api/distributions/${dist.id}`, { method: 'PUT', body: JSON.stringify({ status: 'Sent' }) });
+
+  const { password } = await (await server.apiFetch(`/api/lp/${lp.id}/portal-password`, { method: 'PUT' })).json();
+  const login = await (await fetch(server.baseUrl + '/api/portal/lp/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'lpp-metrics@example.com', password }),
+  })).json();
+
+  const portalMetrics = await (await fetch(server.baseUrl + '/api/portal/lp/metrics', {
+    headers: { Authorization: 'Bearer ' + login.token },
+  })).json();
+  const internalMetrics = await (await server.apiFetch(`/api/lp/${lp.id}/metrics`)).json();
+  assert.deepEqual(portalMetrics, internalMetrics, 'the portal must see exactly the same computeLpMetrics() result the internal CRM route does');
+  assert.equal(portalMetrics.paidIn, 500);
+  assert.equal(portalMetrics.distributed, 200);
+  assert.ok(Math.abs(portalMetrics.dpi - 0.4) < 0.001);
+
+  // A staff token must not work on this LP-only route (same cross-identity
+  // check as the rest of this file).
+  const staffOnPortalMetrics = await server.apiFetch('/api/portal/lp/metrics');
+  assert.equal(staffOnPortalMetrics.status, 401);
+
+  // cleanup
+  await server.apiFetch(`/api/distributions/${dist.id}`, { method: 'DELETE' }).catch(() => {});
+  await server.apiFetch(`/api/capital-calls/${cc.id}`, { method: 'DELETE' }).catch(() => {});
+  await server.apiFetch(`/api/lp/${lp.id}`, { method: 'DELETE' }).catch(() => {});
+});

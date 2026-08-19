@@ -37,6 +37,8 @@ const STATUS_LABELS = {
   'Pass': 'Пройдено',
   'Fail': 'Не пройдено',
   'Paid': 'Оплачено',
+  'Sent': 'Отправлено',
+  'Confirmed': 'Подтверждено',
   'Default': 'Дефолт',
   // conflict-of-interest classification
   'Internal Client': 'Внутренний клиент',

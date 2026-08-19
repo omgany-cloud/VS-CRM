@@ -122,14 +122,14 @@ test('Distribution: Draft deletes cleanly; Sent is blocked permanently (no soft 
   assert.equal(del.status, 409);
 });
 
-test('Distribution: pure ROC auto pro-rates by ownership; profit without lineItems is rejected', async () => {
+test('Distribution: pure ROC auto pro-rates by ownership; profit without lineItems runs the waterfall', async () => {
   // A dedicated fund, not the shared file-level `fundId` — earlier tests
   // in this file leave their LPs Active under that fund (by design, they
   // only clean up what each test itself needs to), so reusing it here
   // would pull unrelated LPs into the pro-rata pool and throw off the
   // expected split.
   const distFund = await (await server.apiFetch('/api/funds', {
-    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND_DIST_PRORATA', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026 }),
+    method: 'POST', body: JSON.stringify({ name: 'TEST_FUND_DIST_PRORATA', type: 'Private Equity', currency: 'USD', targetSize: 10, vintage: 2026, carriedInterest: 20, preferredReturn: 8 }),
   })).json();
   const lpA = await (await server.apiFetch('/api/lp', {
     method: 'POST', body: JSON.stringify({ fundId: distFund.id, name: 'TEST_LP_DIST_A', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 3000, status: 'Active', registerId: 'T-3c' }),
@@ -146,10 +146,28 @@ test('Distribution: pure ROC auto pro-rates by ownership; profit without lineIte
   assert.equal(liA.netAmount, 300, 'LP A (3000/4000 commitment) gets 75% of the ROC pro-rata');
   assert.equal(liB.netAmount, 100, 'LP B (1000/4000 commitment) gets 25% of the ROC pro-rata');
 
-  const rejected = await server.apiFetch('/api/distributions', {
+  // No capital calls were ever recorded as paid for this fund, so the
+  // waterfall's preferred-return ledger is empty (nothing accrued, nothing
+  // owed) — the whole profit amount degenerates to a straight
+  // carriedInterest%-to-GP / rest-to-LPs split (waterfallEngine.js's tier 1
+  // and 2 both correctly contribute $0 here), split pro-rata by
+  // commitment across LPs same as ROC.
+  const noLineItems = await server.apiFetch('/api/distributions', {
     method: 'POST', body: JSON.stringify({ fundId: distFund.id, profitAmount: 100 }),
   });
-  assert.equal(rejected.status, 400, 'profit without explicit lineItems must be rejected, not silently mis-split');
+  assert.equal(noLineItems.status, 201, 'profit without lineItems must now run the waterfall, not be rejected');
+  const withWaterfall = await noLineItems.json();
+  const wA = withWaterfall.lineItems.find(li => li.lpId === lpA.id);
+  const wB = withWaterfall.lineItems.find(li => li.lpId === lpB.id);
+  assert.equal(wA.netAmount, 60, 'LP A: 75% of $100 profit = $75 gross, less 20% carry = $60 net');
+  assert.equal(wA.gpCarryAmount, 15, 'LP A carve-out: 20% of its $75 profit share');
+  assert.equal(wB.netAmount, 20, 'LP B: 25% of $100 profit = $25 gross, less 20% carry = $20 net');
+  assert.equal(wB.gpCarryAmount, 5, 'LP B carve-out: 20% of its $25 profit share');
+
+  const missingFundId = await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ profitAmount: 100 }),
+  });
+  assert.equal(missingFundId.status, 400, 'profit without a fundId still has no way to look up waterfall parameters');
 });
 
 test('Engagement: clean delete succeeds', async () => {

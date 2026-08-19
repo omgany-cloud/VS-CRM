@@ -182,11 +182,10 @@ CREATE TABLE IF NOT EXISTS capital_call_line_items (
 -- Distributions: the reverse cash flow (fund -> LP), mirroring capital_calls/
 -- capital_call_line_items above. roc_amount (return of capital) and
 -- profit_amount are entered separately because they're taxed/carried
--- differently downstream (see server/waterfallEngine.js, not yet built —
--- for now POST /api/distributions either takes lineItems verbatim from the
--- caller, or — only when profit_amount is 0 — auto-splits roc_amount
--- pro-rata by ownership, since ROC never carries GP carry and needs no
--- waterfall math to distribute correctly).
+-- differently downstream: POST /api/distributions auto-splits roc_amount
+-- pro-rata by ownership (no carry, no waterfall math needed) and runs
+-- profit_amount through the real waterfall (server/waterfallEngine.js) —
+-- unless the caller supplies lineItems verbatim instead.
 CREATE TABLE IF NOT EXISTS distributions (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id           INTEGER NOT NULL REFERENCES tenants(id),

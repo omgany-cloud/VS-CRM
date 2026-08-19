@@ -154,6 +154,18 @@
       </div>
     </div>
 
+    <div class="p-section">
+      <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>Capital Account Statement</div>
+      <div class="kpi-row" id="statementKpiRow" style="margin-bottom:0">
+        <div class="kpi-card"><div class="kpi-val" id="stCalled">—</div><div class="kpi-label">Called to date</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="stDistributed">—</div><div class="kpi-label">Distributed</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="stDpi">—</div><div class="kpi-label">DPI</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="stRvpi">—</div><div class="kpi-label">RVPI</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="stTvpi">—</div><div class="kpi-label">TVPI</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="stIrr">—</div><div class="kpi-label">IRR</div></div>
+      </div>
+    </div>
+
     <div class="p-section" id="docsSection" style="display:none">
       <div class="p-section-title"><i class="fas fa-file-contract"></i>Документы</div>
       <div id="docsWrap" style="display:grid;gap:8px"></div>
@@ -256,6 +268,29 @@ async function initPortal() {
   } catch (err) {
     document.getElementById('ccTableWrap').innerHTML = `<div class="empty-state">⚠️ ${escapeHtml(err.message)}</div>`;
   }
+  try {
+    const metrics = await lpFetch('/api/portal/lp/metrics');
+    renderStatement(metrics);
+  } catch (err) {
+    // Best-effort — the rest of the portal (overview, capital calls) stays
+    // usable even if this one call fails; each stat just stays "—".
+  }
+}
+
+// x-multiples (DPI/RVPI/TVPI) and IRR are null — never 0 — when there
+// isn't enough real cash-flow history yet to mean anything
+// (server/metricsEngine.js), same "honest, not a fake number" convention
+// as the CRM dashboard's own IRR tile (js/app.js).
+function fmtMultiple(n) {
+  return n == null ? '—' : Number(n).toFixed(2) + 'x';
+}
+function renderStatement(m) {
+  document.getElementById('stCalled').textContent       = fmtUSD(m.paidIn);
+  document.getElementById('stDistributed').textContent  = fmtUSD(m.distributed);
+  document.getElementById('stDpi').textContent           = fmtMultiple(m.dpi);
+  document.getElementById('stRvpi').textContent          = fmtMultiple(m.rvpi);
+  document.getElementById('stTvpi').textContent          = fmtMultiple(m.tvpi);
+  document.getElementById('stIrr').textContent           = m.irr == null ? '—' : (m.irr * 100).toFixed(1) + '%';
 }
 
 function renderOverview(lp) {

@@ -248,6 +248,9 @@ function updateBadges() {
   // Capital Calls badge — pending CCs
   const ccPending = typeof capitalCallsLog !== 'undefined' ? capitalCallsLog.filter(c => c.status === 'Pending').length : 0;
   set('badge-lp-capital-calls', ccPending);
+  // Distributions badge — Draft distributions still needing CFO/CEO approval
+  const distDraft = typeof distributionsLog !== 'undefined' ? distributionsLog.filter(d => d.status === 'Draft').length : 0;
+  set('badge-lp-distributions', distDraft);
 }
 
 /* ===== NAVIGATION ===== */
@@ -291,6 +294,7 @@ const PAGE_LABELS = {
   subscription:  'Подписка',
   'lp-register':      'LP Register — Реестр партнёров',
   'lp-capital-calls': 'Capital Calls — Журнал взносов',
+  'lp-distributions': 'Distributions — Журнал распределений',
   users:         'Команда / Пользователи',
 };
 
@@ -318,6 +322,7 @@ function navigateTo(page) {
   if (page === 'conflict-approvals'){ renderConflictApprovalsPage(); }
   if (page === 'lp-register')       { renderLPRegisterPage(); }
   if (page === 'lp-capital-calls')  { renderCapitalCallsPage(); }
+  if (page === 'lp-distributions')  { renderDistributionsPage(); }
   if (page === 'users')             { renderUsersPage(); }
 }
 
@@ -360,19 +365,31 @@ function renderDashboard() {
   }
 
   // MOIC "Текущий" — real, computed from portfolio current value / invested
-  // for this fund. IRR "Текущий" stays honest instead of a frozen fake
-  // number: a real annualized IRR needs dated cash-flow-in/out timing
-  // (calls + distributions), and this app has no real distributions data
-  // at all (the Distributions module was removed) — showing a made-up
-  // percentage would be worse than admitting it can't be computed yet.
+  // for this fund (a portfolio-level gross ratio, not tied to LP cash-flow
+  // timing — deliberately kept separate from the IRR below).
   const totalInvested = scopedPortfolio.reduce((s, p) => s + (p.invested || 0), 0);
   const totalValue    = scopedPortfolio.reduce((s, p) => s + (p.value || 0), 0);
   const moicCurrentEl = document.getElementById('kpiMoicCurrent');
   if (moicCurrentEl) {
     moicCurrentEl.textContent = totalInvested > 0 ? `Текущий: ${(totalValue / totalInvested).toFixed(2)}x` : 'Текущий: нет данных';
   }
+  // IRR "Текущий" — real, from GET /api/funds/:id/metrics
+  // (server/metricsEngine.js): an annualized XIRR over the fund's actual
+  // dated capital-call/distribution history plus current portfolio value
+  // as a terminal cash flow. Only meaningful for one specific fund (the
+  // API has no "all funds pooled" view), and fetched async so it doesn't
+  // block the rest of this otherwise-synchronous render.
   const irrCurrentEl = document.getElementById('kpiIrrCurrent');
-  if (irrCurrentEl) irrCurrentEl.textContent = 'Расчёт недоступен — нет данных о распределениях';
+  if (irrCurrentEl) {
+    if (fundScoped && typeof apiFetch === 'function') {
+      irrCurrentEl.textContent = 'Расчёт…';
+      apiFetch(`/api/funds/${activeFundId}/metrics`)
+        .then(m => { irrCurrentEl.textContent = m.irr != null ? `Текущий: ${(m.irr * 100).toFixed(1)}%` : 'Текущий: нет данных'; })
+        .catch(() => { irrCurrentEl.textContent = 'Текущий: нет данных'; });
+    } else {
+      irrCurrentEl.textContent = 'Расчёт недоступен — выберите фонд';
+    }
+  }
 
   if (typeof renderKYCStatus === 'function') renderKYCStatus();
   if (typeof updateLifecycleBar === 'function') updateLifecycleBar();
@@ -433,22 +450,33 @@ function renderKYCStatus() {
   `).join('') || '<div style="color:#4a5568;font-size:12px;padding:8px">Нет активных LP</div>';
 }
 
-// Real per-year net cash flow from capitalCallsLog (money called = out,
-// negated) for this fund — replaces the old hardcoded js/data.js
-// chartData.jcurve series. There's deliberately no positive (inflow) side
-// yet: this app has no real distributions data (that module was removed),
-// so the chart is honestly just the downward leg of the "J" for a fund
-// still in its investment period, not a fabricated eventual upturn.
+// Real per-year net cash flow for this fund — capital calls (money out,
+// negated) from capitalCallsLog, distributions (money back in) from
+// distributionsLog, replacing the old hardcoded js/data.js
+// chartData.jcurve series. Only non-Draft records count on either side —
+// a Draft call/distribution was never actually sent to any LP, so it
+// isn't a real cash flow yet (same "Draft = not real" convention used
+// everywhere else in this app, e.g. server/metricsEngine.js's paid-in/
+// distributed sums).
 function buildRealJCurveData() {
   const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
   const calls = typeof capitalCallsLog !== 'undefined'
     ? (fundScoped ? capitalCallsLog.filter(cc => cc.fundId === activeFundId) : capitalCallsLog)
     : [];
+  const dists = typeof distributionsLog !== 'undefined'
+    ? (fundScoped ? distributionsLog.filter(d => d.fundId === activeFundId) : distributionsLog)
+    : [];
   const byYear = {};
   calls.forEach(cc => {
-    if (!cc.noticeDate) return;
+    if (!cc.noticeDate || cc.status === 'Draft') return;
     const year = cc.noticeDate.slice(0, 4);
     byYear[year] = (byYear[year] || 0) - (cc.totalAmount || 0) / 1e6;
+  });
+  dists.forEach(d => {
+    const date = d.paymentDate || d.noticeDate;
+    if (!date || d.status === 'Draft') return;
+    const year = date.slice(0, 4);
+    byYear[year] = (byYear[year] || 0) + (d.totalAmount || 0) / 1e6;
   });
   const years = Object.keys(byYear).sort();
   if (!years.length) return { labels: [String(new Date().getFullYear())], cashflow: [0] };

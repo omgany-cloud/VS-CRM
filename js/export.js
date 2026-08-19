@@ -1,8 +1,8 @@
 // ============================================================
 //  export.js — Excel Export Module
 //  Regulator-compliant reports via SheetJS (xlsx)
-//  Generates: LP Register, KYC/AML, Capital Calls, Portfolio,
-//             Deals, CF&A Clients, Full CRM dump
+//  Generates: LP Register, KYC/AML, Capital Calls, Distributions,
+//             Portfolio, Deals, CF&A Clients, Full CRM dump
 // ============================================================
 
 /* ── Утилиты ── */
@@ -209,6 +209,64 @@ function exportCapitalCalls() {
       colWidths: [32, 16, 14, 14, 14, 14, 16],
     }
   ], `Capital_Calls_${todayStr()}.xlsx`);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3B. DISTRIBUTIONS — Журнал распределений LP
+═══════════════════════════════════════════════════════════ */
+function exportDistributions() {
+  const header = [
+    '№', 'Dist №', 'Дата уведомления', 'Дата платежа', 'Сумма ($)',
+    'ROC ($)', 'Прибыль ($)', 'GP Carry ($)', 'Источник', 'Статус'
+  ];
+  const distCarry = d => (d.lineItems || []).reduce((s, li) => s + (li.gpCarryAmount || 0), 0);
+  const rows = distributionsLog.map((d, i) => [
+    i + 1,
+    d.distNumber,
+    fmtDate(d.noticeDate),
+    fmtDate(d.paymentDate),
+    d.totalAmount,
+    d.rocAmount,
+    d.profitAmount,
+    distCarry(d),
+    typeof distSourceLabel === 'function' ? distSourceLabel(d.sourceType) : (d.sourceType || '—'),
+    d.status,
+  ]);
+
+  const totalAmount = distributionsLog.reduce((s, d) => s + (d.totalAmount || 0), 0);
+  const totalRoc     = distributionsLog.reduce((s, d) => s + (d.rocAmount || 0), 0);
+  const totalProfit  = distributionsLog.reduce((s, d) => s + (d.profitAmount || 0), 0);
+  const totalCarry   = distributionsLog.reduce((s, d) => s + distCarry(d), 0);
+  rows.push([]);
+  rows.push(['', '', 'ИТОГО', '', totalAmount, totalRoc, totalProfit, totalCarry, '', '']);
+
+  // Разбивка по LP — exact per-LP net amount from each distribution's own
+  // lineItems (same shape as exportCapitalCalls()'s LP Breakdown sheet),
+  // only for distributions that actually paid out (Draft never did).
+  const lpBreakdownHeader = [
+    'LP', 'Commitment ($M)', ...distributionsLog.map(d => `${d.distNumber} (${fmtDate(d.noticeDate)})`), 'Итого Distributed'
+  ];
+  const lpRows = lpRegister.map(lp => {
+    const perDist = distributionsLog.map(d => {
+      if (d.status === 'Draft') return '—';
+      const li = (d.lineItems || []).find(x => x.lpId === lp.id);
+      return li ? `$${(li.netAmount / 1e6).toFixed(3)}M` : '—';
+    });
+    return [lp.name, lp.commitment / 1e6, ...perDist, `$${((lp.distributions || 0) / 1e6).toFixed(2)}M`];
+  });
+
+  downloadExcel([
+    {
+      name: 'Distributions',
+      data: [header, ...rows],
+      colWidths: [4, 14, 18, 16, 14, 14, 14, 14, 16, 14],
+    },
+    {
+      name: 'LP Breakdown',
+      data: [lpBreakdownHeader, ...lpRows],
+      colWidths: [32, 16, 14, 14, 14, 14, 16],
+    }
+  ], `Distributions_${todayStr()}.xlsx`);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -490,11 +548,12 @@ function exportFullCRM() {
     ['1. LP Register — реестр всех инвесторов'],
     ['2. KYC-AML — статус проверок KYC/AML'],
     ['3. Capital Calls — история capital call notices'],
-    ['4. Portfolio — портфельные компании'],
-    ['5. Deals — сделки инвестиционного пайплайна'],
-    ['6. CFA Clients — клиенты CF&A'],
-    ['7. AML Register — реестр AML проверок'],
-    ['8. Conflicts — Decision & Escalation Matrix (COI реестр)'],
+    ['4. Distributions — журнал распределений LP (ROC / waterfall / carry)'],
+    ['5. Portfolio — портфельные компании'],
+    ['6. Deals — сделки инвестиционного пайплайна'],
+    ['7. CFA Clients — клиенты CF&A'],
+    ['8. AML Register — реестр AML проверок'],
+    ['9. Conflicts — Decision & Escalation Matrix (COI реестр)'],
     [''],
     ['Предназначен для регуляторной отчётности,'],
     ['внутреннего аудита и отчётности перед LP.'],
@@ -508,6 +567,9 @@ function exportFullCRM() {
 
   const ccHeader  = ['№','Дата','Сумма ($)','%','Назначение','Статус'];
   const ccRows    = capitalCallsLog.map((cc, i) => [i+1, fmtDate(cc.noticeDate), cc.totalAmount, fmtPct(cc.pctOfCommit), cc.purpose, cc.status]);
+
+  const distHeader = ['№','Dist №','Дата','Сумма ($)','ROC ($)','Прибыль ($)','Статус'];
+  const distRows    = distributionsLog.map((d, i) => [i+1, d.distNumber, fmtDate(d.paymentDate || d.noticeDate), d.totalAmount, d.rocAmount, d.profitAmount, d.status]);
 
   const portHeader = ['№','Компания','Сектор','Инвестировано ($M)','Стоимость ($M)','MOIC','Выход'];
   const portRows   = portfolio.map((p, i) => [i+1, p.name, p.sector, p.invested, p.value, p.moic ? p.moic.toFixed(2)+'x':'—', p.exitStrategy]);
@@ -532,6 +594,7 @@ function exportFullCRM() {
     { name: 'LP Register', data: [lpHeader, ...lpRows], colWidths: [4,32,18,14,18,16,16,14,14] },
     { name: 'KYC-AML', data: [kycHeader, ...kycRows], colWidths: [4,32,18,12,10,14,10,14] },
     { name: 'Capital Calls', data: [ccHeader, ...ccRows], colWidths: [4,16,14,8,36,14] },
+    { name: 'Distributions', data: [distHeader, ...distRows], colWidths: [4,14,16,14,14,14,14] },
     { name: 'Portfolio', data: [portHeader, ...portRows], colWidths: [4,28,18,16,16,10,18] },
     { name: 'Deals', data: [dealHeader, ...dealRows], colWidths: [4,24,18,18,12,18,14] },
     { name: 'CFA Clients', data: [cfaHeader, ...cfaRows], colWidths: [4,32,16,20,14,14,14,14] },
@@ -605,6 +668,16 @@ function renderExportPage() {
       tag: 'Finance',
     },
     {
+      id: 'dist',
+      icon: 'fa-hand-holding-usd',
+      color: 'green',
+      title: 'Distributions',
+      subtitle: 'Журнал распределений LP',
+      desc: 'Все распределения: ROC, прибыль через waterfall, GP carry, статусы. Разбивка по LP. Приложение к отчёту для регулятора.',
+      fn: 'exportDistributions()',
+      tag: 'Finance',
+    },
+    {
       id: 'port',
       icon: 'fa-chart-pie',
       color: 'orange',
@@ -649,8 +722,8 @@ function renderExportPage() {
       icon: 'fa-database',
       color: 'red',
       title: 'Full CRM Export',
-      subtitle: 'Полный дамп всех данных (9 листов)',
-      desc: 'Все модули CRM одним файлом xlsx: LP, KYC/AML, Capital Calls, Portfolio, Deals, CF&A, AML Register, Conflicts. Для аудита.',
+      subtitle: 'Полный дамп всех данных (10 листов)',
+      desc: 'Все модули CRM одним файлом xlsx: LP, KYC/AML, Capital Calls, Distributions, Portfolio, Deals, CF&A, AML Register, Conflicts. Для аудита.',
       fn: 'exportFullCRM()',
       tag: 'Full',
       featured: true,

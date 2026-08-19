@@ -16,7 +16,7 @@ const rateLimit = require('express-rate-limit');
 const { db } = require('./db');
 const { requireApiKey } = require('./auth');
 const { logApiCall } = require('./logger');
-const { rowToLp } = require('./lpMapping');
+const { rowToLp, withLiveFinancials } = require('./lpMapping');
 const { rowToDeal } = require('./dealMapping');
 const { rowToPortfolio } = require('./portfolioMapping');
 const { rowToFund } = require('./fundMapping');
@@ -57,7 +57,7 @@ router.use((req, res, next) => {
 
 router.get('/lp', requireApiKey('read:lp'), apiKeyRateLimit, (req, res) => {
   const rows = db.prepare('SELECT * FROM lp_register WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
-  res.json({ lp: rows.map(rowToLp) });
+  res.json({ lp: rows.map(r => withLiveFinancials(db, req.tenantId, r.id, rowToLp(r))) });
 });
 
 router.get('/portfolio', requireApiKey('read:portfolio'), apiKeyRateLimit, (req, res) => {
