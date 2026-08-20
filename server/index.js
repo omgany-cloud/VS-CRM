@@ -51,6 +51,7 @@ const { notifyCapitalCallCreated, notifyWorkflowStepAssigned } = require('./noti
 const notificationsScheduler = require('./notifications/scheduler');
 const { computeDistributionSplit } = require('./waterfallEngine');
 const { computeFundMetrics, computeLpMetrics } = require('./metricsEngine');
+const { recordAudit } = require('./auditLog');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
@@ -1017,6 +1018,7 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
   }));
 
   const row = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'lp_register', entityId: row.id, action: 'created', actorEmail: req.user.email, summary: `LP «${row.name}» создан` });
   res.status(201).json(withLiveFinancials(db, req.tenantId, row.id, rowToLp(row)));
 });
 
@@ -1059,6 +1061,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
   }));
 
   const row = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'lp_register', entityId: row.id, action: 'updated', actorEmail: req.user.email, summary: `LP «${row.name}» изменён` });
   res.json(withLiveFinancials(db, req.tenantId, row.id, rowToLp(row)));
 });
 
@@ -1078,6 +1081,7 @@ app.delete('/api/lp/:id', requireAuth, requireInternal, requirePermission('acces
     });
   }
   db.prepare('DELETE FROM lp_register WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'lp_register', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `LP «${existing.name}» удалён` });
   res.json({ ok: true, deleted: true });
 });
 
@@ -1204,6 +1208,7 @@ app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('
     const row = db.prepare('SELECT * FROM capital_calls WHERE id = ?').get(callId);
     const cc = rowToCC(row);
     cc.lineItems = lineItemsStmt.all(callId, req.tenantId).map(rowToLineItem);
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: cc.id, action: 'created', actorEmail: req.user.email, summary: `Capital Call ${cc.ccNumber} создан (черновик)` });
     res.status(201).json(cc);
   } catch (err) {
     db.exec('ROLLBACK');
@@ -1241,6 +1246,12 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
   const row = db.prepare('SELECT * FROM capital_calls WHERE id = ?').get(existing.id);
   const cc = rowToCC(row);
   cc.lineItems = lineItemsStmt.all(existing.id, req.tenantId).map(rowToLineItem);
+  const approvedNow = existing.status === 'Draft' && cc.status === 'Pending';
+  recordAudit(db, {
+    tenantId: req.tenantId, entityType: 'capital_calls', entityId: cc.id,
+    action: approvedNow ? 'approved' : 'updated', actorEmail: req.user.email,
+    summary: approvedNow ? `Capital Call ${cc.ccNumber} подтверждён и отправлен` : `Capital Call ${cc.ccNumber} изменён`,
+  });
   res.json(cc);
 
   // Fired here (Draft -> Pending), not at creation: a Draft is still
@@ -1280,6 +1291,7 @@ app.delete('/api/capital-calls/:id', requireAuth, requireInternal, requirePermis
     db.exec('ROLLBACK');
     return res.status(500).json({ error: err.message });
   }
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Capital Call ${existing.cc_number} удалён (черновик)` });
   res.json({ ok: true, deleted: true });
 });
 
@@ -1512,6 +1524,7 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
     const row = db.prepare('SELECT * FROM distributions WHERE id = ?').get(distId);
     const dist = rowToDist(row);
     dist.lineItems = distLineItemsStmt.all(distId, req.tenantId).map(rowToDistLineItem);
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'distributions', entityId: dist.id, action: 'created', actorEmail: req.user.email, summary: `Распределение ${dist.distNumber} создано (черновик)` });
     res.status(201).json(dist);
   } catch (err) {
     db.exec('ROLLBACK');
@@ -1552,6 +1565,15 @@ app.put('/api/distributions/:id', requireAuth, requireInternal, requirePermissio
   const row = db.prepare('SELECT * FROM distributions WHERE id = ?').get(existing.id);
   const dist = rowToDist(row);
   dist.lineItems = distLineItemsStmt.all(existing.id, req.tenantId).map(rowToDistLineItem);
+  const distApprovedNow = existing.status === 'Draft' && dist.status === 'Sent';
+  const distPaidNow = existing.status !== 'Paid' && dist.status === 'Paid';
+  recordAudit(db, {
+    tenantId: req.tenantId, entityType: 'distributions', entityId: dist.id,
+    action: distApprovedNow ? 'approved' : distPaidNow ? 'paid' : 'updated', actorEmail: req.user.email,
+    summary: distApprovedNow ? `Распределение ${dist.distNumber} подтверждено и отправлено`
+      : distPaidNow ? `Распределение ${dist.distNumber} закрыто (все LP получили выплату)`
+      : `Распределение ${dist.distNumber} изменено`,
+  });
   res.json(dist);
 });
 
@@ -1577,6 +1599,7 @@ app.delete('/api/distributions/:id', requireAuth, requireInternal, requirePermis
     db.exec('ROLLBACK');
     return res.status(500).json({ error: err.message });
   }
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'distributions', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Распределение ${existing.dist_number} удалено (черновик)` });
   res.json({ ok: true, deleted: true });
 });
 
@@ -1762,6 +1785,7 @@ app.post('/api/deals', requireAuth, requireInternal, requirePermission('accessFM
   });
   const info = db.prepare(DEAL_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'deals', entityId: row.id, action: 'created', actorEmail: req.user.email, summary: `Сделка «${row.company}» создана` });
   res.status(201).json(rowToDeal(row));
 });
 
@@ -1797,6 +1821,12 @@ app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('acces
   const params = dealToParams(merged);
   db.prepare(DEAL_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  const stageChanged = Object.prototype.hasOwnProperty.call(b, 'stage') && b.stage !== existing.stage;
+  recordAudit(db, {
+    tenantId: req.tenantId, entityType: 'deals', entityId: row.id,
+    action: stageChanged ? 'stage_changed' : 'updated', actorEmail: req.user.email,
+    summary: stageChanged ? `Сделка «${row.company}»: стадия ${existing.stage} → ${row.stage}` : `Сделка «${row.company}» изменена`,
+  });
   res.json(rowToDeal(row));
 });
 
@@ -1816,6 +1846,7 @@ app.delete('/api/deals/:id', requireAuth, requireInternal, requirePermission('ac
     });
   }
   db.prepare('DELETE FROM deals WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'deals', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Сделка «${existing.company}» удалена` });
   res.json({ ok: true, deleted: true });
 });
 
@@ -1831,6 +1862,7 @@ app.post('/api/portfolio', requireAuth, requireInternal, requirePermission('acce
   const params = portfolioToParams({ status: 'Active', ...b });
   const info = db.prepare(PORTFOLIO_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'portfolio', entityId: row.id, action: 'created', actorEmail: req.user.email, summary: `Портфельная компания «${row.name}» добавлена` });
   res.status(201).json(rowToPortfolio(row));
 });
 
@@ -1860,6 +1892,12 @@ app.put('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('a
   const params = portfolioToParams(merged);
   db.prepare(PORTFOLIO_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  const archivedNow = b.archived !== undefined && !!b.archived !== !!wasArchived;
+  recordAudit(db, {
+    tenantId: req.tenantId, entityType: 'portfolio', entityId: row.id,
+    action: archivedNow ? (b.archived ? 'archived' : 'restored') : 'updated', actorEmail: req.user.email,
+    summary: archivedNow ? `Портфельная компания «${row.name}» ${b.archived ? 'архивирована' : 'восстановлена из архива'}` : `Портфельная компания «${row.name}» изменена`,
+  });
   res.json(rowToPortfolio(row));
 });
 
@@ -1880,6 +1918,7 @@ app.delete('/api/portfolio/:id', requireAuth, requireInternal, requirePermission
     return res.status(409).json({ error: `Cannot delete: company has real activity (${summary}). Archive instead.`, footprint });
   }
   db.prepare('DELETE FROM portfolio WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'portfolio', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Портфельная компания «${existing.name}» удалена` });
   res.json({ ok: true, deleted: true });
 });
 
@@ -2258,6 +2297,7 @@ app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const params = engagementToParams({ currency: 'USD', ...b });
   const info = db.prepare(ENGAGEMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'engagements', entityId: row.id, action: 'created', actorEmail: req.user.email, summary: `Договор с «${row.client_name}» создан` });
   res.status(201).json(rowToEngagement(row));
 });
 
@@ -2274,6 +2314,12 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   const params = engagementToParams(merged);
   db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  const statusChanged = Object.prototype.hasOwnProperty.call(req.body || {}, 'status') && row.status !== existing.status;
+  recordAudit(db, {
+    tenantId: req.tenantId, entityType: 'engagements', entityId: row.id,
+    action: statusChanged ? 'status_changed' : 'updated', actorEmail: req.user.email,
+    summary: statusChanged ? `Договор с «${row.client_name}»: статус ${existing.status} → ${row.status}` : `Договор с «${row.client_name}» изменён`,
+  });
   res.json(rowToEngagement(row));
 });
 
@@ -2294,6 +2340,7 @@ app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
     return res.status(409).json({ error: `Cannot delete: engagement has real activity (${summary}). Set status to 'Terminated' instead.`, footprint });
   }
   db.prepare('DELETE FROM engagements WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'engagements', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Договор с «${existing.client_name}» удалён` });
   res.json({ ok: true, deleted: true });
 });
 
@@ -2327,6 +2374,7 @@ app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConfli
   });
   const info = db.prepare(CONFLICT_APPROVAL_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'conflict_approvals', entityId: row.id, action: 'created', actorEmail: req.user.email, summary: `Конфликт интересов «${row.decision_type}» зарегистрирован (риск: ${row.risk_level})` });
   res.status(201).json(rowToConflictApproval(row));
 });
 
@@ -2353,6 +2401,12 @@ app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideCon
   const params = conflictApprovalToParams(merged);
   db.prepare(CONFLICT_APPROVAL_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  const decidedNow = DECIDED_STATUSES.has(row.status) && !DECIDED_STATUSES.has(existing.status);
+  recordAudit(db, {
+    tenantId: req.tenantId, entityType: 'conflict_approvals', entityId: row.id,
+    action: decidedNow ? 'decided' : 'updated', actorEmail: req.user.email,
+    summary: decidedNow ? `Конфликт интересов «${row.decision_type}» решён: ${row.status}` : `Конфликт интересов «${row.decision_type}» изменён`,
+  });
   res.json(rowToConflictApproval(row));
 });
 
@@ -2770,6 +2824,32 @@ app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) 
 app.post('/api/notifications/run-digest', requireAuth, requireInternal, requirePermission('manageUsers'), async (req, res) => {
   await notificationsScheduler.runDigestChecksForTenant(req.tenantId);
   res.json({ ok: true });
+});
+
+// Cross-module "who/what/when" event feed — server/auditLog.js. Same
+// manageUsers gate as run-digest above (CEO by default); Auditor also
+// holds manageUsers and, unlike the POST above, isn't blocked here by the
+// app-wide readOnly gate (server/auth.js only blocks mutating methods) —
+// exactly the role that should be able to read this. Optional
+// entityType/entityId filters for "show me this one record's history"
+// (js/audit-log.js links here from a record's detail view); otherwise
+// the most recent `limit` events across every logged module.
+app.get('/api/audit-log', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
+  const conditions = ['tenant_id = ?'];
+  const params = [req.tenantId];
+  if (req.query.entityType) { conditions.push('entity_type = ?'); params.push(req.query.entityType); }
+  if (req.query.entityId) { conditions.push('entity_id = ?'); params.push(req.query.entityId); }
+  const rows = db.prepare(`
+    SELECT id, entity_type, entity_id, action, actor_email, summary, created_at
+    FROM audit_log WHERE ${conditions.join(' AND ')} ORDER BY id DESC LIMIT ?
+  `).all(...params, limit);
+  res.json({
+    entries: rows.map(r => ({
+      id: r.id, entityType: r.entity_type, entityId: r.entity_id, action: r.action,
+      actorEmail: r.actor_email, summary: r.summary, createdAt: r.created_at,
+    })),
+  });
 });
 
 /* ===== Curated external API (machine callers — see server/externalApi.js) ===== */

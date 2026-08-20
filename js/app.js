@@ -45,6 +45,17 @@ function updateUserRoleUI(role) {
   const canSeeUsersPage = currentUserPermission('manageUsers') || currentUserPermission('manageRoles');
   if (usersNav) usersNav.style.display = canSeeUsersPage ? '' : 'none';
 
+  // Same gate as GET /api/audit-log (server/index.js) — CEO by default,
+  // and Auditor (also manageUsers) since read access to the audit trail
+  // is exactly what that role is for.
+  const auditLogNav = document.querySelector('.nav-item[data-page="audit-log"]');
+  if (auditLogNav) auditLogNav.style.display = currentUserPermission('manageUsers') ? '' : 'none';
+
+  // Same gate as GET /api/funds/:id/metrics — cross-fund financial
+  // comparison is FM data, not for roles without accessFM.
+  const fundCompareNav = document.querySelector('.nav-item[data-page="fund-compare"]');
+  if (fundCompareNav) fundCompareNav.style.display = currentUserPermission('accessFM') ? '' : 'none';
+
   // Portfolio (monitoring conclusions, uploaded documents) is internal-GP-
   // staff-only — external IC seats (Independent Member, LP Rep) already get
   // a 403 from the server (requireInternal on /api/portfolio/*), this just
@@ -277,6 +288,7 @@ function initNavigation() {
 
 const PAGE_LABELS = {
   dashboard:     'Дашборд',
+  'fund-compare': 'Сравнение фондов',
   closing:       'First Closing',
   deals:         'Сделки / Pipeline',
   portfolio:     'Портфель',
@@ -296,6 +308,7 @@ const PAGE_LABELS = {
   'lp-capital-calls': 'Capital Calls — Журнал взносов',
   'lp-distributions': 'Distributions — Журнал распределений',
   users:         'Команда / Пользователи',
+  'audit-log':   'Журнал изменений — Кто / Что / Когда',
 };
 
 function navigateTo(page) {
@@ -308,6 +321,7 @@ function navigateTo(page) {
   const dd = document.getElementById('fundSwitcherDropdown');
   if (dd) dd.classList.remove('open');
   if (page === 'dashboard')    { renderDashboardCharts(); }
+  if (page === 'fund-compare') { renderFundComparePage(); }
   if (page === 'documents')    { renderDocumentsPage(); }
   if (page === 'subscription') { renderSubscriptionPage(); }
   if (page === 'export')       { renderExportPage(); }
@@ -324,6 +338,7 @@ function navigateTo(page) {
   if (page === 'lp-capital-calls')  { renderCapitalCallsPage(); }
   if (page === 'lp-distributions')  { renderDistributionsPage(); }
   if (page === 'users')             { renderUsersPage(); }
+  if (page === 'audit-log')         { renderAuditLogPage(); }
 }
 
 /* ===== DASHBOARD ===== */
@@ -458,13 +473,14 @@ function renderKYCStatus() {
 // isn't a real cash flow yet (same "Draft = not real" convention used
 // everywhere else in this app, e.g. server/metricsEngine.js's paid-in/
 // distributed sums).
-function buildRealJCurveData() {
-  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+function buildRealJCurveData(fundId) {
+  const scopeId = fundId !== undefined ? fundId : (typeof activeFundId !== 'undefined' ? activeFundId : null);
+  const fundScoped = scopeId != null;
   const calls = typeof capitalCallsLog !== 'undefined'
-    ? (fundScoped ? capitalCallsLog.filter(cc => cc.fundId === activeFundId) : capitalCallsLog)
+    ? (fundScoped ? capitalCallsLog.filter(cc => cc.fundId === scopeId) : capitalCallsLog)
     : [];
   const dists = typeof distributionsLog !== 'undefined'
-    ? (fundScoped ? distributionsLog.filter(d => d.fundId === activeFundId) : distributionsLog)
+    ? (fundScoped ? distributionsLog.filter(d => d.fundId === scopeId) : distributionsLog)
     : [];
   const byYear = {};
   calls.forEach(cc => {

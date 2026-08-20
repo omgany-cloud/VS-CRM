@@ -2,6 +2,75 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.17.0] - 2026-08-20
+
+### Added
+- "Сравнение фондов" — a new page (Обзор → Сравнение фондов,
+  `accessFM` permission, same gate as fund metrics) for comparing the
+  tenant's own funds side by side: DPI/RVPI/TVPI/IRR/Paid-in/
+  Distributed/Residual Value per fund (via the existing
+  `GET /api/funds/:id/metrics`, called once per selected fund — no new
+  backend route) plus an overlaid cumulative J-curve chart built from
+  the same in-memory `capitalCallsLog`/`distributionsLog` arrays the
+  single-fund dashboard J-curve already uses. Checkbox fund picker,
+  live re-render on selection change. v1 deliberately excludes
+  industry/peer benchmarks — there is no external or reference dataset
+  anywhere in this system to source them from; that's left as a
+  separate future feature requiring a real data source.
+
+## [1.16.0] - 2026-08-20
+
+### Added
+- Bank reconciliation for Capital Calls — "Сверка с выпиской" button on
+  the Capital Calls page (CFO/CEO only, `paymentConfirm` permission).
+  Upload a bank-statement CSV (EN or RU column headers, comma- or
+  semicolon-delimited, auto-detected); `js/bank-reconciliation.js`
+  parses transactions and scores them against every open Capital Call
+  line item (exact/tolerant amount match, CC-number/LP-name substring
+  match in the transaction reference, payment-date proximity), then
+  greedily assigns each transaction to at most one line item. High-
+  confidence matches are pre-checked in a review table; the user
+  confirms which to apply. Confirming reuses the existing
+  `PUT /api/capital-calls/:id/line-items/:lpId` payment-confirmation
+  route unchanged — the uploaded statement becomes the `wireConfirmUrl`
+  evidence and each transaction's own reference becomes `wireRef` — and
+  replicates the existing auto-close-to-`Completed` rule once every
+  line item on a touched Capital Call is paid. No new backend endpoint;
+  purely a client-side matching layer on top of existing, unweakened
+  server-side rules.
+
+## [1.15.0] - 2026-08-19
+
+### Added
+- Global search — a search box in the topbar (previously search was
+  fragmented into 7 independent page-scoped filter boxes with zero
+  cross-entity search: LP Register, Capital Calls, Distributions, Deal
+  Pipeline, Portfolio, Vault, Onboarding). `js/global-search.js` searches
+  LP Register, Deal Pipeline, Portfolio, Engagements, Capital Calls,
+  Distributions, and Documents (reusing `vault.js`'s own cross-module
+  file aggregator) all at once, purely client-side against data already
+  resident in memory — no new backend endpoint. Results grouped by
+  module; clicking one navigates to and opens that record's own existing
+  detail view.
+
+## [1.14.0] - 2026-08-19
+
+### Added
+- Unified "Журнал изменений" (Audit Log) — a real cross-module who/what/
+  when event feed, replacing what used to be fragmented, per-entity
+  history (`portfolio.history_json`, never even rendered in the UI;
+  `documents.history_json`, scoped to one document). New `audit_log`
+  table + `server/auditLog.js`'s `recordAudit()`, wired into every
+  mutating route across the 7 modules that already function as a
+  governance/regulatory record: LP Register, Capital Calls,
+  Distributions, Portfolio, Deals, Conflict Approvals, Engagements.
+  v1 scope deliberately: event-only (who/what/when + a summary sentence),
+  no per-field old→new diff, and limited to these 7 modules rather than
+  a blanket middleware over every route. New `GET /api/audit-log`
+  (optional `entityType`/`entityId` filters), gated on `manageUsers`
+  (CEO/Auditor). New `js/audit-log.js` page under Система → Журнал
+  изменений.
+
 ## [1.13.0] - 2026-08-19
 
 ### Added

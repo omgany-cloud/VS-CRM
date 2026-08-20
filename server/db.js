@@ -878,6 +878,28 @@ CREATE TABLE IF NOT EXISTS notification_log (
 );
 CREATE INDEX IF NOT EXISTS idx_notification_log_tenant ON notification_log(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_notification_log_dedup ON notification_log(tenant_id, event_type, entity_id, recipient_email);
+
+-- Cross-module "who/what/when" event log (server/auditLog.js) — v1 is
+-- event-only by deliberate choice, no per-field old->new diff: fewer
+-- places to accidentally leak a sensitive value (passwords, PII) into a
+-- log line, and a summary sentence is enough to answer "who touched this
+-- record and when" without needing a diff viewer. Scoped to the modules
+-- that already function as a governance/regulatory record (LP register,
+-- Capital Calls, Distributions, Portfolio, Deals, Conflict Approvals,
+-- Engagements) rather than every mutating route in the app — see the
+-- module's own header comment for why a blanket middleware was rejected.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+  entity_type   TEXT NOT NULL,
+  entity_id     INTEGER NOT NULL,
+  action        TEXT NOT NULL,
+  actor_email   TEXT NOT NULL,
+  summary       TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_created ON audit_log(tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(tenant_id, entity_type, entity_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —

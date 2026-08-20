@@ -1630,6 +1630,10 @@ function renderCapitalCallsPage() {
         <option value="Overdue"   ${ccStatusF==='Overdue'?'selected':''}>🔴 Просрочено</option>
         <option value="Draft"     ${ccStatusF==='Draft'?'selected':''}>📝 Черновик</option>
       </select>
+      <button onclick="openBankReconciliationModal()"
+        style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">
+        <i class="fas fa-university" style="margin-right:6px"></i>Сверка с выпиской
+      </button>
 
     </div>
 
