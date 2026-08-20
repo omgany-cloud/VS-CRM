@@ -35,6 +35,15 @@ const WF_DEFINITIONS = {
       { role: 'CEO',  label: 'CEO — финальное одобрение',   action: 'approve' },
     ]
   },
+  nav_publish: {
+    label: 'Публикация NAV',
+    icon: 'fa-chart-line',
+    color: '#a78bfa',
+    steps: [
+      { role: 'CFO', label: 'CFO вносит расчёт NAV',        action: 'review'  },
+      { role: 'CEO', label: 'CEO подтверждает публикацию',  action: 'approve' },
+    ]
+  },
   deal_ic: {
     label: 'Инвестиционный комитет',
     icon: 'fa-handshake',
@@ -574,6 +583,18 @@ async function syncWfToEntity(w, result) {
     // kycStatus/amlStatus/stage fields to sync a renewal result onto
     // (its `activated` flag is owned by the onboarding task flow, not
     // by ad-hoc KYC renewal workflows), so there's nothing further to do.
+  }
+  if (w.entityType === 'HfNav' && result === 'approved') {
+    // The dedicated publish route (not a plain PUT) re-verifies server-side
+    // that this exact workflow instance is actually resolved 'approved'
+    // before it ever flips the NAV row — this call can't be used to
+    // publish anything the workflow didn't actually approve.
+    try {
+      await apiFetch(`/api/hf/nav/${w.entityId}/publish`, { method: 'PUT' });
+      if (typeof loadHfNavFromApi === 'function') await loadHfNavFromApi();
+    } catch (err) {
+      showToast('⚠️ Workflow одобрен, но не удалось опубликовать NAV: ' + err.message, 'orange');
+    }
   }
   if (w.entityType === 'Deal') {
     // deal_ic is historical-only (see server/wfDefinitions.js) — no live

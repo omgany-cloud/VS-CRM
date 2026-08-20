@@ -19,6 +19,7 @@ const { db } = require('../db');
 const {
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
+  checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
 } = require('./digestChecks');
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR) || 8; // 24h, local server time
@@ -27,6 +28,7 @@ const DIGEST_HOUR = Number(process.env.DIGEST_HOUR) || 8; // 24h, local server t
 const DIGEST_CHECKS = [
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
+  checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
 ];
 
 // Shared by the hourly tick below and the manual POST

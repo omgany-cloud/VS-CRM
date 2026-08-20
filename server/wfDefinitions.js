@@ -31,6 +31,19 @@ const WF_DEFINITIONS = {
   // records. Going forward, an IC decision is tracked by icMemos (richer:
   // 4-seat quorum voting + independent Risk Manager veto), not this
   // generic 3-step chain — the two aren't meant to coexist for new deals.
+  // Hedge Fund module (docs/TZ_Hedge_Fund_Module.md) Stage 2 — Draft ->
+  // Published for hf_nav_history goes through this, never a direct PUT.
+  // PUT /api/hf/nav/:id/publish (server/index.js) re-verifies a resolved
+  // 'approved' instance of exactly this type/entity exists before it ever
+  // flips the NAV row — the workflow gate is enforced server-side, not
+  // just by the frontend calling things in the right order.
+  nav_publish: {
+    label: 'Публикация NAV',
+    steps: [
+      { role: 'CFO', label: 'CFO вносит расчёт NAV', action: 'review' },
+      { role: 'CEO', label: 'CEO подтверждает публикацию', action: 'approve' },
+    ],
+  },
   deal_ic: {
     label: 'Инвестиционный комитет',
     steps: [

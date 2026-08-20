@@ -2,6 +2,164 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.23.0] - 2026-08-20
+
+### Added
+- Hedge Fund module, Stage 5 (final) of `docs/TZ_Hedge_Fund_Module.md`:
+  the frontend. Nav-item and dashboard branching by `operatingModel`
+  (`js/hf.js`'s `updateDashboardForOperatingModel()`, hooked into the
+  existing `switchFund()`/`updateFundBranding()` flow): an open-end fund
+  shows new "Подписки / Погашения" and "NAV" nav items and a dashboard KPI
+  row (AUM, NAV/unit, MTD/YTD/since-inception returns, via new
+  `GET /api/funds/:id/hf-metrics`) instead of the closed-end lifecycle
+  bar/IRR-DPI-TVPI cards/J-curve — and hides Capital Calls/Distributions/
+  First Closing, which hedge funds never populate at all.
+  - New internal pages: Подписки/Погашения (create + process subscriptions
+    and redemptions, with lock-up/gate feedback surfaced from the Stage 2
+    API) and NAV (create Draft entries, submit for the `nav_publish`
+    workflow via the existing `startWorkflow()`).
+  - LP portal (`lp-portal.html`): an open-end LP now sees a position
+    statement (units, current value, unrealized P&L off a real weighted-
+    average cost basis, fees paid — new `GET /api/lp/:id/hf-position` /
+    `GET /api/portal/lp/hf-position`) instead of the Capital Account
+    Statement, plus real subscribe/redeem request forms
+    (`POST /api/portal/lp/hf-{subscription,redemption}-request` — lands as
+    a normal Pending/Requested row, reviewed through the existing internal
+    Stage 2 routes, same "self-service submission, staff decides" pattern
+    already used for the portfolio-company portal's payment
+    confirmations) and its own lock-up-status note.
+  - 11 new tests (metrics/position reads, LP-portal reads + writes +
+    identity isolation + request-forgery rejection) — 143/143 total.
+    Verified end-to-end on the real dev server: real NAV publish through
+    the real workflow UI trigger, real subscription/redemption processing
+    via the new pages' own buttons, real portal login + redemption
+    request whose effect (90 units remaining, $9,000 value) matched
+    exactly.
+
+## [1.22.0] - 2026-08-20
+
+### Added
+- Hedge Fund module, Stage 4 of `docs/TZ_Hedge_Fund_Module.md`:
+  notifications, added to the existing `triggers.js`/`digestChecks.js`
+  rather than a separate module (per the TZ's own instruction).
+  - Instant (LP-facing): NAV published → every LP with a real position
+    (`units_held > 0`) gets their new position value; a redemption reaching
+    `Processed` (not `Queued`) → the LP is notified. "Your turn" for the
+    CFO/CEO steps of the `nav_publish` workflow itself already came free
+    from the existing generic `notifyWorkflowStepAssigned`.
+  - Digest (officer-facing, `payment_confirm` = CEO/CFO, same gate as the
+    processing routes themselves): an LP's lock-up ending soon (only while
+    still upcoming — already-ended isn't actionable); a redemption's
+    notice period expiring, including already-overdue ones (mirrors
+    `checkCapitalCallOverdue`'s shape); a fund's next performance-fee
+    crystallization approaching, one notification per fund keyed on the
+    earliest due date across its positions (not one per LP, which would
+    spam).
+  - 8 new tests (3 instant-trigger, 5 digest, run through the real routes
+    including `POST /api/notifications/run-digest`, same style as the
+    existing `notifications.test.js`/`digest.test.js`) — 132/132 total.
+
+## [1.21.0] - 2026-08-20
+
+### Added
+- Hedge Fund module, Stage 3 of `docs/TZ_Hedge_Fund_Module.md`: performance
+  fee crystallization. New `server/performanceFeeEngine.js` (pure
+  functions, own test file — same split as `waterfallEngine.js`) computes,
+  per investor position: `gainPerUnit = max(0, navPerUnitEnd - hwmBefore)`
+  against the STANDING high-water mark (never last period's NAV — the
+  distinction the TZ's own required test case exists to catch), an
+  optional annualized hurdle rate prorated over the elapsed period and
+  carved out of the gain before fee applies, and the resulting fee
+  expressed in units deducted at the triggering NAV. New
+  `POST /api/hf/fee-crystallization/run` (CEO/CFO only) runs it for every
+  position with real units in a fund against its latest Published NAV,
+  guards against double-crystallizing the same NAV date, and updates each
+  position's `units_held`/`high_water_mark_per_unit` for next time. New
+  `GET /api/hf/fee-crystallizations` for history. 12 new tests (7 pure-
+  function incl. the mandatory drawdown → partial-recovery → new-high
+  case, 5 integration) — 124/124 total. Verified end-to-end against the
+  real dev server with real workflow approvals: entry NAV 100 → drawdown
+  to 90 (fee 0) → recovery to 95, still below the 100 HWM (fee 0) → new
+  high of 110 (fee charged only on the 10 of gain above the HWM, never the
+  15 from the recovery low).
+
+## [1.20.0] - 2026-08-20
+
+### Added
+- Hedge Fund module, Stage 2 of `docs/TZ_Hedge_Fund_Module.md`: real
+  processing against the fund's latest Published NAV.
+  - New workflow type `nav_publish` (CFO reviews → CEO approves,
+    `server/wfDefinitions.js` + `js/workflow.js`). NAV `Draft → Published`
+    only happens through the new `PUT /api/hf/nav/:id/publish`, which
+    re-verifies server-side that a resolved `approved` `nav_publish`
+    workflow instance actually exists for that exact NAV record — a
+    direct call without going through Согласования is rejected (409), not
+    just discouraged by the UI.
+  - `PUT /api/hf/subscriptions/:id` with `status:'Processed'` now computes
+    `unitsIssued`/`navPerUnitAtEntry` from the latest Published NAV and
+    `lockupUntil` from the fund's `lockupMonths` — never trusting those
+    fields from the client for this transition. Creates/updates the
+    investor's `hf_investor_positions` row; a second (top-up) subscription
+    blends the high-water mark by a units-weighted average (documented
+    simplification — true per-series HWM tracking is out of scope until
+    performanceFeeEngine.js, Stage 3).
+  - `PUT /api/hf/redemptions/:id` with `status:'Processed'` now runs a
+    lock-up check (blocks with 409 + `lockupOk:false` if still within the
+    LP's lock-up) and a gate check (redemptions sharing the same
+    `effectiveDate` are processed FIFO up to `gate_pct` of the fund's NAV
+    total; anything past the limit gets `status:'Queued'` instead of
+    partially filled — this schema has no partial-fill field).
+  - 7 new tests (`hf-processing.test.js`) covering the no-NAV-yet
+    rejection, the publish-without-workflow rejection, the full
+    CFO→CEO→publish path, unit/lockup computation, HWM blending, the
+    lock-up block, and the gate's Processed/Queued split — 112/112 total.
+
+## [1.19.0] - 2026-08-20
+
+### Added
+- Hedge Fund module, Stage 1 of `docs/TZ_Hedge_Fund_Module.md`: schema +
+  plain CRUD for the open-end engine, no business logic yet. New tables
+  `hf_subscriptions`, `hf_redemptions`, `hf_nav_history`,
+  `hf_investor_positions` (unused until Stage 2/3), `hf_fee_crystallizations`
+  (unused until Stage 3). New fund-level settings
+  (`performanceFeePct`/`hfHurdleRate`/`lockupMonths`/`gatePct`/etc.,
+  `docs/TZ_Hedge_Fund_Module.md` §2.1), auto-defaulted on a fund created
+  with `assetClass: 'hedge_fund'`. New routes: `GET/POST/PUT/DELETE
+  /api/hf/subscriptions`, `/api/hf/redemptions`, `/api/hf/nav` — every
+  status transition is a plain field write the caller controls directly;
+  no auto-computed units/NAV-matching, no lockup/gate checks, no NAV
+  publish workflow (all Stage 2). `POST`/`PUT /api/hf/nav` do compute
+  `navTotal`/`navPerUnit` from the raw inputs — that's arithmetic, not the
+  business logic Stage 1 is deferring. 11 new tests
+  (`hf-crud.test.js`) plus 7 from Stage 0 — 105/105 total.
+
+### Fixed
+- `PUT /api/hf/subscriptions/:id` and `/api/hf/redemptions/:id` 500'd on
+  every call (`Unknown named parameter '@createdBy'`) — caught by the new
+  tests before shipping, not a real-world regression.
+
+## [1.18.0] - 2026-08-20
+
+### Added
+- Multi-strategy foundation, Stage 0 of the Hedge Fund module
+  (`docs/TZ_Hedge_Fund_Module.md`, `docs/ARCHITECTURE_Multi_Strategy_Roadmap.md`
+  — both added to `docs/` for future VC/REIT tracks to reference too).
+  `funds.assetClass` (`pe`/`vc`/`reit`/`hedge_fund`, client-settable, "Класс
+  активов" selector in the fund modal) and `funds.operatingModel`
+  (`closed-end`/`open-end`, always server-derived from `assetClass` —
+  never trusted from the request body) — every existing fund defaults to
+  `pe`/`closed-end`, no behavior change for current PE funds. Lays the
+  groundwork for the hedge fund open-end engine (subscriptions/
+  redemptions/NAV/performance fee) in upcoming stages.
+
+### Fixed
+- `POST /api/funds` could 500 with `NOT NULL constraint failed:
+  funds.currency` for any caller that omitted `currency` — the explicit-
+  defaults list covered `nav`/`status`/`color`/`icon` but missed
+  `currency`, which is also `NOT NULL DEFAULT 'USD'` at the schema level.
+  Found by the new test suite's minimal POST body, not by a real user
+  (the actual fund-creation form always sends `currency`).
+
 ## [1.17.0] - 2026-08-20
 
 ### Added

@@ -54,7 +54,12 @@ function rowToLp(r) {
 // notes, the assigned RM's name, the internal risk rating, or the
 // granular KYC-checklist booleans (that's an audit trail for compliance
 // staff, not something to expose to the person being checked).
-function rowToLpPortalView(r) {
+// fund: the LP's own funds row (or null), passed by the caller — tells
+// lp-portal.html which UI to show (Capital Account Statement/Capital
+// Calls history for closed-end, position/subscribe/redeem for open-end,
+// docs/TZ_Hedge_Fund_Module.md Stage 5). Not looked up here since
+// rowToLpPortalView() otherwise takes no db handle.
+function rowToLpPortalView(r, fund) {
   return {
     registerId: r.register_id,
     name: r.name,
@@ -72,6 +77,7 @@ function rowToLpPortalView(r) {
     lpaUrl: r.lpa_url,
     saUrl: r.sa_url,
     contractNum: r.contract_num,
+    operatingModel: fund ? fund.operating_model : 'closed-end',
   };
 }
 

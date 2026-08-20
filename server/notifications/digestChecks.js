@@ -146,7 +146,123 @@ async function checkDocumentExpiry(tenantId) {
   }
 }
 
+// Hedge Fund module (docs/TZ_Hedge_Fund_Module.md) Stage 4's three digest
+// triggers — all go to the same officers who'd act on them (payment_confirm
+// = CEO/CFO, same gate as POST /api/hf/fee-crystallization/run and the
+// redemption/subscription processing routes themselves), never to the LP
+// directly: every other digest check in this file is internal-only, the
+// LP-facing notifications are the two INSTANT triggers in triggers.js.
+
+// An investor's lock-up ending soon — not yet actionable by the LP (they
+// can't redeem until it's over), but the fund team benefits from
+// anticipating the liquidity request that becomes possible. Only fires
+// while still upcoming (>= today) — once it's already passed there's
+// nothing to "approach" anymore, unlike an overdue payment.
+async function checkHfLockupEnding(tenantId) {
+  const subs = db.prepare(`
+    SELECT s.*, lp.name AS lp_name, f.short_name AS fund_name
+    FROM hf_subscriptions s
+    JOIN lp_register lp ON lp.id = s.lp_id
+    JOIN funds f ON f.id = s.fund_id
+    WHERE s.tenant_id = ? AND s.status = 'Processed' AND s.lockup_until IS NOT NULL
+      AND date(s.lockup_until) <= date('now', '+${LOOKAHEAD_DAYS} days')
+      AND date(s.lockup_until) >= date('now')
+  `).all(tenantId);
+  if (!subs.length) return;
+  const officers = usersByPermissionFlag(tenantId, 'payment_confirm');
+  for (const s of subs) {
+    for (const officer of officers) {
+      if (!officer.email) continue;
+      await notifyOnce({
+        tenantId, eventType: 'hf_lockup_ending', entityType: 'hf_subscriptions', entityId: s.id,
+        to: officer.email, scope: 'daily',
+        subject: `Скоро заканчивается lock-up: ${s.lp_name}`,
+        html: `<p>Lock-up период инвестора «${esc(s.lp_name)}» в фонде «${esc(s.fund_name)}» заканчивается ${esc(s.lockup_until)} — с этой даты возможна заявка на погашение.</p>`,
+      });
+    }
+  }
+}
+
+// A redemption's notice period expiring — unlike lock-up above, this IS
+// actionable once already past (the redemption should be processed), same
+// "also catches already-overdue" shape as checkCapitalCallOverdue.
+async function checkHfRedemptionNoticeExpiring(tenantId) {
+  const reds = db.prepare(`
+    SELECT r.*, lp.name AS lp_name, f.short_name AS fund_name
+    FROM hf_redemptions r
+    JOIN lp_register lp ON lp.id = r.lp_id
+    JOIN funds f ON f.id = r.fund_id
+    WHERE r.tenant_id = ? AND r.status = 'Requested' AND r.notice_expires IS NOT NULL
+      AND date(r.notice_expires) <= date('now', '+${LOOKAHEAD_DAYS} days')
+  `).all(tenantId);
+  if (!reds.length) return;
+  const officers = usersByPermissionFlag(tenantId, 'payment_confirm');
+  for (const r of reds) {
+    for (const officer of officers) {
+      if (!officer.email) continue;
+      await notifyOnce({
+        tenantId, eventType: 'hf_redemption_notice_expiring', entityType: 'hf_redemptions', entityId: r.id,
+        to: officer.email, scope: 'daily',
+        subject: `Истекает notice period по погашению: ${r.lp_name}`,
+        html: `<p>Notice period по заявке на погашение №${esc(r.redemption_number)} инвестора «${esc(r.lp_name)}» (фонд «${esc(r.fund_name)}») истекает ${esc(r.notice_expires)} — заявку пора обработать.</p>`,
+      });
+    }
+  }
+}
+
+const HF_FREQUENCY_MONTHS = { quarterly: 3, annual: 12 };
+
+// Approaching performance-fee crystallization date for a hedge fund — one
+// notification per FUND (not per position, which would spam one email per
+// LP for the same fund), keyed on the EARLIEST upcoming due date among its
+// positions. A position's own "next due" date is its last crystallization
+// date (or, if it's never crystallized, its own earliest Processed
+// subscription's effective date — matching the same "first period starts
+// at entry" rule server/index.js's fee-crystallization route itself uses)
+// plus the fund's fee_crystallization_frequency.
+async function checkHfFeeCrystallizationDue(tenantId) {
+  const funds = db.prepare(`SELECT * FROM funds WHERE tenant_id = ? AND operating_model = 'open-end'`).all(tenantId);
+  if (!funds.length) return;
+  const officers = usersByPermissionFlag(tenantId, 'payment_confirm');
+  const lookaheadDate = new Date(Date.now() + LOOKAHEAD_DAYS * 86400000).toISOString().slice(0, 10);
+
+  for (const fund of funds) {
+    const months = HF_FREQUENCY_MONTHS[fund.fee_crystallization_frequency] || 12;
+    const positions = db.prepare(`SELECT * FROM hf_investor_positions WHERE tenant_id = ? AND fund_id = ? AND units_held > 0`).all(tenantId, fund.id);
+    if (!positions.length) continue;
+
+    let earliestDue = null;
+    for (const pos of positions) {
+      let baseline = pos.last_fee_crystallization_date;
+      if (!baseline) {
+        const earliestSub = db.prepare(`
+          SELECT MIN(effective_date) AS d FROM hf_subscriptions
+          WHERE tenant_id = ? AND fund_id = ? AND lp_id = ? AND status = 'Processed'
+        `).get(tenantId, fund.id, pos.lp_id);
+        baseline = earliestSub && earliestSub.d ? earliestSub.d : null;
+      }
+      if (!baseline) continue;
+      const due = new Date(baseline + 'T00:00:00Z');
+      due.setUTCMonth(due.getUTCMonth() + months);
+      const dueStr = due.toISOString().slice(0, 10);
+      if (!earliestDue || dueStr < earliestDue) earliestDue = dueStr;
+    }
+    if (!earliestDue || earliestDue > lookaheadDate) continue;
+
+    for (const officer of officers) {
+      if (!officer.email) continue;
+      await notifyOnce({
+        tenantId, eventType: 'hf_fee_crystallization_due', entityType: 'funds', entityId: fund.id,
+        to: officer.email, scope: 'daily',
+        subject: `Приближается кристаллизация performance fee: ${fund.short_name || fund.name}`,
+        html: `<p>По фонду «${esc(fund.short_name || fund.name)}» приближается плановая дата кристаллизации performance fee: ${esc(earliestDue)}.</p>`,
+      });
+    }
+  }
+}
+
 module.exports = {
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
+  checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
 };

@@ -81,4 +81,53 @@ async function notifyWorkflowStepAssigned(tenantId, instance) {
   }
 }
 
-module.exports = { notifyCapitalCallCreated, notifyWorkflowStepAssigned };
+// Hedge Fund module (docs/TZ_Hedge_Fund_Module.md) Stage 4 — the two
+// instant triggers the TZ's §6 asks for. "Your turn" for the CFO/CEO steps
+// of the nav_publish workflow itself already comes free from
+// notifyWorkflowStepAssigned above (it's generic over every workflow
+// type) — these two are the LP-facing ones that only make sense once a
+// NAV is actually Published / a redemption is actually Processed.
+
+// Fired once, right after PUT /api/hf/nav/:id/publish commits. Every LP
+// with a real position (units_held > 0) in that fund gets their new
+// position value — same "resolve recipients from the entity, not from
+// whoever happened to call the route" shape as notifyCapitalCallCreated.
+async function notifyHfNavPublished(tenantId, nav) {
+  const positions = db.prepare(`
+    SELECT p.units_held, lp.name AS lp_name, lp.email AS lp_email
+    FROM hf_investor_positions p JOIN lp_register lp ON lp.id = p.lp_id
+    WHERE p.tenant_id = ? AND p.fund_id = ? AND p.units_held > 0
+  `).all(tenantId, nav.fundId);
+  for (const pos of positions) {
+    if (!pos.lp_email) continue;
+    const value = pos.units_held * nav.navPerUnit;
+    await notifyOnce({
+      tenantId, eventType: 'hf_nav_published', entityType: 'hf_nav_history', entityId: nav.id,
+      to: pos.lp_email,
+      subject: `Опубликован NAV на ${nav.asOfDate}`,
+      html: `<p>Уважаемый(ая) ${esc(pos.lp_name)},</p>
+        <p>Опубликован расчёт NAV на ${esc(nav.asOfDate)}: ${nav.navPerUnit} за юнит.</p>
+        <p>Текущая стоимость вашей позиции: ${value.toFixed(2)} (${pos.units_held} юнитов).</p>`,
+    });
+  }
+}
+
+// Fired once a redemption transitions to Processed (server/index.js's
+// PUT /api/hf/redemptions/:id) — a Queued outcome does NOT fire this, the
+// LP hasn't actually been paid out yet.
+async function notifyHfRedemptionProcessed(tenantId, redemption) {
+  const lp = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(redemption.lpId, tenantId);
+  if (!lp || !lp.email) return;
+  await notifyOnce({
+    tenantId, eventType: 'hf_redemption_processed', entityType: 'hf_redemptions', entityId: redemption.id,
+    to: lp.email,
+    subject: `Погашение ${redemption.redemptionNumber} обработано`,
+    html: `<p>Уважаемый(ая) ${esc(lp.name)},</p>
+      <p>Ваша заявка на погашение №${esc(redemption.redemptionNumber)} обработана: ${redemption.unitsRequested} юнитов по NAV ${redemption.navPerUnitAtExit} на сумму ${redemption.amount}.</p>`,
+  });
+}
+
+module.exports = {
+  notifyCapitalCallCreated, notifyWorkflowStepAssigned,
+  notifyHfNavPublished, notifyHfRedemptionProcessed,
+};

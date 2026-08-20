@@ -511,6 +511,58 @@ async function loadDistributionsFromApi() {
   }
 }
 
+/* ===== Hedge Fund (Stage 5, docs/TZ_Hedge_Fund_Module.md) — backed by
+   the real API. Same "load everything for the tenant, filter by
+   activeFundId at render time" convention as capitalCallsLog/
+   distributionsLog above — page + renderers in js/hf.js. */
+async function loadHfSubscriptionsFromApi() {
+  try {
+    const data = await apiFetch('/api/hf/subscriptions');
+    if (typeof hfSubscriptions === 'undefined') return;
+    hfSubscriptions.length = 0;
+    hfSubscriptions.push(...data.subscriptions);
+    const page = document.getElementById('page-hf-subscriptions');
+    if (page && page.classList.contains('active') && typeof renderHfSubscriptionsPage === 'function') {
+      renderHfSubscriptionsPage();
+    }
+  } catch (err) {
+    console.error('Failed to load hedge fund subscriptions from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить подписки из API: ' + err.message, 'red');
+  }
+}
+
+async function loadHfRedemptionsFromApi() {
+  try {
+    const data = await apiFetch('/api/hf/redemptions');
+    if (typeof hfRedemptions === 'undefined') return;
+    hfRedemptions.length = 0;
+    hfRedemptions.push(...data.redemptions);
+    const page = document.getElementById('page-hf-subscriptions');
+    if (page && page.classList.contains('active') && typeof renderHfSubscriptionsPage === 'function') {
+      renderHfSubscriptionsPage();
+    }
+  } catch (err) {
+    console.error('Failed to load hedge fund redemptions from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить погашения из API: ' + err.message, 'red');
+  }
+}
+
+async function loadHfNavFromApi() {
+  try {
+    const data = await apiFetch('/api/hf/nav');
+    if (typeof hfNavHistory === 'undefined') return;
+    hfNavHistory.length = 0;
+    hfNavHistory.push(...data.navHistory);
+    const page = document.getElementById('page-hf-nav');
+    if (page && page.classList.contains('active') && typeof renderHfNavPage === 'function') {
+      renderHfNavPage();
+    }
+  } catch (err) {
+    console.error('Failed to load hedge fund NAV history from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить историю NAV из API: ' + err.message, 'red');
+  }
+}
+
 /* ===== Regulatory Reports — backed by the real API =====
    Replaces the old static js/data.js `reportSchedule` array. */
 let afsaReports = [];
@@ -764,6 +816,9 @@ async function loadAllApiData() {
   loadWorkflowFromApi();
   loadAfsaReportsFromApi();
   loadDocumentsFromApi();
+  loadHfSubscriptionsFromApi();
+  loadHfRedemptionsFromApi();
+  loadHfNavFromApi();
 }
 
 /* ===== Login gate ===== */

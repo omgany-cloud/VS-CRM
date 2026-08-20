@@ -47,13 +47,14 @@ const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL:
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
 const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
-const { notifyCapitalCallCreated, notifyWorkflowStepAssigned } = require('./notifications/triggers');
+const { notifyCapitalCallCreated, notifyWorkflowStepAssigned, notifyHfNavPublished, notifyHfRedemptionProcessed } = require('./notifications/triggers');
 const notificationsScheduler = require('./notifications/scheduler');
 const { computeDistributionSplit } = require('./waterfallEngine');
 const { computeFundMetrics, computeLpMetrics } = require('./metricsEngine');
+const { computeFeeCrystallization, daysBetween } = require('./performanceFeeEngine');
 const { recordAudit } = require('./auditLog');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
-const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL } = require('./fundMapping');
+const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL, operatingModelForAssetClass } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
 const { rowToAfsaReport, afsaReportToParams, INSERT_SQL: AFSA_REPORT_INSERT_SQL, UPDATE_SQL: AFSA_REPORT_UPDATE_SQL } = require('./afsaReportMapping');
 
@@ -375,7 +376,8 @@ app.post('/api/portal/lp/login', authRateLimit, (req, res) => {
     return res.status(401).json({ error: 'Неверный email или пароль' });
   }
   const token = signLpPortalToken(row);
-  res.json({ token, lp: withLiveFinancials(db, row.tenant_id, row.id, rowToLpPortalView(row)) });
+  const fund = row.fund_id ? db.prepare('SELECT operating_model FROM funds WHERE id = ? AND tenant_id = ?').get(row.fund_id, row.tenant_id) : null;
+  res.json({ token, lp: withLiveFinancials(db, row.tenant_id, row.id, rowToLpPortalView(row, fund)) });
 });
 
 // Internal-staff action: (re)generates a random password for an LP's
@@ -393,7 +395,8 @@ app.put('/api/lp/:id/portal-password', requireAuth, requireInternal, requirePerm
 });
 
 app.get('/api/portal/lp/me', requireLpPortalAuth, (req, res) => {
-  res.json({ lp: withLiveFinancials(db, req.portalLp.tenant_id, req.portalLp.id, rowToLpPortalView(req.portalLp)) });
+  const fund = req.portalLp.fund_id ? db.prepare('SELECT operating_model FROM funds WHERE id = ? AND tenant_id = ?').get(req.portalLp.fund_id, req.tenantId) : null;
+  res.json({ lp: withLiveFinancials(db, req.portalLp.tenant_id, req.portalLp.id, rowToLpPortalView(req.portalLp, fund)) });
 });
 
 // This LP's own DPI/RVPI/TVPI/IRR — the Capital Account Statement tab
@@ -881,19 +884,42 @@ app.get('/api/funds', requireAuth, requireInternal, requirePermission('accessFM'
   res.json({ tenant: req.tenantSlug, funds });
 });
 
+const VALID_ASSET_CLASSES = ['pe', 'vc', 'reit', 'hedge_fund'];
+
 app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
-  // nav/status/color/icon all have NOT NULL DEFAULTs at the schema level,
-  // but fundToParams() binds an explicit NULL for any field the caller
-  // omits — which overrides a column's SQL-level DEFAULT (SQLite/
-  // node:sqlite only applies DEFAULT when the column is left out of the
-  // statement entirely, not when NULL is explicitly bound). The real
-  // fund-creation form (js/funds.js) always sends all four, so this went
-  // unnoticed until a more minimal caller (the automated test suite) hit
-  // it — same bug class as POST /api/deals and /api/portfolio already
-  // guard against, just missing three of the four fields here.
-  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, status: 'fundraising', color: '#3b82f6', icon: 'fa-landmark', catchUpPct: 100, ...b }) }));
+  if (b.assetClass != null && !VALID_ASSET_CLASSES.includes(b.assetClass)) {
+    return res.status(400).json({ error: `assetClass must be one of ${VALID_ASSET_CLASSES.join(', ')}` });
+  }
+  // operatingModel is NEVER taken from the request body — it's derived
+  // from assetClass here, server-side, so a caller can't set a 'pe' fund
+  // to 'open-end' (or vice versa) and desync it from the engine that
+  // actually applies (see fundMapping.js's operatingModelForAssetClass).
+  const assetClass = b.assetClass || 'pe';
+  // nav/status/color/icon/currency all have NOT NULL DEFAULTs at the
+  // schema level, but fundToParams() binds an explicit NULL for any field
+  // the caller omits — which overrides a column's SQL-level DEFAULT
+  // (SQLite/node:sqlite only applies DEFAULT when the column is left out
+  // of the statement entirely, not when NULL is explicitly bound). The
+  // real fund-creation form (js/funds.js) always sends all five, so this
+  // went unnoticed until a more minimal caller (the automated test suite)
+  // hit it — same bug class as POST /api/deals and /api/portfolio already
+  // guard against. currency was missing from this list entirely (a real
+  // pre-existing gap, found by fund-asset-class.test.js's minimal POST
+  // body — a caller sending no currency got a 500, not the documented
+  // USD default).
+  // Hedge fund settings columns are nullable (unlike currency/nav/etc.
+  // above), so omitting them never 500s — but a freshly created
+  // hedge_fund fund gets the TZ's suggested starting values here rather
+  // than sitting on NULLs until someone visits a settings screen that
+  // doesn't exist yet (Stage 5). A pe/vc/reit fund gets none of this —
+  // these columns stay NULL for it, since no closed-end engine ever
+  // reads them.
+  const hfDefaults = assetClass === 'hedge_fund'
+    ? { performanceFeePct: 20, hfHurdleRate: 0, subscriptionFrequency: 'monthly', redemptionFrequency: 'quarterly', redemptionNoticeDays: 60, lockupMonths: 12, gatePct: 25, feeCrystallizationFrequency: 'annual' }
+    : {};
+  const info = db.prepare(FUND_INSERT_SQL).run(at({ tenantId: req.tenantId, ...fundToParams({ nav: 0, status: 'fundraising', color: '#3b82f6', icon: 'fa-landmark', catchUpPct: 100, currency: 'USD', ...hfDefaults, ...b, assetClass, operatingModel: operatingModelForAssetClass(assetClass) }) }));
   const row = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
   const f = rowToFund(row);
   f.lpCount = 0;
@@ -904,7 +930,13 @@ app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUs
 app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manageUsers'), (req, res) => {
   const existing = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Fund not found in this tenant' });
+  if (req.body && req.body.assetClass != null && !VALID_ASSET_CLASSES.includes(req.body.assetClass)) {
+    return res.status(400).json({ error: `assetClass must be one of ${VALID_ASSET_CLASSES.join(', ')}` });
+  }
   const merged = { ...rowToFund(existing), ...(req.body || {}) };
+  // Same rule as POST: operatingModel always re-derived from the final
+  // assetClass, never taken from req.body directly, even on update.
+  merged.operatingModel = operatingModelForAssetClass(merged.assetClass);
   db.prepare(FUND_UPDATE_SQL).run(at({ id: existing.id, tenantId: req.tenantId, ...fundToParams(merged) }));
   const row = db.prepare('SELECT * FROM funds WHERE id = ?').get(existing.id);
   const f = rowToFund(row);
@@ -1646,6 +1678,718 @@ app.put('/api/distributions/:id/line-items/:lpId', requireAuth, requireInternal,
   const result = rowToDist(row);
   result.lineItems = distLineItemsStmt.all(dist.id, req.tenantId).map(rowToDistLineItem);
   res.json(result);
+});
+
+/* ===== Hedge Fund — open-end module (docs/TZ_Hedge_Fund_Module.md) =====
+   Stage 1 (schema + plain CRUD) + Stage 2 (processing against the latest
+   Published NAV) below. Still deliberately NOT doing:
+     - hf_fee_crystallizations writes — performanceFeeEngine.js (Stage 3)
+     - any frontend (Stage 5) — everything here is API-only so far
+   Not wired into server/auditLog.js — that module's v1 scope is
+   explicitly the 7 closed-end governance modules already agreed with the
+   user; adding hedge fund tables there is a separate decision, not
+   bundled into this stage.
+
+   Stage 2 adds real computation at exactly two trigger points, both
+   detected the same way capital_calls detects Draft->Pending
+   ("approvedNow") — a specific status transition in the PUT body, not a
+   separate action route:
+     - hf_subscriptions PUT with status:'Processed' from 'Pending'
+     - hf_redemptions PUT with status:'Processed' from 'Requested'
+   Everything else (plain field edits, any other status value) still
+   falls through to the Stage 1 plain-merge-and-update path unchanged. */
+
+// docs/TZ_Hedge_Fund_Module.md §3 flags multiple subscriptions per LP
+// (before any fee crystallization exists) as a real open question this
+// project deferred to Stage 3's performanceFeeEngine.js — but
+// hf_investor_positions still needs ONE internally-consistent row per
+// (fund, lp) the moment a second subscription is processed, since that's
+// Stage 2's job, not Stage 3's. This blends the new entry into the
+// existing HWM by a units-weighted average — a standard, defensible
+// approximation for a "top-up," not a claim that it's the final answer
+// for true per-series HWM tracking (which would need a different schema
+// entirely). Documented here so this doesn't read as an oversight.
+function upsertHfPosition(tenantId, fundId, lpId, deltaUnits, entryNavPerUnit) {
+  const existing = db.prepare('SELECT * FROM hf_investor_positions WHERE tenant_id = ? AND fund_id = ? AND lp_id = ?').get(tenantId, fundId, lpId);
+  if (!existing) {
+    // First position for this LP in this fund — their own entry price IS
+    // their starting HWM (no fee owed until the fund grows past where
+    // THEY personally bought in).
+    db.prepare(`
+      INSERT INTO hf_investor_positions (tenant_id, fund_id, lp_id, units_held, high_water_mark_per_unit)
+      VALUES (@tenantId, @fundId, @lpId, @unitsHeld, @hwm)
+    `).run(at({ tenantId, fundId, lpId, unitsHeld: deltaUnits, hwm: entryNavPerUnit != null ? entryNavPerUnit : 0 }));
+    return;
+  }
+  let newUnits = existing.units_held + deltaUnits;
+  if (newUnits < 0) newUnits = 0; // never let a redemption push this negative on a rounding edge
+  let newHwm = existing.high_water_mark_per_unit;
+  if (deltaUnits > 0 && entryNavPerUnit != null) {
+    // Top-up: units-weighted average of the old HWM and this entry's price.
+    const totalUnits = existing.units_held + deltaUnits;
+    newHwm = totalUnits > 0 ? ((existing.units_held * existing.high_water_mark_per_unit) + (deltaUnits * entryNavPerUnit)) / totalUnits : existing.high_water_mark_per_unit;
+  }
+  db.prepare(`
+    UPDATE hf_investor_positions SET units_held = @unitsHeld, high_water_mark_per_unit = @hwm, updated_at = datetime('now')
+    WHERE tenant_id = @tenantId AND fund_id = @fundId AND lp_id = @lpId
+  `).run(at({ tenantId, fundId, lpId, unitsHeld: newUnits, hwm: newHwm }));
+}
+
+function addMonths(dateStr, months) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+function latestPublishedNav(tenantId, fundId) {
+  return db.prepare(`
+    SELECT * FROM hf_nav_history WHERE tenant_id = ? AND fund_id = ? AND status = 'Published'
+    ORDER BY as_of_date DESC, id DESC LIMIT 1
+  `).get(tenantId, fundId);
+}
+function rowToHfSubscription(r) {
+  return {
+    id: r.id, fundId: r.fund_id, lpId: r.lp_id, subNumber: r.sub_number,
+    requestDate: r.request_date, amount: r.amount,
+    navPerUnitAtEntry: r.nav_per_unit_at_entry, unitsIssued: r.units_issued,
+    effectiveDate: r.effective_date, lockupUntil: r.lockup_until,
+    status: r.status, createdBy: r.created_by, notes: r.notes,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+app.get('/api/hf/subscriptions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = req.query.fundId
+    ? db.prepare('SELECT * FROM hf_subscriptions WHERE tenant_id = ? AND fund_id = ? ORDER BY id').all(req.tenantId, req.query.fundId)
+    : db.prepare('SELECT * FROM hf_subscriptions WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, subscriptions: rows.map(rowToHfSubscription) });
+});
+
+app.post('/api/hf/subscriptions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  if (!b.lpId) return res.status(400).json({ error: 'lpId is required' });
+  if (!b.amount || b.amount <= 0) return res.status(400).json({ error: 'amount must be greater than 0' });
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM hf_subscriptions WHERE tenant_id = ?').get(req.tenantId);
+  const subNumber = b.subNumber || `SUB-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
+  const info = db.prepare(`
+    INSERT INTO hf_subscriptions
+      (tenant_id, fund_id, lp_id, sub_number, request_date, amount,
+       nav_per_unit_at_entry, units_issued, effective_date, lockup_until, status, created_by, notes)
+    VALUES
+      (@tenantId, @fundId, @lpId, @subNumber, @requestDate, @amount,
+       @navPerUnitAtEntry, @unitsIssued, @effectiveDate, @lockupUntil, @status, @createdBy, @notes)
+  `).run(at({
+    tenantId: req.tenantId, fundId: b.fundId || null, lpId: b.lpId, subNumber,
+    requestDate: b.requestDate || null, amount: b.amount,
+    navPerUnitAtEntry: b.navPerUnitAtEntry || null, unitsIssued: b.unitsIssued || null,
+    effectiveDate: b.effectiveDate || null, lockupUntil: b.lockupUntil || null,
+    status: 'Pending', createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM hf_subscriptions WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToHfSubscription(row));
+});
+
+app.put('/api/hf/subscriptions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_subscriptions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Subscription not found in this tenant' });
+  const b = req.body || {};
+  const processingNow = b.status === 'Processed' && existing.status === 'Pending';
+
+  let navPerUnitAtEntry = b.navPerUnitAtEntry !== undefined ? b.navPerUnitAtEntry : existing.nav_per_unit_at_entry;
+  let unitsIssued = b.unitsIssued !== undefined ? b.unitsIssued : existing.units_issued;
+  let effectiveDate = b.effectiveDate || existing.effective_date;
+  let lockupUntil = b.lockupUntil || existing.lockup_until;
+
+  if (processingNow) {
+    // Stage 2's one real computation for this route: never trust
+    // navPerUnitAtEntry/unitsIssued/lockupUntil from the request body once
+    // this specific transition fires — they're derived from the fund's
+    // own latest Published NAV, same "server computes it" rule as
+    // capital_calls' cc_number.
+    const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(existing.fund_id, req.tenantId);
+    const nav = latestPublishedNav(req.tenantId, existing.fund_id);
+    if (!nav) {
+      return res.status(409).json({ error: 'No Published NAV yet for this fund — cannot process a subscription without a reference NAV.' });
+    }
+    navPerUnitAtEntry = nav.nav_per_unit;
+    unitsIssued = navPerUnitAtEntry > 0 ? existing.amount / navPerUnitAtEntry : 0;
+    effectiveDate = b.effectiveDate || new Date().toISOString().slice(0, 10);
+    lockupUntil = addMonths(effectiveDate, (fund && fund.lockup_months) || 0);
+  }
+
+  const merged = { ...rowToHfSubscription(existing), ...b, navPerUnitAtEntry, unitsIssued, effectiveDate, lockupUntil };
+  // at() binds every key it's given as a named param, and node:sqlite
+  // throws on any bound param the SQL string doesn't reference — so this
+  // must pass exactly the fields the UPDATE below uses (createdBy is
+  // deliberately immutable on edit and not in the SET clause).
+  db.prepare(`
+    UPDATE hf_subscriptions SET
+      fund_id=@fundId, lp_id=@lpId, sub_number=@subNumber, request_date=@requestDate, amount=@amount,
+      nav_per_unit_at_entry=@navPerUnitAtEntry, units_issued=@unitsIssued,
+      effective_date=@effectiveDate, lockup_until=@lockupUntil, status=@status, notes=@notes,
+      updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, fundId: merged.fundId || null, lpId: merged.lpId,
+    subNumber: merged.subNumber, requestDate: merged.requestDate, amount: merged.amount,
+    navPerUnitAtEntry: merged.navPerUnitAtEntry, unitsIssued: merged.unitsIssued,
+    effectiveDate: merged.effectiveDate, lockupUntil: merged.lockupUntil, status: merged.status, notes: merged.notes,
+  }));
+
+  if (processingNow) {
+    upsertHfPosition(req.tenantId, existing.fund_id, existing.lp_id, unitsIssued, navPerUnitAtEntry);
+  }
+
+  const row = db.prepare('SELECT * FROM hf_subscriptions WHERE id = ?').get(existing.id);
+  res.json(rowToHfSubscription(row));
+});
+
+// Delete: only while still Pending — same "permanent record once real"
+// reasoning as capital calls/distributions. A Processed subscription has
+// already issued units against a real NAV; removing that silently would
+// desync unit counts with no trace it ever happened.
+app.delete('/api/hf/subscriptions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_subscriptions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Subscription not found in this tenant' });
+  if (existing.status !== 'Pending') {
+    return res.status(409).json({ error: `Cannot delete: subscription is ${existing.status}, not Pending.` });
+  }
+  db.prepare('DELETE FROM hf_subscriptions WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
+function rowToHfRedemption(r) {
+  return {
+    id: r.id, fundId: r.fund_id, lpId: r.lp_id, redemptionNumber: r.redemption_number,
+    requestDate: r.request_date, unitsRequested: r.units_requested, noticeExpires: r.notice_expires,
+    effectiveDate: r.effective_date, navPerUnitAtExit: r.nav_per_unit_at_exit, amount: r.amount,
+    lockupOk: r.lockup_ok === null ? null : !!r.lockup_ok, gateApplied: !!r.gate_applied,
+    gatePctApplied: r.gate_pct_applied, status: r.status, createdBy: r.created_by, notes: r.notes,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+app.get('/api/hf/redemptions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = req.query.fundId
+    ? db.prepare('SELECT * FROM hf_redemptions WHERE tenant_id = ? AND fund_id = ? ORDER BY id').all(req.tenantId, req.query.fundId)
+    : db.prepare('SELECT * FROM hf_redemptions WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, redemptions: rows.map(rowToHfRedemption) });
+});
+
+app.post('/api/hf/redemptions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  if (!b.lpId) return res.status(400).json({ error: 'lpId is required' });
+  if (!b.unitsRequested || b.unitsRequested <= 0) return res.status(400).json({ error: 'unitsRequested must be greater than 0' });
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM hf_redemptions WHERE tenant_id = ?').get(req.tenantId);
+  const redemptionNumber = b.redemptionNumber || `RED-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
+  const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(b.fundId, req.tenantId);
+  const requestDate = b.requestDate || new Date().toISOString().slice(0, 10);
+  // noticeExpires is server-computed from the fund's own notice period,
+  // same "don't trust the client for a derived date" rule as
+  // subscriptions' lockupUntil — the notice clock starts the moment the
+  // LP requests it, independent of when it's later processed.
+  const noticeExpires = (fund && fund.redemption_notice_days != null)
+    ? new Date(new Date(requestDate + 'T00:00:00Z').getTime() + fund.redemption_notice_days * 86400000).toISOString().slice(0, 10)
+    : null;
+  const info = db.prepare(`
+    INSERT INTO hf_redemptions
+      (tenant_id, fund_id, lp_id, redemption_number, request_date, units_requested, notice_expires,
+       effective_date, nav_per_unit_at_exit, amount, lockup_ok, gate_applied, gate_pct_applied, status, created_by, notes)
+    VALUES
+      (@tenantId, @fundId, @lpId, @redemptionNumber, @requestDate, @unitsRequested, @noticeExpires,
+       @effectiveDate, @navPerUnitAtExit, @amount, @lockupOk, @gateApplied, @gatePctApplied, @status, @createdBy, @notes)
+  `).run(at({
+    tenantId: req.tenantId, fundId: b.fundId || null, lpId: b.lpId, redemptionNumber,
+    requestDate, unitsRequested: b.unitsRequested, noticeExpires,
+    effectiveDate: b.effectiveDate || null, navPerUnitAtExit: null, amount: null,
+    lockupOk: null, gateApplied: 0,
+    gatePctApplied: null, status: 'Requested', createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM hf_redemptions WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToHfRedemption(row));
+});
+
+// Stage 2's real computation for this route: processing a Requested
+// redemption (status:'Processed' in the body) runs the lockup check, then
+// the gate check, against the fund's latest Published NAV — never taking
+// navPerUnitAtExit/amount/lockupOk/gateApplied/gatePctApplied from the
+// client for THIS transition. Everything else (plain edits to a still-
+// Requested row, or any other status change) falls through unchanged.
+//
+// Gate design (docs/TZ_Hedge_Fund_Module.md §7's test case): this schema
+// (Stage 1, mirrors the TZ verbatim) has one units_requested/amount pair
+// per redemption, no separate "amount actually filled" field — so a
+// redemption is either fully Processed or fully Queued for the next
+// window, never partially filled. "Round" = every redemption sharing the
+// same effectiveDate, checked FIFO against the fund's gate_pct of its
+// current NAV total. gatePctApplied on a Queued row is informational (how
+// much of the fund's remaining gate capacity this request would have
+// consumed), not "how much of MY request was filled" — nothing was.
+app.put('/api/hf/redemptions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_redemptions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Redemption not found in this tenant' });
+  const b = req.body || {};
+  const processingNow = b.status === 'Processed' && existing.status === 'Requested';
+
+  if (processingNow) {
+    const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(existing.fund_id, req.tenantId);
+    const nav = latestPublishedNav(req.tenantId, existing.fund_id);
+    if (!nav) {
+      return res.status(409).json({ error: 'No Published NAV yet for this fund — cannot process a redemption without a reference NAV.' });
+    }
+
+    const effectiveDate = b.effectiveDate || existing.effective_date || new Date().toISOString().slice(0, 10);
+    const maxLockupRow = db.prepare(`
+      SELECT MAX(lockup_until) AS m FROM hf_subscriptions
+      WHERE tenant_id = ? AND fund_id = ? AND lp_id = ? AND status = 'Processed'
+    `).get(req.tenantId, existing.fund_id, existing.lp_id);
+    const maxLockupUntil = maxLockupRow ? maxLockupRow.m : null;
+    const lockupOk = !maxLockupUntil || effectiveDate >= maxLockupUntil;
+
+    if (!lockupOk) {
+      db.prepare("UPDATE hf_redemptions SET lockup_ok = 0, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?").run(existing.id, req.tenantId);
+      return res.status(409).json({ error: `Cannot process: this LP is still within lock-up (until ${maxLockupUntil})`, lockupUntil: maxLockupUntil });
+    }
+
+    const navPerUnitAtExit = nav.nav_per_unit;
+    const amount = navPerUnitAtExit != null ? existing.units_requested * navPerUnitAtExit : null;
+    const gateLimit = ((fund && fund.gate_pct != null ? fund.gate_pct : 25) / 100) * nav.nav_total;
+    const alreadyThisRoundRow = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS s FROM hf_redemptions
+      WHERE tenant_id = ? AND fund_id = ? AND status = 'Processed' AND effective_date = ? AND id != ?
+    `).get(req.tenantId, existing.fund_id, effectiveDate, existing.id);
+    const alreadyThisRound = alreadyThisRoundRow.s;
+
+    let finalStatus, gateApplied, gatePctApplied, finalAmount, finalNavPerUnit;
+    if (amount != null && alreadyThisRound + amount <= gateLimit) {
+      finalStatus = 'Processed'; gateApplied = false; gatePctApplied = null;
+      finalAmount = amount; finalNavPerUnit = navPerUnitAtExit;
+    } else {
+      finalStatus = 'Queued'; gateApplied = true;
+      const remainingCapacity = Math.max(0, gateLimit - alreadyThisRound);
+      gatePctApplied = amount > 0 ? Math.round((remainingCapacity / amount) * 10000) / 100 : 0;
+      finalAmount = null; finalNavPerUnit = null;
+    }
+
+    db.prepare(`
+      UPDATE hf_redemptions SET
+        effective_date = @effectiveDate, nav_per_unit_at_exit = @navPerUnitAtExit, amount = @amount,
+        lockup_ok = 1, gate_applied = @gateApplied, gate_pct_applied = @gatePctApplied, status = @status,
+        updated_at = datetime('now')
+      WHERE id = @id AND tenant_id = @tenantId
+    `).run(at({
+      id: existing.id, tenantId: req.tenantId, effectiveDate,
+      navPerUnitAtExit: finalNavPerUnit, amount: finalAmount,
+      gateApplied: gateApplied ? 1 : 0, gatePctApplied, status: finalStatus,
+    }));
+
+    if (finalStatus === 'Processed') {
+      upsertHfPosition(req.tenantId, existing.fund_id, existing.lp_id, -existing.units_requested, null);
+    }
+
+    const row = db.prepare('SELECT * FROM hf_redemptions WHERE id = ?').get(existing.id);
+    const redemption = rowToHfRedemption(row);
+    res.json(redemption);
+
+    if (finalStatus === 'Processed') {
+      notifyHfRedemptionProcessed(req.tenantId, redemption).catch((err) => console.error('[notify] hf_redemption_processed failed:', err.message));
+    }
+    return;
+  }
+
+  const merged = { ...rowToHfRedemption(existing), ...b };
+  // Same at()-binds-exactly-what-it's-given rule as the subscriptions PUT
+  // above — createdBy stays out of the SET clause on purpose.
+  db.prepare(`
+    UPDATE hf_redemptions SET
+      fund_id=@fundId, lp_id=@lpId, redemption_number=@redemptionNumber, request_date=@requestDate,
+      units_requested=@unitsRequested, notice_expires=@noticeExpires, effective_date=@effectiveDate,
+      nav_per_unit_at_exit=@navPerUnitAtExit, amount=@amount, lockup_ok=@lockupOk,
+      gate_applied=@gateApplied, gate_pct_applied=@gatePctApplied, status=@status, notes=@notes,
+      updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, fundId: merged.fundId || null, lpId: merged.lpId,
+    redemptionNumber: merged.redemptionNumber, requestDate: merged.requestDate, unitsRequested: merged.unitsRequested,
+    noticeExpires: merged.noticeExpires, effectiveDate: merged.effectiveDate, navPerUnitAtExit: merged.navPerUnitAtExit,
+    amount: merged.amount, status: merged.status, notes: merged.notes,
+    lockupOk: merged.lockupOk == null ? null : (merged.lockupOk ? 1 : 0), gateApplied: merged.gateApplied ? 1 : 0,
+    gatePctApplied: merged.gatePctApplied,
+  }));
+  const row = db.prepare('SELECT * FROM hf_redemptions WHERE id = ?').get(existing.id);
+  res.json(rowToHfRedemption(row));
+});
+
+// Delete: only while still Requested — a Processed/Queued redemption has
+// already been acted on (or is waiting its turn under a real gate), same
+// "no silent removal of a real financial event" reasoning as subscriptions.
+app.delete('/api/hf/redemptions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_redemptions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Redemption not found in this tenant' });
+  if (existing.status !== 'Requested') {
+    return res.status(409).json({ error: `Cannot delete: redemption is ${existing.status}, not Requested.` });
+  }
+  db.prepare('DELETE FROM hf_redemptions WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
+function rowToHfNav(r) {
+  return {
+    id: r.id, fundId: r.fund_id, asOfDate: r.as_of_date,
+    grossAssetValue: r.gross_asset_value, liabilities: r.liabilities,
+    navTotal: r.nav_total, unitsOutstanding: r.units_outstanding, navPerUnit: r.nav_per_unit,
+    status: r.status, enteredBy: r.entered_by, publishedBy: r.published_by, publishedAt: r.published_at,
+    createdAt: r.created_at,
+  };
+}
+
+app.get('/api/hf/nav', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = req.query.fundId
+    ? db.prepare('SELECT * FROM hf_nav_history WHERE tenant_id = ? AND fund_id = ? ORDER BY as_of_date DESC, id DESC').all(req.tenantId, req.query.fundId)
+    : db.prepare('SELECT * FROM hf_nav_history WHERE tenant_id = ? ORDER BY as_of_date DESC, id DESC').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, navHistory: rows.map(rowToHfNav) });
+});
+
+// nav_total/nav_per_unit ARE computed here — see the schema comment in
+// server/db.js for why this is plain arithmetic, not the Stage-2/3
+// business logic this file otherwise avoids. Always created as Draft;
+// publishing (Draft -> Published) only happens through the dedicated
+// PUT /api/hf/nav/:id/publish route below, gated on a resolved
+// nav_publish workflow — never directly through this route or the
+// plain-edit PUT.
+app.post('/api/hf/nav', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  if (!b.asOfDate) return res.status(400).json({ error: 'asOfDate is required' });
+  const grossAssetValue = b.grossAssetValue || 0;
+  const liabilities = b.liabilities || 0;
+  const unitsOutstanding = b.unitsOutstanding || 0;
+  const navTotal = grossAssetValue - liabilities;
+  const navPerUnit = unitsOutstanding > 0 ? navTotal / unitsOutstanding : null;
+  const info = db.prepare(`
+    INSERT INTO hf_nav_history
+      (tenant_id, fund_id, as_of_date, gross_asset_value, liabilities, nav_total, units_outstanding, nav_per_unit, status, entered_by)
+    VALUES
+      (@tenantId, @fundId, @asOfDate, @grossAssetValue, @liabilities, @navTotal, @unitsOutstanding, @navPerUnit, @status, @enteredBy)
+  `).run(at({
+    tenantId: req.tenantId, fundId: b.fundId || null, asOfDate: b.asOfDate,
+    grossAssetValue, liabilities, navTotal, unitsOutstanding, navPerUnit,
+    status: 'Draft', enteredBy: req.user.email,
+  }));
+  const row = db.prepare('SELECT * FROM hf_nav_history WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToHfNav(row));
+});
+
+// Edits only while Draft — once Published a NAV row is a historical
+// record (every subscription/redemption effective before the next one
+// may reference it), same immutability reasoning as a sent Capital Call.
+app.put('/api/hf/nav/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_nav_history WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'NAV record not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot edit: NAV record is ${existing.status}, not Draft.` });
+  }
+  const b = req.body || {};
+  const grossAssetValue = b.grossAssetValue != null ? b.grossAssetValue : existing.gross_asset_value;
+  const liabilities = b.liabilities != null ? b.liabilities : existing.liabilities;
+  const unitsOutstanding = b.unitsOutstanding != null ? b.unitsOutstanding : existing.units_outstanding;
+  const navTotal = grossAssetValue - liabilities;
+  const navPerUnit = unitsOutstanding > 0 ? navTotal / unitsOutstanding : null;
+  db.prepare(`
+    UPDATE hf_nav_history SET
+      as_of_date=@asOfDate, gross_asset_value=@grossAssetValue, liabilities=@liabilities,
+      nav_total=@navTotal, units_outstanding=@unitsOutstanding, nav_per_unit=@navPerUnit
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, asOfDate: b.asOfDate || existing.as_of_date,
+    grossAssetValue, liabilities, navTotal, unitsOutstanding, navPerUnit,
+  }));
+  const row = db.prepare('SELECT * FROM hf_nav_history WHERE id = ?').get(existing.id);
+  res.json(rowToHfNav(row));
+});
+
+// Draft -> Published, and ONLY through a resolved nav_publish workflow —
+// this route re-verifies server-side that an 'approved' workflow_instances
+// row of type='nav_publish'/entityType='HfNav'/entityId=this NAV's id
+// actually exists before flipping anything. That's what makes "must go
+// through the workflow" a real guarantee rather than a UI convention a
+// direct API call could bypass (docs/TZ_Hedge_Fund_Module.md §4: "нельзя
+// просто PUT status=Published напрямую, иначе смысла в согласовании
+// нет"). The frontend calls this from syncWfToEntity (js/workflow.js)
+// right after the workflow's last step resolves — see that file's
+// entityType==='HfNav' branch.
+app.put('/api/hf/nav/:id/publish', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_nav_history WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'NAV record not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot publish: NAV record is already ${existing.status}.` });
+  }
+  const approvedWf = db.prepare(`
+    SELECT * FROM workflow_instances
+    WHERE tenant_id = ? AND type = 'nav_publish' AND entity_type = 'HfNav' AND entity_id = ? AND status = 'approved'
+  `).get(req.tenantId, existing.id);
+  if (!approvedWf) {
+    return res.status(409).json({ error: 'No approved nav_publish workflow found for this NAV record — publish it through Согласования first.' });
+  }
+  db.prepare(`
+    UPDATE hf_nav_history SET status = 'Published', published_by = @publishedBy, published_at = @publishedAt
+    WHERE id = @id AND tenant_id = @tenantId
+  `).run(at({ id: existing.id, tenantId: req.tenantId, publishedBy: req.user.name || req.user.email, publishedAt: new Date().toISOString() }));
+  const row = db.prepare('SELECT * FROM hf_nav_history WHERE id = ?').get(existing.id);
+  const nav = rowToHfNav(row);
+  res.json(nav);
+
+  notifyHfNavPublished(req.tenantId, nav).catch((err) => console.error('[notify] hf_nav_published failed:', err.message));
+});
+
+app.delete('/api/hf/nav/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM hf_nav_history WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'NAV record not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot delete: NAV record is ${existing.status}, not Draft. A Published NAV is a permanent historical record.` });
+  }
+  db.prepare('DELETE FROM hf_nav_history WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
+// Stage 3 (docs/TZ_Hedge_Fund_Module.md §3) — the real fee math lives in
+// server/performanceFeeEngine.js (pure functions, its own test file);
+// this route owns all the reading/writing around it: which positions to
+// run, the double-crystallization guard, and applying the result back to
+// hf_investor_positions. Only a manual run exists here — wiring this into
+// server/notifications/scheduler.js by fee_crystallization_frequency is
+// Stage 4, not this one.
+function rowToHfFeeCrystallization(r) {
+  return {
+    id: r.id, fundId: r.fund_id, lpId: r.lp_id,
+    periodStart: r.period_start, periodEnd: r.period_end,
+    navPerUnitStart: r.nav_per_unit_start, navPerUnitEnd: r.nav_per_unit_end,
+    hwmBefore: r.hwm_before, hwmAfter: r.hwm_after, gainPerUnit: r.gain_per_unit,
+    performanceFeePct: r.performance_fee_pct, feeAmount: r.fee_amount,
+    unitsDeductedForFee: r.units_deducted_for_fee, createdAt: r.created_at,
+  };
+}
+
+app.get('/api/hf/fee-crystallizations', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = req.query.fundId
+    ? db.prepare('SELECT * FROM hf_fee_crystallizations WHERE tenant_id = ? AND fund_id = ? ORDER BY id DESC').all(req.tenantId, req.query.fundId)
+    : db.prepare('SELECT * FROM hf_fee_crystallizations WHERE tenant_id = ? ORDER BY id DESC').all(req.tenantId);
+  res.json({ tenant: req.tenantSlug, feeCrystallizations: rows.map(rowToHfFeeCrystallization) });
+});
+
+// CEO/CFO only (paymentConfirm — same dual-role gate already used for
+// Capital Call/Distribution payment confirmation) since this moves real
+// economic value from LP units to the GP, the same class of action.
+app.post('/api/hf/fee-crystallization/run', requireAuth, requireInternal, requirePermission('paymentConfirm'), (req, res) => {
+  const b = req.body || {};
+  if (!b.fundId) return res.status(400).json({ error: 'fundId is required' });
+  const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(b.fundId, req.tenantId);
+  if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+
+  const nav = latestPublishedNav(req.tenantId, fund.id);
+  if (!nav) return res.status(409).json({ error: 'No Published NAV yet for this fund — cannot crystallize fee without a reference NAV.' });
+  const asOfDate = nav.as_of_date;
+
+  const positions = db.prepare('SELECT * FROM hf_investor_positions WHERE tenant_id = ? AND fund_id = ? AND units_held > 0').all(req.tenantId, fund.id);
+  const results = [];
+  for (const pos of positions) {
+    // Guard: never crystallize the same NAV date twice for the same
+    // position — running this route again against an unchanged Published
+    // NAV must be a safe no-op, not a second fee charge.
+    if (pos.last_fee_crystallization_date && pos.last_fee_crystallization_date >= asOfDate) continue;
+
+    let periodStart = pos.last_fee_crystallization_date;
+    if (!periodStart) {
+      // First-ever crystallization for this position: the period starts
+      // at the LP's own entry into the fund, not an arbitrary date.
+      const earliest = db.prepare(`
+        SELECT MIN(effective_date) AS d FROM hf_subscriptions
+        WHERE tenant_id = ? AND fund_id = ? AND lp_id = ? AND status = 'Processed'
+      `).get(req.tenantId, fund.id, pos.lp_id);
+      periodStart = earliest && earliest.d ? earliest.d : asOfDate;
+    }
+    const periodDays = Math.max(0, daysBetween(periodStart, asOfDate));
+    const navAtStart = db.prepare(`
+      SELECT nav_per_unit FROM hf_nav_history
+      WHERE tenant_id = ? AND fund_id = ? AND status = 'Published' AND as_of_date <= ?
+      ORDER BY as_of_date DESC, id DESC LIMIT 1
+    `).get(req.tenantId, fund.id, periodStart);
+
+    const result = computeFeeCrystallization({
+      navPerUnitEnd: nav.nav_per_unit, hwmBefore: pos.high_water_mark_per_unit,
+      unitsHeld: pos.units_held, performanceFeePct: fund.performance_fee_pct,
+      hurdleRatePct: fund.hf_hurdle_rate || 0, periodDays,
+    });
+
+    const info = db.prepare(`
+      INSERT INTO hf_fee_crystallizations
+        (tenant_id, fund_id, lp_id, period_start, period_end, nav_per_unit_start, nav_per_unit_end,
+         hwm_before, hwm_after, gain_per_unit, performance_fee_pct, fee_amount, units_deducted_for_fee)
+      VALUES
+        (@tenantId, @fundId, @lpId, @periodStart, @periodEnd, @navPerUnitStart, @navPerUnitEnd,
+         @hwmBefore, @hwmAfter, @gainPerUnit, @performanceFeePct, @feeAmount, @unitsDeductedForFee)
+    `).run(at({
+      tenantId: req.tenantId, fundId: fund.id, lpId: pos.lp_id,
+      periodStart, periodEnd: asOfDate,
+      navPerUnitStart: navAtStart ? navAtStart.nav_per_unit : null, navPerUnitEnd: nav.nav_per_unit,
+      hwmBefore: pos.high_water_mark_per_unit, hwmAfter: result.hwmAfter, gainPerUnit: result.gainPerUnit,
+      performanceFeePct: fund.performance_fee_pct, feeAmount: result.feeAmount, unitsDeductedForFee: result.unitsDeductedForFee,
+    }));
+
+    db.prepare(`
+      UPDATE hf_investor_positions SET
+        units_held = @unitsHeld, high_water_mark_per_unit = @hwm, last_fee_crystallization_date = @asOfDate, updated_at = datetime('now')
+      WHERE tenant_id = @tenantId AND fund_id = @fundId AND lp_id = @lpId
+    `).run(at({
+      tenantId: req.tenantId, fundId: fund.id, lpId: pos.lp_id,
+      unitsHeld: pos.units_held - result.unitsDeductedForFee, hwm: result.hwmAfter, asOfDate,
+    }));
+
+    const row = db.prepare('SELECT * FROM hf_fee_crystallizations WHERE id = ?').get(info.lastInsertRowid);
+    results.push(rowToHfFeeCrystallization(row));
+  }
+
+  res.json({ asOfDate, crystallizations: results });
+});
+
+// Stage 5 (docs/TZ_Hedge_Fund_Module.md §4) — read views for the
+// dashboard/LP-portal frontend. Both are pure aggregation over tables the
+// earlier stages already own; neither writes anything.
+function navAsOfOrBefore(tenantId, fundId, date) {
+  return db.prepare(`
+    SELECT * FROM hf_nav_history WHERE tenant_id = ? AND fund_id = ? AND status = 'Published' AND as_of_date <= ?
+    ORDER BY as_of_date DESC, id DESC LIMIT 1
+  `).get(tenantId, fundId, date);
+}
+
+// { aum, navPerUnit, mtdReturn, ytdReturn, sinceInceptionReturn } — the
+// open-end dashboard's replacement for the closed-end IRR/DPI/TVPI cards.
+// Every return field is a real % change between two actually-Published
+// NAVs, null (never a fabricated 0) when there's no earlier NAV to
+// compare against — same "null over a fake number" rule as
+// metricsEngine.js's computeFundMetrics.
+app.get('/api/funds/:id/hf-metrics', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+  const latest = latestPublishedNav(req.tenantId, fund.id);
+  if (!latest) return res.json({ aum: null, navPerUnit: null, asOfDate: null, mtdReturn: null, ytdReturn: null, sinceInceptionReturn: null });
+
+  const today = new Date();
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().slice(0, 10);
+  const yearStart = new Date(Date.UTC(today.getUTCFullYear(), 0, 1)).toISOString().slice(0, 10);
+  const monthStartNav = navAsOfOrBefore(req.tenantId, fund.id, monthStart);
+  const yearStartNav = navAsOfOrBefore(req.tenantId, fund.id, yearStart);
+  const inceptionNav = db.prepare(`
+    SELECT * FROM hf_nav_history WHERE tenant_id = ? AND fund_id = ? AND status = 'Published' ORDER BY as_of_date ASC, id ASC LIMIT 1
+  `).get(req.tenantId, fund.id);
+  const pctReturn = (base) => (base && base.nav_per_unit > 0) ? (latest.nav_per_unit / base.nav_per_unit - 1) : null;
+
+  res.json({
+    aum: latest.nav_total, navPerUnit: latest.nav_per_unit, asOfDate: latest.as_of_date,
+    mtdReturn: pctReturn(monthStartNav), ytdReturn: pctReturn(yearStartNav), sinceInceptionReturn: pctReturn(inceptionNav),
+  });
+});
+
+// Shared by the internal route below and the LP-portal one further down —
+// { unitsHeld, currentValue, unrealizedGain, hwm, feesPaidToDate } or null
+// if this LP has never held a position in this fund.
+function hfPositionSummary(tenantId, fundId, lpId) {
+  const pos = db.prepare('SELECT * FROM hf_investor_positions WHERE tenant_id = ? AND fund_id = ? AND lp_id = ?').get(tenantId, fundId, lpId);
+  if (!pos) return null;
+  const nav = latestPublishedNav(tenantId, fundId);
+  const feesRow = db.prepare('SELECT COALESCE(SUM(fee_amount), 0) AS s FROM hf_fee_crystallizations WHERE tenant_id = ? AND fund_id = ? AND lp_id = ?').get(tenantId, fundId, lpId);
+  const currentValue = nav ? pos.units_held * nav.nav_per_unit : null;
+  // unrealizedGain needs a real cost basis, NOT the HWM — HWM tracks the
+  // fee-relevant peak (it moves up to the current NAV every time a fee
+  // crystallizes), which after even one crystallization no longer means
+  // "what this LP paid in". A standard weighted-average cost basis from
+  // every Processed subscription's own amount/units is the honest figure:
+  // avg cost/unit * units still held (assumes redemptions reduce units at
+  // that same average cost, the conventional average-cost-basis method).
+  const costRow = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS amt, COALESCE(SUM(units_issued), 0) AS units
+    FROM hf_subscriptions WHERE tenant_id = ? AND fund_id = ? AND lp_id = ? AND status = 'Processed'
+  `).get(tenantId, fundId, lpId);
+  const avgCostPerUnit = costRow.units > 0 ? costRow.amt / costRow.units : null;
+  const costBasisRemaining = avgCostPerUnit != null ? pos.units_held * avgCostPerUnit : null;
+  const unrealizedGain = (currentValue != null && costBasisRemaining != null) ? currentValue - costBasisRemaining : null;
+  return {
+    unitsHeld: pos.units_held, navPerUnit: nav ? nav.nav_per_unit : null,
+    currentValue, unrealizedGain, hwm: pos.high_water_mark_per_unit, feesPaidToDate: feesRow.s,
+  };
+}
+
+app.get('/api/lp/:id/hf-position', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const lp = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!lp) return res.status(404).json({ error: 'LP not found in this tenant' });
+  res.json({ position: lp.fund_id ? hfPositionSummary(req.tenantId, lp.fund_id, lp.id) : null });
+});
+
+/* ===== LP self-service portal — Hedge Fund (lp-portal.html) =====
+   Same identity space as GET /api/portal/lp/me etc. (requireLpPortalAuth,
+   scoped to req.portalLp — never a client-supplied id). Reads reuse the
+   same helpers/row mappers the internal routes above already use. The two
+   writes follow the exact same shape as POST /api/portal/payment-
+   confirmations (portfolio-company portal): the LP's submission lands as
+   a normal Pending/Requested row — the SAME state an internal-staff-
+   created one starts in — reviewed and processed by staff through the
+   existing internal hf_subscriptions/hf_redemptions routes (Stage 2).
+   Nothing here bypasses lockup/gate/NAV computation; it only creates the
+   request. */
+app.get('/api/portal/lp/hf-position', requireLpPortalAuth, (req, res) => {
+  res.json({ position: req.portalLp.fund_id ? hfPositionSummary(req.tenantId, req.portalLp.fund_id, req.portalLp.id) : null });
+});
+
+app.get('/api/portal/lp/hf-subscriptions', requireLpPortalAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM hf_subscriptions WHERE tenant_id = ? AND lp_id = ? ORDER BY id DESC').all(req.tenantId, req.portalLp.id);
+  res.json({ subscriptions: rows.map(rowToHfSubscription) });
+});
+
+app.get('/api/portal/lp/hf-redemptions', requireLpPortalAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM hf_redemptions WHERE tenant_id = ? AND lp_id = ? ORDER BY id DESC').all(req.tenantId, req.portalLp.id);
+  res.json({ redemptions: rows.map(rowToHfRedemption) });
+});
+
+app.post('/api/portal/lp/hf-subscription-request', requireLpPortalAuth, (req, res) => {
+  const b = req.body || {};
+  if (!b.amount || b.amount <= 0) return res.status(400).json({ error: 'amount must be greater than 0' });
+  const fundId = req.portalLp.fund_id;
+  if (!fundId) return res.status(409).json({ error: 'This LP has no fund on record' });
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM hf_subscriptions WHERE tenant_id = ?').get(req.tenantId);
+  const subNumber = `SUB-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
+  const info = db.prepare(`
+    INSERT INTO hf_subscriptions (tenant_id, fund_id, lp_id, sub_number, request_date, amount, status, created_by, notes)
+    VALUES (@tenantId, @fundId, @lpId, @subNumber, @requestDate, @amount, @status, @createdBy, @notes)
+  `).run(at({
+    tenantId: req.tenantId, fundId, lpId: req.portalLp.id, subNumber,
+    requestDate: new Date().toISOString().slice(0, 10), amount: b.amount,
+    status: 'Pending', createdBy: 'Портал: ' + req.portalLp.name, notes: b.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM hf_subscriptions WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToHfSubscription(row));
+});
+
+app.post('/api/portal/lp/hf-redemption-request', requireLpPortalAuth, (req, res) => {
+  const b = req.body || {};
+  if (!b.unitsRequested || b.unitsRequested <= 0) return res.status(400).json({ error: 'unitsRequested must be greater than 0' });
+  const fundId = req.portalLp.fund_id;
+  if (!fundId) return res.status(409).json({ error: 'This LP has no fund on record' });
+  const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(fundId, req.tenantId);
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM hf_redemptions WHERE tenant_id = ?').get(req.tenantId);
+  const redemptionNumber = `RED-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
+  const requestDate = new Date().toISOString().slice(0, 10);
+  const noticeExpires = (fund && fund.redemption_notice_days != null)
+    ? new Date(new Date(requestDate + 'T00:00:00Z').getTime() + fund.redemption_notice_days * 86400000).toISOString().slice(0, 10)
+    : null;
+  const info = db.prepare(`
+    INSERT INTO hf_redemptions (tenant_id, fund_id, lp_id, redemption_number, request_date, units_requested, notice_expires, status, created_by, notes)
+    VALUES (@tenantId, @fundId, @lpId, @redemptionNumber, @requestDate, @unitsRequested, @noticeExpires, @status, @createdBy, @notes)
+  `).run(at({
+    tenantId: req.tenantId, fundId, lpId: req.portalLp.id, redemptionNumber,
+    requestDate, unitsRequested: b.unitsRequested, noticeExpires,
+    status: 'Requested', createdBy: 'Портал: ' + req.portalLp.name, notes: b.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM hf_redemptions WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToHfRedemption(row));
 });
 
 /* ===== AFSA Regulatory Reports — tenant-scoped =====

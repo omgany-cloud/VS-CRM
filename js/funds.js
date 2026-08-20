@@ -123,6 +123,8 @@ function updateFundBranding(f) {
   if (mgmtFee) mgmtFee.textContent = `${f.managementFee}% / год`;
   const carryDelta = document.getElementById('kpiCarryDelta');
   if (carryDelta) carryDelta.textContent = `Carried Interest: ${f.carriedInterest}%`;
+
+  if (typeof updateDashboardForOperatingModel === 'function') updateDashboardForOperatingModel(f);
 }
 
 // Called instead of updateFundBranding() when funds.length === 0 (a brand
@@ -154,6 +156,7 @@ function openNewFundModal() {
    'nf_gpCEO','nf_gpTitle','nf_gpAddress','nf_gpBIN','nf_gpBankName','nf_gpBIC','nf_gpIBANkzt','nf_gpIBANusd',
   ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const currEl = document.getElementById('nf_currency'); if (currEl) currEl.value = 'USD';
+  const acEl = document.getElementById('nf_assetClass'); if (acEl) acEl.value = 'pe';
   const mfeeEl = document.getElementById('nf_mfee'); if (mfeeEl) mfeeEl.value = 2;
   const carryEl = document.getElementById('nf_carry'); if (carryEl) carryEl.value = 20;
   const prefEl = document.getElementById('nf_pref'); if (prefEl) prefEl.value = 8;
@@ -172,6 +175,7 @@ function openEditFundModal(id) {
   set('nf_name', f.name);
   set('nf_gp', f.gp);
   set('nf_type', f.type);
+  set('nf_assetClass', f.assetClass || 'pe');
   set('nf_currency', f.currency || 'USD');
   set('nf_size', f.targetSize);
   set('nf_vintage', f.vintage);
@@ -201,6 +205,7 @@ async function saveFund() {
   const name     = document.getElementById('nf_name').value.trim();
   const gp       = document.getElementById('nf_gp').value.trim() || '—';
   const type     = document.getElementById('nf_type').value;
+  const assetClass = document.getElementById('nf_assetClass').value || 'pe';
   const currency = document.getElementById('nf_currency').value || 'USD';
   const size    = parseFloat(document.getElementById('nf_size').value) || 0;
   const vintage = parseInt(document.getElementById('nf_vintage').value) || new Date().getFullYear();
@@ -229,6 +234,7 @@ async function saveFund() {
     gp,
     license,
     type,
+    assetClass,
     targetSize: size,
     currency,
     vintage,

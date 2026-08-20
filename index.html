@@ -128,6 +128,18 @@
       <i class="fas fa-file-signature"></i><span>First Closing</span>
     </a>
 
+    <!-- Hedge Fund (open-end) track — visibility toggled by
+         updateDashboardForOperatingModel() (js/hf.js) on every fund
+         switch, same mechanism as the role-based nav-item gates in
+         js/app.js's updateUserRoleUI(). Only ever relevant for a fund
+         with assetClass:'hedge_fund'/operatingModel:'open-end'. -->
+    <a href="#" class="nav-item" data-page="hf-subscriptions">
+      <i class="fas fa-right-left" style="color:#a78bfa"></i><span>Подписки / Погашения</span>
+    </a>
+    <a href="#" class="nav-item" data-page="hf-nav">
+      <i class="fas fa-chart-line" style="color:#a78bfa"></i><span>NAV</span>
+    </a>
+
     <div class="nav-group-label">Инвестиционный цикл</div>
     <a href="#" class="nav-item" data-page="ic">
       <i class="fas fa-handshake"></i><span>Investment Committee</span>
@@ -263,8 +275,12 @@
       </div>
 
       <!-- LIFECYCLE PROGRESS BAR — completed/active state computed from
-           real data by updateLifecycleBar() (js/app.js), not hardcoded. -->
-      <div class="lifecycle-bar">
+           real data by updateLifecycleBar() (js/app.js), not hardcoded.
+           closed-end-only concept (Onboarding -> First Closing ->
+           Investing -> Value Creation) — hidden for an open-end (hedge
+           fund) active fund by updateDashboardForOperatingModel()
+           (js/hf.js), which shows hfKpiGrid below instead. -->
+      <div class="lifecycle-bar" id="lifecycleBar">
         <div class="lc-title">Жизненный цикл фонда (10 лет)</div>
         <div class="lc-stages">
           <div class="lc-stage" id="lcStageOnboarding" data-page="ob-clients">
@@ -289,8 +305,10 @@
         </div>
       </div>
 
-      <!-- KPI CARDS -->
-      <div class="kpi-grid">
+      <!-- KPI CARDS — closed-end (PE/VC/REIT). Hidden for an open-end
+           fund by updateDashboardForOperatingModel() (js/hf.js), which
+           shows hfKpiGrid below instead. -->
+      <div class="kpi-grid" id="peKpiGrid">
         <div class="kpi-card">
           <div class="kpi-icon blue"><i class="fas fa-dollar-sign"></i></div>
           <div class="kpi-body">
@@ -341,8 +359,63 @@
         </div>
       </div>
 
-      <!-- CHARTS ROW -->
-      <div class="charts-row">
+      <!-- KPI CARDS — open-end (Hedge Fund), populated from real data by
+           renderHfDashboardKpis() (js/hf.js) via GET /api/funds/:id/hf-metrics.
+           Hidden by default; shown only for operatingModel==='open-end'. -->
+      <div class="kpi-grid" id="hfKpiGrid" style="display:none">
+        <div class="kpi-card">
+          <div class="kpi-icon blue"><i class="fas fa-dollar-sign"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">AUM (NAV фонда)</span>
+            <span class="kpi-value" id="hfKpiAum">—</span>
+            <span class="kpi-delta neutral" id="hfKpiAumDelta">—</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon purple"><i class="fas fa-coins"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">NAV / юнит</span>
+            <span class="kpi-value" id="hfKpiNavPerUnit">—</span>
+            <span class="kpi-delta neutral" id="hfKpiNavDate">—</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon green"><i class="fas fa-chart-line"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Доходность MTD</span>
+            <span class="kpi-value" id="hfKpiMtd">—</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon teal"><i class="fas fa-calendar-check"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">Доходность YTD</span>
+            <span class="kpi-value" id="hfKpiYtd">—</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon orange"><i class="fas fa-rocket"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">С момента запуска</span>
+            <span class="kpi-value" id="hfKpiInception">—</span>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon red"><i class="fas fa-users"></i></div>
+          <div class="kpi-body">
+            <span class="kpi-label">LP (Инвесторов)</span>
+            <span class="kpi-value" id="hfKpiLpCount">0</span>
+            <span class="kpi-delta neutral" id="hfKpiLpDelta">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW — J-curve is a closed-end-only concept (cumulative
+           capital calls vs distributions); hidden for open-end funds by
+           updateDashboardForOperatingModel() rather than showing an
+           always-empty chart (hedge funds never populate
+           capitalCallsLog/distributionsLog at all). -->
+      <div class="charts-row" id="dashboardChartsRow">
         <div class="chart-card wide">
           <div class="chart-header">
             <span class="chart-title">J-Curve — Денежный поток фонда (прогноз)</span>
@@ -442,6 +515,23 @@
       <div id="distributionsContent"></div>
     </section>
 
+    <!-- ===== HEDGE FUND — SUBSCRIPTIONS / REDEMPTIONS ===== -->
+    <section id="page-hf-subscriptions" class="page">
+      <div class="section-header">
+        <h1>Подписки / Погашения <span class="fund-label">Open-end</span></h1>
+        <p>Заявки на подписку и погашение юнитов · обработка против последней опубликованной NAV · проверка lock-up и gate</p>
+      </div>
+      <div id="hfSubscriptionsContent"></div>
+    </section>
+
+    <!-- ===== HEDGE FUND — NAV ===== -->
+    <section id="page-hf-nav" class="page">
+      <div class="section-header">
+        <h1>NAV <span class="fund-label">Open-end</span></h1>
+        <p>История расчётов NAV · публикация через согласование CFO → CEO</p>
+      </div>
+      <div id="hfNavContent"></div>
+    </section>
 
     <!-- ===== FIRST CLOSING ===== -->
     <section id="page-closing" class="page">
@@ -907,6 +997,36 @@
   <div class="modal-body" id="bankReconContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
 </div>
 
+<!-- New Hedge Fund Subscription Modal -->
+<div class="task-overlay" id="hfSubNewOverlay" onclick="closeNewHfSubModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-hf-sub-new" style="display:none;max-width:520px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#22c55e;margin-right:8px"></i>Новая подписка</h3>
+    <button class="modal-close" onclick="closeNewHfSubModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="hfSubNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New Hedge Fund Redemption Modal -->
+<div class="task-overlay" id="hfRedNewOverlay" onclick="closeNewHfRedModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-hf-red-new" style="display:none;max-width:520px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#ef4444;margin-right:8px"></i>Новое погашение</h3>
+    <button class="modal-close" onclick="closeNewHfRedModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="hfRedNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New Hedge Fund NAV Entry Modal -->
+<div class="task-overlay" id="hfNavNewOverlay" onclick="closeNewHfNavModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-hf-nav-new" style="display:none;max-width:560px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#a78bfa;margin-right:8px"></i>Новая запись NAV</h3>
+    <button class="modal-close" onclick="closeNewHfNavModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="hfNavNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
 <!-- ===== ACCOUNT MENU ===== -->
 <div class="role-menu" id="roleMenu" style="display:none">
   <div class="role-menu-title" id="accountMenuTitle">Аккаунт</div>
@@ -1088,6 +1208,15 @@
         </select>
       </div>
       <div class="form-group">
+        <label>Класс активов</label>
+        <select id="nf_assetClass">
+          <option value="pe">Private Equity (closed-end)</option>
+          <option value="vc">Venture Capital (closed-end)</option>
+          <option value="reit">Private REIT (closed-end)</option>
+          <option value="hedge_fund">Hedge Fund (open-end)</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Валюта фонда</label>
         <select id="nf_currency">
           <option value="USD" selected>Доллар США (USD, $)</option>
@@ -1194,6 +1323,7 @@
 <script src="js/global-search.js"></script>
 <script src="js/bank-reconciliation.js"></script>
 <script src="js/fund-compare.js"></script>
+<script src="js/hf.js"></script>
 <script src="js/vault.js"></script>
 <script src="js/users.js"></script>
 <script src="js/data.js"></script>

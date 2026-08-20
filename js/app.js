@@ -309,6 +309,8 @@ const PAGE_LABELS = {
   'lp-distributions': 'Distributions — Журнал распределений',
   users:         'Команда / Пользователи',
   'audit-log':   'Журнал изменений — Кто / Что / Когда',
+  'hf-subscriptions': 'Подписки / Погашения',
+  'hf-nav':      'NAV',
 };
 
 function navigateTo(page) {
@@ -339,6 +341,8 @@ function navigateTo(page) {
   if (page === 'lp-distributions')  { renderDistributionsPage(); }
   if (page === 'users')             { renderUsersPage(); }
   if (page === 'audit-log')         { renderAuditLogPage(); }
+  if (page === 'hf-subscriptions')  { renderHfSubscriptionsPage(); }
+  if (page === 'hf-nav')            { renderHfNavPage(); }
 }
 
 /* ===== DASHBOARD ===== */

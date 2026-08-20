@@ -900,6 +900,125 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_created ON audit_log(tenant_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(tenant_id, entity_type, entity_id);
+
+-- Hedge Fund module (docs/TZ_Hedge_Fund_Module.md), Stage 1: schema + CRUD
+-- only — no business logic yet. Only ever populated for funds with
+-- asset_class='hedge_fund'/operating_model='open-end' (see the migration
+-- below); a closed-end (PE/VC/REIT) fund never gets rows here, it uses
+-- capital_calls/distributions/waterfallEngine.js instead (see
+-- docs/ARCHITECTURE_Multi_Strategy_Roadmap.md §3 for why these are a
+-- separate, non-overlapping track rather than an extension of the
+-- closed-end tables).
+--
+-- nav_per_unit_at_entry/units_issued/lockup_until (subscriptions) and
+-- notice_expires/nav_per_unit_at_exit/amount/lockup_ok/gate_applied/
+-- gate_pct_applied (redemptions) are all SERVER-computed once the
+-- Stage-2 processing logic exists — Stage 1 only stores whatever a
+-- caller explicitly sends for them (usually null at creation), it does
+-- not compute anything.
+CREATE TABLE IF NOT EXISTS hf_subscriptions (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id              INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id                INTEGER REFERENCES funds(id),
+  lp_id                  INTEGER NOT NULL REFERENCES lp_register(id),
+  sub_number             TEXT NOT NULL,
+  request_date           TEXT,
+  amount                 REAL NOT NULL DEFAULT 0,
+  nav_per_unit_at_entry  REAL,
+  units_issued           REAL,
+  effective_date         TEXT,
+  lockup_until           TEXT,
+  status                 TEXT NOT NULL DEFAULT 'Pending',
+  created_by             TEXT,
+  notes                  TEXT,
+  created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_hf_subscriptions_tenant ON hf_subscriptions(tenant_id);
+
+CREATE TABLE IF NOT EXISTS hf_redemptions (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id              INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id                INTEGER REFERENCES funds(id),
+  lp_id                  INTEGER NOT NULL REFERENCES lp_register(id),
+  redemption_number      TEXT NOT NULL,
+  request_date           TEXT,
+  units_requested        REAL NOT NULL DEFAULT 0,
+  notice_expires         TEXT,
+  effective_date         TEXT,
+  nav_per_unit_at_exit   REAL,
+  amount                 REAL,
+  lockup_ok              INTEGER,
+  gate_applied           INTEGER NOT NULL DEFAULT 0,
+  gate_pct_applied       REAL,
+  status                 TEXT NOT NULL DEFAULT 'Requested',
+  created_by             TEXT,
+  notes                  TEXT,
+  created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_hf_redemptions_tenant ON hf_redemptions(tenant_id);
+
+-- nav_total/nav_per_unit ARE computed at write time even in Stage 1 (see
+-- POST/PUT /api/hf/nav in server/index.js) — that's plain arithmetic
+-- (gross_asset_value - liabilities, and division by units_outstanding),
+-- not the risky "business logic" (lockup/gate/fee) Stage 1 is deliberately
+-- deferring. units_outstanding itself is a manual input here — nothing
+-- writes hf_investor_positions yet (that starts Stage 2), so there is no
+-- live number to sum.
+CREATE TABLE IF NOT EXISTS hf_nav_history (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id           INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id             INTEGER REFERENCES funds(id),
+  as_of_date          TEXT NOT NULL,
+  gross_asset_value   REAL NOT NULL DEFAULT 0,
+  liabilities         REAL NOT NULL DEFAULT 0,
+  nav_total           REAL,
+  units_outstanding   REAL,
+  nav_per_unit        REAL,
+  status              TEXT NOT NULL DEFAULT 'Draft',
+  entered_by          TEXT,
+  published_by        TEXT,
+  published_at        TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_hf_nav_history_tenant ON hf_nav_history(tenant_id, fund_id, as_of_date);
+
+-- Not written to by anything yet in Stage 1 — units_held/high_water_mark
+-- only start getting real values once Stage 2 (subscription/redemption
+-- processing) and Stage 3 (performanceFeeEngine.js) exist. Table created
+-- now so those stages are pure logic additions, not another migration.
+CREATE TABLE IF NOT EXISTS hf_investor_positions (
+  id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id                 INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id                   INTEGER REFERENCES funds(id),
+  lp_id                     INTEGER NOT NULL REFERENCES lp_register(id),
+  units_held                REAL NOT NULL DEFAULT 0,
+  high_water_mark_per_unit  REAL NOT NULL DEFAULT 0,
+  last_fee_crystallization_date TEXT,
+  updated_at                TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(tenant_id, fund_id, lp_id)
+);
+CREATE INDEX IF NOT EXISTS idx_hf_investor_positions_tenant ON hf_investor_positions(tenant_id);
+
+CREATE TABLE IF NOT EXISTS hf_fee_crystallizations (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id              INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id                INTEGER REFERENCES funds(id),
+  lp_id                  INTEGER NOT NULL REFERENCES lp_register(id),
+  period_start           TEXT,
+  period_end             TEXT,
+  nav_per_unit_start     REAL,
+  nav_per_unit_end       REAL,
+  hwm_before             REAL,
+  hwm_after              REAL,
+  gain_per_unit          REAL,
+  performance_fee_pct    REAL,
+  fee_amount             REAL,
+  units_deducted_for_fee REAL,
+  created_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_hf_fee_crystallizations_tenant ON hf_fee_crystallizations(tenant_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —
@@ -1014,6 +1133,35 @@ if (!columnExists('funds', 'waterfall_type')) db.exec("ALTER TABLE funds ADD COL
 // this stays nullable rather than backfilled to a fake default. Powers
 // the document-expiry digest check (server/notifications/digestChecks.js).
 if (!columnExists('ob_clients', 'id_document_expiry')) db.exec("ALTER TABLE ob_clients ADD COLUMN id_document_expiry TEXT");
+
+// Multi-strategy foundation (docs/ARCHITECTURE_Multi_Strategy_Roadmap.md
+// §3) — asset_class is the client-settable driver ('pe' | 'vc' | 'reit' |
+// 'hedge_fund'); operating_model is DERIVED from it server-side (see
+// fundMapping.js's operatingModelForAssetClass()) and stored so the rest
+// of the app branches on one cheap column read instead of a string
+// comparison against asset_class everywhere. Every existing fund defaults
+// to 'pe'/'closed-end' — the only values this codebase has ever actually
+// meant until now — so this migration changes no existing fund's behavior.
+if (!columnExists('funds', 'asset_class'))     db.exec("ALTER TABLE funds ADD COLUMN asset_class TEXT NOT NULL DEFAULT 'pe'");
+if (!columnExists('funds', 'operating_model')) db.exec("ALTER TABLE funds ADD COLUMN operating_model TEXT NOT NULL DEFAULT 'closed-end'");
+
+// Hedge Fund per-fund settings (docs/TZ_Hedge_Fund_Module.md §2.1) — only
+// meaningful for operating_model='open-end' funds, but harmless (unused)
+// on a closed-end one, same tolerance as catch_up_pct/waterfall_type
+// above. hwm_scope is intentionally NOT exposed via fundMapping.js's
+// SCALAR_FIELDS/API — this project committed to Series accounting (HWM
+// lives per hf_investor_positions row, not per-fund), so 'fund' scope has
+// no implemented behavior; only 'investor' does anything. Same "column
+// exists, but only one value is real" precedent as waterfall_type.
+if (!columnExists('funds', 'performance_fee_pct'))  db.exec("ALTER TABLE funds ADD COLUMN performance_fee_pct REAL DEFAULT 20");
+if (!columnExists('funds', 'hf_hurdle_rate'))        db.exec("ALTER TABLE funds ADD COLUMN hf_hurdle_rate REAL DEFAULT 0");
+if (!columnExists('funds', 'hwm_scope'))             db.exec("ALTER TABLE funds ADD COLUMN hwm_scope TEXT DEFAULT 'investor'");
+if (!columnExists('funds', 'subscription_frequency')) db.exec("ALTER TABLE funds ADD COLUMN subscription_frequency TEXT DEFAULT 'monthly'");
+if (!columnExists('funds', 'redemption_frequency'))   db.exec("ALTER TABLE funds ADD COLUMN redemption_frequency TEXT DEFAULT 'quarterly'");
+if (!columnExists('funds', 'redemption_notice_days')) db.exec("ALTER TABLE funds ADD COLUMN redemption_notice_days INTEGER DEFAULT 60");
+if (!columnExists('funds', 'lockup_months'))          db.exec("ALTER TABLE funds ADD COLUMN lockup_months INTEGER DEFAULT 12");
+if (!columnExists('funds', 'gate_pct'))               db.exec("ALTER TABLE funds ADD COLUMN gate_pct REAL DEFAULT 25");
+if (!columnExists('funds', 'fee_crystallization_frequency')) db.exec("ALTER TABLE funds ADD COLUMN fee_crystallization_frequency TEXT DEFAULT 'annual'");
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

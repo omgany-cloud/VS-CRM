@@ -135,47 +135,95 @@
       <div id="lpMeta" style="font-size:12px;color:var(--muted)"></div>
     </div>
 
-    <div class="kpi-row">
-      <div class="kpi-card">
-        <div class="kpi-val" id="kpiCommitment">—</div>
-        <div class="kpi-label">Commitment</div>
+    <!-- Closed-end (PE/VC/REIT) sections — hidden entirely for an
+         open-end (Hedge Fund) LP by initPortal() below, which shows
+         hfSection instead. -->
+    <div id="closedEndSections">
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-val" id="kpiCommitment">—</div>
+          <div class="kpi-label">Commitment</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-val" id="kpiCalled">—</div>
+          <div class="kpi-label">Called to date</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-val" id="kpiUnfunded">—</div>
+          <div class="kpi-label">Unfunded</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-val" id="kpiDistributions">—</div>
+          <div class="kpi-label">Distributions</div>
+        </div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-val" id="kpiCalled">—</div>
-        <div class="kpi-label">Called to date</div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>Capital Account Statement</div>
+        <div class="kpi-row" id="statementKpiRow" style="margin-bottom:0">
+          <div class="kpi-card"><div class="kpi-val" id="stCalled">—</div><div class="kpi-label">Called to date</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stDistributed">—</div><div class="kpi-label">Distributed</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stDpi">—</div><div class="kpi-label">DPI</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stRvpi">—</div><div class="kpi-label">RVPI</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stTvpi">—</div><div class="kpi-label">TVPI</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="stIrr">—</div><div class="kpi-label">IRR</div></div>
+        </div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-val" id="kpiUnfunded">—</div>
-        <div class="kpi-label">Unfunded</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-val" id="kpiDistributions">—</div>
-        <div class="kpi-label">Distributions</div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>История Capital Calls</div>
+        <div id="ccTableWrap">
+          <div class="empty-state">Загрузка...</div>
+        </div>
       </div>
     </div>
 
-    <div class="p-section">
-      <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>Capital Account Statement</div>
-      <div class="kpi-row" id="statementKpiRow" style="margin-bottom:0">
-        <div class="kpi-card"><div class="kpi-val" id="stCalled">—</div><div class="kpi-label">Called to date</div></div>
-        <div class="kpi-card"><div class="kpi-val" id="stDistributed">—</div><div class="kpi-label">Distributed</div></div>
-        <div class="kpi-card"><div class="kpi-val" id="stDpi">—</div><div class="kpi-label">DPI</div></div>
-        <div class="kpi-card"><div class="kpi-val" id="stRvpi">—</div><div class="kpi-label">RVPI</div></div>
-        <div class="kpi-card"><div class="kpi-val" id="stTvpi">—</div><div class="kpi-label">TVPI</div></div>
-        <div class="kpi-card"><div class="kpi-val" id="stIrr">—</div><div class="kpi-label">IRR</div></div>
+    <!-- Open-end (Hedge Fund) section — docs/TZ_Hedge_Fund_Module.md
+         Stage 5. Shown instead of closedEndSections when
+         currentLp.operatingModel === 'open-end'. -->
+    <div id="hfSection" style="display:none">
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-val" id="hfKpiUnits">—</div><div class="kpi-label">Юнитов</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="hfKpiValue">—</div><div class="kpi-label">Текущая стоимость</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="hfKpiGain">—</div><div class="kpi-label">Нереализованный P&L</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="hfKpiFees">—</div><div class="kpi-label">Уплачено fee</div></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-right-left"></i>Подать заявку</div>
+        <div id="hfLockupNote" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <div class="fgroup" style="margin-bottom:10px">
+              <label>Сумма подписки</label>
+              <input type="number" id="hfSubAmount" placeholder="100000"/>
+            </div>
+            <button class="btn-primary" style="width:100%" onclick="submitHfSubRequest()">
+              <i class="fas fa-plus" style="margin-right:6px"></i>Подать заявку на подписку
+            </button>
+          </div>
+          <div>
+            <div class="fgroup" style="margin-bottom:10px">
+              <label>Количество юнитов</label>
+              <input type="number" id="hfRedUnits" placeholder="100"/>
+            </div>
+            <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#b91c1c,#7f1d1d)" onclick="submitHfRedRequest()">
+              <i class="fas fa-minus" style="margin-right:6px"></i>Подать заявку на погашение
+            </button>
+          </div>
+        </div>
+        <div id="hfRequestMsg" style="display:none;font-size:12px;margin-top:12px"></div>
+      </div>
+
+      <div class="p-section">
+        <div class="p-section-title"><i class="fas fa-history"></i>Мои заявки</div>
+        <div id="hfRequestsTableWrap"><div class="empty-state">Загрузка...</div></div>
       </div>
     </div>
 
     <div class="p-section" id="docsSection" style="display:none">
       <div class="p-section-title"><i class="fas fa-file-contract"></i>Документы</div>
       <div id="docsWrap" style="display:grid;gap:8px"></div>
-    </div>
-
-    <div class="p-section">
-      <div class="p-section-title"><i class="fas fa-file-invoice-dollar"></i>История Capital Calls</div>
-      <div id="ccTableWrap">
-        <div class="empty-state">Загрузка...</div>
-      </div>
     </div>
 
   </div>
@@ -260,20 +308,46 @@ async function lpFetch(path) {
   return res.json();
 }
 
+async function lpPost(path, body) {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + lpToken },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) doLogout();
+    throw new Error(data.error || 'Ошибка запроса');
+  }
+  return data;
+}
+
+// operatingModel comes from the curated LP view (server/lpMapping.js's
+// rowToLpPortalView) — 'open-end' only for a hedge fund LP
+// (docs/TZ_Hedge_Fund_Module.md Stage 5); every existing closed-end LP
+// gets the unchanged Capital Account Statement / Capital Calls flow.
 async function initPortal() {
   renderOverview(currentLp);
-  try {
-    const { capitalCalls } = await lpFetch('/api/portal/lp/capital-calls');
-    renderCapitalCalls(capitalCalls);
-  } catch (err) {
-    document.getElementById('ccTableWrap').innerHTML = `<div class="empty-state">⚠️ ${escapeHtml(err.message)}</div>`;
-  }
-  try {
-    const metrics = await lpFetch('/api/portal/lp/metrics');
-    renderStatement(metrics);
-  } catch (err) {
-    // Best-effort — the rest of the portal (overview, capital calls) stays
-    // usable even if this one call fails; each stat just stays "—".
+  if (currentLp.operatingModel === 'open-end') {
+    document.getElementById('closedEndSections').style.display = 'none';
+    document.getElementById('hfSection').style.display = 'block';
+    await loadHfPortalData();
+  } else {
+    document.getElementById('closedEndSections').style.display = 'block';
+    document.getElementById('hfSection').style.display = 'none';
+    try {
+      const { capitalCalls } = await lpFetch('/api/portal/lp/capital-calls');
+      renderCapitalCalls(capitalCalls);
+    } catch (err) {
+      document.getElementById('ccTableWrap').innerHTML = `<div class="empty-state">⚠️ ${escapeHtml(err.message)}</div>`;
+    }
+    try {
+      const metrics = await lpFetch('/api/portal/lp/metrics');
+      renderStatement(metrics);
+    } catch (err) {
+      // Best-effort — the rest of the portal (overview, capital calls) stays
+      // usable even if this one call fails; each stat just stays "—".
+    }
   }
 }
 
@@ -358,6 +432,129 @@ function renderCapitalCalls(calls) {
         `).join('')}
       </tbody>
     </table>`;
+}
+
+/* ===== Hedge Fund (open-end) — docs/TZ_Hedge_Fund_Module.md Stage 5 ===== */
+let hfPortalSubs = [];
+let hfPortalReds = [];
+
+async function loadHfPortalData() {
+  try {
+    const { position } = await lpFetch('/api/portal/lp/hf-position');
+    renderHfPosition(position);
+  } catch (err) {
+    document.getElementById('hfKpiUnits').textContent = '⚠️';
+  }
+  try {
+    const [subsData, redsData] = await Promise.all([
+      lpFetch('/api/portal/lp/hf-subscriptions'),
+      lpFetch('/api/portal/lp/hf-redemptions'),
+    ]);
+    hfPortalSubs = subsData.subscriptions;
+    hfPortalReds = redsData.redemptions;
+    renderHfLockupNote();
+    renderHfRequests();
+  } catch (err) {
+    document.getElementById('hfRequestsTableWrap').innerHTML = `<div class="empty-state">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderHfPosition(position) {
+  if (!position) {
+    document.getElementById('hfKpiUnits').textContent = '0';
+    document.getElementById('hfKpiValue').textContent = '—';
+    document.getElementById('hfKpiGain').textContent = '—';
+    document.getElementById('hfKpiFees').textContent = '—';
+    return;
+  }
+  document.getElementById('hfKpiUnits').textContent = Number(position.unitsHeld).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  document.getElementById('hfKpiValue').textContent = fmtUSD(position.currentValue);
+  const gainEl = document.getElementById('hfKpiGain');
+  gainEl.textContent = position.unrealizedGain == null ? '—' : (position.unrealizedGain >= 0 ? '+' : '') + fmtUSD(position.unrealizedGain);
+  gainEl.style.color = position.unrealizedGain == null ? '' : (position.unrealizedGain >= 0 ? 'var(--green)' : 'var(--red)');
+  document.getElementById('hfKpiFees').textContent = fmtUSD(position.feesPaidToDate);
+}
+
+// The most restrictive (latest) lock-up date among this LP's own
+// Processed subscriptions — same rule server/index.js's redemption
+// processing route itself checks, computed here just for display so the
+// LP knows before submitting a redemption whether it would even clear.
+function renderHfLockupNote() {
+  const el = document.getElementById('hfLockupNote');
+  const processed = hfPortalSubs.filter(s => s.status === 'Processed' && s.lockupUntil);
+  if (!processed.length) { el.textContent = ''; return; }
+  const maxLockup = processed.map(s => s.lockupUntil).sort().slice(-1)[0];
+  const today = new Date().toISOString().slice(0, 10);
+  if (maxLockup > today) {
+    el.innerHTML = `<i class="fas fa-lock" style="color:var(--yellow);margin-right:6px"></i>Lock-up период действует до <b>${escapeHtml(maxLockup)}</b> — до этой даты заявка на погашение не будет обработана.`;
+  } else {
+    el.innerHTML = `<i class="fas fa-lock-open" style="color:var(--green);margin-right:6px"></i>Lock-up период завершён — заявка на погашение может быть обработана.`;
+  }
+}
+
+const HF_SUB_STATUS_BADGE = { Pending: 'yellow', Processed: 'green', Cancelled: 'gray' };
+const HF_RED_STATUS_BADGE = { Requested: 'yellow', Queued: 'yellow', Processed: 'green', Cancelled: 'gray' };
+
+function renderHfRequests() {
+  const wrap = document.getElementById('hfRequestsTableWrap');
+  const rows = [
+    ...hfPortalSubs.map(s => ({ type: 'Подписка', number: s.subNumber, date: s.requestDate, detail: fmtUSD(s.amount), extra: s.lockupUntil ? `Lock-up до ${s.lockupUntil}` : '—', status: s.status, badge: HF_SUB_STATUS_BADGE })),
+    ...hfPortalReds.map(r => ({ type: 'Погашение', number: r.redemptionNumber, date: r.requestDate, detail: `${r.unitsRequested} юнитов`, extra: r.noticeExpires ? `Notice до ${r.noticeExpires}` : '—', status: r.status, badge: HF_RED_STATUS_BADGE })),
+  ].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty-state">Пока нет заявок.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="p-table">
+      <thead><tr><th>Тип</th><th>№</th><th>Дата</th><th>Детали</th><th></th><th>Статус</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td>${escapeHtml(r.type)}</td>
+            <td style="font-weight:700">${escapeHtml(r.number)}</td>
+            <td>${escapeHtml(r.date || '—')}</td>
+            <td>${escapeHtml(r.detail)}</td>
+            <td style="color:var(--muted);font-size:11px">${escapeHtml(r.extra)}</td>
+            <td><span class="sbadge ${r.badge[r.status] || 'gray'}">${escapeHtml(r.status)}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function showHfRequestMsg(text, isError) {
+  const el = document.getElementById('hfRequestMsg');
+  el.style.display = 'block';
+  el.style.color = isError ? '#f87171' : '#4ade80';
+  el.textContent = text;
+}
+
+async function submitHfSubRequest() {
+  const amount = parseFloat(document.getElementById('hfSubAmount').value);
+  if (!amount || amount <= 0) { showHfRequestMsg('Укажите сумму подписки.', true); return; }
+  try {
+    await lpPost('/api/portal/lp/hf-subscription-request', { amount });
+    document.getElementById('hfSubAmount').value = '';
+    showHfRequestMsg('✅ Заявка на подписку отправлена.', false);
+    await loadHfPortalData();
+  } catch (err) {
+    showHfRequestMsg('⚠️ ' + err.message, true);
+  }
+}
+
+async function submitHfRedRequest() {
+  const unitsRequested = parseFloat(document.getElementById('hfRedUnits').value);
+  if (!unitsRequested || unitsRequested <= 0) { showHfRequestMsg('Укажите количество юнитов.', true); return; }
+  try {
+    await lpPost('/api/portal/lp/hf-redemption-request', { unitsRequested });
+    document.getElementById('hfRedUnits').value = '';
+    showHfRequestMsg('✅ Заявка на погашение отправлена.', false);
+    await loadHfPortalData();
+  } catch (err) {
+    showHfRequestMsg('⚠️ ' + err.message, true);
+  }
 }
 </script>
 </body>
