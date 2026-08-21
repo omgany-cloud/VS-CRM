@@ -5043,7 +5043,7 @@ function openNewObClientModal(editId) {
 
   // Update modal header title
   var hdr = document.getElementById('obNewModalTitle');
-  if (hdr) hdr.innerHTML = '<i class="fas fa-' + (isEdit ? 'edit' : 'user-plus') + '" style="color:#14b8a6;margin-right:8px"></i>' + (isEdit ? 'Редактировать: ' + client.name : 'Новый клиент');
+  if (hdr) hdr.innerHTML = '<i class="fas fa-' + (isEdit ? 'edit' : 'user-plus') + '" style="color:#14b8a6;margin-right:8px"></i>' + (isEdit ? 'Редактировать: ' + escapeHtml(client.name) : 'Новый клиент');
 
   var cfaBorder = isFM ? '#2a4846' : '#8b5cf6';
   var cfaBg     = isFM ? 'transparent' : 'rgba(139,92,246,0.12)';
@@ -5079,7 +5079,7 @@ function openNewObClientModal(editId) {
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
     +   '<div style="grid-column:1/-1">'
     +     '<label style="' + labelStyle + '">Полное имя / Название компании *</label>'
-    +     '<input type="text" id="ob_name" value="' + ((client && client.name) || '') + '" placeholder="ООО Компания или ФИО" style="' + inputStyle + '" />'
+    +     '<input type="text" id="ob_name" value="' + escapeHtml((client && client.name) || '') + '" placeholder="ООО Компания или ФИО" style="' + inputStyle + '" />'
     +   '</div>'
     +   sel('ob_type', 'Тип клиента', ['Individual','Corporate'], client && client.type)
     +   sel('ob_rm', 'Ответственный RM', ['RM (Relationship Manager)','CEO','Analyst'], client && client.rm)
