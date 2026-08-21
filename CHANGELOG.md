@@ -2,6 +2,21 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.31.0] - 2026-08-21
+
+### Fixed
+- Waterfall retroactivity: `replayWaterfallState()` rebuilt
+  cross-distribution carry-tier state by replaying every prior
+  distribution against the fund's/SPV's CURRENT
+  preferredReturn/carriedInterest/catchUpPct, not the terms actually
+  in effect when each prior distribution was created — changing a
+  fund's carry terms after distributions had already gone out silently
+  shifted where the next distribution's tiers start from. New
+  nullable snapshot columns on `distributions`/`spv_distributions`
+  (populated at creation time) fix this; legacy rows with no snapshot
+  fall back to the fund's current terms unchanged. QA Data Integrity
+  audit finding.
+
 ## [1.30.0] - 2026-08-21
 
 ### Fixed
