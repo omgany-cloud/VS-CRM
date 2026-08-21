@@ -1272,7 +1272,13 @@ app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('
     res.status(201).json(cc);
   } catch (err) {
     db.exec('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    // Never forward a raw SQLite error to the client (QA audit finding) —
+    // a constraint failure ("NOT NULL constraint failed: capital_call_
+    // line_items.lp_id") names real table/column identifiers, which is
+    // an internal-schema leak, not an actionable message. Logged for the
+    // server operator, not shown to the caller.
+    console.error('[capital-calls] create failed:', err.message);
+    res.status(500).json({ error: 'Failed to create capital call — please try again' });
   }
 });
 
@@ -1588,7 +1594,8 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
     res.status(201).json(dist);
   } catch (err) {
     db.exec('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error('[distributions] create failed:', err.message);
+    res.status(500).json({ error: 'Failed to create distribution — please try again' });
   }
 });
 
@@ -2545,7 +2552,8 @@ app.post('/api/portfolio/:id/rounds', requireAuth, requireInternal, requirePermi
     res.status(201).json({ round, fundOwnershipPct });
   } catch (err) {
     db.exec('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error('[portfolio-rounds] create failed:', err.message);
+    res.status(500).json({ error: 'Failed to create round — please try again' });
   }
 });
 
@@ -3107,7 +3115,8 @@ app.post('/api/spvs/:id/distributions', requireAuth, requireInternal, requirePer
     res.status(201).json(d);
   } catch (err) {
     db.exec('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error('[spv-distributions] create failed:', err.message);
+    res.status(500).json({ error: 'Failed to create distribution — please try again' });
   }
 });
 
