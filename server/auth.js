@@ -30,7 +30,11 @@ const JWT_SECRET = resolveJwtSecret();
 
 function signToken(user, tenant) {
   return jwt.sign(
-    { sub: user.id, tenantId: tenant.id, tenantSlug: tenant.slug, email: user.email, role: user.role },
+    // tokenVersion: user.token_version || 0 — embedded so requireAuth can
+    // reject this token once the user's counter is bumped by logout or a
+    // password change/reset, without waiting for the 12h expiry. See the
+    // users.token_version migration comment in server/db.js.
+    { sub: user.id, tenantId: tenant.id, tenantSlug: tenant.slug, email: user.email, role: user.role, tokenVersion: user.token_version || 0 },
     JWT_SECRET,
     { expiresIn: '12h' }
   );
@@ -74,9 +78,11 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 //
 // Routes still reachable while must_change_password is set — everything
 // else 403s below. Keep this list to exactly what the mandatory
-// change-password screen needs: reading who's logged in, and the one route
-// that clears the flag.
-const PASSWORD_GATE_EXEMPT = new Set(['GET /api/auth/me', 'PUT /api/users/me/password']);
+// change-password screen needs: reading who's logged in, the one route
+// that clears the flag, and logging out (a user stuck on the mandatory
+// change-password screen must still be able to walk away from it instead
+// of the account effectively being unable to log out).
+const PASSWORD_GATE_EXEMPT = new Set(['GET /api/auth/me', 'PUT /api/users/me/password', 'POST /api/auth/logout']);
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
@@ -84,9 +90,17 @@ function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Missing bearer token' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const row = db.prepare('SELECT id, email, name, role, active, must_change_password FROM users WHERE id = @id AND tenant_id = @tenantId')
+    const row = db.prepare('SELECT id, email, name, role, active, must_change_password, token_version FROM users WHERE id = @id AND tenant_id = @tenantId')
       .get(at({ id: payload.sub, tenantId: payload.tenantId }));
     if (!row || !row.active) return res.status(401).json({ error: 'Account inactive or not found' });
+    // A token signed before the user's last logout or password change/
+    // reset carries a stale (or, for a pre-migration token, absent —
+    // treated as 0) tokenVersion — reject it even though it hasn't
+    // technically expired yet. See the users.token_version migration
+    // comment in server/db.js.
+    if ((payload.tokenVersion || 0) !== row.token_version) {
+      return res.status(401).json({ error: 'Session invalidated — please log in again' });
+    }
     const roleRow = getRoleRowByCode(payload.tenantId, row.role);
     req.user = {
       id: row.id, email: row.email, name: row.name, role: row.role,

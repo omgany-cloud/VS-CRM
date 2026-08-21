@@ -59,7 +59,18 @@ function clearAuth() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
-function apiLogout() {
+async function apiLogout() {
+  // Best-effort: invalidate the token server-side (POST /api/auth/logout)
+  // before discarding it locally, so it can't keep being used against the
+  // API by whoever might still have it (see server/auth.js's
+  // token_version check). A failed request here must never block the
+  // user from actually logging out client-side.
+  const auth = getAuth();
+  if (auth && auth.token) {
+    try {
+      await fetch(API_BASE + '/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + auth.token } });
+    } catch (err) { /* offline or already-invalid token — still log out locally */ }
+  }
   clearAuth();
   window.location.reload();
 }

@@ -175,14 +175,23 @@ async function saveChangePassword() {
   if (!newPassword || newPassword.length < 8) { showToast('⚠️ Новый пароль минимум 8 символов', 'red'); return; }
   if (newPassword !== confirmPassword) { showToast('⚠️ Пароли не совпадают', 'red'); return; }
   try {
-    await apiFetch('/api/users/me/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
+    const result = await apiFetch('/api/users/me/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) });
     const wasMandatory = window._mandatoryPasswordChange;
     window._mandatoryPasswordChange = false;
     // Patch the cached copy immediately — otherwise a page reload before
     // the next periodic refreshAuthFromServer() (js/api-auth.js) tick would
     // still see the stale mustChangePassword:true and re-show this modal.
+    // Also swap in the fresh token the server just issued — changing a
+    // password bumps token_version server-side (server/index.js) so any
+    // OTHER already-issued token for this user stops working; without
+    // picking up the new one here, this very session would immediately
+    // 401 on its next request too.
     const auth = getAuth();
-    if (auth && auth.user) { auth.user.mustChangePassword = false; setAuth(auth); }
+    if (auth && auth.user) {
+      auth.user.mustChangePassword = false;
+      if (result && result.token) auth.token = result.token;
+      setAuth(auth);
+    }
     closeObNewModalSilent();
     showToast('✅ Пароль изменён', 'green');
     // Deferred from completeAuth() (js/api-auth.js) until the temporary

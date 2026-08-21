@@ -1348,6 +1348,21 @@ for (const col of ['preferred_return_snapshot', 'carried_interest_snapshot', 'ca
   if (!columnExists('spv_distributions', col)) db.exec(`ALTER TABLE spv_distributions ADD COLUMN ${col} REAL`);
 }
 
+// Session invalidation (QA Security audit) — logout and password change/
+// reset previously had no way to invalidate an already-issued JWT; it
+// just kept working until its own 12h expiry regardless. Bumped by
+// POST /api/auth/logout and both password-change/reset routes
+// (server/index.js); embedded in the JWT at sign time and compared on
+// every request in requireAuth() (server/auth.js) — a mismatch means
+// this specific token was issued before the user's last logout/password
+// change, so it's rejected even though it hasn't technically expired.
+// A single per-user counter, not per-token: this is "invalidate every
+// session for this user" (logout-everywhere), not single-device logout —
+// there's no per-device session table in this app to do finer-grained
+// revocation, and that's a strict improvement over the previous "nothing
+// ever gets invalidated" behavior.
+if (!columnExists('users', 'token_version')) db.exec("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0");
+
 if (!columnExists('funds', 'performance_fee_pct'))  db.exec("ALTER TABLE funds ADD COLUMN performance_fee_pct REAL DEFAULT 20");
 if (!columnExists('funds', 'hf_hurdle_rate'))        db.exec("ALTER TABLE funds ADD COLUMN hf_hurdle_rate REAL DEFAULT 0");
 if (!columnExists('funds', 'hwm_scope'))             db.exec("ALTER TABLE funds ADD COLUMN hwm_scope TEXT DEFAULT 'investor'");

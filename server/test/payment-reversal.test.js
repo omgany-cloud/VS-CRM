@@ -31,11 +31,15 @@ before(async () => {
   analystToken = (await loginRes.json()).token;
   // Clear the mustChangePassword gate so this token can actually call
   // the routes under test (it's exempt on GET /api/auth/me and the
-  // self password-change route only).
-  await fetch(server.baseUrl + '/api/users/me/password', {
+  // self password-change route only). A password change invalidates the
+  // token used to make the request (session-invalidation fix) and
+  // returns a fresh one — capture and use THAT one, not the now-dead
+  // pre-change token.
+  const pwChangeRes = await fetch(server.baseUrl + '/api/users/me/password', {
     method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + analystToken },
     body: JSON.stringify({ currentPassword: 'TempPass123!', newPassword: 'AnalystPass456!' }),
   });
+  analystToken = (await pwChangeRes.json()).token;
 });
 
 after(async () => { await server.stop(); });

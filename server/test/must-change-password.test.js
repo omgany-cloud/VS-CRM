@@ -33,7 +33,7 @@ test('creating a user sets mustChangePassword and the login response reports it'
   assert.equal(login.user.mustChangePassword, true);
 });
 
-test('a mustChangePassword account is blocked from every route except the exempt two', async () => {
+test('a mustChangePassword account is blocked from every route except the exempt ones', async () => {
   const login = await loginAs('newbie@turancapital.kz', 'TempPass123!');
   const asNewbie = (pathname, opts = {}) => fetch(server.baseUrl + pathname, {
     ...opts,
@@ -65,6 +65,14 @@ test('changing the temporary password clears the flag and unblocks other routes'
     method: 'PUT', body: JSON.stringify({ currentPassword: 'TempPass123!', newPassword: 'MyOwnPassword456!' }),
   });
   assert.equal(changeRes.status, 200);
+  const { token: freshToken } = await changeRes.json();
+  assert.ok(freshToken, 'a password change must return a fresh token — the old one is now invalidated (token_version bump)');
+
+  // The PRE-change token must now be dead — same fix that answers the QA
+  // Security audit's "password change doesn't invalidate already-issued
+  // tokens" finding (server/auth.js's token_version check).
+  const staleTokenRejected = await asNewbie('/api/lp');
+  assert.equal(staleTokenRejected.status, 401, 'the token used to change the password must be invalidated by that very change');
 
   const oldPwLogin = await fetch(server.baseUrl + '/api/auth/login', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -75,8 +83,12 @@ test('changing the temporary password clears the flag and unblocks other routes'
   const relogin = await loginAs('newbie@turancapital.kz', 'MyOwnPassword456!');
   assert.equal(relogin.user.mustChangePassword, false);
 
-  const nowAllowed = await asNewbie('/api/lp');
-  assert.equal(nowAllowed.status, 200, 'once the flag is cleared, previously-blocked routes work again');
+  const asNewbieWithFreshToken = (pathname, opts = {}) => fetch(server.baseUrl + pathname, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + freshToken, ...(opts.headers || {}) },
+  });
+  const nowAllowed = await asNewbieWithFreshToken('/api/lp');
+  assert.equal(nowAllowed.status, 200, 'once the flag is cleared, previously-blocked routes work again — using the fresh token returned by the password change, not the now-dead pre-change one');
 });
 
 test('an admin-triggered password reset re-sets mustChangePassword', async () => {

@@ -331,6 +331,18 @@ app.post('/api/auth/login', authRateLimit, (req, res) => {
   });
 });
 
+// Previously didn't exist at all (QA Security audit finding) — "logging
+// out" was purely client-side (clearing localStorage), so the JWT kept
+// working against every route until its own 12h expiry regardless.
+// Bumps token_version so THIS token (and any other still-active token
+// for this user — see the users.token_version migration comment in
+// server/db.js for why this is logout-everywhere, not single-device)
+// is rejected by requireAuth on its very next use.
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  db.prepare('UPDATE users SET token_version=token_version+1 WHERE id=? AND tenant_id=?').run(req.user.id, req.tenantId);
+  res.json({ ok: true });
+});
+
 // Lets an already-logged-in client re-sync its cached role/permissions
 // without waiting out the 12h token or re-entering credentials. requireAuth
 // already re-reads role/active/permissions live from the DB on every
@@ -692,9 +704,17 @@ app.put('/api/users/me/password', authRateLimit, requireAuth, (req, res) => {
   }
   // The user picked this one themselves — the "admin knows a temporary
   // password" condition that must_change_password guards against is over.
-  db.prepare('UPDATE users SET password_hash=@passwordHash, must_change_password=0 WHERE id=@id AND tenant_id=@tenantId')
+  // token_version is bumped so any OTHER already-issued token for this
+  // user (e.g. a stolen one from before this change) stops working on
+  // its next request instead of riding out the full 12h expiry — see the
+  // users.token_version migration comment in server/db.js. A fresh token
+  // is issued below so THIS request's own session isn't kicked out by
+  // its own action.
+  db.prepare('UPDATE users SET password_hash=@passwordHash, must_change_password=0, token_version=token_version+1 WHERE id=@id AND tenant_id=@tenantId')
     .run(at({ passwordHash: bcrypt.hashSync(newPassword, 10), id: existing.id, tenantId: req.tenantId }));
-  res.json({ ok: true });
+  const updated = db.prepare('SELECT * FROM users WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+  const token = signToken(updated, { id: req.tenantId, slug: req.tenantSlug });
+  res.json({ ok: true, token });
 });
 
 app.put('/api/users/:id/password', authRateLimit, requireAuth, requirePermission('manageUsers'), (req, res) => {
@@ -703,8 +723,12 @@ app.put('/api/users/:id/password', authRateLimit, requireAuth, requirePermission
   const { password } = req.body || {};
   if (!password || String(password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
   // Admin-set password again, same as account creation — force a change on
-  // this user's next login.
-  db.prepare('UPDATE users SET password_hash=@passwordHash, must_change_password=1 WHERE id=@id AND tenant_id=@tenantId')
+  // this user's next login. token_version bump kills whatever session
+  // this user currently holds immediately, not just at natural expiry —
+  // the correct behavior for an admin-forced reset (e.g. a suspected
+  // compromise), see the users.token_version migration comment in
+  // server/db.js. This is the TARGET user's session, not the admin's own.
+  db.prepare('UPDATE users SET password_hash=@passwordHash, must_change_password=1, token_version=token_version+1 WHERE id=@id AND tenant_id=@tenantId')
     .run(at({ passwordHash: bcrypt.hashSync(password, 10), id: existing.id, tenantId: req.tenantId }));
   res.json({ ok: true });
 });

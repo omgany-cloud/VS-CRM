@@ -24,6 +24,10 @@ before(async () => {
     body: JSON.stringify({ currentPassword: 'HfMetrics2026!', newPassword: 'HfMetrics2026New!' }),
   });
   if (!pwRes.ok) throw new Error('CFO password change failed: ' + (await pwRes.text()));
+  // The password change invalidated the token used to make it (session-
+  // invalidation fix, server/auth.js's token_version) — swap in the
+  // fresh one the response returns.
+  cfoToken = (await pwRes.json()).token;
 });
 
 after(async () => { await server.stop(); });
