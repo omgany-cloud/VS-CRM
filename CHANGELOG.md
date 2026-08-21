@@ -2,6 +2,21 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.32.0] - 2026-08-21
+
+### Fixed
+- Neither logout nor a password change/reset ever invalidated an
+  already-issued JWT — it kept working until its own 12h expiry
+  regardless. New `users.token_version` column, embedded in the JWT
+  and checked on every request; bumped by the new
+  `POST /api/auth/logout`, self password-change, and admin password
+  reset (logout-everywhere, since there's no per-device session table
+  — still a strict improvement over nothing being invalidated at all).
+  Self password-change returns a fresh token so that session isn't
+  logged out by its own action. Backward compatible with
+  already-issued tokens (no `tokenVersion` claim = treated as version
+  0). QA Security audit finding.
+
 ## [1.31.0] - 2026-08-21
 
 ### Fixed
