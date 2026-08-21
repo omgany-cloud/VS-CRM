@@ -1428,6 +1428,23 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   }
 
   const b = req.body || {};
+  // paid was never validated against the line item's own called amount
+  // (QA Data Integrity audit finding) — a negative, non-numeric, or
+  // simply too-large value would be written as-is, silently corrupting
+  // the reconciliation this whole table exists for. A real overpayment
+  // (LP wires slightly more than called) isn't inherently invalid
+  // financial reality, but recording MORE than was ever asked for is
+  // exactly the kind of typo/tampering this field must guard against —
+  // if a genuine overpayment ever needs recording, that's a new Capital
+  // Call/adjustment, not a bigger number on this one's own called amount.
+  if (Object.prototype.hasOwnProperty.call(b, 'paid') && b.paid != null) {
+    if (typeof b.paid !== 'number' || !Number.isFinite(b.paid) || b.paid < 0) {
+      return res.status(400).json({ error: 'paid must be a non-negative number' });
+    }
+    if (b.paid > item.called) {
+      return res.status(400).json({ error: `paid ($${b.paid}) cannot exceed the called amount ($${item.called})` });
+    }
+  }
   // AML/SoF clearance is a compliance judgment — restricted to Compliance
   // Officer/MLRO (amlClear) so an RM can't confirm their own client's AML
   // check.
@@ -3074,6 +3091,16 @@ app.put('/api/spv-capital-calls/:id/line-items/:investorId', requireAuth, requir
     return res.status(409).json({ error: 'This SPV capital call is still a draft — approve it before recording payments' });
   }
   const b = req.body || {};
+  // Same overpayment guard as the fund-level route above (QA Data
+  // Integrity audit finding).
+  if (Object.prototype.hasOwnProperty.call(b, 'paid') && b.paid != null) {
+    if (typeof b.paid !== 'number' || !Number.isFinite(b.paid) || b.paid < 0) {
+      return res.status(400).json({ error: 'paid must be a non-negative number' });
+    }
+    if (b.paid > item.called) {
+      return res.status(400).json({ error: `paid ($${b.paid}) cannot exceed the called amount ($${item.called})` });
+    }
+  }
   const confirmingPayment = b.status === 'Paid' && item.status !== 'Paid';
   if (confirmingPayment) {
     if (!req.user.permissions.paymentConfirm) {

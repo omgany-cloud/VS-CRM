@@ -21,13 +21,27 @@ function cleanupDbFiles(dbPath) {
   }
 }
 
+// Same retry as stop()'s below — a leftover file from this port's PREVIOUS
+// run (or, on Windows, an antivirus/cloud-sync scan transiently locking a
+// just-created file) can make the plain unlinkSync above throw EBUSY here
+// too; retrying beats failing the whole test file's setup over what's
+// ultimately a harmless, temporary lock.
+async function cleanupDbFilesRetrying(dbPath) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try { cleanupDbFiles(dbPath); return; } catch (err) {
+      if (attempt === 4) throw err;
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+}
+
 // port: distinct per test file so parallel `node --test` workers never
 // collide. authRateLimitWindowMs: short by default so auth.test.js can
 // actually observe the limiter resetting without a real 15-minute wait.
 async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv = {} } = {}) {
   if (!port) throw new Error('createTestServer requires a distinct port per test file');
   const dbPath = path.join(SERVER_DIR, 'data', `test-${port}.sqlite`);
-  cleanupDbFiles(dbPath);
+  await cleanupDbFilesRetrying(dbPath);
 
   const env = {
     ...process.env,
