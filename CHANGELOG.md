@@ -2,6 +2,19 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.30.0] - 2026-08-21
+
+### Fixed
+- `PUT /api/capital-calls/:id/line-items/:lpId` (and its SPV mirror,
+  `PUT /api/spv-capital-calls/:id/line-items/:investorId`) gated
+  `paymentConfirm` + wire evidence only on confirming a payment, never
+  on reversing one — an already-`Paid` line item could be silently
+  reverted to `Pending` by anyone with `accessFM`, no evidence, no
+  trace. Both routes now require `paymentConfirm` plus a non-empty
+  `reason` on any transition OUT of `Paid`, and both directions
+  (confirm/reverse) are now recorded in `audit_log` (this route had no
+  audit entry at all before). QA Data Integrity audit finding.
+
 ## [1.29.0] - 2026-08-21
 
 ### Fixed
