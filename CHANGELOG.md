@@ -2,6 +2,16 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.33.0] - 2026-08-21
+
+### Added
+- Account-level login lockout: 5 wrong passwords locks the account for
+  15 minutes (`users.failed_login_attempts`/`locked_until`), on top of
+  (not instead of) the existing IP-based rate limit — the IP limiter
+  alone did nothing to stop repeated guesses against one specific
+  account spread across many IPs. A successful login resets the
+  counter. QA Security audit finding.
+
 ## [1.32.0] - 2026-08-21
 
 ### Fixed
