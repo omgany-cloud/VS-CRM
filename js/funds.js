@@ -223,7 +223,9 @@ function openEditFundModal(id) {
   openModal('addFund');
 }
 
+let _savingFund = false;
 async function saveFund() {
+  if (_savingFund) return; // guards against a double click firing two identical creates
   const name     = document.getElementById('nf_name').value.trim();
   const gp       = document.getElementById('nf_gp').value.trim() || '—';
   const type     = document.getElementById('nf_type').value;
@@ -276,6 +278,7 @@ async function saveFund() {
     gpCEO, gpTitle, gpAddress, gpBIN, gpBankName, gpBIC, gpIBANkzt, gpIBANusd,
   };
 
+  _savingFund = true;
   try {
     if (isEdit) {
       const updated = await apiFetch(`/api/funds/${fundModalEditId}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -292,6 +295,8 @@ async function saveFund() {
   } catch (err) {
     console.error('Failed to save fund:', err);
     showToast('⚠️ ' + err.message, 'red');
+  } finally {
+    _savingFund = false;
   }
 }
 

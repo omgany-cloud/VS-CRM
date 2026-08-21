@@ -1213,11 +1213,15 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
 app.delete('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
-  const lineItems = db.prepare('SELECT id FROM capital_call_line_items WHERE tenant_id = ? AND lp_id = ?').all(req.tenantId, existing.id);
-  if (lineItems.length) {
+  const ccLineItems = db.prepare('SELECT id FROM capital_call_line_items WHERE tenant_id = ? AND lp_id = ?').all(req.tenantId, existing.id);
+  const distLineItems = db.prepare('SELECT id FROM distribution_line_items WHERE tenant_id = ? AND lp_id = ?').all(req.tenantId, existing.id);
+  if (ccLineItems.length || distLineItems.length) {
+    const footprint = [];
+    if (ccLineItems.length) footprint.push({ table: 'capital_call_line_items', column: 'lp_id', count: ccLineItems.length });
+    if (distLineItems.length) footprint.push({ table: 'distribution_line_items', column: 'lp_id', count: distLineItems.length });
     return res.status(409).json({
-      error: `Cannot delete: LP has ${lineItems.length} capital call line item(s). Set status to 'Exited' instead.`,
-      footprint: [{ table: 'capital_call_line_items', column: 'lp_id', count: lineItems.length }],
+      error: `Cannot delete: LP has ${ccLineItems.length} capital call line item(s) and ${distLineItems.length} distribution line item(s). Set status to 'Exited' instead.`,
+      footprint,
     });
   }
   db.prepare('DELETE FROM lp_register WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);

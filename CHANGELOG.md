@@ -2,6 +2,24 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.36.0] - 2026-08-21
+
+### Fixed
+- `DELETE /api/lp/:id` only checked `capital_call_line_items` before
+  allowing a hard delete — an LP that had already received real
+  distributions (but never a capital call) could be deleted, orphaning
+  its `distribution_line_items`. Now checks both tables and reports
+  both counts in the 409 footprint. QA Data Integrity audit finding.
+- Double-click / repeat-submit could create duplicate Fund/Deal/
+  Portfolio-company/Individual Capital Call records — none of those
+  save functions guarded against a second click firing while the
+  first `await apiFetch(...)` was still in flight. Added an in-flight
+  guard to `saveFund()`, `saveDeal()`, `savePortfolio()`, and
+  `saveIndividualCC()`. Server-side Idempotency-Key support and
+  UNIQUE constraints on business entities remain open — the latter
+  needs a business decision on what counts as a duplicate, not a
+  guess. QA Data Integrity audit finding.
+
 ## [1.35.0] - 2026-08-21
 
 ### Fixed

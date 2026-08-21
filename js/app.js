@@ -2296,7 +2296,9 @@ function filterDeals(search) {
   renderPipeline(filtered);
 }
 
+let _savingDeal = false;
 async function saveDeal() {
+  if (_savingDeal) return; // guards against a double click firing two identical creates
   const company  = document.getElementById('deal_company').value.trim();
   const sector   = document.getElementById('deal_sector').value;
   const amount   = parseFloat(document.getElementById('deal_amount').value) || 0;
@@ -2384,6 +2386,7 @@ async function saveDeal() {
     comments: [],
   };
 
+  _savingDeal = true;
   try {
     const created = await apiFetch('/api/deals', { method: 'POST', body: JSON.stringify(newDeal) });
     deals.push({ ...newDeal, ...created });
@@ -2393,12 +2396,16 @@ async function saveDeal() {
     showToast('✅ Сделка добавлена в pipeline');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить сделку: ' + err.message, 'red');
+  } finally {
+    _savingDeal = false;
   }
 }
 
 
 /* ===== PORTFOLIO ===== */
+let _savingPortfolio = false;
 async function savePortfolio() {
+  if (_savingPortfolio) return; // guards against a double click firing two identical creates
   const name        = document.getElementById('port_name').value.trim();
   const sector      = document.getElementById('port_sector').value;
   const stage       = document.getElementById('port_stage').value;
@@ -2474,6 +2481,7 @@ async function savePortfolio() {
     ],
   };
 
+  _savingPortfolio = true;
   try {
     const created = await apiFetch('/api/portfolio', { method: 'POST', body: JSON.stringify(newPortco) });
     portfolio.push({ ...newPortco, ...created });
@@ -2483,6 +2491,8 @@ async function savePortfolio() {
     showToast(`✅ Компания добавлена в портфель: ${name}`);
   } catch (err) {
     showToast('⚠️ Не удалось сохранить компанию: ' + err.message, 'red');
+  } finally {
+    _savingPortfolio = false;
   }
 }
 

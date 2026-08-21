@@ -58,6 +58,31 @@ test('LP: delete blocked once a capital call references it (409, record intact)'
   await server.apiFetch(`/api/lp/${lp.id}`, { method: 'DELETE' });
 });
 
+test('LP: delete blocked once a distribution references it (409, record intact) — not just capital calls', async () => {
+  const lp = await (await server.apiFetch('/api/lp', {
+    method: 'POST',
+    body: JSON.stringify({ fundId, name: 'TEST_LP_WITH_DIST', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1000, status: 'Active', registerId: 'T-2B' }),
+  })).json();
+  // Auto pro-rated distribution across Active LPs of the fund — no capital
+  // call involved, so this exercises distribution_line_items specifically.
+  const dist = await (await server.apiFetch('/api/distributions', {
+    method: 'POST', body: JSON.stringify({ fundId, rocAmount: 100, profitAmount: 0 }),
+  })).json();
+
+  const del = await server.apiFetch(`/api/lp/${lp.id}`, { method: 'DELETE' });
+  assert.equal(del.status, 409);
+  const body = await del.json();
+  assert.match(body.error, /Exited/);
+  assert.ok(body.footprint.some(f => f.table === 'distribution_line_items'), 'footprint must report the distribution_line_items table');
+
+  const list = await (await server.apiFetch('/api/lp')).json();
+  assert.ok(list.lp.some(l => l.id === lp.id), 'LP with distribution footprint must survive the blocked delete attempt');
+
+  // cleanup: delete the distribution first (still Draft), then the LP becomes deletable
+  await server.apiFetch(`/api/distributions/${dist.id}`, { method: 'DELETE' });
+  await server.apiFetch(`/api/lp/${lp.id}`, { method: 'DELETE' });
+});
+
 test('Deal: clean delete succeeds; delete blocked once an IC memo references it', async () => {
   const clean = await (await server.apiFetch('/api/deals', {
     method: 'POST', body: JSON.stringify({ fundId, company: 'TEST_DEAL_CLEAN', sector: 'Test', amount: 1, stage: 'Скрининг' }),

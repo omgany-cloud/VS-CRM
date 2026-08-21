@@ -2242,7 +2242,9 @@ function updateICCPctPreview(commitment) {
   }
 }
 
+let _savingIndividualCC = false;
 async function saveIndividualCC(lpId) {
+  if (_savingIndividualCC) return; // guards against a double click firing two identical creates
   const lp = lpRegister.find(l => l.id === lpId);
   if (!lp) return;
   const fmtUSD = (n) => fmtCurrency(n, currencyForEntity(lp));
@@ -2294,6 +2296,7 @@ async function saveIndividualCC(lpId) {
     lineItems,
   };
 
+  _savingIndividualCC = true;
   try {
     const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
     capitalCallsLog.push(created);
@@ -2302,6 +2305,8 @@ async function saveIndividualCC(lpId) {
     renderCapitalCallsPage();
   } catch (err) {
     showToast('⚠️ Не удалось создать Individual CC: ' + err.message, 'red');
+  } finally {
+    _savingIndividualCC = false;
   }
 }
 
