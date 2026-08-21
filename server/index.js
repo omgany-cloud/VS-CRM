@@ -305,6 +305,14 @@ const authRateLimit = rateLimit({
   message: { error: 'Too many attempts. Try again later.' },
 });
 
+// Account-level lockout (QA Security audit finding) — authRateLimit above
+// is IP-keyed, so it does nothing to stop repeated password guesses
+// against ONE specific account spread across many IPs (a botnet, or just
+// several devices). Same overridable-window convention as authRateLimit,
+// for the same test-suite reason.
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const ACCOUNT_LOCKOUT_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
+
 app.post('/api/auth/login', authRateLimit, (req, res) => {
   const { email, password, tenant } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
@@ -316,10 +324,31 @@ app.post('/api/auth/login', authRateLimit, (req, res) => {
   if (!tenantRow) return res.status(401).json({ error: 'Unknown tenant or user' });
 
   const user = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND email = ?').get(tenantRow.id, email);
+
+  if (user && user.locked_until && new Date(user.locked_until) > new Date()) {
+    return res.status(401).json({ error: 'Account temporarily locked after repeated failed login attempts — try again later' });
+  }
+
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    // Only a real account has a row to update — an unknown email has
+    // nothing to lock. Locks for ACCOUNT_LOCKOUT_MS once attempts reach
+    // MAX_FAILED_LOGIN_ATTEMPTS; the counter itself never resets on its
+    // own between failures (only a SUCCESSFUL login resets it below), so
+    // this isn't a per-window count that quietly forgives itself.
+    if (user) {
+      const attempts = (user.failed_login_attempts || 0) + 1;
+      const lockedUntil = attempts >= MAX_FAILED_LOGIN_ATTEMPTS ? new Date(Date.now() + ACCOUNT_LOCKOUT_MS).toISOString() : null;
+      db.prepare('UPDATE users SET failed_login_attempts=@attempts, locked_until=@lockedUntil WHERE id=@id')
+        .run(at({ attempts, lockedUntil, id: user.id }));
+    }
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   if (!user.active) return res.status(401).json({ error: 'Account is deactivated' });
+
+  // A real, successful login — the slate is clean again.
+  if (user.failed_login_attempts || user.locked_until) {
+    db.prepare('UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=?').run(user.id);
+  }
 
   const roleRow = getRoleRowByCode(tenantRow.id, user.role);
   const token = signToken(user, tenantRow);

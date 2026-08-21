@@ -1363,6 +1363,15 @@ for (const col of ['preferred_return_snapshot', 'carried_interest_snapshot', 'ca
 // ever gets invalidated" behavior.
 if (!columnExists('users', 'token_version')) db.exec("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0");
 
+// Account-level lockout (QA Security audit) — authRateLimit above only
+// throttles by IP across ALL accounts; it does nothing to stop repeated
+// guesses against ONE specific account from many different IPs. Reset to
+// 0/NULL on a successful login; POST /api/auth/login (server/index.js)
+// locks the account for LOCKOUT_DURATION_MS once failed_login_attempts
+// reaches MAX_FAILED_LOGIN_ATTEMPTS.
+if (!columnExists('users', 'failed_login_attempts')) db.exec("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0");
+if (!columnExists('users', 'locked_until')) db.exec("ALTER TABLE users ADD COLUMN locked_until TEXT");
+
 if (!columnExists('funds', 'performance_fee_pct'))  db.exec("ALTER TABLE funds ADD COLUMN performance_fee_pct REAL DEFAULT 20");
 if (!columnExists('funds', 'hf_hurdle_rate'))        db.exec("ALTER TABLE funds ADD COLUMN hf_hurdle_rate REAL DEFAULT 0");
 if (!columnExists('funds', 'hwm_scope'))             db.exec("ALTER TABLE funds ADD COLUMN hwm_scope TEXT DEFAULT 'investor'");
