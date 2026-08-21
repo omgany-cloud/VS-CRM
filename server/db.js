@@ -1382,6 +1382,17 @@ if (!columnExists('funds', 'lockup_months'))          db.exec("ALTER TABLE funds
 if (!columnExists('funds', 'gate_pct'))               db.exec("ALTER TABLE funds ADD COLUMN gate_pct REAL DEFAULT 25");
 if (!columnExists('funds', 'fee_crystallization_frequency')) db.exec("ALTER TABLE funds ADD COLUMN fee_crystallization_frequency TEXT DEFAULT 'annual'");
 
+// Optimistic locking (QA Data Integrity audit — "no version column, pure
+// last-write-wins") for the 3 entities named in that finding. Deliberately
+// opt-in: PUT /api/deals/:id, /api/lp/:id, /api/portfolio/:id only compare
+// against a caller-supplied `version`; a PUT with no `version` field (every
+// existing granular partial-update call site in js/*.js) behaves exactly as
+// before. `version` always increments server-side on a successful UPDATE
+// regardless of whether the caller checked it.
+if (!columnExists('deals', 'version')) db.exec("ALTER TABLE deals ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
+if (!columnExists('portfolio', 'version')) db.exec("ALTER TABLE portfolio ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
+if (!columnExists('lp_register', 'version')) db.exec("ALTER TABLE lp_register ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
+
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
 // This helper lets the rest of the codebase pass plain camelCase keys.

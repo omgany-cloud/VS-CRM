@@ -34,6 +34,7 @@ function portfolioToParams(p) {
 function rowToPortfolio(r) {
   return {
     id: r.id,
+    version: r.version,
     fundId: r.fund_id,
     name: r.name, sector: r.sector, stage: r.stage, bin: r.bin,
     invested: r.invested, value: r.value, date: r.date,
@@ -70,7 +71,8 @@ const UPDATE_SQL = `
     manager=@manager, status=@status, next_action=@nextAction, next_action_date=@nextActionDate,
     last_updated=@lastUpdated, archived=@archived, archived_at=@archivedAt, archived_by=@archivedBy,
     financials_json=@financialsJson, monitoring_json=@monitoringJson,
-    documents_json=@documentsJson, compliance_json=@complianceJson, exit_json=@exitJson, history_json=@historyJson
+    documents_json=@documentsJson, compliance_json=@complianceJson, exit_json=@exitJson, history_json=@historyJson,
+    version=version+1
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

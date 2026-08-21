@@ -1090,6 +1090,17 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
     const check = validateFundOwnershipPct(db, req.tenantId, b.fundId, b.ownershipPct || 0, null);
     if (!check.ok) return res.status(400).json({ error: check.error });
   }
+  // If the caller claims an onboarding client (obClientId), that client
+  // must genuinely be an activated (KYC-completed) one — the LP Register
+  // banner promises direct entry never bypasses KYC/AML, but nothing
+  // enforced that claim before. LPs created with no obClientId at all
+  // (tests, external API/MCP, manual ops entry) are unaffected — this
+  // only stops forging a link to KYC work that never happened.
+  if (b.obClientId) {
+    const client = db.prepare('SELECT activated FROM ob_clients WHERE id = ? AND tenant_id = ?').get(b.obClientId, req.tenantId);
+    if (!client) return res.status(400).json({ error: 'obClientId does not refer to an onboarding client in this tenant' });
+    if (!client.activated) return res.status(400).json({ error: 'obClientId refers to an onboarding client that is not yet activated (KYC/AML not complete)' });
+  }
 
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM lp_register WHERE tenant_id = ?').get(req.tenantId);
   const registerId = b.registerId || `LP-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
@@ -1157,11 +1168,28 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
   res.status(201).json(withLiveFinancials(db, req.tenantId, row.id, rowToLp(row)));
 });
 
+// Optimistic-locking check shared by the 3 entities named in the QA Data
+// Integrity audit's "no version column, pure last-write-wins" finding.
+// Opt-in: only enforced when the caller supplies `version` at all — every
+// existing granular partial-update call site in js/*.js doesn't send it,
+// and stays exactly as unprotected/last-write-wins as before. A caller
+// that DOES send it (a real "I loaded this record, here's my full edit"
+// flow) gets a real 409 + the current row if someone else saved first.
+function checkVersion(res, existing, body, currentRow) {
+  if (body.version == null) return true;
+  if (Number(body.version) !== Number(existing.version)) {
+    res.status(409).json({ error: 'Version conflict: this record was modified by someone else since you loaded it', current: currentRow });
+    return false;
+  }
+  return true;
+}
+
 app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
 
   const b = req.body || {};
+  if (!checkVersion(res, existing, b, withLiveFinancials(db, req.tenantId, existing.id, rowToLp(existing)))) return;
   const merged = { ...rowToLp(existing), ...b };
 
   if (merged.fundId) {
@@ -1180,7 +1208,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
       ob_client_id=@obClientId, rm=@rm, identity_verified=@identityVerified,
       proof_address_verified=@proofAddressVerified, sof_verified=@sofVerified, tax_id_verified=@taxIdVerified,
       pep_check_cleared=@pepCheckCleared, aml_screening_cleared=@amlScreeningCleared, ubo_verified=@uboVerified,
-      lpa_url=@lpaUrl, sa_url=@saUrl, contract_num=@contractNum, updated_at=datetime('now')
+      lpa_url=@lpaUrl, sa_url=@saUrl, contract_num=@contractNum, updated_at=datetime('now'), version=version+1
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({
     fundId: merged.fundId || null,
@@ -3514,6 +3542,7 @@ app.put('/api/deals/:id', requireAuth, requireInternal, requirePermission('acces
   const existing = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Deal not found in this tenant' });
   const b = req.body || {};
+  if (!checkVersion(res, existing, b, rowToDeal(existing))) return;
   // Signing the Management Company's own conclusion is a formal act, not a
   // field edit — only whoever is trusted to author/finalize an IC memo
   // (authorICMemo) may set it, same trust level as POST /api/ic-memos.
@@ -3592,6 +3621,7 @@ app.put('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('a
   if (!existing) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
   const existingCo = rowToPortfolio(existing);
   const b = req.body || {};
+  if (!checkVersion(res, existing, b, existingCo)) return;
   // Snapshot pre-merge state — Object.assign below mutates existingCo in
   // place, so the "did archived actually change" check has to use this,
   // not existingCo, or it'd compare the new value against itself (same

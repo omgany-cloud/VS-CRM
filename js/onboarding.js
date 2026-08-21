@@ -3202,6 +3202,15 @@ async function submitObTask(taskId) {
       // navigate+highlight follow-up must wait for the real saved LP
       // (with its server-assigned id) instead of racing ahead of it.
       if (client.direction === 'FM' && typeof registerLPFromOnboarding === 'function') {
+        // POST /api/lp validates obClientId against a server-side
+        // activated=1 client — must land before registerLPFromOnboarding
+        // fires, not race it (the client-level PUT further below runs in
+        // Promise.allSettled and isn't guaranteed to finish first).
+        try {
+          await apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify({ activated: true }) });
+        } catch (err) {
+          showToast('⚠️ Не удалось активировать клиента перед созданием LP: ' + err.message, 'red');
+        }
         const saTask  = obTasks.find(t => t.clientId === client.id && t.formKey === 'subscription_agreement');
         const actTask = task; // activation task 5.1: has f_lpaUrl, f_contractNum, f_commitmentConfirmed
         registerLPFromOnboarding(client, saTask, actTask).then(function(savedLP) {

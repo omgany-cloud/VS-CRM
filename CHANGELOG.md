@@ -2,6 +2,26 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.38.0] - 2026-08-21
+
+### Added
+- Optimistic locking (opt-in) for `deals`/`lp_register`/`portfolio`: new
+  `version` column, incremented on every successful `PUT`. When the
+  caller supplies `version` in the body, a mismatch against the
+  current row now returns 409 with the current record instead of
+  silently overwriting it. Every existing granular partial-update
+  call site (none of which send `version`) is unaffected — this only
+  activates for callers that opt in. QA Data Integrity audit finding.
+- `POST /api/lp` now validates `obClientId` when one is supplied: it
+  must reference a real onboarding client in this tenant with
+  `activated=1`, closing the gap between what the LP Register banner
+  claimed ("direct entry never bypasses KYC/AML") and what the server
+  actually enforced (nothing). LPs created with no `obClientId` (tests,
+  external API/MCP, manual entry) are unaffected. Also fixed a race in
+  `submitObTask()` where the client-activation PUT and the LP-creation
+  POST fired without guaranteed ordering — the activation PUT is now
+  awaited first. QA Security/Data Integrity audit finding.
+
 ## [1.37.0] - 2026-08-21
 
 ### Fixed

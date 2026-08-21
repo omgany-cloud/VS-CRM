@@ -5,6 +5,7 @@
 function rowToLp(r) {
   return {
     id: r.id,
+    version: r.version,
     fundId: r.fund_id,
     registerId: r.register_id,
     name: r.name,

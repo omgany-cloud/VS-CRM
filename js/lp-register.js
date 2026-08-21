@@ -230,7 +230,7 @@ function renderLPRegisterPage() {
       <div style="font-size:12px;color:#94a3b8;flex:1">
         LP попадает в реестр <b style="color:#e2e8f0">автоматически</b> после завершения онбординга
         (<b style="color:#e2e8f0">Задача 5.1 — LP Activation</b>).
-        Прямое добавление в обход KYC/AML не допускается.
+        Обычный путь — только через онбординг; сервер отклонит ссылку на клиента, KYC/AML которого не завершён.
       </div>
       <button onclick="navigateTo('ob-clients')"
         style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0">

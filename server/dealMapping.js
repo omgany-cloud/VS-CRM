@@ -53,6 +53,7 @@ function dealToParams(d) {
 function rowToDeal(r) {
   return {
     id: r.id,
+    version: r.version,
     fundId: r.fund_id,
     company: r.company, sector: r.sector, stage: r.stage, amount: r.amount, type: r.type,
     priority: r.priority, manager: r.manager, ic: r.ic,
@@ -163,7 +164,8 @@ const UPDATE_SQL = `
     dd_compliance_json=@ddComplianceJson, dd_mlro_json=@ddMlroJson,
     dd_red_flags_json=@ddRedFlagsJson,
     dd_consultants_json=@ddConsultantsJson, dd_conclusions_json=@ddConclusionsJson, comments_json=@commentsJson,
-    neg_meetings_json=@negMeetingsJson, neg_disputed_items_json=@negDisputedItemsJson, neg_blockers_json=@negBlockersJson
+    neg_meetings_json=@negMeetingsJson, neg_disputed_items_json=@negDisputedItemsJson, neg_blockers_json=@negBlockersJson,
+    version=version+1
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
