@@ -2,6 +2,91 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.29.0] - 2026-08-21
+
+### Fixed
+- Four `POST` routes (`/api/capital-calls`, `/api/distributions`,
+  `/api/portfolio/:id/rounds`, `/api/spvs/:id/distributions`) forwarded
+  raw SQLite error text straight into the client-facing error message
+  on any transaction failure (e.g. `NOT NULL constraint failed:
+  capital_call_line_items.lp_id`), leaking real table/column names.
+  Real error still goes to `console.error` for the operator; the
+  client now gets a generic, human-readable message. Found during a
+  repo-wide QA audit (`docs/QA_AUDIT_STATUS.md`).
+
+## [1.28.0] - 2026-08-21
+
+### Fixed
+- `switchFund()` never reset `js/lp-register.js`'s `lpRegFilter`/
+  `lpRegStatus` module state, so a text/status filter typed while
+  viewing one fund's LP Register silently kept applying after
+  switching to a different fund. Deals had the milder cousin: the
+  `#searchDeals`/`#filterDealStage` inputs kept showing stale text
+  with no actual effect on the (correctly unfiltered) list. Both now
+  reset on fund switch. QA audit finding.
+
+## [1.27.0] - 2026-08-21
+
+### Fixed
+- Second stored-XSS cluster: LPA/SA/pitch-deck document-link URLs
+  (`lp.lpaUrl` and deal document fields) were inserted unescaped into
+  `onclick="_obOpenPreviewModal('...')"` and `value="..."` attributes
+  in `js/lp-register.js` and `js/app.js` — a URL containing a single
+  quote breaks out of the `onclick` JS string literal and executes
+  arbitrary JS for any staff member opening that record, not just
+  injecting markup. Also hardened the shared sink itself
+  (`_obOpenPreviewModal()`'s `href`/iframe `src` in `js/onboarding.js`)
+  as defense in depth. QA security audit finding.
+
+## [1.26.0] - 2026-08-21
+
+### Fixed
+- Stored XSS in the onboarding client create/edit modal
+  (`openNewObClientModal()`, `js/onboarding.js`): `client.name` was
+  inserted unescaped into the modal title (`innerHTML`) and into the
+  name input's `value="..."` attribute. Combined with the JWT sitting
+  in `localStorage` in plaintext, this was a real session-theft path
+  for any staff member opening a maliciously-named client's record.
+  Both sites now go through the existing `escapeHtml()`. QA security
+  audit finding.
+
+## [1.25.0] - 2026-08-21
+
+### Fixed
+- `GET /api/uploads/:id` accepted ANY valid tenant token — internal
+  staff, portfolio-company portal, or LP portal — to fetch ANY file in
+  the tenant by id, including other companies'/LPs' KYC/AML documents,
+  since `uploaded_files` never recorded which portfolio company a
+  portal-uploaded file actually belongs to. New nullable
+  `uploaded_files.portal_portfolio_id` column, set on
+  `POST /api/portal/uploads`; the download route now scopes a
+  portfolio-portal token to its own files only, rejects LP-portal
+  tokens outright (never legitimately used this route), and re-checks
+  that an internal user is still active (a deactivated account's
+  unexpired 12h JWT could previously keep downloading). 5 new
+  regression tests (`server/test/uploads-security.test.js`). Found
+  during a repo-wide QA audit.
+
+## [1.24.0] - 2026-08-21
+
+### Added
+- VC module: cap table dilution tracking + SPV co-investment vehicles,
+  the second closed-end `asset_class` alongside PE
+  (`docs/TZ_VC_Module.md`, mirrors the Hedge Fund module's build
+  pattern). `capital_calls`/`distributions`/`waterfallEngine.js` are
+  already asset-class-agnostic and needed no changes — this adds only
+  what's genuinely new: `portfolio_rounds`/`portfolio_round_investors`
+  for multi-round cap table tracking with server-computed,
+  correctly-diluted `ownership_pct_post`; `spvs`/`spv_investors` plus a
+  mirrored capital-call/distribution ledger (fund LPs or external
+  co-investors, own carry/preferred-return terms, reusing
+  `waterfallEngine.js`/`metricsEngine.js` unmodified for
+  carry/IRR/DPI/TVPI computed from the SPV's own terms, not the parent
+  fund's). `js/vc.js`: SPV list/detail UI, a cap-table section spliced
+  into the portfolio company modal, nav item shown only for
+  `assetClass:'vc'` funds. 27 new tests. Verified end-to-end via a
+  headless-Chrome scenario against the real dev server.
+
 ## [1.23.0] - 2026-08-20
 
 ### Added
