@@ -2,6 +2,16 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.34.0] - 2026-08-21
+
+### Fixed
+- Capital Call line-item payments never validated `paid` against the
+  line item's own `called` amount — a negative, non-numeric, or
+  simply too-large value would be written as-is. Both the fund-level
+  route and the SPV mirror now require `paid` to be a finite,
+  non-negative number that doesn't exceed `called`. QA Data Integrity
+  audit finding.
+
 ## [1.33.0] - 2026-08-21
 
 ### Added
