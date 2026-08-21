@@ -1065,9 +1065,31 @@ app.get('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), 
   res.json({ tenant: req.tenantSlug, lp: rows.map(r => withLiveFinancials(db, req.tenantId, r.id, rowToLp(r))) });
 });
 
+// Sum of ownership_pct across a fund's LPs must never exceed 100% — nothing
+// enforced this before (QA Data Integrity audit, 2026-08-21). excludeLpId
+// lets an update compare against every OTHER LP's value, not double-count
+// its own prior value.
+const OWNERSHIP_PCT_EPSILON = 1e-6;
+function validateFundOwnershipPct(db, tenantId, fundId, incomingPct, excludeLpId) {
+  const pct = Number(incomingPct) || 0;
+  const row = db.prepare(
+    `SELECT COALESCE(SUM(ownership_pct), 0) AS total FROM lp_register
+     WHERE tenant_id = ? AND fund_id = ? AND id != ?`
+  ).get(tenantId, fundId, excludeLpId || -1);
+  const total = row.total + pct;
+  if (total > 100 + OWNERSHIP_PCT_EPSILON) {
+    return { ok: false, error: `ownershipPct would bring the fund's total to ${total.toFixed(4)}%, exceeding 100%` };
+  }
+  return { ok: true };
+}
+
 app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
+  if (b.fundId) {
+    const check = validateFundOwnershipPct(db, req.tenantId, b.fundId, b.ownershipPct || 0, null);
+    if (!check.ok) return res.status(400).json({ error: check.error });
+  }
 
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM lp_register WHERE tenant_id = ?').get(req.tenantId);
   const registerId = b.registerId || `LP-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
@@ -1141,6 +1163,11 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
 
   const b = req.body || {};
   const merged = { ...rowToLp(existing), ...b };
+
+  if (merged.fundId) {
+    const check = validateFundOwnershipPct(db, req.tenantId, merged.fundId, merged.ownershipPct || 0, existing.id);
+    if (!check.ok) return res.status(400).json({ error: check.error });
+  }
 
   db.prepare(`
     UPDATE lp_register SET

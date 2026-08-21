@@ -2,6 +2,16 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.35.0] - 2026-08-21
+
+### Fixed
+- `ownership_pct` on `lp_register` was never validated server-side —
+  the sum across a fund's LPs could silently exceed 100%. New
+  `validateFundOwnershipPct()` rejects `POST /api/lp` and
+  `PUT /api/lp/:id` with 400 when the fund's total would go over 100%
+  (excluding the LP's own prior value on update); LPs with no
+  `fundId` are unaffected. QA Data Integrity audit finding.
+
 ## [1.34.0] - 2026-08-21
 
 ### Fixed
