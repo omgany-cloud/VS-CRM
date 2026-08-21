@@ -103,6 +103,41 @@ test('replayWaterfallState + computeDistributionSplit: state threads correctly a
   closeTo(totalGp / totalProfit, 0.20, 0.001, 'cumulative GP carry ratio must converge on the fund\'s target carriedInterestPct');
 });
 
+test('replayWaterfallState: replays a prior distribution using ITS OWN snapshot terms, not the fund\'s current (possibly changed) terms', () => {
+  // Regression test for the retroactivity fix (QA Data Integrity audit):
+  // a fund's preferredReturn/carriedInterest/catchUpPct can change after
+  // distributions have already gone out (PUT /api/funds/:id). Replaying
+  // an OLD distribution must use the terms snapshotted onto that row at
+  // creation time (server/index.js's POST /api/distributions), not
+  // whatever the fund's terms happen to be today.
+  const ledgerEvents = [{ date: '2025-01-01', delta: 10000 }];
+  const fundToday = { preferredReturn: 15, carriedInterest: 20, catchUpPct: 100 }; // changed since
+  const priorDistributions = [
+    // Snapshotted at 5% preferred — what was ACTUALLY in effect when
+    // this distribution was created, before the fund's rate was raised.
+    { status: 'Sent', profitAmount: 1000, rocAmount: 0, date: '2026-01-01', preferredReturn: 5, carriedInterest: 20, catchUpPct: 100 },
+  ];
+  const state = replayWaterfallState({ fund: fundToday, ledgerEvents, priorDistributions });
+  // Hand-verified at the 5% snapshot rate: $10,000 * 5% * 1yr = $500
+  // accrued preferred, fully paid from the $1000 profit.
+  closeTo(state.cumLpPrefPaid, 500, 0.5, 'must replay against the historical 5% snapshot, not today\'s 15% fund rate');
+  // Contrast: the pre-fix code used fund.preferredReturn (15%) for this
+  // replay — 10,000*15%*1yr = $1500 accrued > $1000 profit, so the whole
+  // profit would land in tier1 and cumLpPrefPaid would read $1000. Assert
+  // we did NOT reproduce that.
+  assert.ok(Math.abs(state.cumLpPrefPaid - 1000) > 100, 'must NOT match what the pre-fix code would have computed using the fund\'s current rate');
+});
+
+test('replayWaterfallState: falls back to the fund\'s current terms for a legacy distribution with no snapshot', () => {
+  const ledgerEvents = [{ date: '2025-01-01', delta: 10000 }];
+  const fund = { preferredReturn: 10, carriedInterest: 20, catchUpPct: 100 };
+  // No preferredReturn/carriedInterest/catchUpPct fields — a row created
+  // before the snapshot columns existed.
+  const priorDistributions = [{ status: 'Sent', profitAmount: 1100, rocAmount: 0, date: '2026-01-01' }];
+  const state = replayWaterfallState({ fund, ledgerEvents, priorDistributions });
+  closeTo(state.cumLpPrefPaid, 1000, 0.5, 'a legacy distribution with no snapshot replays against the fund\'s current terms, unchanged behavior');
+});
+
 test('computeDistributionSplit: pure ROC (profitAmount 0) carries zero GP carry and splits by commitment only', () => {
   const fund = { preferredReturn: 8, carriedInterest: 20, catchUpPct: 100 };
   const activeLps = [{ id: 1, commitment: 3000 }, { id: 2, commitment: 1000 }];

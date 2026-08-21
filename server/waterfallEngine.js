@@ -112,6 +112,21 @@ function applyProfitTiers({ profitAmount, prefAccruedToDate, carriedInterestPct,
 // in chronological order, to rebuild the {cumLpPrefPaid, cumGpCatchupPaid}
 // state as of just before the new distribution being created — see the
 // file header for why this can't just be a stored running total.
+//
+// Each prior distribution `d` is replayed against the terms actually in
+// effect WHEN IT WAS CREATED (d.preferredReturn/carriedInterest/
+// catchUpPct, snapshotted onto the row at creation time — see
+// server/index.js's POST /api/distributions), not the fund's CURRENT
+// terms. Retroactivity bug fixed here (QA Data Integrity audit): if a
+// fund's carry/preferred-return/catch-up changed after several
+// distributions had already gone out, the old code replayed ALL of them
+// as if the new terms had always applied, shifting where the running
+// tier state — and therefore the NEXT distribution's split — actually
+// starts from. `d.preferredReturn`/etc. fall back to the passed-in
+// `fund`'s current terms only for legacy distributions created before
+// this snapshot existed (their own values are null) — there is no way
+// to recover what terms actually applied to those, so this is the
+// closest honest answer, not a silent behavior change for old data.
 function replayWaterfallState({ fund, ledgerEvents, priorDistributions }) {
   let state = { cumLpPrefPaid: 0, cumGpCatchupPaid: 0 };
   const ordered = priorDistributions
@@ -119,10 +134,13 @@ function replayWaterfallState({ fund, ledgerEvents, priorDistributions }) {
     .slice()
     .sort((a, b) => new Date(a.date) - new Date(b.date));
   for (const d of ordered) {
-    const prefAccruedToDate = accruePreferredReturn(fund.preferredReturn, ledgerEvents, d.date);
+    const preferredReturn = d.preferredReturn != null ? d.preferredReturn : fund.preferredReturn;
+    const carriedInterestPct = d.carriedInterest != null ? d.carriedInterest : fund.carriedInterest;
+    const catchUpPct = d.catchUpPct != null ? d.catchUpPct : fund.catchUpPct;
+    const prefAccruedToDate = accruePreferredReturn(preferredReturn, ledgerEvents, d.date);
     const result = applyProfitTiers({
       profitAmount: d.profitAmount, prefAccruedToDate,
-      carriedInterestPct: fund.carriedInterest, catchUpPct: fund.catchUpPct, state,
+      carriedInterestPct, catchUpPct, state,
     });
     state = result.newState;
   }

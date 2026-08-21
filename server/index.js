@@ -1515,6 +1515,19 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM distributions WHERE tenant_id = ?').get(req.tenantId);
   const distNumber = b.distNumber || `DIST-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(2, '0')}`;
 
+  // Fetched once, up front, whenever fundId is given — used both to
+  // auto-compute a profit split below AND to snapshot the terms actually
+  // in effect onto this distribution row at INSERT time further down, so
+  // a LATER fund term change can never retroactively change what THIS
+  // distribution's carry was computed against when a future distribution
+  // replays it (waterfallEngine.js's replayWaterfallState — QA Data
+  // Integrity audit finding).
+  let fund = null;
+  if (b.fundId) {
+    fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(b.fundId, req.tenantId);
+    if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+  }
+
   let lineItems = b.lineItems;
   if (!lineItems) {
     const activeLps = b.fundId
@@ -1534,9 +1547,7 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
       // A profit split needs a specific fund's waterfall parameters
       // (preferred return / carry / catch-up) — can't run the waterfall
       // fund-agnostically the way pure ROC can.
-      if (!b.fundId) return res.status(400).json({ error: 'profitAmount requires fundId — the waterfall needs a specific fund\'s preferredReturn/carriedInterest/catchUpPct' });
-      const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(b.fundId, req.tenantId);
-      if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+      if (!fund) return res.status(400).json({ error: 'profitAmount requires fundId — the waterfall needs a specific fund\'s preferredReturn/carriedInterest/catchUpPct' });
 
       // Ledger for the preferred-return accrual: every paid, dated
       // contribution (capital in) from a non-Draft Capital Call, and every
@@ -1550,7 +1561,9 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
       `).all(req.tenantId, b.fundId);
       const priorDistRows = db.prepare(`
         SELECT status, profit_amount AS profitAmount, roc_amount AS rocAmount,
-               COALESCE(payment_date, notice_date) AS date
+               COALESCE(payment_date, notice_date) AS date,
+               preferred_return_snapshot AS preferredReturn, carried_interest_snapshot AS carriedInterest,
+               catch_up_pct_snapshot AS catchUpPct
         FROM distributions WHERE tenant_id = ? AND fund_id = ?
       `).all(req.tenantId, b.fundId);
       const ledgerEvents = [
@@ -1582,10 +1595,12 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
     const info = db.prepare(`
       INSERT INTO distributions
         (tenant_id, fund_id, dist_number, notice_date, payment_date, total_amount, source_type, source_portfolio_id,
-         roc_amount, profit_amount, status, created_by, notes)
+         roc_amount, profit_amount, status, created_by, notes,
+         preferred_return_snapshot, carried_interest_snapshot, catch_up_pct_snapshot)
       VALUES
         (@tenantId, @fundId, @distNumber, @noticeDate, @paymentDate, @totalAmount, @sourceType, @sourcePortfolioId,
-         @rocAmount, @profitAmount, @status, @createdBy, @notes)
+         @rocAmount, @profitAmount, @status, @createdBy, @notes,
+         @preferredReturnSnapshot, @carriedInterestSnapshot, @catchUpPctSnapshot)
     `).run(at({
       tenantId: req.tenantId, fundId: b.fundId || null, distNumber,
       noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
@@ -1594,6 +1609,9 @@ app.post('/api/distributions', requireAuth, requireInternal, requirePermission('
       // Always Draft on creation, same reasoning as Capital Calls always
       // starting Draft — it isn't a real payment commitment to LPs yet.
       status: 'Draft', createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+      preferredReturnSnapshot: fund ? fund.preferred_return : null,
+      carriedInterestSnapshot: fund ? fund.carried_interest : null,
+      catchUpPctSnapshot: fund ? fund.catch_up_pct : null,
     }));
     const distId = info.lastInsertRowid;
     const insertItem = db.prepare(`
@@ -3105,7 +3123,9 @@ app.post('/api/spvs/:id/distributions', requireAuth, requireInternal, requirePer
         WHERE li.tenant_id = ? AND cc.spv_id = ? AND cc.status != 'Draft' AND li.paid > 0 AND li.payment_date IS NOT NULL
       `).all(req.tenantId, spv.id);
       const priorDistRows = db.prepare(`
-        SELECT status, profit_amount AS profitAmount, roc_amount AS rocAmount, COALESCE(payment_date, notice_date) AS date
+        SELECT status, profit_amount AS profitAmount, roc_amount AS rocAmount, COALESCE(payment_date, notice_date) AS date,
+               preferred_return_snapshot AS preferredReturn, carried_interest_snapshot AS carriedInterest,
+               catch_up_pct_snapshot AS catchUpPct
         FROM spv_distributions WHERE tenant_id = ? AND spv_id = ?
       `).all(req.tenantId, spv.id);
       const ledgerEvents = [
@@ -3125,12 +3145,19 @@ app.post('/api/spvs/:id/distributions', requireAuth, requireInternal, requirePer
   db.exec('BEGIN');
   try {
     const info = db.prepare(`
-      INSERT INTO spv_distributions (tenant_id, spv_id, dist_number, notice_date, payment_date, total_amount, source_type, roc_amount, profit_amount, status, created_by, notes)
-      VALUES (@tenantId, @spvId, @distNumber, @noticeDate, @paymentDate, @totalAmount, @sourceType, @rocAmount, @profitAmount, @status, @createdBy, @notes)
+      INSERT INTO spv_distributions (tenant_id, spv_id, dist_number, notice_date, payment_date, total_amount, source_type, roc_amount, profit_amount, status, created_by, notes,
+        preferred_return_snapshot, carried_interest_snapshot, catch_up_pct_snapshot)
+      VALUES (@tenantId, @spvId, @distNumber, @noticeDate, @paymentDate, @totalAmount, @sourceType, @rocAmount, @profitAmount, @status, @createdBy, @notes,
+        @preferredReturnSnapshot, @carriedInterestSnapshot, @catchUpPctSnapshot)
     `).run(at({
       tenantId: req.tenantId, spvId: spv.id, distNumber, noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
       totalAmount, sourceType: b.sourceType || null, rocAmount, profitAmount, status: 'Draft',
       createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+      // Snapshot the SPV's own carry terms at creation time — same
+      // retroactivity fix as fund-level distributions above (QA Data
+      // Integrity audit finding), applied here since this SPV route
+      // reuses the exact same replayWaterfallState() engine.
+      preferredReturnSnapshot: spv.preferred_return_pct, carriedInterestSnapshot: spv.carried_interest_pct, catchUpPctSnapshot: spv.catch_up_pct,
     }));
     const distId = info.lastInsertRowid;
     const insertItem = db.prepare(`

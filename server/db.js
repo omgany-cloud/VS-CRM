@@ -1335,6 +1335,19 @@ if (!columnExists('funds', 'operating_model')) db.exec("ALTER TABLE funds ADD CO
 // portfolioId — see server/index.js.
 if (!columnExists('uploaded_files', 'portal_portfolio_id')) db.exec("ALTER TABLE uploaded_files ADD COLUMN portal_portfolio_id INTEGER REFERENCES portfolio(id)");
 
+// Waterfall retroactivity fix (QA Data Integrity audit) — snapshots the
+// fund's/SPV's carry terms onto each distribution AT CREATION TIME, so
+// replayWaterfallState() (server/waterfallEngine.js) can replay a prior
+// distribution against the terms that actually applied to it instead of
+// whatever the fund's/SPV's terms happen to be today. NULL = distribution
+// created before this column existed — replay falls back to the current
+// fund/SPV terms for those (see waterfallEngine.js's own comment), same
+// "no fake precision for old data" principle as elsewhere in this file.
+for (const col of ['preferred_return_snapshot', 'carried_interest_snapshot', 'catch_up_pct_snapshot']) {
+  if (!columnExists('distributions', col)) db.exec(`ALTER TABLE distributions ADD COLUMN ${col} REAL`);
+  if (!columnExists('spv_distributions', col)) db.exec(`ALTER TABLE spv_distributions ADD COLUMN ${col} REAL`);
+}
+
 if (!columnExists('funds', 'performance_fee_pct'))  db.exec("ALTER TABLE funds ADD COLUMN performance_fee_pct REAL DEFAULT 20");
 if (!columnExists('funds', 'hf_hurdle_rate'))        db.exec("ALTER TABLE funds ADD COLUMN hf_hurdle_rate REAL DEFAULT 0");
 if (!columnExists('funds', 'hwm_scope'))             db.exec("ALTER TABLE funds ADD COLUMN hwm_scope TEXT DEFAULT 'investor'");
