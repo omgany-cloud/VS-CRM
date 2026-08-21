@@ -236,14 +236,30 @@ app.get('/api/uploads/meta', requireAuth, requireInternal, (req, res) => {
   });
 });
 
-// Deliberately NOT behind requireAuth — this route accepts the JWT via
-// either the normal Authorization header OR a ?token= query param, so a
-// plain <a href>/window.open/iframe (no way to attach a header) can open
-// it directly, the same way every other document link in this app just
-// works when clicked. Same trust level as those external Drive/SharePoint
-// links already are — the file is reachable by anyone holding a valid
-// token for the right tenant, not by the general public, and tenant_id
-// is still checked against the row before anything is served.
+// Deliberately NOT behind requireAuth's middleware — this route accepts
+// the JWT via either the normal Authorization header OR a ?token= query
+// param, so a plain <a href>/window.open/iframe (no way to attach a
+// header) can open it directly, the same way every other document link
+// in this app just works when clicked.
+//
+// Ownership-scoped per token type (uploads-IDOR audit fix — this used to
+// let ANY valid tenant token, internal or portal, fetch ANY file in the
+// tenant, since uploaded_files never recorded who a portal file actually
+// belongs to; auth.js's signPortalToken comment explicitly documented
+// that as a known simplification):
+//   - Internal token (payload.sub): re-checks the user is still active,
+//     same re-verification requireAuth itself does — a deactivated
+//     account's still-unexpired 12h JWT can no longer keep downloading.
+//     No further per-file permission check (which internal role should
+//     see which file needs real ownership modeling this table doesn't
+//     have yet — same limitation as the portal case, not solved here).
+//   - Portfolio-portal token (payload.portal): only files THIS portfolio
+//     company itself uploaded (portal_portfolio_id match) — same trust
+//     boundary the rest of the portal already has, not "every file in
+//     the tenant".
+//   - LP-portal token (payload.lpPortal): rejected outright — lp-portal.html
+//     has no legitimate use of this route today (confirmed: it never
+//     references /api/uploads), so there is nothing to regress.
 app.get('/api/uploads/:id', (req, res) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : (req.query.token || null);
@@ -256,6 +272,17 @@ app.get('/api/uploads/:id', (req, res) => {
   }
   const row = db.prepare('SELECT * FROM uploaded_files WHERE id = ? AND tenant_id = ?').get(req.params.id, payload.tenantId);
   if (!row) return res.status(404).json({ error: 'File not found in this tenant' });
+
+  if (payload.lpPortal) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (payload.portal) {
+    if (row.portal_portfolio_id !== payload.portfolioId) return res.status(403).json({ error: 'Forbidden' });
+  } else {
+    const user = db.prepare('SELECT active FROM users WHERE id = ? AND tenant_id = ?').get(payload.sub, payload.tenantId);
+    if (!user || !user.active) return res.status(401).json({ error: 'Account inactive or not found' });
+  }
+
   const filePath = path.join(UPLOADS_DIR, row.stored_name);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing from storage' });
   res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
@@ -453,11 +480,12 @@ app.post('/api/portal/uploads', requirePortalAuth, (req, res) => {
       return res.status(400).json({ error: 'No file uploaded, or file type not allowed (PDF, image, Word, Excel only)' });
     }
     const info = db.prepare(`
-      INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
-      VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+      INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by, portal_portfolio_id)
+      VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy, @portalPortfolioId)
     `).run(at({
       tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
       mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: 'Портал: ' + req.portalCompany.name,
+      portalPortfolioId: req.portalCompany.id,
     }));
     res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
   });

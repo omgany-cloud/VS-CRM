@@ -1324,6 +1324,17 @@ if (!columnExists('funds', 'operating_model')) db.exec("ALTER TABLE funds ADD CO
 // lives per hf_investor_positions row, not per-fund), so 'fund' scope has
 // no implemented behavior; only 'investor' does anything. Same "column
 // exists, but only one value is real" precedent as waterfall_type.
+// Security fix (uploads IDOR audit) — GET /api/uploads/:id previously
+// trusted ANY valid tenant token (internal OR portal) to fetch ANY file
+// in the tenant, because this table never recorded which portfolio
+// company a portal-uploaded file actually belongs to (auth.js's
+// signPortalToken comment explicitly documented this as a known
+// simplification). NULL = uploaded by internal staff (not portal-owned,
+// unaffected); set only by POST /api/portal/uploads. GET /api/uploads/:id
+// now requires this to match the requesting portal token's own
+// portfolioId — see server/index.js.
+if (!columnExists('uploaded_files', 'portal_portfolio_id')) db.exec("ALTER TABLE uploaded_files ADD COLUMN portal_portfolio_id INTEGER REFERENCES portfolio(id)");
+
 if (!columnExists('funds', 'performance_fee_pct'))  db.exec("ALTER TABLE funds ADD COLUMN performance_fee_pct REAL DEFAULT 20");
 if (!columnExists('funds', 'hf_hurdle_rate'))        db.exec("ALTER TABLE funds ADD COLUMN hf_hurdle_rate REAL DEFAULT 0");
 if (!columnExists('funds', 'hwm_scope'))             db.exec("ALTER TABLE funds ADD COLUMN hwm_scope TEXT DEFAULT 'investor'");
