@@ -78,20 +78,27 @@ function downloadExcel(sheets, filename) {
    1. LP REGISTER — Реестр инвесторов
 ═══════════════════════════════════════════════════════════ */
 function exportLPRegister() {
+  // Scoped to the active fund like every other on-screen LP view (see
+  // js/lp-register.js's own fundScoped filter) — lpRegister is a
+  // tenant-wide array (GET /api/lp returns every fund's LPs), so leaving
+  // this unfiltered mixed unrelated funds' investors into one export.
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const scopedLps = fundScoped ? lpRegister.filter(lp => lp.fundId === activeFundId) : lpRegister;
+
   const header = [
     '№', 'Наименование / ФИО', 'Тип', 'Страна', 'Статус',
     'Commitment ($M)', 'Инвестировано ($M)', 'Capital Called ($M)',
     'Distributions ($M)', 'Квалифицирован', 'Sub. Agreement',
     'Дата Sub. Agreement', 'Контакт', 'Email', 'Телефон', 'RM'
   ];
-  const rows = lpRegister.map((lp, i) => [
+  const rows = scopedLps.map((lp, i) => [
     i + 1,
     lp.name,
     lp.type,
     lp.country,
     lp.status,
     lp.commitment / 1e6,
-    lp.commitment / 1e6,
+    (lp.paidAmount || 0) / 1e6,
     lp.calledAmount / 1e6,
     (lp.distributions || 0) / 1e6,
     lp.professionalClient,
@@ -104,10 +111,10 @@ function exportLPRegister() {
   ]);
 
   // Итоги
-  const totalCommit    = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
-  const totalInvested  = totalCommit;
-  const totalCalled    = lpRegister.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
-  const totalDistrib   = lpRegister.reduce((s, lp) => s + (lp.distributions || 0), 0) / 1e6;
+  const totalCommit    = scopedLps.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
+  const totalInvested  = scopedLps.reduce((s, lp) => s + (lp.paidAmount || 0), 0) / 1e6;
+  const totalCalled    = scopedLps.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
+  const totalDistrib   = scopedLps.reduce((s, lp) => s + (lp.distributions || 0), 0) / 1e6;
 
   rows.push([]);
   rows.push(['', 'ИТОГО', '', '', '',

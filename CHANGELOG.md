@@ -2,6 +2,18 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.37.0] - 2026-08-21
+
+### Fixed
+- `exportLPRegister()` dumped `lpRegister` unfiltered (the whole
+  tenant, every fund's LPs) into one Excel file with no fund column
+  to tell them apart. Now scoped to `activeFundId`, matching every
+  other on-screen LP view's `fundScoped` filter.
+- The "Инвестировано ($M)" column in that same export literally
+  duplicated "Commitment ($M)" — both were `lp.commitment`. Now uses
+  `lp.paidAmount`, the actual live-computed paid-in figure. QA Data
+  Integrity audit finding.
+
 ## [1.36.0] - 2026-08-21
 
 ### Fixed
