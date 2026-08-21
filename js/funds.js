@@ -55,6 +55,7 @@ function switchFund(id) {
   if (typeof renderLPRegisterPage === 'function') renderLPRegisterPage();
   if (typeof renderCapitalCallsPage === 'function') renderCapitalCallsPage();
   if (typeof renderICPage === 'function') renderICPage();
+  if (typeof renderSpvsPage === 'function') renderSpvsPage();
   if (f) showToast(`✅ ${f.shortName} — Все фонды`);
 }
 
@@ -125,6 +126,11 @@ function updateFundBranding(f) {
   if (carryDelta) carryDelta.textContent = `Carried Interest: ${f.carriedInterest}%`;
 
   if (typeof updateDashboardForOperatingModel === 'function') updateDashboardForOperatingModel(f);
+  // Second, independent hook for VC (docs/TZ_VC_Module.md) — operatingModel
+  // alone can't distinguish a VC fund from a PE one (both 'closed-end'),
+  // so this checks assetClass directly rather than overloading the hook
+  // above. Same duck-typed pattern, same call site.
+  if (typeof updateDashboardForAssetClass === 'function') updateDashboardForAssetClass(f);
 }
 
 // Called instead of updateFundBranding() when funds.length === 0 (a brand

@@ -563,6 +563,25 @@ async function loadHfNavFromApi() {
   }
 }
 
+/* ===== VC module (docs/TZ_VC_Module.md) — SPVs, loaded tenant-wide and
+   filtered by activeFundId at render time, same convention as the Hedge
+   Fund entities above. Page + renderers in js/vc.js. */
+async function loadSpvsFromApi() {
+  try {
+    const data = await apiFetch('/api/spvs');
+    if (typeof spvs === 'undefined') return;
+    spvs.length = 0;
+    spvs.push(...data.spvs);
+    const page = document.getElementById('page-spvs');
+    if (page && page.classList.contains('active') && typeof renderSpvsPage === 'function') {
+      renderSpvsPage();
+    }
+  } catch (err) {
+    console.error('Failed to load SPVs from API:', err);
+    if (typeof showToast === 'function') showToast('⚠️ Не удалось загрузить SPV из API: ' + err.message, 'red');
+  }
+}
+
 /* ===== Regulatory Reports — backed by the real API =====
    Replaces the old static js/data.js `reportSchedule` array. */
 let afsaReports = [];
@@ -799,6 +818,7 @@ async function loadRolesFromApi() {
     if (page === 'calendar') { loadCapitalCallsFromApi(); loadAfsaReportsFromApi(); }
     if (page === 'documents' || page === 'vault') loadDocumentsFromApi();
     if (page === 'users') loadUsersFromApi();
+    if (page === 'spvs') loadSpvsFromApi();
   };
 })();
 
@@ -819,6 +839,7 @@ async function loadAllApiData() {
   loadHfSubscriptionsFromApi();
   loadHfRedemptionsFromApi();
   loadHfNavFromApi();
+  loadSpvsFromApi();
 }
 
 /* ===== Login gate ===== */

@@ -153,6 +153,15 @@
       <i class="fas fa-briefcase"></i><span>Портфель</span>
     </a>
 
+    <!-- SPV / co-investment vehicles — visibility toggled by
+         updateDashboardForAssetClass() (js/vc.js) on every fund switch,
+         same duck-typed hook pattern as Hedge Fund's
+         updateDashboardForOperatingModel() above. Only ever relevant for
+         a fund with assetClass:'vc' (docs/TZ_VC_Module.md). -->
+    <a href="#" class="nav-item" data-page="spvs">
+      <i class="fas fa-sitemap" style="color:#38bdf8"></i><span>SPV</span>
+    </a>
+
     <div class="nav-group-label">Compliance</div>
     <a href="#" class="nav-item" data-page="workflow">
       <i class="fas fa-stream"></i><span>Согласования</span>
@@ -583,6 +592,15 @@
         <button class="btn-primary" onclick="openModal('addPortfolio')"><i class="fas fa-plus"></i> Добавить компанию</button>
       </div>
       <div id="portfolioGrid" class="portfolio-grid"></div>
+    </section>
+
+    <!-- ===== SPV / CO-INVESTMENT VEHICLES ===== -->
+    <section id="page-spvs" class="page">
+      <div class="section-header">
+        <h1>SPV <span class="fund-label">Co-investment vehicles</span></h1>
+        <p>Отдельные юрлица под одну сделку · LP фонда + внешние ко-инвесторы · собственные капитал-коллы, дистрибьюции и carry</p>
+      </div>
+      <div id="spvsContent"></div>
     </section>
 
     <!-- ===== EXPORT / REPORTS PANEL ===== -->
@@ -1027,6 +1045,56 @@
   <div class="modal-body" id="hfNavNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
 </div>
 
+<!-- New SPV Modal -->
+<div class="task-overlay" id="spvNewOverlay" onclick="closeNewSpvModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-spv-new" style="display:none;max-width:560px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#38bdf8;margin-right:8px"></i>Новый SPV</h3>
+    <button class="modal-close" onclick="closeNewSpvModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="spvNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- SPV Detail Modal -->
+<div class="task-overlay" id="spvDetailOverlay" onclick="closeSpvDetailModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-spv-detail" style="display:none;max-width:900px">
+  <div class="modal-header">
+    <h3 id="spvDetailTitle"><i class="fas fa-sitemap" style="color:#38bdf8;margin-right:8px"></i>SPV</h3>
+    <button class="modal-close" onclick="closeSpvDetailModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="spvDetailContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New SPV Investor Modal -->
+<div class="task-overlay" id="spvInvestorNewOverlay" onclick="closeNewSpvInvestorModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-spv-investor-new" style="display:none;max-width:520px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#38bdf8;margin-right:8px"></i>Новый инвестор SPV</h3>
+    <button class="modal-close" onclick="closeNewSpvInvestorModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="spvInvestorNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New SPV Capital Call Modal -->
+<div class="task-overlay" id="spvCcNewOverlay" onclick="closeNewSpvCcModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-spv-cc-new" style="display:none;max-width:520px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#f97316;margin-right:8px"></i>Новый капитал-колл SPV</h3>
+    <button class="modal-close" onclick="closeNewSpvCcModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="spvCcNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
+<!-- New SPV Distribution Modal -->
+<div class="task-overlay" id="spvDistNewOverlay" onclick="closeNewSpvDistModal()" style="display:none"></div>
+<div class="task-modal-wide" id="modal-spv-dist-new" style="display:none;max-width:520px">
+  <div class="modal-header">
+    <h3><i class="fas fa-plus-circle" style="color:#22c55e;margin-right:8px"></i>Новая дистрибьюция SPV</h3>
+    <button class="modal-close" onclick="closeNewSpvDistModal()"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body" id="spvDistNewContent" style="overflow-y:auto;max-height:80vh;padding:20px"></div>
+</div>
+
 <!-- ===== ACCOUNT MENU ===== -->
 <div class="role-menu" id="roleMenu" style="display:none">
   <div class="role-menu-title" id="accountMenuTitle">Аккаунт</div>
@@ -1324,6 +1392,7 @@
 <script src="js/bank-reconciliation.js"></script>
 <script src="js/fund-compare.js"></script>
 <script src="js/hf.js"></script>
+<script src="js/vc.js"></script>
 <script src="js/vault.js"></script>
 <script src="js/users.js"></script>
 <script src="js/data.js"></script>

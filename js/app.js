@@ -311,6 +311,7 @@ const PAGE_LABELS = {
   'audit-log':   'Журнал изменений — Кто / Что / Когда',
   'hf-subscriptions': 'Подписки / Погашения',
   'hf-nav':      'NAV',
+  spvs:          'SPV',
 };
 
 function navigateTo(page) {
@@ -343,6 +344,7 @@ function navigateTo(page) {
   if (page === 'audit-log')         { renderAuditLogPage(); }
   if (page === 'hf-subscriptions')  { renderHfSubscriptionsPage(); }
   if (page === 'hf-nav')            { renderHfNavPage(); }
+  if (page === 'spvs')              { renderSpvsPage(); }
 }
 
 /* ===== DASHBOARD ===== */
@@ -2923,7 +2925,10 @@ function _renderPortfolioModal(p) {
           padding:7px 16px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700">
         <i class="fas fa-plus" style="margin-right:5px"></i>Добавить документ
       </button>
-    </div>`;
+    </div>
+
+    <!-- ── CAP TABLE (VC only, docs/TZ_VC_Module.md) ── -->
+    ${typeof renderVcCapTableSection === 'function' ? renderVcCapTableSection(p) : ''}`;
 
 
   /* ── Assemble modal ── */

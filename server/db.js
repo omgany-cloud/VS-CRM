@@ -1019,6 +1019,177 @@ CREATE TABLE IF NOT EXISTS hf_fee_crystallizations (
   created_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_hf_fee_crystallizations_tenant ON hf_fee_crystallizations(tenant_id);
+
+-- VC cap table + SPV module (docs/TZ_VC_Module.md), Stage 1: schema + CRUD
+-- only — no business logic yet (ownership_pct_post computation and SPV
+-- capital-call/distribution processing land in Stage 2). Only meaningful
+-- for asset_class='vc' funds but harmless/unused for PE. Unlike Hedge
+-- Fund, VC reuses capital_calls/distributions/waterfallEngine.js
+-- unmodified for the fund's own economics (docs/ARCHITECTURE_Multi_
+-- Strategy_Roadmap.md §3.1) — these new tables cover only what's
+-- genuinely new: multi-round cap table dilution and SPV co-invest
+-- vehicles, neither of which had any prior representation.
+CREATE TABLE IF NOT EXISTS portfolio_rounds (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  portfolio_id      INTEGER NOT NULL REFERENCES portfolio(id),
+  round_name        TEXT,
+  round_date        TEXT,
+  instrument        TEXT,
+  pre_money         REAL,
+  post_money        REAL,
+  amount_raised     REAL,
+  price_per_share   REAL,
+  is_fund_round     INTEGER NOT NULL DEFAULT 0,
+  source_deal_id    INTEGER REFERENCES deals(id),
+  notes             TEXT,
+  created_by        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_rounds_tenant ON portfolio_rounds(tenant_id);
+
+-- ownership_pct_post is SERVER-computed (cumulative dilution across all
+-- rounds of the company) once Stage 2 exists — Stage 1 stores whatever a
+-- caller sends (usually null at creation), it does not compute anything.
+CREATE TABLE IF NOT EXISTS portfolio_round_investors (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id           INTEGER NOT NULL REFERENCES tenants(id),
+  round_id            INTEGER NOT NULL REFERENCES portfolio_rounds(id),
+  investor_name       TEXT NOT NULL,
+  investor_type       TEXT,
+  is_own_fund         INTEGER NOT NULL DEFAULT 0,
+  spv_id              INTEGER REFERENCES spvs(id),
+  amount              REAL,
+  shares              REAL,
+  ownership_pct_post  REAL,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_round_investors_tenant ON portfolio_round_investors(tenant_id);
+
+CREATE TABLE IF NOT EXISTS spvs (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id              INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id                INTEGER NOT NULL REFERENCES funds(id),
+  portfolio_id           INTEGER REFERENCES portfolio(id),
+  deal_id                INTEGER REFERENCES deals(id),
+  name                   TEXT NOT NULL,
+  legal_entity_name      TEXT,
+  jurisdiction           TEXT,
+  formation_date         TEXT,
+  status                 TEXT NOT NULL DEFAULT 'Forming',
+  target_size            REAL,
+  currency               TEXT DEFAULT 'USD',
+  management_fee_pct     REAL DEFAULT 0,
+  carried_interest_pct   REAL DEFAULT 20,
+  preferred_return_pct   REAL DEFAULT 0,
+  catch_up_pct           REAL DEFAULT 100,
+  gp_entity              TEXT,
+  notes                  TEXT,
+  created_by             TEXT,
+  created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_spvs_tenant ON spvs(tenant_id);
+
+CREATE TABLE IF NOT EXISTS spv_investors (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id        INTEGER NOT NULL REFERENCES tenants(id),
+  spv_id           INTEGER NOT NULL REFERENCES spvs(id),
+  lp_id            INTEGER REFERENCES lp_register(id),
+  name             TEXT NOT NULL,
+  investor_type    TEXT,
+  email            TEXT,
+  contact          TEXT,
+  commitment       REAL NOT NULL DEFAULT 0,
+  called_amount    REAL NOT NULL DEFAULT 0,
+  paid_amount      REAL NOT NULL DEFAULT 0,
+  distributions    REAL NOT NULL DEFAULT 0,
+  kyc_status       TEXT DEFAULT 'Pending',
+  status           TEXT NOT NULL DEFAULT 'Active',
+  notes            TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_spv_investors_tenant ON spv_investors(tenant_id);
+
+-- Column-for-column mirror of capital_calls/capital_call_line_items
+-- above, scoped by spv_id/spv_investor_id instead of fund_id/lp_id — see
+-- docs/TZ_VC_Module.md §2.3 for why this is a separate mirrored table
+-- rather than a nullable spv_id on the real capital_calls table (lp_id
+-- there is NOT NULL REFERENCES lp_register, and SPV investors are often
+-- not fund LPs at all).
+CREATE TABLE IF NOT EXISTS spv_capital_calls (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id             INTEGER NOT NULL REFERENCES tenants(id),
+  spv_id                INTEGER NOT NULL REFERENCES spvs(id),
+  cc_number             TEXT NOT NULL,
+  notice_date           TEXT,
+  payment_date          TEXT,
+  total_amount          REAL NOT NULL DEFAULT 0,
+  pct_of_commit         REAL NOT NULL DEFAULT 0,
+  purpose               TEXT,
+  purpose_type          TEXT,
+  status                TEXT NOT NULL DEFAULT 'Draft',
+  bank_ref              TEXT,
+  created_by            TEXT,
+  notes                 TEXT,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_spv_capital_calls_tenant ON spv_capital_calls(tenant_id);
+
+CREATE TABLE IF NOT EXISTS spv_capital_call_line_items (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id        INTEGER NOT NULL REFERENCES tenants(id),
+  call_id          INTEGER NOT NULL REFERENCES spv_capital_calls(id),
+  spv_investor_id  INTEGER NOT NULL REFERENCES spv_investors(id),
+  commitment       REAL NOT NULL DEFAULT 0,
+  pct              REAL NOT NULL DEFAULT 0,
+  called           REAL NOT NULL DEFAULT 0,
+  paid             REAL NOT NULL DEFAULT 0,
+  payment_date     TEXT,
+  status           TEXT NOT NULL DEFAULT 'Pending',
+  wire_ref         TEXT,
+  wire_confirm_url TEXT,
+  aml_ok           INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_spv_cc_line_items_tenant ON spv_capital_call_line_items(tenant_id);
+
+CREATE TABLE IF NOT EXISTS spv_distributions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id           INTEGER NOT NULL REFERENCES tenants(id),
+  spv_id              INTEGER NOT NULL REFERENCES spvs(id),
+  dist_number         TEXT NOT NULL,
+  notice_date         TEXT,
+  payment_date        TEXT,
+  total_amount        REAL NOT NULL DEFAULT 0,
+  source_type         TEXT,
+  roc_amount          REAL NOT NULL DEFAULT 0,
+  profit_amount       REAL NOT NULL DEFAULT 0,
+  status              TEXT NOT NULL DEFAULT 'Draft',
+  created_by          TEXT,
+  notes               TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_spv_distributions_tenant ON spv_distributions(tenant_id);
+
+CREATE TABLE IF NOT EXISTS spv_distribution_line_items (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id        INTEGER NOT NULL REFERENCES tenants(id),
+  distribution_id  INTEGER NOT NULL REFERENCES spv_distributions(id),
+  spv_investor_id  INTEGER NOT NULL REFERENCES spv_investors(id),
+  pct              REAL NOT NULL DEFAULT 0,
+  gross_amount     REAL NOT NULL DEFAULT 0,
+  gp_carry_amount  REAL NOT NULL DEFAULT 0,
+  net_amount       REAL NOT NULL DEFAULT 0,
+  payment_date     TEXT,
+  status           TEXT NOT NULL DEFAULT 'Pending',
+  wire_ref         TEXT,
+  wire_confirm_url TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_spv_dist_line_items_tenant ON spv_distribution_line_items(tenant_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —

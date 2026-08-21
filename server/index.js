@@ -50,7 +50,7 @@ const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { notifyCapitalCallCreated, notifyWorkflowStepAssigned, notifyHfNavPublished, notifyHfRedemptionProcessed } = require('./notifications/triggers');
 const notificationsScheduler = require('./notifications/scheduler');
 const { computeDistributionSplit } = require('./waterfallEngine');
-const { computeFundMetrics, computeLpMetrics } = require('./metricsEngine');
+const { computeFundMetrics, computeLpMetrics, computeMetrics } = require('./metricsEngine');
 const { computeFeeCrystallization, daysBetween } = require('./performanceFeeEngine');
 const { recordAudit } = require('./auditLog');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
@@ -2390,6 +2390,772 @@ app.post('/api/portal/lp/hf-redemption-request', requireLpPortalAuth, (req, res)
   }));
   const row = db.prepare('SELECT * FROM hf_redemptions WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json(rowToHfRedemption(row));
+});
+
+/* ===== VC module: cap table + SPV — tenant-scoped =====
+   docs/TZ_VC_Module.md. Only meaningful for asset_class='vc' funds, but
+   the API itself doesn't hard-gate on that (same tolerance as Hedge
+   Fund's fund-level settings columns) — js/vc.js is what hides the SPV
+   nav item for non-VC funds. Unlike Hedge Fund, the fund's own economics
+   (capital_calls/distributions/waterfallEngine.js) are untouched; these
+   tables cover only what's genuinely new — multi-round dilution and SPV
+   co-invest vehicles. */
+
+function rowToPortfolioRound(r) {
+  return {
+    id: r.id, portfolioId: r.portfolio_id, roundName: r.round_name, roundDate: r.round_date,
+    instrument: r.instrument, preMoney: r.pre_money, postMoney: r.post_money,
+    amountRaised: r.amount_raised, pricePerShare: r.price_per_share,
+    isFundRound: !!r.is_fund_round, sourceDealId: r.source_deal_id,
+    notes: r.notes, createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+function rowToRoundInvestor(r) {
+  return {
+    id: r.id, roundId: r.round_id, investorName: r.investor_name, investorType: r.investor_type,
+    isOwnFund: !!r.is_own_fund, spvId: r.spv_id, amount: r.amount, shares: r.shares,
+    ownershipPctPost: r.ownership_pct_post,
+  };
+}
+
+const roundInvestorsStmt = db.prepare('SELECT * FROM portfolio_round_investors WHERE tenant_id = ? AND round_id = ? ORDER BY id');
+
+// Recomputes every round-investor's ownership_pct_post for a portfolio
+// company from scratch (never trusts a stored value), and returns the
+// company's CURRENT fund ownership % diluted through every later round.
+// ownership_pct_post per round-investor row is that investor's stake
+// purchased IN that specific round (amount / that round's post-money) —
+// it deliberately does not retroactively change on later rounds (that's
+// the standard "how big was my check, as % of the company then" reading
+// of a cap table line). fundOwnershipPct is the separate, genuinely
+// dilution-aware number: every is_own_fund/SPV round stake carried
+// forward and multiplied by (pre_money/post_money) of each subsequent
+// round — see docs/TZ_VC_Module.md §2.2. This avoids modeling an actual
+// fully-diluted share ledger (option pools, exact share counts) while
+// still answering the question that matters for a VC LP report: "what %
+// of this company do we actually own right now".
+function recomputeCapTable(tenantId, portfolioId) {
+  const rounds = db.prepare(`
+    SELECT * FROM portfolio_rounds WHERE tenant_id = ? AND portfolio_id = ?
+    ORDER BY (round_date IS NULL), round_date, id
+  `).all(tenantId, portfolioId);
+  const updateInvestor = db.prepare('UPDATE portfolio_round_investors SET ownership_pct_post = @pct WHERE id = @id');
+  let fundOwnershipPct = 0;
+  let hasFundStake = false;
+  for (const round of rounds) {
+    const dilution = (round.pre_money > 0 && round.post_money > 0) ? round.pre_money / round.post_money : 1;
+    fundOwnershipPct *= dilution;
+    const investors = roundInvestorsStmt.all(tenantId, round.id);
+    for (const inv of investors) {
+      const pct = (round.post_money > 0 && inv.amount != null) ? (inv.amount / round.post_money) * 100 : null;
+      updateInvestor.run(at({ id: inv.id, pct }));
+      if (inv.is_own_fund) {
+        hasFundStake = true;
+        if (pct != null) fundOwnershipPct += pct;
+      }
+    }
+  }
+  return hasFundStake ? fundOwnershipPct : null;
+}
+
+app.get('/api/portfolio/:id/rounds', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const portfolio = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!portfolio) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
+  const rounds = db.prepare(`
+    SELECT * FROM portfolio_rounds WHERE tenant_id = ? AND portfolio_id = ?
+    ORDER BY (round_date IS NULL), round_date, id
+  `).all(req.tenantId, portfolio.id).map(r => {
+    const round = rowToPortfolioRound(r);
+    round.investors = roundInvestorsStmt.all(req.tenantId, r.id).map(rowToRoundInvestor);
+    return round;
+  });
+  const fundOwnershipPct = recomputeCapTable(req.tenantId, portfolio.id);
+  res.json({ rounds, fundOwnershipPct });
+});
+
+app.post('/api/portfolio/:id/rounds', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const portfolio = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!portfolio) return res.status(404).json({ error: 'Portfolio company not found in this tenant' });
+  const b = req.body || {};
+  if (!b.roundName) return res.status(400).json({ error: 'roundName is required' });
+  const investors = Array.isArray(b.investors) ? b.investors : [];
+
+  db.exec('BEGIN');
+  try {
+    const info = db.prepare(`
+      INSERT INTO portfolio_rounds
+        (tenant_id, portfolio_id, round_name, round_date, instrument, pre_money, post_money,
+         amount_raised, price_per_share, is_fund_round, source_deal_id, notes, created_by)
+      VALUES
+        (@tenantId, @portfolioId, @roundName, @roundDate, @instrument, @preMoney, @postMoney,
+         @amountRaised, @pricePerShare, @isFundRound, @sourceDealId, @notes, @createdBy)
+    `).run(at({
+      tenantId: req.tenantId, portfolioId: portfolio.id, roundName: b.roundName, roundDate: b.roundDate || null,
+      instrument: b.instrument || null, preMoney: b.preMoney != null ? b.preMoney : null, postMoney: b.postMoney != null ? b.postMoney : null,
+      amountRaised: b.amountRaised != null ? b.amountRaised : null, pricePerShare: b.pricePerShare != null ? b.pricePerShare : null,
+      isFundRound: b.isFundRound ? 1 : 0, sourceDealId: b.sourceDealId || null, notes: b.notes || '',
+      createdBy: b.createdBy || req.user.email,
+    }));
+    const roundId = info.lastInsertRowid;
+    const insertInvestor = db.prepare(`
+      INSERT INTO portfolio_round_investors (tenant_id, round_id, investor_name, investor_type, is_own_fund, spv_id, amount, shares)
+      VALUES (@tenantId, @roundId, @investorName, @investorType, @isOwnFund, @spvId, @amount, @shares)
+    `);
+    for (const inv of investors) {
+      if (!inv.investorName) continue;
+      insertInvestor.run(at({
+        tenantId: req.tenantId, roundId, investorName: inv.investorName, investorType: inv.investorType || null,
+        isOwnFund: inv.isOwnFund ? 1 : 0, spvId: inv.spvId || null,
+        amount: inv.amount != null ? inv.amount : null, shares: inv.shares != null ? inv.shares : null,
+      }));
+    }
+    db.exec('COMMIT');
+    const fundOwnershipPct = recomputeCapTable(req.tenantId, portfolio.id);
+    const round = rowToPortfolioRound(db.prepare('SELECT * FROM portfolio_rounds WHERE id = ?').get(roundId));
+    round.investors = roundInvestorsStmt.all(req.tenantId, roundId).map(rowToRoundInvestor);
+    res.status(201).json({ round, fundOwnershipPct });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/portfolio/rounds/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM portfolio_rounds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Round not found in this tenant' });
+  const b = req.body || {};
+  const merged = { ...rowToPortfolioRound(existing), ...b };
+
+  db.exec('BEGIN');
+  try {
+    db.prepare(`
+      UPDATE portfolio_rounds SET
+        round_name=@roundName, round_date=@roundDate, instrument=@instrument, pre_money=@preMoney, post_money=@postMoney,
+        amount_raised=@amountRaised, price_per_share=@pricePerShare, is_fund_round=@isFundRound,
+        source_deal_id=@sourceDealId, notes=@notes, updated_at=datetime('now')
+      WHERE id=@id AND tenant_id=@tenantId
+    `).run(at({
+      id: existing.id, tenantId: req.tenantId, roundName: merged.roundName, roundDate: merged.roundDate || null,
+      instrument: merged.instrument || null, preMoney: merged.preMoney != null ? merged.preMoney : null,
+      postMoney: merged.postMoney != null ? merged.postMoney : null, amountRaised: merged.amountRaised != null ? merged.amountRaised : null,
+      pricePerShare: merged.pricePerShare != null ? merged.pricePerShare : null, isFundRound: merged.isFundRound ? 1 : 0,
+      sourceDealId: merged.sourceDealId || null, notes: merged.notes || '',
+    }));
+    // Investors are replaced wholesale when supplied — same "delete-then-
+    // reinsert" convention as elsewhere in this app for a list-shaped
+    // sub-resource with no independent identity of its own.
+    if (Array.isArray(b.investors)) {
+      db.prepare('DELETE FROM portfolio_round_investors WHERE tenant_id = ? AND round_id = ?').run(req.tenantId, existing.id);
+      const insertInvestor = db.prepare(`
+        INSERT INTO portfolio_round_investors (tenant_id, round_id, investor_name, investor_type, is_own_fund, spv_id, amount, shares)
+        VALUES (@tenantId, @roundId, @investorName, @investorType, @isOwnFund, @spvId, @amount, @shares)
+      `);
+      for (const inv of b.investors) {
+        if (!inv.investorName) continue;
+        insertInvestor.run(at({
+          tenantId: req.tenantId, roundId: existing.id, investorName: inv.investorName, investorType: inv.investorType || null,
+          isOwnFund: inv.isOwnFund ? 1 : 0, spvId: inv.spvId || null,
+          amount: inv.amount != null ? inv.amount : null, shares: inv.shares != null ? inv.shares : null,
+        }));
+      }
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  const fundOwnershipPct = recomputeCapTable(req.tenantId, existing.portfolio_id);
+  const round = rowToPortfolioRound(db.prepare('SELECT * FROM portfolio_rounds WHERE id = ?').get(existing.id));
+  round.investors = roundInvestorsStmt.all(req.tenantId, existing.id).map(rowToRoundInvestor);
+  res.json({ round, fundOwnershipPct });
+});
+
+app.delete('/api/portfolio/rounds/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM portfolio_rounds WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Round not found in this tenant' });
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM portfolio_round_investors WHERE tenant_id = ? AND round_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM portfolio_rounds WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  recomputeCapTable(req.tenantId, existing.portfolio_id);
+  res.json({ ok: true, deleted: true });
+});
+
+/* ----- SPV / co-investment vehicles ----- */
+
+function rowToSpv(r) {
+  return {
+    id: r.id, fundId: r.fund_id, portfolioId: r.portfolio_id, dealId: r.deal_id, name: r.name,
+    legalEntityName: r.legal_entity_name, jurisdiction: r.jurisdiction, formationDate: r.formation_date,
+    status: r.status, targetSize: r.target_size, currency: r.currency,
+    managementFeePct: r.management_fee_pct, carriedInterestPct: r.carried_interest_pct,
+    preferredReturnPct: r.preferred_return_pct, catchUpPct: r.catch_up_pct, gpEntity: r.gp_entity,
+    notes: r.notes, createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+function rowToSpvInvestor(r) {
+  return {
+    id: r.id, spvId: r.spv_id, lpId: r.lp_id, name: r.name, investorType: r.investor_type,
+    email: r.email, contact: r.contact, commitment: r.commitment, calledAmount: r.called_amount,
+    paidAmount: r.paid_amount, distributions: r.distributions, kycStatus: r.kyc_status, status: r.status,
+    notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+const spvInvestorsStmt = db.prepare('SELECT * FROM spv_investors WHERE tenant_id = ? AND spv_id = ? ORDER BY id');
+
+app.get('/api/spvs', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const rows = req.query.fundId
+    ? db.prepare('SELECT * FROM spvs WHERE tenant_id = ? AND fund_id = ? ORDER BY id').all(req.tenantId, req.query.fundId)
+    : db.prepare('SELECT * FROM spvs WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
+  const result = rows.map(r => {
+    const spv = rowToSpv(r);
+    const investors = spvInvestorsStmt.all(req.tenantId, r.id);
+    spv.investorCount = investors.length;
+    spv.totalCommitment = investors.reduce((s, i) => s + (i.commitment || 0), 0);
+    spv.totalCalled = investors.reduce((s, i) => s + (i.called_amount || 0), 0);
+    return spv;
+  });
+  res.json({ tenant: req.tenantSlug, spvs: result });
+});
+
+app.post('/api/spvs', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  if (!b.name) return res.status(400).json({ error: 'name is required' });
+  if (!b.fundId) return res.status(400).json({ error: 'fundId is required' });
+  const fund = db.prepare('SELECT * FROM funds WHERE id = ? AND tenant_id = ?').get(b.fundId, req.tenantId);
+  if (!fund) return res.status(404).json({ error: 'Fund not found in this tenant' });
+
+  const info = db.prepare(`
+    INSERT INTO spvs
+      (tenant_id, fund_id, portfolio_id, deal_id, name, legal_entity_name, jurisdiction, formation_date,
+       status, target_size, currency, management_fee_pct, carried_interest_pct, preferred_return_pct,
+       catch_up_pct, gp_entity, notes, created_by)
+    VALUES
+      (@tenantId, @fundId, @portfolioId, @dealId, @name, @legalEntityName, @jurisdiction, @formationDate,
+       @status, @targetSize, @currency, @managementFeePct, @carriedInterestPct, @preferredReturnPct,
+       @catchUpPct, @gpEntity, @notes, @createdBy)
+  `).run(at({
+    tenantId: req.tenantId, fundId: b.fundId, portfolioId: b.portfolioId || null, dealId: b.dealId || null,
+    name: b.name, legalEntityName: b.legalEntityName || null, jurisdiction: b.jurisdiction || null,
+    formationDate: b.formationDate || null, status: b.status || 'Forming',
+    targetSize: b.targetSize != null ? b.targetSize : null, currency: b.currency || 'USD',
+    managementFeePct: b.managementFeePct != null ? b.managementFeePct : 0,
+    carriedInterestPct: b.carriedInterestPct != null ? b.carriedInterestPct : 20,
+    preferredReturnPct: b.preferredReturnPct != null ? b.preferredReturnPct : 0,
+    catchUpPct: b.catchUpPct != null ? b.catchUpPct : 100,
+    gpEntity: b.gpEntity || null, notes: b.notes || '', createdBy: b.createdBy || req.user.email,
+  }));
+  const row = db.prepare('SELECT * FROM spvs WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToSpv(row));
+});
+
+app.get('/api/spvs/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const spv = rowToSpv(existing);
+  spv.investors = spvInvestorsStmt.all(req.tenantId, spv.id).map(rowToSpvInvestor);
+  spv.capitalCalls = db.prepare('SELECT * FROM spv_capital_calls WHERE tenant_id = ? AND spv_id = ? ORDER BY id').all(req.tenantId, spv.id).map(r => {
+    const cc = rowToSpvCC(r);
+    cc.lineItems = spvCcLineItemsStmt.all(req.tenantId, r.id).map(rowToSpvCcLineItem);
+    return cc;
+  });
+  spv.distributions = db.prepare('SELECT * FROM spv_distributions WHERE tenant_id = ? AND spv_id = ? ORDER BY id').all(req.tenantId, spv.id).map(r => {
+    const d = rowToSpvDist(r);
+    d.lineItems = spvDistLineItemsStmt.all(req.tenantId, r.id).map(rowToSpvDistLineItem);
+    return d;
+  });
+  res.json(spv);
+});
+
+app.put('/api/spvs/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const b = req.body || {};
+  const merged = { ...rowToSpv(existing), ...b };
+  db.prepare(`
+    UPDATE spvs SET
+      fund_id=@fundId, portfolio_id=@portfolioId, deal_id=@dealId, name=@name, legal_entity_name=@legalEntityName,
+      jurisdiction=@jurisdiction, formation_date=@formationDate, status=@status, target_size=@targetSize,
+      currency=@currency, management_fee_pct=@managementFeePct, carried_interest_pct=@carriedInterestPct,
+      preferred_return_pct=@preferredReturnPct, catch_up_pct=@catchUpPct, gp_entity=@gpEntity, notes=@notes,
+      updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, fundId: merged.fundId, portfolioId: merged.portfolioId || null,
+    dealId: merged.dealId || null, name: merged.name, legalEntityName: merged.legalEntityName || null,
+    jurisdiction: merged.jurisdiction || null, formationDate: merged.formationDate || null, status: merged.status,
+    targetSize: merged.targetSize != null ? merged.targetSize : null, currency: merged.currency || 'USD',
+    managementFeePct: merged.managementFeePct, carriedInterestPct: merged.carriedInterestPct,
+    preferredReturnPct: merged.preferredReturnPct, catchUpPct: merged.catchUpPct,
+    gpEntity: merged.gpEntity || null, notes: merged.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM spvs WHERE id = ?').get(existing.id);
+  res.json(rowToSpv(row));
+});
+
+// Blocked once there's any real financial footprint (a capital call ever
+// issued, or an investor with money actually paid in) — same "permanent
+// record once real" reasoning as capital_calls/distributions/hf_*.
+app.delete('/api/spvs/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const calls = db.prepare('SELECT id FROM spv_capital_calls WHERE tenant_id = ? AND spv_id = ?').all(req.tenantId, existing.id);
+  if (calls.length) {
+    return res.status(409).json({
+      error: `Cannot delete: SPV has ${calls.length} capital call(s). Set status to 'Wound Down' instead.`,
+      footprint: [{ table: 'spv_capital_calls', column: 'spv_id', count: calls.length }],
+    });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM spv_investors WHERE tenant_id = ? AND spv_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM spvs WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  res.json({ ok: true, deleted: true });
+});
+
+app.post('/api/spvs/:id/investors', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const b = req.body || {};
+  if (!b.name) return res.status(400).json({ error: 'name is required' });
+  const info = db.prepare(`
+    INSERT INTO spv_investors
+      (tenant_id, spv_id, lp_id, name, investor_type, email, contact, commitment, called_amount, paid_amount, distributions, kyc_status, status, notes)
+    VALUES
+      (@tenantId, @spvId, @lpId, @name, @investorType, @email, @contact, @commitment, @calledAmount, @paidAmount, @distributions, @kycStatus, @status, @notes)
+  `).run(at({
+    tenantId: req.tenantId, spvId: spv.id, lpId: b.lpId || null, name: b.name, investorType: b.investorType || null,
+    email: b.email || null, contact: b.contact || null, commitment: b.commitment != null ? b.commitment : 0,
+    calledAmount: b.calledAmount != null ? b.calledAmount : 0, paidAmount: b.paidAmount != null ? b.paidAmount : 0,
+    distributions: b.distributions != null ? b.distributions : 0, kycStatus: b.kycStatus || 'Pending',
+    status: b.status || 'Active', notes: b.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM spv_investors WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json(rowToSpvInvestor(row));
+});
+
+app.put('/api/spv-investors/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spv_investors WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV investor not found in this tenant' });
+  const b = req.body || {};
+  const merged = { ...rowToSpvInvestor(existing), ...b };
+  db.prepare(`
+    UPDATE spv_investors SET
+      lp_id=@lpId, name=@name, investor_type=@investorType, email=@email, contact=@contact,
+      commitment=@commitment, called_amount=@calledAmount, paid_amount=@paidAmount, distributions=@distributions,
+      kyc_status=@kycStatus, status=@status, notes=@notes, updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, lpId: merged.lpId || null, name: merged.name,
+    investorType: merged.investorType || null, email: merged.email || null, contact: merged.contact || null,
+    commitment: merged.commitment || 0, calledAmount: merged.calledAmount || 0, paidAmount: merged.paidAmount || 0,
+    distributions: merged.distributions || 0, kycStatus: merged.kycStatus || 'Pending', status: merged.status || 'Active',
+    notes: merged.notes || '',
+  }));
+  const row = db.prepare('SELECT * FROM spv_investors WHERE id = ?').get(existing.id);
+  res.json(rowToSpvInvestor(row));
+});
+
+app.delete('/api/spv-investors/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spv_investors WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV investor not found in this tenant' });
+  const lineItems = db.prepare('SELECT id FROM spv_capital_call_line_items WHERE tenant_id = ? AND spv_investor_id = ?').all(req.tenantId, existing.id);
+  if (lineItems.length) {
+    return res.status(409).json({
+      error: `Cannot delete: investor has ${lineItems.length} capital call line item(s). Set status to 'Exited' instead.`,
+      footprint: [{ table: 'spv_capital_call_line_items', column: 'spv_investor_id', count: lineItems.length }],
+    });
+  }
+  db.prepare('DELETE FROM spv_investors WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+  res.json({ ok: true, deleted: true });
+});
+
+/* ----- SPV capital calls / distributions — mirrors Capital Calls/
+   Distributions above (server/index.js), scoped by spv_id/spv_investor_id
+   instead of fund_id/lp_id (see docs/TZ_VC_Module.md §2.3 for why these
+   are separate mirrored tables rather than a nullable spv_id column on
+   the real capital_calls/distributions tables). */
+
+function rowToSpvCC(r) {
+  return {
+    id: r.id, spvId: r.spv_id, ccNumber: r.cc_number, noticeDate: r.notice_date, paymentDate: r.payment_date,
+    totalAmount: r.total_amount, pctOfCommit: r.pct_of_commit, purpose: r.purpose, purposeType: r.purpose_type,
+    status: r.status, bankRef: r.bank_ref, createdBy: r.created_by, notes: r.notes,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+function rowToSpvCcLineItem(r) {
+  return {
+    id: r.id, callId: r.call_id, spvInvestorId: r.spv_investor_id, investorName: r.investor_name,
+    commitment: r.commitment, pct: r.pct, called: r.called, paid: r.paid, paymentDate: r.payment_date,
+    status: r.status, wireRef: r.wire_ref, wireConfirmUrl: r.wire_confirm_url,
+    amlOk: r.aml_ok === null ? null : !!r.aml_ok,
+  };
+}
+const spvCcLineItemsStmt = db.prepare(`
+  SELECT li.*, inv.name AS investor_name
+  FROM spv_capital_call_line_items li JOIN spv_investors inv ON inv.id = li.spv_investor_id
+  WHERE li.tenant_id = ? AND li.call_id = ? ORDER BY li.id
+`);
+
+app.get('/api/spvs/:id/capital-calls', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const calls = db.prepare('SELECT * FROM spv_capital_calls WHERE tenant_id = ? AND spv_id = ? ORDER BY id').all(req.tenantId, spv.id).map(r => {
+    const cc = rowToSpvCC(r);
+    cc.lineItems = spvCcLineItemsStmt.all(req.tenantId, r.id).map(rowToSpvCcLineItem);
+    return cc;
+  });
+  res.json({ capitalCalls: calls });
+});
+
+app.post('/api/spvs/:id/capital-calls', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const b = req.body || {};
+  if (!b.purpose) return res.status(400).json({ error: 'purpose is required' });
+  const totalAmount = b.totalAmount || 0;
+
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM spv_capital_calls WHERE tenant_id = ? AND spv_id = ?').get(req.tenantId, spv.id);
+  const ccNumber = b.ccNumber || `SPV-CC-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
+
+  let lineItems = b.lineItems;
+  if (!lineItems) {
+    const investors = db.prepare("SELECT * FROM spv_investors WHERE tenant_id = ? AND spv_id = ? AND status = 'Active'").all(req.tenantId, spv.id);
+    const totalCommit = investors.reduce((s, i) => s + (i.commitment || 0), 0);
+    lineItems = investors.map(i => {
+      const pct = totalCommit ? (i.commitment / totalCommit) * 100 : 0;
+      return {
+        spvInvestorId: i.id, commitment: i.commitment, pct,
+        called: totalCommit ? (i.commitment / totalCommit) * totalAmount : 0,
+        paid: 0, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '', amlOk: null,
+      };
+    });
+  }
+  const pctOfCommit = b.pctOfCommit != null ? b.pctOfCommit : (lineItems[0] ? lineItems[0].pct : 0);
+
+  db.exec('BEGIN');
+  try {
+    const info = db.prepare(`
+      INSERT INTO spv_capital_calls
+        (tenant_id, spv_id, cc_number, notice_date, payment_date, total_amount, pct_of_commit, purpose, purpose_type, status, bank_ref, created_by, notes)
+      VALUES
+        (@tenantId, @spvId, @ccNumber, @noticeDate, @paymentDate, @totalAmount, @pctOfCommit, @purpose, @purposeType, @status, @bankRef, @createdBy, @notes)
+    `).run(at({
+      tenantId: req.tenantId, spvId: spv.id, ccNumber, noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
+      totalAmount, pctOfCommit, purpose: b.purpose, purposeType: b.purposeType || 'Investment',
+      status: 'Draft', bankRef: b.bankRef || '', createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+    }));
+    const callId = info.lastInsertRowid;
+    const insertItem = db.prepare(`
+      INSERT INTO spv_capital_call_line_items
+        (tenant_id, call_id, spv_investor_id, commitment, pct, called, paid, payment_date, status, wire_ref, aml_ok)
+      VALUES
+        (@tenantId, @callId, @spvInvestorId, @commitment, @pct, @called, @paid, @paymentDate, @status, @wireRef, @amlOk)
+    `);
+    for (const li of lineItems) {
+      insertItem.run(at({
+        tenantId: req.tenantId, callId, spvInvestorId: li.spvInvestorId,
+        commitment: li.commitment || 0, pct: li.pct || 0, called: li.called || 0, paid: li.paid || 0,
+        paymentDate: li.paymentDate || null, status: li.status || 'Pending', wireRef: li.wireRef || '',
+        amlOk: li.amlOk === null || li.amlOk === undefined ? null : (li.amlOk ? 1 : 0),
+      }));
+    }
+    db.exec('COMMIT');
+    const row = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ?').get(callId);
+    const cc = rowToSpvCC(row);
+    cc.lineItems = spvCcLineItemsStmt.all(req.tenantId, callId).map(rowToSpvCcLineItem);
+    res.status(201).json(cc);
+  } catch (err) {
+    db.exec('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/spv-capital-calls/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV capital call not found in this tenant' });
+  const b = req.body || {};
+  const merged = { ...rowToSpvCC(existing), ...b };
+  db.prepare(`
+    UPDATE spv_capital_calls SET
+      cc_number=@ccNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
+      pct_of_commit=@pctOfCommit, purpose=@purpose, purpose_type=@purposeType, status=@status,
+      bank_ref=@bankRef, notes=@notes, updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, ccNumber: merged.ccNumber, noticeDate: merged.noticeDate,
+    paymentDate: merged.paymentDate, totalAmount: merged.totalAmount, pctOfCommit: merged.pctOfCommit,
+    purpose: merged.purpose, purposeType: merged.purposeType, status: merged.status,
+    bankRef: merged.bankRef, notes: merged.notes,
+  }));
+  const row = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ?').get(existing.id);
+  const cc = rowToSpvCC(row);
+  cc.lineItems = spvCcLineItemsStmt.all(req.tenantId, existing.id).map(rowToSpvCcLineItem);
+  res.json(cc);
+});
+
+app.delete('/api/spv-capital-calls/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV capital call not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot delete: call is ${existing.status}, not Draft.` });
+  }
+  const paidItems = db.prepare('SELECT id FROM spv_capital_call_line_items WHERE tenant_id = ? AND call_id = ? AND paid > 0').all(req.tenantId, existing.id);
+  if (paidItems.length) {
+    return res.status(409).json({ error: `Cannot delete: ${paidItems.length} line item(s) already have payments recorded.` });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM spv_capital_call_line_items WHERE tenant_id = ? AND call_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM spv_capital_calls WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  res.json({ ok: true, deleted: true });
+});
+
+// Record a payment against one investor's line item — same evidence-
+// required (wireRef + wireConfirmUrl) CFO/CEO gate as
+// PUT /api/capital-calls/:id/line-items/:lpId above.
+app.put('/api/spv-capital-calls/:id/line-items/:investorId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const call = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!call) return res.status(404).json({ error: 'SPV capital call not found in this tenant' });
+  const item = db.prepare('SELECT * FROM spv_capital_call_line_items WHERE call_id = ? AND spv_investor_id = ? AND tenant_id = ?')
+    .get(call.id, req.params.investorId, req.tenantId);
+  if (!item) return res.status(404).json({ error: 'Line item not found' });
+  if (call.status === 'Draft') {
+    return res.status(409).json({ error: 'This SPV capital call is still a draft — approve it before recording payments' });
+  }
+  const b = req.body || {};
+  const confirmingPayment = b.status === 'Paid' && item.status !== 'Paid';
+  if (confirmingPayment) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may confirm an SPV capital call payment' });
+    }
+    if (!b.wireRef || !b.wireRef.trim()) return res.status(400).json({ error: 'wireRef is required to confirm payment' });
+    if (!b.wireConfirmUrl || !b.wireConfirmUrl.trim()) return res.status(400).json({ error: 'wireConfirmUrl is required to confirm payment' });
+  }
+  db.prepare(`
+    UPDATE spv_capital_call_line_items SET
+      paid=@paid, payment_date=@paymentDate, status=@status, wire_ref=@wireRef, wire_confirm_url=@wireConfirmUrl, aml_ok=@amlOk
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: item.id, tenantId: req.tenantId,
+    paid: b.paid != null ? b.paid : item.paid, paymentDate: b.paymentDate || item.payment_date,
+    status: b.status || item.status, wireRef: b.wireRef != null ? b.wireRef : item.wire_ref,
+    wireConfirmUrl: b.wireConfirmUrl != null ? b.wireConfirmUrl : item.wire_confirm_url,
+    amlOk: b.amlOk != null ? (b.amlOk ? 1 : 0) : item.aml_ok,
+  }));
+  const row = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ?').get(call.id);
+  const cc = rowToSpvCC(row);
+  cc.lineItems = spvCcLineItemsStmt.all(req.tenantId, call.id).map(rowToSpvCcLineItem);
+  res.json(cc);
+});
+
+function rowToSpvDist(r) {
+  return {
+    id: r.id, spvId: r.spv_id, distNumber: r.dist_number, noticeDate: r.notice_date, paymentDate: r.payment_date,
+    totalAmount: r.total_amount, sourceType: r.source_type, rocAmount: r.roc_amount, profitAmount: r.profit_amount,
+    status: r.status, createdBy: r.created_by, notes: r.notes,
+  };
+}
+function rowToSpvDistLineItem(r) {
+  return {
+    id: r.id, distributionId: r.distribution_id, spvInvestorId: r.spv_investor_id, investorName: r.investor_name,
+    pct: r.pct, grossAmount: r.gross_amount, gpCarryAmount: r.gp_carry_amount, netAmount: r.net_amount,
+    paymentDate: r.payment_date, status: r.status, wireRef: r.wire_ref, wireConfirmUrl: r.wire_confirm_url,
+  };
+}
+const spvDistLineItemsStmt = db.prepare(`
+  SELECT li.*, inv.name AS investor_name
+  FROM spv_distribution_line_items li JOIN spv_investors inv ON inv.id = li.spv_investor_id
+  WHERE li.tenant_id = ? AND li.distribution_id = ? ORDER BY li.id
+`);
+
+app.get('/api/spvs/:id/distributions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const dists = db.prepare('SELECT * FROM spv_distributions WHERE tenant_id = ? AND spv_id = ? ORDER BY id').all(req.tenantId, spv.id).map(r => {
+    const d = rowToSpvDist(r);
+    d.lineItems = spvDistLineItemsStmt.all(req.tenantId, r.id).map(rowToSpvDistLineItem);
+    return d;
+  });
+  res.json({ distributions: dists });
+});
+
+// Profit split reuses waterfallEngine.js's computeDistributionSplit —
+// same tiers as the fund-level Distributions route above, parameterized
+// by the SPV's OWN preferred_return_pct/carried_interest_pct/catch_up_pct
+// (never the parent fund's — see docs/TZ_VC_Module.md §3 and the
+// spv-metrics.test.js requirement that these never get confused).
+app.post('/api/spvs/:id/distributions', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
+  const b = req.body || {};
+  const rocAmount = b.rocAmount || 0;
+  const profitAmount = b.profitAmount || 0;
+  const totalAmount = b.totalAmount != null ? b.totalAmount : (rocAmount + profitAmount);
+  if (totalAmount <= 0) return res.status(400).json({ error: 'totalAmount (or rocAmount/profitAmount) must be greater than 0' });
+
+  const countRow = db.prepare('SELECT COUNT(*) AS c FROM spv_distributions WHERE tenant_id = ? AND spv_id = ?').get(req.tenantId, spv.id);
+  const distNumber = b.distNumber || `SPV-DIST-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(2, '0')}`;
+
+  let lineItems = b.lineItems;
+  if (!lineItems) {
+    const investors = db.prepare("SELECT * FROM spv_investors WHERE tenant_id = ? AND spv_id = ? AND status = 'Active'").all(req.tenantId, spv.id);
+    if (profitAmount <= 0) {
+      const totalCommit = investors.reduce((s, i) => s + (i.commitment || 0), 0);
+      lineItems = investors.map(i => {
+        const pct = totalCommit ? (i.commitment / totalCommit) * 100 : 0;
+        const gross = totalCommit ? (i.commitment / totalCommit) * rocAmount : 0;
+        return { spvInvestorId: i.id, pct, grossAmount: gross, gpCarryAmount: 0, netAmount: gross, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '' };
+      });
+    } else {
+      const contributions = db.prepare(`
+        SELECT li.paid AS amount, li.payment_date AS date
+        FROM spv_capital_call_line_items li JOIN spv_capital_calls cc ON cc.id = li.call_id
+        WHERE li.tenant_id = ? AND cc.spv_id = ? AND cc.status != 'Draft' AND li.paid > 0 AND li.payment_date IS NOT NULL
+      `).all(req.tenantId, spv.id);
+      const priorDistRows = db.prepare(`
+        SELECT status, profit_amount AS profitAmount, roc_amount AS rocAmount, COALESCE(payment_date, notice_date) AS date
+        FROM spv_distributions WHERE tenant_id = ? AND spv_id = ?
+      `).all(req.tenantId, spv.id);
+      const ledgerEvents = [
+        ...contributions.map(c => ({ date: c.date, delta: c.amount })),
+        ...priorDistRows.filter(d => d.status !== 'Draft' && d.date).map(d => ({ date: d.date, delta: -(d.rocAmount || 0) })),
+      ];
+      const { lineItems: split } = computeDistributionSplit({
+        fund: { preferredReturn: spv.preferred_return_pct, carriedInterest: spv.carried_interest_pct, catchUpPct: spv.catch_up_pct },
+        activeLps: investors.map(i => ({ id: i.id, commitment: i.commitment })),
+        ledgerEvents, priorDistributions: priorDistRows,
+        rocAmount, profitAmount, distDate: b.paymentDate || b.noticeDate || new Date().toISOString().slice(0, 10),
+      });
+      lineItems = split.map(li => ({ spvInvestorId: li.lpId, pct: li.pct, grossAmount: li.grossAmount, gpCarryAmount: li.gpCarryAmount, netAmount: li.netAmount, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '' }));
+    }
+  }
+
+  db.exec('BEGIN');
+  try {
+    const info = db.prepare(`
+      INSERT INTO spv_distributions (tenant_id, spv_id, dist_number, notice_date, payment_date, total_amount, source_type, roc_amount, profit_amount, status, created_by, notes)
+      VALUES (@tenantId, @spvId, @distNumber, @noticeDate, @paymentDate, @totalAmount, @sourceType, @rocAmount, @profitAmount, @status, @createdBy, @notes)
+    `).run(at({
+      tenantId: req.tenantId, spvId: spv.id, distNumber, noticeDate: b.noticeDate || null, paymentDate: b.paymentDate || null,
+      totalAmount, sourceType: b.sourceType || null, rocAmount, profitAmount, status: 'Draft',
+      createdBy: b.createdBy || req.user.email, notes: b.notes || '',
+    }));
+    const distId = info.lastInsertRowid;
+    const insertItem = db.prepare(`
+      INSERT INTO spv_distribution_line_items (tenant_id, distribution_id, spv_investor_id, pct, gross_amount, gp_carry_amount, net_amount, payment_date, status, wire_ref)
+      VALUES (@tenantId, @distributionId, @spvInvestorId, @pct, @grossAmount, @gpCarryAmount, @netAmount, @paymentDate, @status, @wireRef)
+    `);
+    for (const li of lineItems) {
+      insertItem.run(at({
+        tenantId: req.tenantId, distributionId: distId, spvInvestorId: li.spvInvestorId,
+        pct: li.pct || 0, grossAmount: li.grossAmount || 0, gpCarryAmount: li.gpCarryAmount || 0, netAmount: li.netAmount || 0,
+        paymentDate: li.paymentDate || null, status: li.status || 'Pending', wireRef: li.wireRef || '',
+      }));
+    }
+    db.exec('COMMIT');
+    const row = db.prepare('SELECT * FROM spv_distributions WHERE id = ?').get(distId);
+    const d = rowToSpvDist(row);
+    d.lineItems = spvDistLineItemsStmt.all(req.tenantId, distId).map(rowToSpvDistLineItem);
+    res.status(201).json(d);
+  } catch (err) {
+    db.exec('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/spv-distributions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spv_distributions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV distribution not found in this tenant' });
+  const b = req.body || {};
+  const merged = { ...rowToSpvDist(existing), ...b };
+  db.prepare(`
+    UPDATE spv_distributions SET
+      dist_number=@distNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
+      source_type=@sourceType, roc_amount=@rocAmount, profit_amount=@profitAmount, status=@status, notes=@notes,
+      updated_at=datetime('now')
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    id: existing.id, tenantId: req.tenantId, distNumber: merged.distNumber, noticeDate: merged.noticeDate,
+    paymentDate: merged.paymentDate, totalAmount: merged.totalAmount, sourceType: merged.sourceType,
+    rocAmount: merged.rocAmount, profitAmount: merged.profitAmount, status: merged.status, notes: merged.notes,
+  }));
+  const row = db.prepare('SELECT * FROM spv_distributions WHERE id = ?').get(existing.id);
+  const d = rowToSpvDist(row);
+  d.lineItems = spvDistLineItemsStmt.all(req.tenantId, existing.id).map(rowToSpvDistLineItem);
+  res.json(d);
+});
+
+app.delete('/api/spv-distributions/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM spv_distributions WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'SPV distribution not found in this tenant' });
+  if (existing.status !== 'Draft') {
+    return res.status(409).json({ error: `Cannot delete: distribution is ${existing.status}, not Draft.` });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM spv_distribution_line_items WHERE tenant_id = ? AND distribution_id = ?').run(req.tenantId, existing.id);
+    db.prepare('DELETE FROM spv_distributions WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+  res.json({ ok: true, deleted: true });
+});
+
+// IRR/DPI/RVPI/TVPI reusing metricsEngine.js's generic computeMetrics —
+// same function the fund-level /api/funds/:id/metrics route uses, just
+// fed the SPV's own ledger instead of a fund's. residualValue is
+// necessarily an approximation (an SPV has no NAV of its own): the
+// linked portfolio company's current value, prorated by the SPV's share
+// of that company's total invested capital — reuses the same
+// portfolio.value proxy computeFundMetrics already relies on for the
+// same purpose (see metricsEngine.js's file header).
+app.get('/api/spvs/:id/metrics', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
+
+  const paidInEvents = db.prepare(`
+    SELECT li.paid AS amount, li.payment_date AS date
+    FROM spv_capital_call_line_items li JOIN spv_capital_calls cc ON cc.id = li.call_id
+    WHERE li.tenant_id = ? AND cc.spv_id = ? AND cc.status != 'Draft' AND li.paid > 0
+  `).all(req.tenantId, spv.id);
+  const distributedEvents = db.prepare(`
+    SELECT dli.net_amount AS amount, COALESCE(dli.payment_date, d.payment_date, d.notice_date) AS date
+    FROM spv_distribution_line_items dli JOIN spv_distributions d ON d.id = dli.distribution_id
+    WHERE dli.tenant_id = ? AND d.spv_id = ? AND d.status != 'Draft' AND dli.net_amount > 0
+  `).all(req.tenantId, spv.id);
+
+  let residualValue = 0;
+  if (spv.portfolio_id) {
+    const portfolio = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(spv.portfolio_id, req.tenantId);
+    if (portfolio && portfolio.invested > 0) {
+      const spvInvested = paidInEvents.reduce((s, e) => s + e.amount, 0);
+      residualValue = portfolio.value * (spvInvested / portfolio.invested);
+    }
+  }
+
+  res.json(computeMetrics({ paidInEvents, distributedEvents, residualValue, asOfDate: new Date().toISOString().slice(0, 10) }));
 });
 
 /* ===== AFSA Regulatory Reports — tenant-scoped =====
