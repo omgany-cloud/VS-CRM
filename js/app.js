@@ -1326,11 +1326,11 @@ function _renderDealModal(d) {
       <div style="margin-bottom:12px">
         <label style="${lS}">${label}</label>
         <div style="display:flex;gap:8px">
-          <input style="${iS}" value="${d[field]||''}" placeholder="https://drive.google.com/... или загрузите файл"
+          <input style="${iS}" value="${escapeAttr(d[field]||'')}" placeholder="https://drive.google.com/... или загрузите файл"
             id="${inputId}"
             onchange="dealField(${d.id},'${field}',this.value)" />
           ${docUploadBtn(inputId)}
-          ${d[field] ? `<button onclick="_obOpenPreviewModal('${resolved.replace(/'/g,"\\'")}','${resolved.replace(/'/g,"\\'")}')"
+          ${d[field] ? `<button onclick="_obOpenPreviewModal('${escapeAttr(resolved)}','${escapeAttr(resolved)}')"
             style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#a78bfa;
               padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap">
             <i class="fas fa-eye"></i></button>` : ''}

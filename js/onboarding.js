@@ -3537,7 +3537,7 @@ function _obOpenPreviewModal(previewUrl, originalUrl) {
           <i class="fas fa-file-pdf" style="color:#ef4444"></i> Просмотр договора
         </div>
         <div style="display:flex;gap:8px">
-          <a href="${originalUrl}" target="_blank" style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+          <a href="${escapeAttr(originalUrl)}" target="_blank" style="background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#5eead4;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
             <i class="fas fa-external-link-alt"></i> Открыть в новой вкладке
           </a>
           <button onclick="document.getElementById('ob_contract_modal').remove()" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">
@@ -3545,12 +3545,12 @@ function _obOpenPreviewModal(previewUrl, originalUrl) {
           </button>
         </div>
       </div>
-      <iframe id="ob_contract_iframe" src="${previewUrl}" style="flex:1;border:none;width:100%" allow="autoplay"></iframe>
+      <iframe id="ob_contract_iframe" src="${escapeAttr(previewUrl)}" style="flex:1;border:none;width:100%" allow="autoplay"></iframe>
       <div id="ob_contract_fallback" style="display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:40px">
         <i class="fas fa-exclamation-triangle" style="font-size:32px;color:#f97316"></i>
         <div style="font-size:14px;color:#e2e8f0;text-align:center">Предпросмотр недоступен (X-Frame-Options)</div>
         <div style="font-size:12px;color:#8abfbb;text-align:center">Нажмите «Открыть в новой вкладке» для просмотра</div>
-        <a href="${originalUrl}" target="_blank" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;text-decoration:none">
+        <a href="${escapeAttr(originalUrl)}" target="_blank" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;text-decoration:none">
           <i class="fas fa-external-link-alt" style="margin-right:6px"></i>Открыть договор
         </a>
       </div>

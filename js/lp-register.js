@@ -550,7 +550,7 @@ function openLPDetail(lpId) {
           style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.3);color:#eab308;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700${lp.email ? '' : ';opacity:0.5;cursor:not-allowed'}">
           <i class="fas fa-key"></i> Пароль LP-портала
         </button>
-        ${lp.lpaUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${lp.lpaUrl}','${lp.lpaUrl}')"
+        ${lp.lpaUrl ? `<button onclick="event.stopPropagation();_obOpenPreviewModal('${escapeAttr(lp.lpaUrl)}','${escapeAttr(lp.lpaUrl)}')"
           style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#c4b5fd;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700">
           <i class="fas fa-file-contract"></i> Открыть LPA
         </button>` : ''}
