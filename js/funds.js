@@ -50,8 +50,24 @@ function switchFund(id) {
   if (f) updateFundBranding(f);
   if (typeof renderDashboard === 'function') renderDashboard();
   if (typeof renderOnboardingTable === 'function') renderOnboardingTable(lpList);
+  // Same reasoning as the LP filter reset below — renderPipeline(deals)
+  // just rendered the full, unfiltered list for the new fund, but the
+  // #searchDeals/#filterDealStage inputs still visibly show the PREVIOUS
+  // fund's filter text/stage (QA audit finding) until the user notices
+  // it no longer does anything and clears it themselves.
+  const searchDealsEl = document.getElementById('searchDeals');
+  if (searchDealsEl) searchDealsEl.value = '';
+  const filterDealStageEl = document.getElementById('filterDealStage');
+  if (filterDealStageEl) filterDealStageEl.value = '';
   if (typeof renderPipeline === 'function') renderPipeline(deals);
   if (typeof renderPortfolio === 'function') renderPortfolio(portfolio);
+  // A text/status filter left over from the PREVIOUS fund must not
+  // silently apply to the new fund's LP list (QA audit finding) —
+  // lpRegFilter/lpRegStatus are module-level state in js/lp-register.js
+  // with no fund scoping of their own, so switching funds has to reset
+  // them explicitly, same as a fresh page load would.
+  if (typeof lpRegFilter !== 'undefined') lpRegFilter = '';
+  if (typeof lpRegStatus !== 'undefined') lpRegStatus = '';
   if (typeof renderLPRegisterPage === 'function') renderLPRegisterPage();
   if (typeof renderCapitalCallsPage === 'function') renderCapitalCallsPage();
   if (typeof renderICPage === 'function') renderICPage();
