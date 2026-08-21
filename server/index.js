@@ -1385,9 +1385,7 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
   // the person who created/approved the call should self-certify —
   // restricted to CFO/CEO (paymentConfirm), and requires the actual
   // evidence (wire reference + a link to the payment order/SWIFT
-  // confirmation) rather than a bare status flip. Only enforced on the
-  // transition INTO Paid — editing an already-paid item's other fields
-  // later doesn't re-trigger this.
+  // confirmation) rather than a bare status flip.
   const confirmingPayment = b.status === 'Paid' && item.status !== 'Paid';
   if (confirmingPayment) {
     if (!req.user.permissions.paymentConfirm) {
@@ -1398,6 +1396,24 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
     }
     if (!b.wireConfirmUrl || !b.wireConfirmUrl.trim()) {
       return res.status(400).json({ error: 'wireConfirmUrl (payment order document link) is required to confirm payment' });
+    }
+  }
+  // Reversing a confirmed payment (Paid -> anything else) is the same
+  // class of judgment as confirming one in the first place — QA audit
+  // found this transition previously required nothing beyond generic
+  // accessFM, so an already-confirmed payment could be silently
+  // reverted with no evidence and no trace. Same permission as
+  // confirming, plus a reason (there's no wire evidence to point to for
+  // an *undo*, so the accountability trail is a written reason instead,
+  // recorded below via recordAudit — this route had no audit entry at
+  // all before now).
+  const reversingPayment = item.status === 'Paid' && b.status !== undefined && b.status !== 'Paid';
+  if (reversingPayment) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may reverse a confirmed Capital Call payment' });
+    }
+    if (!b.reason || !b.reason.trim()) {
+      return res.status(400).json({ error: 'reason is required to reverse a confirmed payment' });
     }
   }
   db.prepare(`
@@ -1414,6 +1430,14 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
     wireConfirmUrl: b.wireConfirmUrl != null ? b.wireConfirmUrl : item.wire_confirm_url,
     amlOk: b.amlOk != null ? (b.amlOk ? 1 : 0) : item.aml_ok,
   }));
+
+  const lpRow = db.prepare('SELECT name FROM lp_register WHERE id = ? AND tenant_id = ?').get(item.lp_id, req.tenantId);
+  const lpName = lpRow ? lpRow.name : `LP #${item.lp_id}`;
+  if (confirmingPayment) {
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: call.id, action: 'payment_confirmed', actorEmail: req.user.email, summary: `Capital Call ${call.cc_number}: платёж «${lpName}» подтверждён (wireRef: ${b.wireRef})` });
+  } else if (reversingPayment) {
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: call.id, action: 'payment_reversed', actorEmail: req.user.email, summary: `Capital Call ${call.cc_number}: подтверждённый платёж «${lpName}» отменён — ${b.reason}` });
+  }
 
   const row = db.prepare('SELECT * FROM capital_calls WHERE id = ?').get(call.id);
   const cc = rowToCC(row);
@@ -2986,6 +3010,18 @@ app.put('/api/spv-capital-calls/:id/line-items/:investorId', requireAuth, requir
     }
     if (!b.wireRef || !b.wireRef.trim()) return res.status(400).json({ error: 'wireRef is required to confirm payment' });
     if (!b.wireConfirmUrl || !b.wireConfirmUrl.trim()) return res.status(400).json({ error: 'wireConfirmUrl is required to confirm payment' });
+  }
+  // Same reversal gate as the fund-level route above (QA audit finding) —
+  // reversing an already-confirmed payment needs the same trust level as
+  // confirming one, plus a recorded reason.
+  const reversingPayment = item.status === 'Paid' && b.status !== undefined && b.status !== 'Paid';
+  if (reversingPayment) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may reverse a confirmed SPV capital call payment' });
+    }
+    if (!b.reason || !b.reason.trim()) {
+      return res.status(400).json({ error: 'reason is required to reverse a confirmed payment' });
+    }
   }
   db.prepare(`
     UPDATE spv_capital_call_line_items SET
