@@ -80,7 +80,7 @@ function getOpenCapitalCallLineItems() {
     .forEach(cc => {
       (cc.lineItems || []).forEach(li => {
         if (li.status === 'Paid') return;
-        items.push({ ccId: cc.id, ccNumber: cc.ccNumber, lpId: li.lpId, lpName: li.lpName, called: li.called, paymentDate: cc.paymentDate });
+        items.push({ ccId: cc.id, ccNumber: cc.ccNumber, fundId: cc.fundId, lpId: li.lpId, lpName: li.lpName, called: li.called, paymentDate: cc.paymentDate });
       });
     });
   return items;
@@ -232,6 +232,13 @@ function bankReconChooseItem(idx, itemIdxStr) {
 }
 
 function renderBankReconReview() {
+  // Open items span whichever funds have Pending capital calls — each one
+  // must show ITS OWN fund's currency, not a hardcoded 'USD' (a KZT fund's
+  // called amount was previously mislabeled with a $ sign here). A raw
+  // statement row (`t`) has no fund of its own until matched, so it takes
+  // its chosen match's currency once one is picked, DEFAULT_CURRENCY (same
+  // as before this fix) while still unmatched.
+  const fmtItem = (n, it) => fmtCurrency(n, currencyForFundId(it.fundId));
   const fmtUSD = (n) => (typeof fmtCurrency === 'function' ? fmtCurrency(n, 'USD') : ('$' + Number(n).toLocaleString()));
   const confidenceBadge = (c) => ({
     high:   '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(34,197,94,0.12);color:#22c55e">Высокая</span>',
@@ -267,13 +274,13 @@ function renderBankReconReview() {
                   onchange="bankReconToggleRow(${t.idx}, this.checked)" />
               </td>
               <td style="padding:8px 10px;font-size:11px;color:#94a3b8">${escapeHtml(t.date || '—')}</td>
-              <td style="padding:8px 10px;font-size:12px;font-weight:700;color:#22c55e;text-align:right">${fmtUSD(t.amount)}</td>
+              <td style="padding:8px 10px;font-size:12px;font-weight:700;color:#22c55e;text-align:right">${t.chosenItem ? fmtItem(t.amount, t.chosenItem) : fmtUSD(t.amount)}</td>
               <td style="padding:8px 10px;font-size:11px;color:#64748b;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(t.reference || t.raw || '')}">${escapeHtml(t.reference || t.raw || '—')}</td>
               <td style="padding:8px 10px;font-size:12px">
                 <select onchange="bankReconChooseItem(${t.idx}, this.value)"
                   style="background:#0f1623;border:1px solid #2a4846;border-radius:6px;padding:4px 8px;color:#e2e8f0;font-size:11px;max-width:230px">
                   <option value="">— не выбрано —</option>
-                  ${_bankReconOpenItems.map((it, ii) => `<option value="${ii}" ${t.chosenItem && t.chosenItem.ccId === it.ccId && t.chosenItem.lpId === it.lpId ? 'selected' : ''}>${escapeHtml(it.lpName)} · ${escapeHtml(it.ccNumber)} · ${fmtUSD(it.called)}</option>`).join('')}
+                  ${_bankReconOpenItems.map((it, ii) => `<option value="${ii}" ${t.chosenItem && t.chosenItem.ccId === it.ccId && t.chosenItem.lpId === it.lpId ? 'selected' : ''}>${escapeHtml(it.lpName)} · ${escapeHtml(it.ccNumber)} · ${fmtItem(it.called, it)}</option>`).join('')}
                 </select>
               </td>
               <td style="padding:8px 10px;text-align:center">${confidenceBadge(t.confidence)}</td>

@@ -2,6 +2,24 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.39.0] - 2026-08-24
+
+### Fixed
+- Fund currency (`funds.currency`) was silently ignored in 8 real
+  places, always showing `$` regardless of the fund's actual
+  currency (a KZT fund's AUM showed as `$50M` instead of `₸50M`):
+  the fund switcher, main dashboard AUM widgets, the IC module, bank
+  reconciliation (which also mixed capital calls from different funds
+  into one unlabeled list), and 3 Excel exports (Capital Calls,
+  Distributions, Fund Overview — the latter two also weren't
+  fund-scoped at all, pooling every fund's data into one export).
+  All now derive the symbol/label from the owning fund via the
+  existing `js/currency.js` helpers, matching the pattern already
+  used correctly across LP Register/Capital Calls/Distributions.
+  KYC/SoF questionnaire income bands in onboarding were deliberately
+  left as-is — those look like fixed compliance thresholds, not a
+  display bug, and weren't confirmed as one.
+
 ## [1.38.0] - 2026-08-21
 
 ### Added

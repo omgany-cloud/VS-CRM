@@ -168,12 +168,21 @@ function exportKYCAML() {
    3. CAPITAL CALLS — История Capital Call Notices
 ═══════════════════════════════════════════════════════════ */
 function exportCapitalCalls() {
+  // Scoped to the active fund, same as exportLPRegister() — capitalCallsLog/
+  // lpRegister are tenant-wide arrays, and the currency symbol below is
+  // only meaningful for a single fund's own currency, not a mix.
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const scopedCCs = fundScoped ? capitalCallsLog.filter(cc => cc.fundId === activeFundId) : capitalCallsLog;
+  const scopedLps = fundScoped ? lpRegister.filter(lp => lp.fundId === activeFundId) : lpRegister;
+  const curCode = fundScoped && typeof currencyForFundId === 'function' ? currencyForFundId(activeFundId) : 'USD';
+  const sym = typeof currencySymbol === 'function' ? currencySymbol(curCode) : '$';
+
   const header = [
-    '№', 'Дата уведомления', 'Дата платежа', 'Сумма ($)',
-    '% от Commitment', 'Назначение', 'Статус', 'Получено ($)'
+    '№', 'Дата уведомления', 'Дата платежа', `Сумма (${curCode})`,
+    '% от Commitment', 'Назначение', 'Статус', `Получено (${curCode})`
   ];
   const ccPaid = cc => (cc.lineItems || []).reduce((s, li) => s + (li.paid || 0), 0);
-  const rows = capitalCallsLog.map((cc, i) => [
+  const rows = scopedCCs.map((cc, i) => [
     i + 1,
     fmtDate(cc.noticeDate),
     fmtDate(cc.paymentDate),
@@ -184,8 +193,8 @@ function exportCapitalCalls() {
     ccPaid(cc),
   ]);
 
-  const totalAmount   = capitalCallsLog.reduce((s, cc) => s + (cc.totalAmount || 0), 0);
-  const totalReceived = capitalCallsLog.reduce((s, cc) => s + ccPaid(cc), 0);
+  const totalAmount   = scopedCCs.reduce((s, cc) => s + (cc.totalAmount || 0), 0);
+  const totalReceived = scopedCCs.reduce((s, cc) => s + ccPaid(cc), 0);
   rows.push([]);
   rows.push(['', 'ИТОГО', '', totalAmount, '', '', '', totalReceived]);
 
@@ -193,15 +202,15 @@ function exportCapitalCalls() {
   // lineItems, not an approximated pro-rata of the call total (the real
   // data already has the precise figure per LP per call).
   const lpBreakdownHeader = [
-    'LP', 'Commitment ($M)', ...capitalCallsLog.map(cc => `${cc.ccNumber} (${fmtDate(cc.noticeDate)})`), 'Итого Paid'
+    'LP', `Commitment (${curCode}M)`, ...scopedCCs.map(cc => `${cc.ccNumber} (${fmtDate(cc.noticeDate)})`), 'Итого Paid'
   ];
-  const lpRows = lpRegister.map(lp => {
-    const perCC = capitalCallsLog.map(cc => {
+  const lpRows = scopedLps.map(lp => {
+    const perCC = scopedCCs.map(cc => {
       if (cc.status !== 'Completed') return '—';
       const li = (cc.lineItems || []).find(x => x.lpId === lp.id);
-      return li ? `$${(li.called / 1e6).toFixed(3)}M` : '—';
+      return li ? `${sym}${(li.called / 1e6).toFixed(3)}M` : '—';
     });
-    return [lp.name, lp.commitment / 1e6, ...perCC, `$${(lp.calledAmount/1e6).toFixed(2)}M`];
+    return [lp.name, lp.commitment / 1e6, ...perCC, `${sym}${(lp.calledAmount/1e6).toFixed(2)}M`];
   });
 
   downloadExcel([
@@ -222,12 +231,20 @@ function exportCapitalCalls() {
    3B. DISTRIBUTIONS — Журнал распределений LP
 ═══════════════════════════════════════════════════════════ */
 function exportDistributions() {
+  // Scoped to the active fund, same as exportLPRegister()/exportCapitalCalls()
+  // — distributionsLog/lpRegister are tenant-wide arrays.
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const scopedDists = fundScoped ? distributionsLog.filter(d => d.fundId === activeFundId) : distributionsLog;
+  const scopedLps = fundScoped ? lpRegister.filter(lp => lp.fundId === activeFundId) : lpRegister;
+  const curCode = fundScoped && typeof currencyForFundId === 'function' ? currencyForFundId(activeFundId) : 'USD';
+  const sym = typeof currencySymbol === 'function' ? currencySymbol(curCode) : '$';
+
   const header = [
-    '№', 'Dist №', 'Дата уведомления', 'Дата платежа', 'Сумма ($)',
-    'ROC ($)', 'Прибыль ($)', 'GP Carry ($)', 'Источник', 'Статус'
+    '№', 'Dist №', 'Дата уведомления', 'Дата платежа', `Сумма (${curCode})`,
+    `ROC (${curCode})`, `Прибыль (${curCode})`, `GP Carry (${curCode})`, 'Источник', 'Статус'
   ];
   const distCarry = d => (d.lineItems || []).reduce((s, li) => s + (li.gpCarryAmount || 0), 0);
-  const rows = distributionsLog.map((d, i) => [
+  const rows = scopedDists.map((d, i) => [
     i + 1,
     d.distNumber,
     fmtDate(d.noticeDate),
@@ -240,10 +257,10 @@ function exportDistributions() {
     d.status,
   ]);
 
-  const totalAmount = distributionsLog.reduce((s, d) => s + (d.totalAmount || 0), 0);
-  const totalRoc     = distributionsLog.reduce((s, d) => s + (d.rocAmount || 0), 0);
-  const totalProfit  = distributionsLog.reduce((s, d) => s + (d.profitAmount || 0), 0);
-  const totalCarry   = distributionsLog.reduce((s, d) => s + distCarry(d), 0);
+  const totalAmount = scopedDists.reduce((s, d) => s + (d.totalAmount || 0), 0);
+  const totalRoc     = scopedDists.reduce((s, d) => s + (d.rocAmount || 0), 0);
+  const totalProfit  = scopedDists.reduce((s, d) => s + (d.profitAmount || 0), 0);
+  const totalCarry   = scopedDists.reduce((s, d) => s + distCarry(d), 0);
   rows.push([]);
   rows.push(['', '', 'ИТОГО', '', totalAmount, totalRoc, totalProfit, totalCarry, '', '']);
 
@@ -251,15 +268,15 @@ function exportDistributions() {
   // lineItems (same shape as exportCapitalCalls()'s LP Breakdown sheet),
   // only for distributions that actually paid out (Draft never did).
   const lpBreakdownHeader = [
-    'LP', 'Commitment ($M)', ...distributionsLog.map(d => `${d.distNumber} (${fmtDate(d.noticeDate)})`), 'Итого Distributed'
+    'LP', `Commitment (${curCode}M)`, ...scopedDists.map(d => `${d.distNumber} (${fmtDate(d.noticeDate)})`), 'Итого Distributed'
   ];
-  const lpRows = lpRegister.map(lp => {
-    const perDist = distributionsLog.map(d => {
+  const lpRows = scopedLps.map(lp => {
+    const perDist = scopedDists.map(d => {
       if (d.status === 'Draft') return '—';
       const li = (d.lineItems || []).find(x => x.lpId === lp.id);
-      return li ? `$${(li.netAmount / 1e6).toFixed(3)}M` : '—';
+      return li ? `${sym}${(li.netAmount / 1e6).toFixed(3)}M` : '—';
     });
-    return [lp.name, lp.commitment / 1e6, ...perDist, `$${((lp.distributions || 0) / 1e6).toFixed(2)}M`];
+    return [lp.name, lp.commitment / 1e6, ...perDist, `${sym}${((lp.distributions || 0) / 1e6).toFixed(2)}M`];
   });
 
   downloadExcel([
@@ -389,10 +406,23 @@ function exportCFAClients() {
 ═══════════════════════════════════════════════════════════ */
 function exportFundOverview() {
   const p = fundParamsFor(activeFundId);
-  const totalCommit  = lpRegister.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
-  const totalCalled  = lpRegister.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
-  const totalPortVal = portfolio.reduce((s, p) => s + (p.value || 0), 0);
-  const totalInvest  = portfolio.reduce((s, p) => s + (p.invested || 0), 0);
+  // Scoped to the active fund — lpRegister/portfolio/deals/capitalCallsLog
+  // are tenant-wide arrays, so a fund-titled overview export previously
+  // pooled every OTHER fund's LPs/portfolio/deals/capital calls into "this
+  // fund"'s totals too, on top of always labeling money as '$'.
+  const fundScoped = typeof activeFundId !== 'undefined' && activeFundId != null;
+  const scopedLps = fundScoped ? lpRegister.filter(lp => lp.fundId === activeFundId) : lpRegister;
+  const scopedPortfolio = fundScoped ? portfolio.filter(pc => pc.fundId === activeFundId) : portfolio;
+  const scopedDeals = fundScoped ? deals.filter(d => d.fundId === activeFundId) : deals;
+  const scopedCCs = fundScoped ? capitalCallsLog.filter(cc => cc.fundId === activeFundId) : capitalCallsLog;
+  const curCode = fundScoped && typeof currencyForFundId === 'function' ? currencyForFundId(activeFundId) : 'USD';
+  const curSuffix = curCode + 'M';
+  const fmtCur = (v) => fmtMoney(v, curSuffix);
+
+  const totalCommit  = scopedLps.reduce((s, lp) => s + (lp.commitment || 0), 0) / 1e6;
+  const totalCalled  = scopedLps.reduce((s, lp) => s + (lp.calledAmount || 0), 0) / 1e6;
+  const totalPortVal = scopedPortfolio.reduce((s, pc) => s + (pc.value || 0), 0);
+  const totalInvest  = scopedPortfolio.reduce((s, pc) => s + (pc.invested || 0), 0);
 
   const fundInfo = [
     [`${p.name} — ОБЗОР ФОНДА`],
@@ -402,8 +432,8 @@ function exportFundOverview() {
     ['Наименование фонда',       p.name],
     ['Генеральный партнёр',      p.gp],
     ['Лицензия',                 p.license],
-    ['Целевой размер фонда',     fmtMoney(p.targetSize)],
-    ['Мин. commitment LP',       fmtMoney(p.minCommitment)],
+    ['Целевой размер фонда',     fmtCur(p.targetSize)],
+    ['Мин. commitment LP',       fmtCur(p.minCommitment)],
     ['Management Fee',           fmtPct(p.managementFee)],
     ['Carried Interest',         fmtPct(p.carriedInterest)],
     ['Hurdle Rate',              fmtPct(p.preferredReturn)],
@@ -413,26 +443,26 @@ function exportFundOverview() {
     ['Целевой MOIC',             `${p.targetMOIC_min}–${p.targetMOIC_max}x`],
     [],
     ['ТЕКУЩЕЕ СОСТОЯНИЕ'],
-    ['Инвесторов (LP)',          lpRegister.length],
-    ['Всего Commitments',        fmtMoney(totalCommit)],
-    ['Capital Called',           fmtMoney(totalCalled)],
-    ['Uncalled Capital',         fmtMoney(totalCommit - totalCalled)],
-    ['Портфельных компаний',     portfolio.length],
-    ['Инвестировано',            fmtMoney(totalInvest)],
-    ['NAV (текущая)',             fmtMoney(totalPortVal)],
+    ['Инвесторов (LP)',          scopedLps.length],
+    ['Всего Commitments',        fmtCur(totalCommit)],
+    ['Capital Called',           fmtCur(totalCalled)],
+    ['Uncalled Capital',         fmtCur(totalCommit - totalCalled)],
+    ['Портфельных компаний',     scopedPortfolio.length],
+    ['Инвестировано',            fmtCur(totalInvest)],
+    ['NAV (текущая)',             fmtCur(totalPortVal)],
     ['Gross MOIC',               `${(totalPortVal / totalInvest).toFixed(2)}x`],
     [],
     ['СДЕЛКИ'],
-    ['Всего в базе',             deals.length],
-    ['Закрыто',                  deals.filter(d => d.stage === 'Закрыта').length],
-    ['В пайплайне',              deals.filter(d => !['Закрыта','Отклонена','Отклонена IC'].includes(d.stage)).length],
-    ['Отклонено до IC',          deals.filter(d => d.stage === 'Отклонена').length],
-    ['Отклонено комитетом (IC)', deals.filter(d => d.stage === 'Отклонена IC').length],
+    ['Всего в базе',             scopedDeals.length],
+    ['Закрыто',                  scopedDeals.filter(d => d.stage === 'Закрыта').length],
+    ['В пайплайне',              scopedDeals.filter(d => !['Закрыта','Отклонена','Отклонена IC'].includes(d.stage)).length],
+    ['Отклонено до IC',          scopedDeals.filter(d => d.stage === 'Отклонена').length],
+    ['Отклонено комитетом (IC)', scopedDeals.filter(d => d.stage === 'Отклонена IC').length],
   ];
 
   // График капитал-коллов
-  const ccHeader = ['Capital Call', 'Дата уведомления', 'Дата платежа', 'Сумма ($)', 'Получено ($)', 'Статус'];
-  const ccRows = capitalCallsLog.map(cc => [
+  const ccHeader = ['Capital Call', 'Дата уведомления', 'Дата платежа', `Сумма (${curCode})`, `Получено (${curCode})`, 'Статус'];
+  const ccRows = scopedCCs.map(cc => [
     cc.ccNumber, fmtDate(cc.noticeDate), fmtDate(cc.paymentDate), cc.totalAmount,
     (cc.lineItems || []).reduce((s, li) => s + (li.paid || 0), 0), cc.status,
   ]);

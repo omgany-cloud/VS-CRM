@@ -389,9 +389,10 @@ function renderDashboard() {
   const aumDeltaEl = document.getElementById('kpiAumDelta');
   if (aumDeltaEl && fund && fund.targetSize) {
     const pctOfTarget = Math.round((totalCommitted / 1e6 / fund.targetSize) * 100);
+    const sym = typeof currencySymbol === 'function' ? currencySymbol(curr) : '$';
     aumDeltaEl.textContent = totalCommitted > 0
-      ? `Цель: $${fund.targetSize}M · Committed: ${pctOfTarget}%`
-      : `Цель: $${fund.targetSize}M · Min: $5M`;
+      ? `Цель: ${sym}${fund.targetSize}M · Committed: ${pctOfTarget}%`
+      : `Цель: ${sym}${fund.targetSize}M · Min: ${sym}5M`;
   }
 
   // MOIC "Текущий" — real, computed from portfolio current value / invested
@@ -964,7 +965,7 @@ function renderClosing() {
               ${[
                 {l:'Активных LP',     v:activeLP.length,                                   c:'#14b8a6'},
                 {l:'Total Commitment',v:fmtUSD(totalCommit),                               c:'#22c55e'},
-                {l:'Min. Commitment', v:`$${fp.firstClosingMin}M`,                         c:commitOk?'#22c55e':'#ef4444'},
+                {l:'Min. Commitment', v:fmtUSD(fp.firstClosingMin*1e6),                     c:commitOk?'#22c55e':'#ef4444'},
                 {l:'Выполнение',      v:commitOk?'✓ Порог достигнут':'✗ Ниже минимума',   c:commitOk?'#22c55e':'#ef4444'},
                 {l:'KYC All OK',      v:allKycOk?'✓ Все проверены':'⚠ Есть незавершённые', c:allKycOk?'#22c55e':'#f97316'},
                 {l:'Регулятор >20% check', v:activeLP.filter(l=>l.ownershipPct>20&&!l.afsaNotified).length===0?'✓ OK':'⚠ Требует уведомления',

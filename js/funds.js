@@ -83,7 +83,7 @@ function renderFundSwitcher() {
       <div class="fsi-dot" style="background:${f.color}"></div>
       <div class="fsi-body">
         <div class="fsi-name">${f.shortName}</div>
-        <div class="fsi-type">${f.type} · $${f.targetSize}M</div>
+        <div class="fsi-type">${f.type} · ${typeof currencySymbol === 'function' ? currencySymbol(f.currency) : '$'}${f.targetSize}M</div>
       </div>
       <span class="fsi-status ${f.status}">${getFundStatusLabel(f.status)}</span>
       <span class="fsi-edit" onclick="event.stopPropagation();openEditFundModal(${f.id})" title="Редактировать">
@@ -128,10 +128,14 @@ function updateFundBranding(f) {
 
   // Dashboard headline KPI cards — previously static HTML frozen to
   // whichever fund happened to load first; now reactive to switchFund().
+  // Currency symbol comes from the fund itself (js/currency.js) — this
+  // used to hardcode '$', so a KZT/EUR/RUB fund's AUM showed with a
+  // dollar sign regardless of its real currency.
+  const sym = typeof currencySymbol === 'function' ? currencySymbol(f.currency) : '$';
   const aum = document.getElementById('kpiAum');
-  if (aum) aum.textContent = `$${f.targetSize}M`;
+  if (aum) aum.textContent = `${sym}${f.targetSize}M`;
   const aumDelta = document.getElementById('kpiAumDelta');
-  if (aumDelta) aumDelta.textContent = `Целевой: $${f.targetSize}M · Min: $5M`;
+  if (aumDelta) aumDelta.textContent = `Целевой: ${sym}${f.targetSize}M · Min: ${sym}5M`;
   const irr = document.getElementById('kpiIrr');
   if (irr) irr.textContent = f.targetIRR || '—';
   const moic = document.getElementById('kpiMoic');

@@ -420,6 +420,8 @@ function renderICKPIs() {
   const el = document.getElementById('icKPIs');
   if (!el) return;
   const fundMemos = getFundScopedIcMemos();
+  const sym = typeof currencySymbol === 'function' && typeof currencyForFundId === 'function'
+    ? currencySymbol(currencyForFundId(activeFundId)) : '$';
   const approved = fundMemos.filter(m => m.status === 'approved').length;
   const pending  = fundMemos.filter(m => m.status === 'pending').length;
   const rejected = fundMemos.filter(m => m.status === 'rejected').length;
@@ -439,8 +441,8 @@ function renderICKPIs() {
     </div>
     <div class="kpi-card">
       <div class="kpi-icon green"><i class="fas fa-check-double"></i></div>
-      <div class="kpi-body"><span class="kpi-label">Одобрено ($M)</span>
-        <span class="kpi-value">$${totalApproved.toFixed(1)}M</span>
+      <div class="kpi-body"><span class="kpi-label">Одобрено (${sym}M)</span>
+        <span class="kpi-value">${sym}${totalApproved.toFixed(1)}M</span>
         <span class="kpi-delta up">${approved} сделок</span></div>
     </div>
     <div class="kpi-card">
@@ -454,6 +456,8 @@ function renderICKPIs() {
 function renderICList() {
   const el = document.getElementById('icList');
   if (!el) return;
+  const sym = typeof currencySymbol === 'function' && typeof currencyForFundId === 'function'
+    ? currencySymbol(currencyForFundId(activeFundId)) : '$';
   el.innerHTML = getFundScopedIcMemos().map(m => {
     const votedCount = m.votes.filter(v=>v.vote).length;
     const approveCount = m.votes.filter(v=>v.vote==='approve').length;
@@ -473,7 +477,7 @@ function renderICList() {
             ${m.status==='pending'?'<span class="wf-my-badge"><i class="fas fa-vote-yea"></i> Голосование открыто</span>':''}
           </div>
           <div class="wf-row-meta">
-            <span style="color:#f97316;font-size:11px;font-weight:700">$${m.amount}M ${m.type}</span>
+            <span style="color:#f97316;font-size:11px;font-weight:700">${sym}${m.amount}M ${m.type}</span>
             <span class="wf-meta-sep">·</span>
             <span style="font-size:11px;color:#8abfbb">${m.sector}</span>
             <span class="wf-meta-sep">·</span>
@@ -524,6 +528,8 @@ function icQuorumMet(votes) {
 }
 
 function renderICModalContent(m) {
+  const sym = typeof currencySymbol === 'function' && typeof currencyForFundId === 'function'
+    ? currencySymbol(currencyForFundId(m.fundId)) : '$';
   // Each IC seat is now cast by the real account holding that seat's role
   // (GP Rep 1 = CEO, GP Rep 2 = CFO, Independent Member and LP Rep have
   // their own external accounts) — a vote button
@@ -562,7 +568,7 @@ function renderICModalContent(m) {
       <div class="kpi-icon orange" style="width:46px;height:46px;font-size:18px;border-radius:12px"><i class="fas fa-handshake"></i></div>
       <div style="flex:1">
         <div style="font-size:16px;font-weight:800;color:#f1f5f9">${escapeHtml(m.company)}</div>
-        <div style="font-size:12px;color:#f97316;font-weight:600">$${m.amount}M ${m.type} · ${m.sector}</div>
+        <div style="font-size:12px;color:#f97316;font-weight:600">${sym}${m.amount}M ${m.type} · ${m.sector}</div>
       </div>
       <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;background:${quorum?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)'};color:${quorum?'#22c55e':'#ef4444'}">
         ${quorum ? 'Кворум набран' : 'Кворум не набран'}
@@ -640,6 +646,8 @@ function printICMemo(id) {
   const m = icMemos.find(x => x.id === id);
   if (!m) return;
   const fp = fundParamsFor(m.fundId);
+  const sym = typeof currencySymbol === 'function' && typeof currencyForFundId === 'function'
+    ? currencySymbol(currencyForFundId(m.fundId)) : '$';
 
   const docStyle = `
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -701,7 +709,7 @@ function printICMemo(id) {
   <table class="deal-table">
     <tr><td>Компания</td><td><b>${escapeHtml(m.company)}</b></td></tr>
     <tr><td>Сектор</td><td>${m.sector || '—'}</td></tr>
-    <tr><td>Сумма инвестиций</td><td><b>$${m.amount}M</b></td></tr>
+    <tr><td>Сумма инвестиций</td><td><b>${sym}${m.amount}M</b></td></tr>
     <tr><td>Тип сделки</td><td>${m.type || '—'}</td></tr>
     <tr><td>Стадия</td><td>${m.stage || '—'}</td></tr>
     <tr><td>Автор меморандума</td><td>${m.author || '—'}</td></tr>
@@ -879,7 +887,7 @@ function openNewICMemo() {
   // Build deal options from deals[] array
   const dealOptions = (typeof deals !== 'undefined' ? deals : [])
     .filter(d => d.stage !== 'Закрыта')
-    .map(d => `<option value="${d.id}">${escapeHtml(d.company)} — $${d.amount}M (${d.stage})</option>`)
+    .map(d => `<option value="${d.id}">${escapeHtml(d.company)} — ${typeof currencySymbol === 'function' ? currencySymbol(currencyForEntity(d)) : '$'}${d.amount}M (${d.stage})</option>`)
     .join('');
 
   const SECTORS = ['Технологии','Финансы','Промышленность','Здравоохранение','Недвижимость','Энергетика','Потребительский','Другое'];

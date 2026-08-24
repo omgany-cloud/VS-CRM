@@ -220,7 +220,7 @@ function renderLPRegisterPage() {
         <div style="height:100%;width:${totalCommit ? Math.min(100, totalCalled/totalCommit*100) : 0}%;background:linear-gradient(90deg,#14b8a6,#22c55e);border-radius:5px;transition:width 0.5s"></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:#64748b">
-        <span>$0</span><span>Первое Закрытие: ${fmtUSD(FUND_PARAMS.firstClosingMin*1e6)}</span><span>Цель: ${fmtUSD(FUND_PARAMS.targetSize*1e6)}</span>
+        <span>${fmtUSD(0)}</span><span>Первое Закрытие: ${fmtUSD(FUND_PARAMS.firstClosingMin*1e6)}</span><span>Цель: ${fmtUSD(FUND_PARAMS.targetSize*1e6)}</span>
       </div>
     </div>
 
@@ -756,7 +756,7 @@ function openCapitalAccountStatement(lpId) {
         { label:'Capital Called to Date',         val:fmtUSD(totalPaid),            color:'#f97316', bold:true  },
         { label:'Unfunded Commitment (Remaining)',val:fmtUSD(unfunded),             color:'#8b5cf6', bold:true  },
         { label:'Distributions Received to Date', val:fmtUSD(distributions),        color:'#22c55e', bold:false },
-        { label:'NAV per Unit (последняя оценка)',val:'$1.00 (2024-12-31)',          color:'#14b8a6', bold:false },
+        { label:'NAV per Unit (последняя оценка)',val:`${currencySymbol(currencyForEntity(lp))}${navPerUnit.toFixed(2)} (2024-12-31)`, color:'#14b8a6', bold:false },
         { label:'Fund Term Remaining',            val:`${(getFundById(lp.fundId)?.fundTerm ?? 10) - (getFundById(lp.fundId)?.phaseYear ?? FUND_PARAMS.currentYear)} лет`, color:'#eab308', bold:false },
       ].map((row, i) => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;${i%2===0?'background:#0f1623':'background:#131c2e'};border-bottom:1px solid #1e293b">
@@ -1389,7 +1389,7 @@ function printCapitalAccountStatement(lpId) {
       </tr>
       <tr>
         <td class="lbl">NAV per Unit (последняя оценка)</td>
-        <td class="val" style="color:#2b6cb0">$${navPerUnit.toFixed(2)} <span style="font-size:8.5pt;font-weight:400;color:#718096">(${startYear}-12-31)</span></td>
+        <td class="val" style="color:#2b6cb0">${currencySymbol(currencyForEntity(lp))}${navPerUnit.toFixed(2)} <span style="font-size:8.5pt;font-weight:400;color:#718096">(${startYear}-12-31)</span></td>
       </tr>
       <tr>
         <td class="lbl">Capital Call Rate</td>
