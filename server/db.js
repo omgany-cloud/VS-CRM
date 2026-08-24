@@ -1393,6 +1393,13 @@ if (!columnExists('deals', 'version')) db.exec("ALTER TABLE deals ADD COLUMN ver
 if (!columnExists('portfolio', 'version')) db.exec("ALTER TABLE portfolio ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
 if (!columnExists('lp_register', 'version')) db.exec("ALTER TABLE lp_register ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
 
+// Idempotency guard (QA Data Integrity audit) — POST /api/ob-tasks used to
+// have no way to tell "these 7 tasks already exist for this client" from
+// "create a fresh set", so a double-click/retry/race duplicated the whole
+// template. A real UNIQUE index (not just an application-level check) so
+// the invariant holds even if a future code path forgets to check first.
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_ob_tasks_client_tasknum ON ob_tasks(tenant_id, client_id, task_num)');
+
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
 // This helper lets the rest of the codebase pass plain camelCase keys.

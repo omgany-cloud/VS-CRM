@@ -2,6 +2,52 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.41.0] - 2026-08-24
+
+### Fixed
+- `GET /api/uploads/meta` had no `requirePermission` at all — now
+  requires `accessFM` (RM, the only internal role without it, loses
+  Vault file-name metadata for FM-only documents; confirmed as the
+  accepted tradeoff — `uploaded_files` has no owning-module column to
+  check more precisely without a bigger schema change).
+- `POST /api/workflow/:id/withdraw` had no ownership check — any
+  internal user could withdraw anyone's approval request. Now only
+  the workflow's own creator may withdraw it.
+- `POST /api/ob-tasks` could duplicate a client's whole 7-task
+  onboarding template on a double-click/retry — no `UNIQUE(client_id,
+  task_num)` existed. Added a real unique index plus idempotent
+  insert-or-return behavior in the route itself.
+- Amending an already-`Paid` Capital Call line item's own evidence
+  (paid amount, wireRef, wireConfirmUrl, paymentDate) while its status
+  stayed `Paid` fell through both the confirm and reverse evidence
+  gates untouched — now requires the same `paymentConfirm` permission
+  + reason as reversing, and is audited (`payment_amended`). Fund and
+  SPV mirrors both fixed.
+- Auto pro-rated Capital Call line items could sum to a few cents off
+  `totalAmount` due to plain proportional rounding — the last line
+  item now absorbs the remainder so the row sum reconciles exactly.
+  Fund and SPV mirrors both fixed.
+- Draft -> Pending Capital Call approval now rejects a totalAmount or
+  date that is present and actually invalid (negative/non-finite
+  amount, unparseable date, payment date before notice date) — loose
+  by design, since an established pattern in this codebase creates
+  Capital Calls with no top-level totalAmount/dates at all (the real
+  amount lives in each line item's own `called`).
+- `commitment` (LP), `invested`/`value` (Portfolio), and `targetSize`
+  (Fund) now reject a present-but-invalid value (negative, non-finite,
+  non-numeric) on both create and update.
+- 12 modal overlays (mostly Hedge Fund/VC/SPV) had no Escape-close or
+  focus-trap/ARIA — added to `MODAL_OVERLAY_IDS`, which already
+  handles all of that generically for every overlay in the list.
+- A failed `uploaded_files` INSERT left the just-uploaded file
+  orphaned on disk with no DB row pointing at it — both upload routes
+  now clean it up (best-effort) on that failure path.
+- Corrected 3 stale QA_AUDIT_STATUS.md entries that had already been
+  fixed earlier in this session but never marked as such: the LP
+  Register filter surviving a fund switch, and (noted in the previous
+  entry) the onboarding-client XSS and Google-Drive-link escaping
+  findings.
+
 ## [1.40.0] - 2026-08-24
 
 ### Fixed

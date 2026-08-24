@@ -47,6 +47,12 @@ const MODAL_OVERLAY_IDS = [
   'vaultPreviewOverlay', 'lpDetailOverlay',
   'capitalStatementOverlay', 'ccDetailOverlay', 'ccNewOverlay',
   'dealDetailOverlay', 'portDetailOverlay',
+  // QA audit finding: these 12 (mostly Hedge Fund/VC/SPV module overlays,
+  // added after MODAL_OVERLAY_IDS was last updated) had no Escape-close
+  // or focus-trap/ARIA at all.
+  'coiAddOverlay', 'distDetailOverlay', 'distNewOverlay', 'bankReconOverlay',
+  'hfSubNewOverlay', 'hfRedNewOverlay', 'hfNavNewOverlay', 'spvNewOverlay',
+  'spvDetailOverlay', 'spvInvestorNewOverlay', 'spvCcNewOverlay', 'spvDistNewOverlay',
 ];
 
 function _modalOverlayIsVisible(el) {

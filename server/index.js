@@ -252,14 +252,27 @@ app.post('/api/uploads', requireAuth, requireInternal, requirePermission('access
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded, or file type not allowed (PDF, image, Word, Excel only)' });
     }
-    const info = db.prepare(`
-      INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
-      VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
-    `).run(at({
-      tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
-      mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: req.user.email,
-    }));
-    res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
+    try {
+      const info = db.prepare(`
+        INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+        VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+      `).run(at({
+        tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
+        mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: req.user.email,
+      }));
+      res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
+    } catch (dbErr) {
+      // QA Data Integrity audit finding: the file had already landed on
+      // disk (multer wrote it before this handler ever runs) — if the
+      // INSERT then fails, the file used to just sit there forever with
+      // no DB row pointing at it. Best-effort cleanup; a failure to
+      // unlink is logged, not thrown, so it never masks the real 500.
+      fs.unlink(req.file.path, (unlinkErr) => {
+        if (unlinkErr) console.error('[uploads] orphaned file cleanup failed:', req.file.path, unlinkErr.message);
+      });
+      console.error('[uploads] INSERT failed:', dbErr.message);
+      res.status(500).json({ error: 'Failed to save the uploaded file — please try again' });
+    }
   });
 });
 
@@ -272,7 +285,15 @@ app.post('/api/uploads', requireAuth, requireInternal, requirePermission('access
 // firing a separate full-file GET per row just to read a name. MUST be
 // registered before the /:id route below, or Express would try to parse
 // "meta" as an id.
-app.get('/api/uploads/meta', requireAuth, requireInternal, (req, res) => {
+// requirePermission('accessFM') — QA RBAC audit: uploaded_files has no
+// owning-module column, so a precise per-file check isn't possible without
+// a bigger schema change; accessFM is the closest real boundary that
+// exists today (the only internal role WITHOUT it is RM, the CF&A-side
+// role, which was able to query metadata — filename/uploader/date, not
+// file content — for FM-only documents in bypass of the Chinese Wall).
+// Confirmed with the user: RM losing Vault's cross-module file names for
+// its own CF&A-linked files is an accepted tradeoff over leaving this open.
+app.get('/api/uploads/meta', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const ids = String(req.query.ids || '').split(',').map(s => parseInt(s, 10)).filter(n => Number.isInteger(n));
   if (!ids.length) return res.json({ files: [] });
   const placeholders = ids.map(() => '?').join(',');
@@ -571,15 +592,25 @@ app.post('/api/portal/uploads', requirePortalAuth, (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded, or file type not allowed (PDF, image, Word, Excel only)' });
     }
-    const info = db.prepare(`
-      INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by, portal_portfolio_id)
-      VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy, @portalPortfolioId)
-    `).run(at({
-      tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
-      mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: 'Портал: ' + req.portalCompany.name,
-      portalPortfolioId: req.portalCompany.id,
-    }));
-    res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
+    try {
+      const info = db.prepare(`
+        INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by, portal_portfolio_id)
+        VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy, @portalPortfolioId)
+      `).run(at({
+        tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
+        mimeType: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: 'Портал: ' + req.portalCompany.name,
+        portalPortfolioId: req.portalCompany.id,
+      }));
+      res.status(201).json({ id: info.lastInsertRowid, url: `/api/uploads/${info.lastInsertRowid}`, name: req.file.originalname });
+    } catch (dbErr) {
+      // Same orphaned-file cleanup as POST /api/uploads above (QA Data
+      // Integrity audit finding).
+      fs.unlink(req.file.path, (unlinkErr) => {
+        if (unlinkErr) console.error('[portal uploads] orphaned file cleanup failed:', req.file.path, unlinkErr.message);
+      });
+      console.error('[portal uploads] INSERT failed:', dbErr.message);
+      res.status(500).json({ error: 'Failed to save the uploaded file — please try again' });
+    }
   });
 });
 
@@ -1024,6 +1055,7 @@ app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUs
   if (b.assetClass != null && !VALID_ASSET_CLASSES.includes(b.assetClass)) {
     return res.status(400).json({ error: `assetClass must be one of ${VALID_ASSET_CLASSES.join(', ')}` });
   }
+  { const bad = invalidMoneyField(b, 'targetSize'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
   // operatingModel is NEVER taken from the request body — it's derived
   // from assetClass here, server-side, so a caller can't set a 'pe' fund
   // to 'open-end' (or vice versa) and desync it from the engine that
@@ -1065,6 +1097,7 @@ app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manag
   if (req.body && req.body.assetClass != null && !VALID_ASSET_CLASSES.includes(req.body.assetClass)) {
     return res.status(400).json({ error: `assetClass must be one of ${VALID_ASSET_CLASSES.join(', ')}` });
   }
+  { const bad = invalidMoneyField(req.body || {}, 'targetSize'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
   const merged = { ...rowToFund(existing), ...(req.body || {}) };
   // Same rule as POST: operatingModel always re-derived from the final
   // assetClass, never taken from req.body directly, even on update.
@@ -1137,6 +1170,7 @@ function validateFundOwnershipPct(db, tenantId, fundId, incomingPct, excludeLpId
 app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
+  { const bad = invalidMoneyField(b, 'commitment'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
   if (b.fundId) {
     const check = validateFundOwnershipPct(db, req.tenantId, b.fundId, b.ownershipPct || 0, null);
     if (!check.ok) return res.status(400).json({ error: check.error });
@@ -1235,12 +1269,37 @@ function checkVersion(res, existing, body, currentRow) {
   return true;
 }
 
+// Shared date-string validation (QA Input/date-validation audit finding —
+// "0 date-validation matches anywhere on the server"). Deliberately loose:
+// accepts anything Date can parse, not just strict ISO — this app's date
+// inputs are plain HTML <input type="date"> values (YYYY-MM-DD), and the
+// goal here is catching missing/garbage values, not enforcing one exact format.
+function isValidDateStr(s) {
+  if (typeof s !== 'string' || !s.trim()) return false;
+  const d = new Date(s);
+  return !Number.isNaN(d.getTime());
+}
+
+// Shared money-field validation (QA Input/numeric-validation audit
+// finding — commitment/invested/value/targetSize accepted negative
+// numbers, NaN, and arbitrarily large values with zero server-side
+// check). Only rejects when the field is actually present in the
+// request AND fails the check — omitted fields keep their existing
+// defaulting behavior untouched.
+function invalidMoneyField(body, field) {
+  if (!Object.prototype.hasOwnProperty.call(body, field) || body[field] == null) return null;
+  const v = body[field];
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return field;
+  return null;
+}
+
 app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const existing = db.prepare('SELECT * FROM lp_register WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'LP not found in this tenant' });
 
   const b = req.body || {};
   if (!checkVersion(res, existing, b, withLiveFinancials(db, req.tenantId, existing.id, rowToLp(existing)))) return;
+  { const bad = invalidMoneyField(b, 'commitment'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
   const merged = { ...rowToLp(existing), ...b };
 
   if (merged.fundId) {
@@ -1389,6 +1448,16 @@ app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('
       return { lpId: l.id, commitment: l.commitment, pct, called: totalCommit ? (l.commitment / totalCommit) * totalAmount : 0,
         paid: 0, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '', amlOk: null };
     });
+    // A pure proportional split leaves the sum of per-LP `called` off
+    // totalAmount by a rounding remainder (QA Data Integrity audit) —
+    // true up the last line item so the row sum reconciles exactly with
+    // the amount actually being called, same convention as a real
+    // capital-call notice (round every LP but one, then true up the last).
+    if (lineItems.length && totalCommit) {
+      const sumCalled = lineItems.reduce((s, li) => s + li.called, 0);
+      const diff = totalAmount - sumCalled;
+      if (diff !== 0) lineItems[lineItems.length - 1].called += diff;
+    }
   }
   const pctOfCommit = b.pctOfCommit != null ? b.pctOfCommit : (lineItems[0] ? lineItems[0].pct : 0);
 
@@ -1458,6 +1527,30 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
     return res.status(403).json({ error: 'Forbidden: only CEO/CFO may approve and send a Capital Call' });
   }
   const merged = Object.assign(rowToCC(existing), b);
+  // Draft -> Pending is the moment this becomes a real cash call sent to
+  // every LP — QA Data Integrity audit found almost nothing was checked
+  // on that transition beyond the ccApprove permission above. Deliberately
+  // NOT a required-field check (totalAmount/notice/paymentDate being unset
+  // at the top level is an established, widely-relied-on pattern — the
+  // real called amount can live entirely in each line item's own `called`
+  // instead): only rejects values that are PRESENT and actually wrong —
+  // an explicit negative/non-finite amount, an unparseable date, or a
+  // payment date before the notice date.
+  if (existing.status === 'Draft' && b.status === 'Pending') {
+    if (merged.totalAmount != null && (typeof merged.totalAmount !== 'number' || !Number.isFinite(merged.totalAmount) || merged.totalAmount < 0)) {
+      return res.status(400).json({ error: 'totalAmount must be a non-negative number' });
+    }
+    if (merged.noticeDate && !isValidDateStr(merged.noticeDate)) {
+      return res.status(400).json({ error: 'noticeDate is not a valid date' });
+    }
+    if (merged.paymentDate && !isValidDateStr(merged.paymentDate)) {
+      return res.status(400).json({ error: 'paymentDate is not a valid date' });
+    }
+    if (merged.noticeDate && merged.paymentDate && isValidDateStr(merged.noticeDate) && isValidDateStr(merged.paymentDate)
+      && new Date(merged.paymentDate) < new Date(merged.noticeDate)) {
+      return res.status(400).json({ error: 'paymentDate cannot be before noticeDate' });
+    }
+  }
   db.prepare(`
     UPDATE capital_calls SET
       fund_id=@fundId, cc_number=@ccNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
@@ -1596,6 +1689,24 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
       return res.status(400).json({ error: 'reason is required to reverse a confirmed payment' });
     }
   }
+  // QA Data Integrity audit: staying Paid while silently changing the
+  // evidence itself (paid amount, wireRef, wireConfirmUrl, paymentDate)
+  // fell through both gates above untouched — neither confirmingPayment
+  // nor reversingPayment fires when status doesn't change, so a Paid line
+  // item's own reconciliation evidence could be edited after the fact
+  // with nothing beyond generic accessFM. Same trust bar as reversing.
+  const EVIDENCE_FIELD_TO_COLUMN = { paid: 'paid', wireRef: 'wire_ref', wireConfirmUrl: 'wire_confirm_url', paymentDate: 'payment_date' };
+  const amendingConfirmedEvidence = item.status === 'Paid' && (b.status === undefined || b.status === 'Paid') &&
+    Object.entries(EVIDENCE_FIELD_TO_COLUMN).some(([field, column]) =>
+      Object.prototype.hasOwnProperty.call(b, field) && b[field] !== item[column]);
+  if (amendingConfirmedEvidence) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may amend a confirmed Capital Call payment' });
+    }
+    if (!b.reason || !b.reason.trim()) {
+      return res.status(400).json({ error: 'reason is required to amend a confirmed payment' });
+    }
+  }
   db.prepare(`
     UPDATE capital_call_line_items SET
       paid=@paid, payment_date=@paymentDate, status=@status, wire_ref=@wireRef,
@@ -1617,6 +1728,8 @@ app.put('/api/capital-calls/:id/line-items/:lpId', requireAuth, requireInternal,
     recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: call.id, action: 'payment_confirmed', actorEmail: req.user.email, summary: `Capital Call ${call.cc_number}: платёж «${lpName}» подтверждён (wireRef: ${b.wireRef})` });
   } else if (reversingPayment) {
     recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: call.id, action: 'payment_reversed', actorEmail: req.user.email, summary: `Capital Call ${call.cc_number}: подтверждённый платёж «${lpName}» отменён — ${b.reason}` });
+  } else if (amendingConfirmedEvidence) {
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'capital_calls', entityId: call.id, action: 'payment_amended', actorEmail: req.user.email, summary: `Capital Call ${call.cc_number}: подтверждённый платёж «${lpName}» изменён задним числом — ${b.reason}` });
   }
 
   const row = db.prepare('SELECT * FROM capital_calls WHERE id = ?').get(call.id);
@@ -3102,6 +3215,13 @@ app.post('/api/spvs/:id/capital-calls', requireAuth, requireInternal, requirePer
         paid: 0, paymentDate: b.paymentDate || null, status: 'Pending', wireRef: '', amlOk: null,
       };
     });
+    // Same rounding true-up as the fund-level route above (QA Data
+    // Integrity audit finding).
+    if (lineItems.length && totalCommit) {
+      const sumCalled = lineItems.reduce((s, li) => s + li.called, 0);
+      const diff = totalAmount - sumCalled;
+      if (diff !== 0) lineItems[lineItems.length - 1].called += diff;
+    }
   }
   const pctOfCommit = b.pctOfCommit != null ? b.pctOfCommit : (lineItems[0] ? lineItems[0].pct : 0);
 
@@ -3148,6 +3268,26 @@ app.put('/api/spv-capital-calls/:id', requireAuth, requireInternal, requirePermi
   if (!existing) return res.status(404).json({ error: 'SPV capital call not found in this tenant' });
   const b = req.body || {};
   const merged = { ...rowToSpvCC(existing), ...b };
+  // Same Draft -> Pending validation as the fund-level route (QA Data
+  // Integrity audit finding) — only rejects values that are PRESENT and
+  // actually wrong, not merely unset (see the fund-level route's comment
+  // for why: totalAmount/dates being unset at the top level is an
+  // established pattern, the real amount can live in each line item).
+  if (existing.status === 'Draft' && b.status === 'Pending') {
+    if (merged.totalAmount != null && (typeof merged.totalAmount !== 'number' || !Number.isFinite(merged.totalAmount) || merged.totalAmount < 0)) {
+      return res.status(400).json({ error: 'totalAmount must be a non-negative number' });
+    }
+    if (merged.noticeDate && !isValidDateStr(merged.noticeDate)) {
+      return res.status(400).json({ error: 'noticeDate is not a valid date' });
+    }
+    if (merged.paymentDate && !isValidDateStr(merged.paymentDate)) {
+      return res.status(400).json({ error: 'paymentDate is not a valid date' });
+    }
+    if (merged.noticeDate && merged.paymentDate && isValidDateStr(merged.noticeDate) && isValidDateStr(merged.paymentDate)
+      && new Date(merged.paymentDate) < new Date(merged.noticeDate)) {
+      return res.status(400).json({ error: 'paymentDate cannot be before noticeDate' });
+    }
+  }
   db.prepare(`
     UPDATE spv_capital_calls SET
       cc_number=@ccNumber, notice_date=@noticeDate, payment_date=@paymentDate, total_amount=@totalAmount,
@@ -3231,6 +3371,20 @@ app.put('/api/spv-capital-calls/:id/line-items/:investorId', requireAuth, requir
       return res.status(400).json({ error: 'reason is required to reverse a confirmed payment' });
     }
   }
+  // Same amend-while-staying-Paid gate as the fund-level route above (QA
+  // Data Integrity audit finding).
+  const SPV_EVIDENCE_FIELD_TO_COLUMN = { paid: 'paid', wireRef: 'wire_ref', wireConfirmUrl: 'wire_confirm_url', paymentDate: 'payment_date' };
+  const amendingConfirmedEvidence = item.status === 'Paid' && (b.status === undefined || b.status === 'Paid') &&
+    Object.entries(SPV_EVIDENCE_FIELD_TO_COLUMN).some(([field, column]) =>
+      Object.prototype.hasOwnProperty.call(b, field) && b[field] !== item[column]);
+  if (amendingConfirmedEvidence) {
+    if (!req.user.permissions.paymentConfirm) {
+      return res.status(403).json({ error: 'Forbidden: only CFO/CEO may amend a confirmed SPV capital call payment' });
+    }
+    if (!b.reason || !b.reason.trim()) {
+      return res.status(400).json({ error: 'reason is required to amend a confirmed payment' });
+    }
+  }
   db.prepare(`
     UPDATE spv_capital_call_line_items SET
       paid=@paid, payment_date=@paymentDate, status=@status, wire_ref=@wireRef, wire_confirm_url=@wireConfirmUrl, aml_ok=@amlOk
@@ -3242,6 +3396,9 @@ app.put('/api/spv-capital-calls/:id/line-items/:investorId', requireAuth, requir
     wireConfirmUrl: b.wireConfirmUrl != null ? b.wireConfirmUrl : item.wire_confirm_url,
     amlOk: b.amlOk != null ? (b.amlOk ? 1 : 0) : item.aml_ok,
   }));
+  if (amendingConfirmedEvidence) {
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'spv_capital_calls', entityId: call.id, action: 'payment_amended', actorEmail: req.user.email, summary: `SPV Capital Call: подтверждённый платёж изменён задним числом — ${b.reason}` });
+  }
   const row = db.prepare('SELECT * FROM spv_capital_calls WHERE id = ?').get(call.id);
   const cc = rowToSpvCC(row);
   cc.lineItems = spvCcLineItemsStmt.all(req.tenantId, call.id).map(rowToSpvCcLineItem);
@@ -3660,6 +3817,10 @@ app.get('/api/portfolio', requireAuth, requireInternal, requirePermission('acces
 app.post('/api/portfolio', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
+  for (const field of ['invested', 'value']) {
+    const bad = invalidMoneyField(b, field);
+    if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` });
+  }
   const params = portfolioToParams({ status: 'Active', ...b });
   const info = db.prepare(PORTFOLIO_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
   const row = db.prepare('SELECT * FROM portfolio WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
@@ -3673,6 +3834,10 @@ app.put('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('a
   const existingCo = rowToPortfolio(existing);
   const b = req.body || {};
   if (!checkVersion(res, existing, b, existingCo)) return;
+  for (const field of ['invested', 'value']) {
+    const bad = invalidMoneyField(b, field);
+    if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` });
+  }
   // Snapshot pre-merge state — Object.assign below mutates existingCo in
   // place, so the "did archived actually change" check has to use this,
   // not existingCo, or it'd compare the new value against itself (same
@@ -4032,8 +4197,14 @@ app.post('/api/ob-tasks', requireAuth, requireInternal, (req, res) => {
   db.exec('BEGIN');
   try {
     const insert = db.prepare(OB_TASK_INSERT_SQL);
+    const findExisting = db.prepare('SELECT * FROM ob_tasks WHERE tenant_id = ? AND client_id = ? AND task_num = ?');
     const created = [];
     for (const t of tasks) {
+      // Idempotent: a task with this (clientId, taskNum) already existing
+      // means an earlier call already created it (double-click, retry,
+      // etc.) — hand back that same row instead of duplicating it.
+      const already = findExisting.get(req.tenantId, clientId, t.taskNum);
+      if (already) { created.push(rowToObTask(already)); continue; }
       const params = obTaskToParams({ ...t, clientId });
       const info = insert.run(at({ tenantId: req.tenantId, ...params }));
       created.push(rowToObTask(db.prepare('SELECT * FROM ob_tasks WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId)));
@@ -4606,10 +4777,19 @@ app.put('/api/workflow/:id', requireAuth, requireInternal, (req, res) => {
   }
 });
 
+// QA RBAC audit: withdrawing was open to ANY internal user with no
+// ownership check at all — unlike PUT above (which gates on the current
+// step's role), a withdrawal cancels the whole chain outright, so the
+// natural owner is whoever actually submitted the request, the same
+// identity stored in created_by at POST /api/workflow time.
 app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
   if (existing.status !== 'active') return res.status(409).json({ error: 'This workflow is already resolved' });
+  const requester = req.user.name || req.user.email;
+  if (existing.created_by !== requester && existing.created_by !== req.user.email) {
+    return res.status(403).json({ error: 'Only the workflow\'s own creator may withdraw it' });
+  }
   db.prepare("UPDATE workflow_instances SET status='withdrawn' WHERE id=? AND tenant_id=?").run(existing.id, req.tenantId);
   const row = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToWfInstance(row));
