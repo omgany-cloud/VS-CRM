@@ -2,6 +2,36 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.40.0] - 2026-08-24
+
+### Fixed
+- Stored XSS: `client.name` (and one COI `parties` field) rendered
+  unescaped via `innerHTML`/`document.write()` in 7 places across
+  `js/onboarding.js` — the onboarding task-form header, the LP-data
+  section of that same form, the Term Sheet and DD Report print
+  generators (including a `<title>` RCDATA-breakout vector —
+  `</title><script>...` closes the tag early and executes as real
+  HTML), the Conflict Approval list/detail view, and a second,
+  unescaped COI list view. All now go through `escapeHtml()`/`esc()`.
+  Two previously-reported spots at the old QA_AUDIT_STATUS.md line
+  citations turned out to already be fixed from earlier in this
+  session — the audit doc just hadn't been updated to reflect it;
+  corrected there too.
+
+### Added
+- Server-side URL-scheme guard: any request-body field whose name
+  ends in "url" (recursively, including nested objects/arrays) is now
+  rejected with 400 if its value is a `javascript:`/`data:`/
+  `vbscript:`/`file:` URI (normalized against whitespace/control-char
+  obfuscation like `java\tscript:`). `escapeAttr()`/`escapeHtml()`
+  already stop a URL value from breaking out of its `href`/`iframe
+  src` attribute, but do nothing to stop the value ITSELF from being
+  live script once rendered as a real link — this closes that gap.
+  Plain `http(s)` links (Google Drive included) are completely
+  unaffected; this is a denylist of dangerous schemes, not a
+  format/domain allowlist, so free-text placeholders in these fields
+  keep working. 7 new tests (`server/test/url-scheme-guard.test.js`).
+
 ## [1.39.0] - 2026-08-24
 
 ### Fixed

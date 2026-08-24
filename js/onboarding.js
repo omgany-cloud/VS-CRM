@@ -833,7 +833,7 @@ function openObTaskForm(taskId) {
         <i class="fas fa-arrow-left"></i> Назад
       </button>
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;color:#8abfbb;margin-bottom:1px">${client.name} · ${client.clientId}</div>
+        <div style="font-size:11px;color:#8abfbb;margin-bottom:1px">${escapeHtml(client.name)} · ${escapeHtml(client.clientId)}</div>
         <div style="font-size:14px;font-weight:800;color:#f1f5f9">
           <span style="color:${PHASE_COLORS[task.phase]};margin-right:6px">TASK ${task.taskNum}</span>${task.title}
         </div>
@@ -2500,7 +2500,7 @@ function buildTaskForm(task, client) {
             <i class="fas fa-user-tie"></i> Секция 2 — LP: данные подписанта
           </div>
           <div style="background:#1c3332;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#94a3b8">
-            <b style="color:#c4b5fd">${client.name}</b> · ${client.type} · Commitment: <b style="color:#5eead4">${fmtCurrency(client.commitment||0, currencyForFundId(activeFundId))}</b>
+            <b style="color:#c4b5fd">${escapeHtml(client.name)}</b> · ${escapeHtml(client.type)} · Commitment: <b style="color:#5eead4">${fmtCurrency(client.commitment||0, currencyForFundId(activeFundId))}</b>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="${formGroupStyle}"><label style="${labelStyle}">ФИО Директора / CEO LP (подписант) *</label>
@@ -4660,7 +4660,7 @@ function obGenerateTermSheet(taskId) {
       '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Date</th>' +
     '</tr></thead><tbody>' +
     sigLine('For and on behalf of<br>' + companyName(), 'Authorised Signatory') +
-    sigLine('For and on behalf of<br>the Client', client.name) +
+    sigLine('For and on behalf of<br>the Client', esc(client.name)) +
     sigLine('Witnessed by<br>(if applicable)', '') +
     '</tbody></table>' +
 
@@ -4850,7 +4850,7 @@ function obGenerateDDReport(taskId) {
       <tbody>
         <tr style="background:#f8fafc">
           <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;width:38%;border-bottom:1px solid #e2e8f0">Client / ${isFM?'LP':''} Name</td>
-          <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#0f172a;border-bottom:1px solid #e2e8f0">${client.name}</td>
+          <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#0f172a;border-bottom:1px solid #e2e8f0">${escapeHtml(client.name)}</td>
         </tr>
         <tr>
           <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;border-bottom:1px solid #e2e8f0">Client ID</td>
@@ -5026,7 +5026,7 @@ function obGenerateDDReport(taskId) {
   //    consistent toolbar/button across every document generator) ──
   try {
     const win = openPrintableDocument(body, {
-      title: 'DD Report — ' + client.name + ' — ' + docRef,
+      title: 'DD Report — ' + escapeHtml(client.name) + ' — ' + docRef,
       features: 'width=900,height=750,scrollbars=yes,menubar=yes,toolbar=yes',
       extraStyle: docStyle,
     });
@@ -6339,7 +6339,7 @@ function renderConflictApprovalsPage() {
               return `
                 <tr onclick="openConflictApprovalDetail(${a.id})" style="cursor:pointer">
                   <td style="font-weight:700;color:#e2e8f0;font-size:13px">${statusLabel(a.decisionType)}</td>
-                  <td style="font-size:12px;color:#94a3b8">${client ? client.name : '—'}</td>
+                  <td style="font-size:12px;color:#94a3b8">${client ? escapeHtml(client.name) : '—'}</td>
                   <td style="font-size:11px;color:#5a8a85">${a.dealRef || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${risk.bg};color:${risk.c}">${statusLabel(a.riskLevel)}</span></td>
                   <td style="font-size:12px;color:#22c55e">${a.feeAmount ? fmtCurrency(a.feeAmount, a.currency||'USD') : '—'}</td>
@@ -6486,7 +6486,7 @@ function openConflictApprovalDetail(id) {
     ${a.status === 'Escalated' ? `<div style="margin-bottom:14px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:12px;color:#fca5a5">
       <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>Риск ${statusLabel(a.riskLevel)} — решение может принять только CEO.</div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#94a3b8;margin-bottom:14px">
-      <div><b style="color:#8abfbb">Клиент:</b> ${client ? client.name : '—'}</div>
+      <div><b style="color:#8abfbb">Клиент:</b> ${client ? escapeHtml(client.name) : '—'}</div>
       <div><b style="color:#8abfbb">Договор:</b> ${eng ? eng.engId : '—'}</div>
       <div><b style="color:#8abfbb">Deal Ref:</b> ${a.dealRef || '—'}</div>
       <div><b style="color:#8abfbb">Fee:</b> ${a.feeAmount ? currencySymbol(a.currency||'USD') + a.feeAmount.toLocaleString() : '—'}</div>
@@ -6660,7 +6660,7 @@ function renderDashboardCoiWidget() {
               <i class="fas fa-exclamation" style="color:${sevCfg.c||'#94a3b8'};font-size:12px"></i>
             </div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.parties}</div>
+              <div style="font-size:12px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.parties)}</div>
               <div style="font-size:10px;color:#5a8a85">${r.coiId} · ${r.date}</div>
             </div>
             <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:${sevCfg.bg};color:${sevCfg.c};flex-shrink:0">${r.severity}</span>

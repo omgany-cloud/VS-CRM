@@ -131,6 +131,57 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Blocks javascript:/data:/vbscript:/file: schemes in any "*url" field
+// anywhere in a request body (LP's lpaUrl/saUrl, a deal's pitchDeckUrl/
+// dataRoomUrl/icMemoUrl/wireConfirmUrl, portfolio.documents.driveUrl,
+// etc. — deliberately generic/recursive so it covers nested JSON
+// sections too, not just top-level fields). These "paste a link" fields
+// get rendered as href/iframe src (js/onboarding.js's
+// _obOpenPreviewModal, js/lp-register.js, js/app.js) — those call sites
+// correctly HTML-attribute-escape the value now, but escaping only stops
+// breaking OUT of the attribute; it does nothing if the value itself IS
+// a javascript:/data: URI, which becomes live/clickable script once
+// rendered as a real href/src regardless of how cleanly it's quoted.
+// http(s) (Google Drive et al.) links are completely unaffected — this
+// is a denylist of dangerous schemes, not an allowlist of "looks like a
+// URL", so free-text placeholders ("N/A", "see email") in these fields
+// keep working exactly as before.
+const DANGEROUS_URL_SCHEMES = ['javascript:', 'data:', 'vbscript:', 'file:'];
+function findDangerousUrlField(value, keyHint) {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    if (keyHint && /url$/i.test(keyHint)) {
+      // Strip C0 controls/whitespace anywhere in the string — browsers do
+      // the same when parsing a URL's scheme, so "java\tscript:" is only
+      // a real bypass if this check doesn't normalize it away too.
+      const normalized = value.replace(/[\x00-\x20\x7f]+/g, '').toLowerCase();
+      if (DANGEROUS_URL_SCHEMES.some(s => normalized.startsWith(s))) return keyHint;
+    }
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const bad = findDangerousUrlField(item, keyHint);
+      if (bad) return bad;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      const bad = findDangerousUrlField(v, k);
+      if (bad) return bad;
+    }
+  }
+  return null;
+}
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT') {
+    const badField = findDangerousUrlField(req.body, null);
+    if (badField) return res.status(400).json({ error: `${badField}: unsupported URL scheme — only http(s) links are allowed` });
+  }
+  next();
+});
+
 // Without these, an exception thrown outside any request handler (e.g. in
 // a setInterval callback, or a rejected promise nobody awaited) used to
 // just crash the process with nothing but whatever happened to be in the
