@@ -1055,7 +1055,7 @@ app.post('/api/funds', requireAuth, requireInternal, requirePermission('manageUs
   if (b.assetClass != null && !VALID_ASSET_CLASSES.includes(b.assetClass)) {
     return res.status(400).json({ error: `assetClass must be one of ${VALID_ASSET_CLASSES.join(', ')}` });
   }
-  { const bad = invalidMoneyField(b, 'targetSize'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
+  { const bad = invalidMoneyField(b, 'targetSize'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad }); }
   // operatingModel is NEVER taken from the request body — it's derived
   // from assetClass here, server-side, so a caller can't set a 'pe' fund
   // to 'open-end' (or vice versa) and desync it from the engine that
@@ -1097,7 +1097,7 @@ app.put('/api/funds/:id', requireAuth, requireInternal, requirePermission('manag
   if (req.body && req.body.assetClass != null && !VALID_ASSET_CLASSES.includes(req.body.assetClass)) {
     return res.status(400).json({ error: `assetClass must be one of ${VALID_ASSET_CLASSES.join(', ')}` });
   }
-  { const bad = invalidMoneyField(req.body || {}, 'targetSize'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
+  { const bad = invalidMoneyField(req.body || {}, 'targetSize'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad }); }
   const merged = { ...rowToFund(existing), ...(req.body || {}) };
   // Same rule as POST: operatingModel always re-derived from the final
   // assetClass, never taken from req.body directly, even on update.
@@ -1169,8 +1169,8 @@ function validateFundOwnershipPct(db, tenantId, fundId, incomingPct, excludeLpId
 
 app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
-  if (!b.name) return res.status(400).json({ error: 'name is required' });
-  { const bad = invalidMoneyField(b, 'commitment'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
+  if (!b.name) return res.status(400).json({ error: 'name is required', field: 'name' });
+  { const bad = invalidMoneyField(b, 'commitment'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad }); }
   if (b.fundId) {
     const check = validateFundOwnershipPct(db, req.tenantId, b.fundId, b.ownershipPct || 0, null);
     if (!check.ok) return res.status(400).json({ error: check.error });
@@ -1183,8 +1183,8 @@ app.post('/api/lp', requireAuth, requireInternal, requirePermission('accessFM'),
   // only stops forging a link to KYC work that never happened.
   if (b.obClientId) {
     const client = db.prepare('SELECT activated FROM ob_clients WHERE id = ? AND tenant_id = ?').get(b.obClientId, req.tenantId);
-    if (!client) return res.status(400).json({ error: 'obClientId does not refer to an onboarding client in this tenant' });
-    if (!client.activated) return res.status(400).json({ error: 'obClientId refers to an onboarding client that is not yet activated (KYC/AML not complete)' });
+    if (!client) return res.status(400).json({ error: 'obClientId does not refer to an onboarding client in this tenant', field: 'obClientId' });
+    if (!client.activated) return res.status(400).json({ error: 'obClientId refers to an onboarding client that is not yet activated (KYC/AML not complete)', field: 'obClientId' });
   }
 
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM lp_register WHERE tenant_id = ?').get(req.tenantId);
@@ -1299,7 +1299,7 @@ app.put('/api/lp/:id', requireAuth, requireInternal, requirePermission('accessFM
 
   const b = req.body || {};
   if (!checkVersion(res, existing, b, withLiveFinancials(db, req.tenantId, existing.id, rowToLp(existing)))) return;
-  { const bad = invalidMoneyField(b, 'commitment'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` }); }
+  { const bad = invalidMoneyField(b, 'commitment'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad }); }
   const merged = { ...rowToLp(existing), ...b };
 
   if (merged.fundId) {
@@ -1430,7 +1430,7 @@ app.get('/api/capital-calls', requireAuth, requireInternal, requirePermission('a
 
 app.post('/api/capital-calls', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
-  if (!b.purpose) return res.status(400).json({ error: 'purpose is required' });
+  if (!b.purpose) return res.status(400).json({ error: 'purpose is required', field: 'purpose' });
 
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM capital_calls WHERE tenant_id = ?').get(req.tenantId);
   const ccNumber = b.ccNumber || `CC-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
@@ -1538,17 +1538,17 @@ app.put('/api/capital-calls/:id', requireAuth, requireInternal, requirePermissio
   // payment date before the notice date.
   if (existing.status === 'Draft' && b.status === 'Pending') {
     if (merged.totalAmount != null && (typeof merged.totalAmount !== 'number' || !Number.isFinite(merged.totalAmount) || merged.totalAmount < 0)) {
-      return res.status(400).json({ error: 'totalAmount must be a non-negative number' });
+      return res.status(400).json({ error: 'totalAmount must be a non-negative number', field: 'totalAmount' });
     }
     if (merged.noticeDate && !isValidDateStr(merged.noticeDate)) {
-      return res.status(400).json({ error: 'noticeDate is not a valid date' });
+      return res.status(400).json({ error: 'noticeDate is not a valid date', field: 'noticeDate' });
     }
     if (merged.paymentDate && !isValidDateStr(merged.paymentDate)) {
-      return res.status(400).json({ error: 'paymentDate is not a valid date' });
+      return res.status(400).json({ error: 'paymentDate is not a valid date', field: 'paymentDate' });
     }
     if (merged.noticeDate && merged.paymentDate && isValidDateStr(merged.noticeDate) && isValidDateStr(merged.paymentDate)
       && new Date(merged.paymentDate) < new Date(merged.noticeDate)) {
-      return res.status(400).json({ error: 'paymentDate cannot be before noticeDate' });
+      return res.status(400).json({ error: 'paymentDate cannot be before noticeDate', field: 'paymentDate' });
     }
   }
   db.prepare(`
@@ -3197,7 +3197,7 @@ app.post('/api/spvs/:id/capital-calls', requireAuth, requireInternal, requirePer
   const spv = db.prepare('SELECT * FROM spvs WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!spv) return res.status(404).json({ error: 'SPV not found in this tenant' });
   const b = req.body || {};
-  if (!b.purpose) return res.status(400).json({ error: 'purpose is required' });
+  if (!b.purpose) return res.status(400).json({ error: 'purpose is required', field: 'purpose' });
   const totalAmount = b.totalAmount || 0;
 
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM spv_capital_calls WHERE tenant_id = ? AND spv_id = ?').get(req.tenantId, spv.id);
@@ -3275,17 +3275,17 @@ app.put('/api/spv-capital-calls/:id', requireAuth, requireInternal, requirePermi
   // established pattern, the real amount can live in each line item).
   if (existing.status === 'Draft' && b.status === 'Pending') {
     if (merged.totalAmount != null && (typeof merged.totalAmount !== 'number' || !Number.isFinite(merged.totalAmount) || merged.totalAmount < 0)) {
-      return res.status(400).json({ error: 'totalAmount must be a non-negative number' });
+      return res.status(400).json({ error: 'totalAmount must be a non-negative number', field: 'totalAmount' });
     }
     if (merged.noticeDate && !isValidDateStr(merged.noticeDate)) {
-      return res.status(400).json({ error: 'noticeDate is not a valid date' });
+      return res.status(400).json({ error: 'noticeDate is not a valid date', field: 'noticeDate' });
     }
     if (merged.paymentDate && !isValidDateStr(merged.paymentDate)) {
-      return res.status(400).json({ error: 'paymentDate is not a valid date' });
+      return res.status(400).json({ error: 'paymentDate is not a valid date', field: 'paymentDate' });
     }
     if (merged.noticeDate && merged.paymentDate && isValidDateStr(merged.noticeDate) && isValidDateStr(merged.paymentDate)
       && new Date(merged.paymentDate) < new Date(merged.noticeDate)) {
-      return res.status(400).json({ error: 'paymentDate cannot be before noticeDate' });
+      return res.status(400).json({ error: 'paymentDate cannot be before noticeDate', field: 'paymentDate' });
     }
   }
   db.prepare(`
@@ -3729,7 +3729,7 @@ app.get('/api/deals', requireAuth, requireInternal, requirePermission('accessFM'
 
 app.post('/api/deals', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
-  if (!b.company) return res.status(400).json({ error: 'company is required' });
+  if (!b.company) return res.status(400).json({ error: 'company is required', field: 'company' });
   const now = new Date().toISOString().slice(0, 10);
   // stage/ic are forced, not defaulted — they used to sit after ...b (a
   // default a caller could simply override), which combined with the
@@ -3816,10 +3816,10 @@ app.get('/api/portfolio', requireAuth, requireInternal, requirePermission('acces
 
 app.post('/api/portfolio', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   const b = req.body || {};
-  if (!b.name) return res.status(400).json({ error: 'name is required' });
+  if (!b.name) return res.status(400).json({ error: 'name is required', field: 'name' });
   for (const field of ['invested', 'value']) {
     const bad = invalidMoneyField(b, field);
-    if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` });
+    if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad });
   }
   const params = portfolioToParams({ status: 'Active', ...b });
   const info = db.prepare(PORTFOLIO_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
@@ -3836,7 +3836,7 @@ app.put('/api/portfolio/:id', requireAuth, requireInternal, requirePermission('a
   if (!checkVersion(res, existing, b, existingCo)) return;
   for (const field of ['invested', 'value']) {
     const bad = invalidMoneyField(b, field);
-    if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number` });
+    if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad });
   }
   // Snapshot pre-merge state — Object.assign below mutates existingCo in
   // place, so the "did archived actually change" check has to use this,

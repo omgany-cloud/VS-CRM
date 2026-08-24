@@ -121,7 +121,14 @@ async function apiFetch(path, options = {}) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || ('HTTP ' + res.status));
+    const err = new Error(body.error || ('HTTP ' + res.status));
+    // QA P3 audit finding ("field-level errors нет вообще") — the server
+    // now names which field a 400 is about on the routes that matter most
+    // (LP/Deal/Portfolio/Capital Call); attach it here so a caller CAN
+    // highlight that one input, without changing what err.message is for
+    // every existing catch(err) site that only ever read .message.
+    if (body.field) err.field = body.field;
+    throw err;
   }
   return res.status === 204 ? null : res.json();
 }

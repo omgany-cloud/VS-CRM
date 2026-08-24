@@ -2,6 +2,28 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.42.0] - 2026-08-24
+
+### Added
+- Digest notification for overdue portfolio-company payments: new
+  `checkPortfolioOverdue()` surfaces the same
+  `financials.overdueAmount`/`paymentSchedule` signal `portAutoStatus()`
+  already computed client-only (visible only to whoever happened to
+  open that one company's page) as a real daily email to accessFM
+  staff. Deliberately does not touch `portfolio.status` itself — the
+  manual field stays manual, confirmed as the intended design: an
+  auto-computed "Problem" should never silently override a human's
+  judgment call.
+- Field-level validation errors on the 4 highest-traffic forms (LP,
+  Deal, Portfolio, Capital Call): the server now names which field a
+  400 is about, `apiFetch()` attaches it to the thrown error, and the
+  New Deal / New Portfolio Company / New Individual Capital Call forms
+  highlight that exact input (red border + inline message) instead of
+  only a generic toast. LP has no direct creation form in the UI (LPs
+  are only created via onboarding activation), so the server-side
+  `field` key is there for API consistency but nothing in the UI
+  consumes it yet.
+
 ## [1.41.0] - 2026-08-24
 
 ### Fixed

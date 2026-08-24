@@ -2387,6 +2387,8 @@ async function saveDeal() {
     comments: [],
   };
 
+  const dealFieldInputs = { company: 'deal_company' };
+  clearFieldErrors(Object.values(dealFieldInputs));
   _savingDeal = true;
   try {
     const created = await apiFetch('/api/deals', { method: 'POST', body: JSON.stringify(newDeal) });
@@ -2396,7 +2398,9 @@ async function saveDeal() {
     closeModalSilent();
     showToast('✅ Сделка добавлена в pipeline');
   } catch (err) {
-    showToast('⚠️ Не удалось сохранить сделку: ' + err.message, 'red');
+    if (!err.field || !showFieldError(dealFieldInputs[err.field], err.message)) {
+      showToast('⚠️ Не удалось сохранить сделку: ' + err.message, 'red');
+    }
   } finally {
     _savingDeal = false;
   }
@@ -2482,6 +2486,8 @@ async function savePortfolio() {
     ],
   };
 
+  const portFieldInputs = { name: 'port_name', invested: 'port_invested', value: 'port_value' };
+  clearFieldErrors(Object.values(portFieldInputs));
   _savingPortfolio = true;
   try {
     const created = await apiFetch('/api/portfolio', { method: 'POST', body: JSON.stringify(newPortco) });
@@ -2491,7 +2497,9 @@ async function savePortfolio() {
     closeModalSilent();
     showToast(`✅ Компания добавлена в портфель: ${name}`);
   } catch (err) {
-    showToast('⚠️ Не удалось сохранить компанию: ' + err.message, 'red');
+    if (!err.field || !showFieldError(portFieldInputs[err.field], err.message)) {
+      showToast('⚠️ Не удалось сохранить компанию: ' + err.message, 'red');
+    }
   } finally {
     _savingPortfolio = false;
   }
@@ -3292,6 +3300,38 @@ function closeModalSilent() {
 // Each toast now has its own element and its own timer, so several can be
 // visible at once (stacked via .toast-container's flex layout) and none
 // get cut short by another one firing.
+// Field-level error highlighting (QA P3 audit finding: "Field-level
+// ошибок нет вообще — ни сервер не отдаёт field-ключ в 400-ответах, ни
+// фронтенд не подсвечивает конкретное поле"). apiFetch() now attaches
+// err.field when the server names one; this puts a red border + an
+// inline message under that one input, on top of (not instead of) the
+// existing toast, which stays the fallback for every field this doesn't
+// cover yet. clearFieldErrors() must be called at the top of a save
+// function, before the request — otherwise a stale highlight from a
+// PREVIOUS failed attempt lingers after an unrelated field also errors.
+function showFieldError(inputId, message) {
+  const input = document.getElementById(inputId);
+  if (!input) return false; // caller falls back to the toast
+  input.style.borderColor = '#ef4444';
+  const existing = document.getElementById(inputId + '_fieldError');
+  if (existing) existing.remove();
+  const msg = document.createElement('div');
+  msg.id = inputId + '_fieldError';
+  msg.textContent = message;
+  msg.style.cssText = 'color:#ef4444;font-size:11px;margin-top:4px';
+  input.insertAdjacentElement('afterend', msg);
+  input.focus({ preventScroll: false });
+  return true;
+}
+function clearFieldErrors(inputIds) {
+  for (const id of inputIds) {
+    const input = document.getElementById(id);
+    if (input) input.style.borderColor = '';
+    const msg = document.getElementById(id + '_fieldError');
+    if (msg) msg.remove();
+  }
+}
+
 function showToast(msg, color = 'green') {
   const container = document.getElementById('toastContainer');
   if (!container) return;

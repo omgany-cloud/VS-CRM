@@ -2296,6 +2296,8 @@ async function saveIndividualCC(lpId) {
     lineItems,
   };
 
+  const iccFieldInputs = { purpose: 'icc_purpose', totalAmount: 'icc_amount', noticeDate: 'icc_noticeDate', paymentDate: 'icc_payDate' };
+  clearFieldErrors(Object.values(iccFieldInputs));
   _savingIndividualCC = true;
   try {
     const created = await apiFetch('/api/capital-calls', { method: 'POST', body: JSON.stringify(newCC) });
@@ -2304,7 +2306,9 @@ async function saveIndividualCC(lpId) {
     showToast(`📝 Individual CC ${created.ccNumber} сохранён как черновик для ${lp.name} · ${fmtUSD(amount)} — требует подтверждения CFO/CEO`, 'blue');
     renderCapitalCallsPage();
   } catch (err) {
-    showToast('⚠️ Не удалось создать Individual CC: ' + err.message, 'red');
+    if (!err.field || !showFieldError(iccFieldInputs[err.field], err.message)) {
+      showToast('⚠️ Не удалось создать Individual CC: ' + err.message, 'red');
+    }
   } finally {
     _savingIndividualCC = false;
   }

@@ -261,8 +261,48 @@ async function checkHfFeeCrystallizationDue(tenantId) {
   }
 }
 
+// A portfolio company with an overdue payment on its own
+// financials.paymentSchedule — QA Portfolio Monitoring audit finding:
+// portAutoStatus() (js/app.js) derives a "Problem"/"Monitoring" BADGE
+// from exactly this same data, but purely client-side, at render time —
+// nobody who hasn't personally opened that one company's page ever finds
+// out. This surfaces the same underlying fact (an overdue payment
+// exists) as a real notification, without touching portfolio.status
+// itself — confirmed with the user: the stored status stays a manual
+// field, this is strictly an additional signal, never an override.
+// financials/monitoring are free-form JSON blobs (no query-able columns,
+// same PoC tradeoff as elsewhere in this schema), so this reads every
+// non-archived row and parses in JS rather than a SQL-side JSON filter.
+async function checkPortfolioOverdue(tenantId) {
+  const rows = db.prepare(`
+    SELECT * FROM portfolio WHERE tenant_id = ? AND (archived IS NULL OR archived = 0)
+  `).all(tenantId);
+  if (!rows.length) return;
+  const officers = usersByPermissionFlag(tenantId, 'access_fm');
+  if (!officers.length) return;
+
+  for (const row of rows) {
+    let financials;
+    try { financials = JSON.parse(row.financials_json || '{}'); } catch { continue; }
+    if (!(financials.overdueAmount > 0)) continue;
+    const oldest = (financials.paymentSchedule || []).find(s => s.status === 'Просрочен');
+    const sinceDate = oldest ? oldest.date : null;
+
+    for (const officer of officers) {
+      if (!officer.email) continue;
+      await notifyOnce({
+        tenantId, eventType: 'portfolio_payment_overdue', entityType: 'portfolio', entityId: row.id,
+        to: officer.email, scope: 'daily',
+        subject: `Просроченный платёж по портфельной компании: ${row.name}`,
+        html: `<p>По компании «${esc(row.name)}» есть просроченная сумма ${esc(financials.overdueAmount)}${sinceDate ? ` (с ${esc(sinceDate)})` : ''}.</p>`,
+      });
+    }
+  }
+}
+
 module.exports = {
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
   checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
+  checkPortfolioOverdue,
 };
