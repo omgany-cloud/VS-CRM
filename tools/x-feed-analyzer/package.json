@@ -1,0 +1,14 @@
+{
+  "name": "x-feed-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI that authenticates against the X (Twitter) API v2 with your own account and analyzes your home timeline.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "auth": "node src/cli.js auth",
+    "analyze": "node src/cli.js analyze"
+  }
+}
