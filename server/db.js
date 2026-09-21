@@ -730,6 +730,12 @@ CREATE TABLE IF NOT EXISTS roles (
   -- ob_clients/ob_tasks itself, so this permission controls who can see
   -- AI suggestions, not who can approve anything.
   ai_assist         INTEGER NOT NULL DEFAULT 0,
+  -- Accepting a Sandbox project into the Deal Pipeline's Скрининг stage
+  -- (POST /api/sandbox/:id/promote) is the fund's own "this is worth the
+  -- team's time" call — restricted to CEO by default, same reasoning as
+  -- cc_approve: whoever sourced/prepared a project shouldn't also be the
+  -- only one who can decide it deserves a screening slot.
+  screening_accept  INTEGER NOT NULL DEFAULT 0,
   ic_seat           TEXT,
   is_system         INTEGER NOT NULL DEFAULT 0,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -1190,6 +1196,60 @@ CREATE TABLE IF NOT EXISTS spv_distribution_line_items (
   wire_confirm_url TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_spv_dist_line_items_tenant ON spv_distribution_line_items(tenant_id);
+
+-- Sandbox ("Песочница") — the pre-Скрининг holding area for raw
+-- projects/companies/assets that MIGHT deserve a screening slot. Its own
+-- entity rather than a deals.stage: deals is already ~80 columns with a
+-- NOT NULL amount and a fixed investment-stage lifecycle, while a sandbox
+-- item needs none of that (no sum, often no fund yet) but does need its
+-- own status, goal and task list. Accepting one creates a real deals row
+-- at Скрининг and links back via promoted_deal_id (one project -> one
+-- deal), after which the sandbox row is read-only history.
+--  * name: deliberately one free-text field — a company, a project or an
+--    asset; no kind/type column until there's a real need to tell them apart.
+--  * owner / task.assignee: user emails (same identifier audit_log uses).
+--  * status: Новый / В проработке / Ждём информацию / Отложен / Отказ /
+--    Передан в скрининг (the last one only ever set by the promote route).
+--  * goal: what's planned for the project in the near term; its change
+--    history lives in audit_log (entity_type 'sandbox_projects'), not a
+--    second history table.
+CREATE TABLE IF NOT EXISTS sandbox_projects (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  fund_id           INTEGER REFERENCES funds(id),
+  name              TEXT NOT NULL,
+  initiator         TEXT,
+  description       TEXT,
+  folder_url        TEXT,
+  goal              TEXT,
+  status            TEXT NOT NULL DEFAULT 'Новый',
+  status_reason     TEXT,
+  deferred_until    TEXT,
+  owner             TEXT,
+  promoted_deal_id  INTEGER REFERENCES deals(id),
+  archived          INTEGER NOT NULL DEFAULT 0,
+  created_by        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  version           INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_projects_tenant ON sandbox_projects(tenant_id, archived, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sandbox_projects_promoted_deal ON sandbox_projects(promoted_deal_id) WHERE promoted_deal_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS sandbox_tasks (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
+  project_id    INTEGER NOT NULL REFERENCES sandbox_projects(id),
+  title         TEXT NOT NULL,
+  assignee      TEXT,
+  due_date      TEXT,
+  priority      TEXT NOT NULL DEFAULT 'Средний',
+  status        TEXT NOT NULL DEFAULT 'К выполнению',
+  created_by    TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_tasks_project ON sandbox_tasks(tenant_id, project_id, status);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —
@@ -1226,6 +1286,13 @@ if (!columnExists('roles', 'afsa_submit')) db.exec("ALTER TABLE roles ADD COLUMN
 db.exec("UPDATE roles SET afsa_submit = 1 WHERE is_system = 1 AND code IN ('CEO', 'CFO', 'COMPLIANCE_OFFICER', 'MLRO') AND afsa_submit = 0");
 if (!columnExists('roles', 'ai_assist')) db.exec("ALTER TABLE roles ADD COLUMN ai_assist INTEGER NOT NULL DEFAULT 0");
 db.exec("UPDATE roles SET ai_assist = 1 WHERE is_system = 1 AND code IN ('RELATIONSHIP_MANAGER', 'COMPLIANCE_OFFICER', 'MLRO') AND ai_assist = 0");
+// Backfill only in the same step that adds the column (unlike the older
+// per-boot backfills above): those re-grant on every restart, which would
+// silently undo an admin deliberately revoking this from the CEO role.
+if (!columnExists('roles', 'screening_accept')) {
+  db.exec("ALTER TABLE roles ADD COLUMN screening_accept INTEGER NOT NULL DEFAULT 0");
+  db.exec("UPDATE roles SET screening_accept = 1 WHERE is_system = 1 AND code = 'CEO'");
+}
 if (!columnExists('documents', 'document_url')) db.exec("ALTER TABLE documents ADD COLUMN document_url TEXT");
 if (!columnExists('documents', 'archived')) db.exec("ALTER TABLE documents ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
 if (!columnExists('documents', 'archived_at')) db.exec("ALTER TABLE documents ADD COLUMN archived_at TEXT");

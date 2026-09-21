@@ -53,6 +53,7 @@ const MODAL_OVERLAY_IDS = [
   'coiAddOverlay', 'distDetailOverlay', 'distNewOverlay', 'bankReconOverlay',
   'hfSubNewOverlay', 'hfRedNewOverlay', 'hfNavNewOverlay', 'spvNewOverlay',
   'spvDetailOverlay', 'spvInvestorNewOverlay', 'spvCcNewOverlay', 'spvDistNewOverlay',
+  'sandboxOverlay',
 ];
 
 function _modalOverlayIsVisible(el) {

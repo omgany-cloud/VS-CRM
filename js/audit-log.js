@@ -17,6 +17,7 @@ const AUDIT_ENTITY_LABELS = {
   deals:                { label: 'Deal Pipeline',         color: '#3b82f6' },
   conflict_approvals:   { label: 'Conflicts / COI',        color: '#ef4444' },
   engagements:          { label: 'Реестр договоров',       color: '#22c55e' },
+  sandbox_projects:     { label: 'Песочница',              color: '#a78bfa' },
 };
 
 const AUDIT_ACTION_LABELS = {
@@ -30,6 +31,11 @@ const AUDIT_ACTION_LABELS = {
   stage_changed:  { label: 'Смена стадии', color: '#3b82f6' },
   status_changed: { label: 'Смена статуса', color: '#3b82f6' },
   decided:        { label: 'Решение принято', color: '#eab308' },
+  goal_changed:   { label: 'Смена цели',   color: '#a78bfa' },
+  promoted:       { label: 'Принято в скрининг', color: '#22c55e' },
+  task_created:   { label: 'Новая задача', color: '#3b82f6' },
+  task_completed: { label: 'Задача выполнена', color: '#14b8a6' },
+  task_deleted:   { label: 'Задача удалена', color: '#ef4444' },
 };
 
 function auditEntityBadge(entityType) {

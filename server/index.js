@@ -33,6 +33,11 @@ const {
 } = require('./chineseWall');
 const { rowToLp, rowToLpPortalView, withLiveFinancials } = require('./lpMapping');
 const { dealToParams, rowToDeal, INSERT_SQL: DEAL_INSERT_SQL, UPDATE_SQL: DEAL_UPDATE_SQL } = require('./dealMapping');
+const {
+  SANDBOX_STATUSES, SANDBOX_PROMOTED_STATUS, SANDBOX_REASON_STATUSES,
+  SANDBOX_TASK_STATUSES, SANDBOX_TASK_DONE_STATUSES, SANDBOX_TASK_PRIORITIES,
+  rowToSandboxProject, rowToSandboxTask,
+} = require('./sandboxMapping');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
   restrictedToParams, rowToRestricted, RESTRICTED_INSERT_SQL,
@@ -177,7 +182,7 @@ function findDangerousUrlField(value, keyHint) {
 app.use((req, res, next) => {
   if (req.method === 'POST' || req.method === 'PUT') {
     const badField = findDangerousUrlField(req.body, null);
-    if (badField) return res.status(400).json({ error: `${badField}: unsupported URL scheme — only http(s) links are allowed` });
+    if (badField) return res.status(400).json({ error: `${badField}: unsupported URL scheme — only http(s) links are allowed`, field: badField });
   }
   next();
 });
@@ -3803,9 +3808,366 @@ app.delete('/api/deals/:id', requireAuth, requireInternal, requirePermission('ac
       footprint: [{ table: 'ic_memos', column: 'deal_id', count: memos.length }],
     });
   }
+  // A deal accepted from the Sandbox stays as the governance trail of that
+  // acceptance (sandbox_projects.promoted_deal_id points at it, and the
+  // foreign key would reject the delete anyway) — same "move it to
+  // Отклонена instead" answer as the IC-memo footprint above.
+  const fromSandbox = db.prepare('SELECT id, name FROM sandbox_projects WHERE tenant_id = ? AND promoted_deal_id = ?').get(req.tenantId, existing.id);
+  if (fromSandbox) {
+    return res.status(409).json({
+      error: `Cannot delete: deal was accepted from Sandbox project «${fromSandbox.name}». Move it to the "Отклонена" stage instead.`,
+      footprint: [{ table: 'sandbox_projects', column: 'promoted_deal_id', count: 1 }],
+    });
+  }
   db.prepare('DELETE FROM deals WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
   recordAudit(db, { tenantId: req.tenantId, entityType: 'deals', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Сделка «${existing.company}» удалена` });
   res.json({ ok: true, deleted: true });
+});
+
+/* ===== Sandbox (Песочница) API — pre-Скрининг projects, tenant-scoped =====
+   Visible to every accessFM user (the same audience as the Deal Pipeline
+   this feeds); accepting a project into Скрининг additionally needs the
+   screeningAccept permission (CEO by default). A promoted project is
+   read-only history — further work happens on the deal itself. */
+const SANDBOX_DONE_SQL = SANDBOX_TASK_DONE_STATUSES.map(s => `'${s}'`).join(', ');
+const SANDBOX_SELECT = `
+  SELECT p.*,
+    (SELECT COUNT(*) FROM sandbox_tasks t
+       WHERE t.project_id = p.id AND t.tenant_id = p.tenant_id AND t.status NOT IN (${SANDBOX_DONE_SQL})) AS open_tasks,
+    (SELECT COUNT(*) FROM sandbox_tasks t
+       WHERE t.project_id = p.id AND t.tenant_id = p.tenant_id AND t.status NOT IN (${SANDBOX_DONE_SQL})
+         AND t.due_date IS NOT NULL AND t.due_date <> '' AND t.due_date < date('now')) AS overdue_tasks,
+    (SELECT MIN(t.due_date) FROM sandbox_tasks t
+       WHERE t.project_id = p.id AND t.tenant_id = p.tenant_id AND t.status NOT IN (${SANDBOX_DONE_SQL})
+         AND t.due_date IS NOT NULL AND t.due_date <> '') AS next_due
+  FROM sandbox_projects p`;
+const SANDBOX_TEXT_LIMITS = { name: 200, initiator: 200, description: 5000, goal: 1000, statusReason: 1000 };
+const SANDBOX_PROMOTED_MSG = 'Проект уже передан в скрининг — дальнейшая работа ведётся в разделе «Сделки»';
+
+function loadSandboxProject(tenantId, id) {
+  return db.prepare(SANDBOX_SELECT + ' WHERE p.id = ? AND p.tenant_id = ?').get(id, tenantId);
+}
+function sandboxNameMap(tenantId) {
+  const map = {};
+  for (const u of db.prepare('SELECT email, name FROM users WHERE tenant_id = ?').all(tenantId)) map[u.email] = u.name || u.email;
+  return map;
+}
+// Same audience as the sandbox itself: active internal staff who hold
+// accessFM. Owner/assignee must come from this set, so a task can never be
+// assigned to someone who couldn't even open the project.
+function sandboxPeople(tenantId) {
+  return db.prepare(`
+    SELECT u.email, u.name, u.role FROM users u
+    JOIN roles r ON r.tenant_id = u.tenant_id AND r.code = u.role
+    WHERE u.tenant_id = ? AND u.active = 1 AND r.internal = 1 AND r.access_fm = 1
+    ORDER BY COALESCE(NULLIF(u.name, ''), u.email)`).all(tenantId);
+}
+function sandboxPersonInvalid(tenantId, email) {
+  if (email == null || email === '') return false;
+  if (typeof email !== 'string') return true;
+  return !db.prepare(`
+    SELECT 1 AS ok FROM users u
+    JOIN roles r ON r.tenant_id = u.tenant_id AND r.code = u.role
+    WHERE u.tenant_id = ? AND u.email = ? AND u.active = 1 AND r.internal = 1 AND r.access_fm = 1`).get(tenantId, email);
+}
+function sandboxFundInvalid(tenantId, fundId) {
+  if (fundId == null || fundId === '') return false;
+  if (!Number.isInteger(Number(fundId))) return true;
+  return !db.prepare('SELECT 1 AS ok FROM funds WHERE id = ? AND tenant_id = ?').get(Number(fundId), tenantId);
+}
+function sandboxInvalidText(body) {
+  for (const [f, max] of Object.entries(SANDBOX_TEXT_LIMITS)) {
+    if (!Object.prototype.hasOwnProperty.call(body, f) || body[f] == null) continue;
+    if (typeof body[f] !== 'string') return { field: f, error: `${f} must be text` };
+    if (body[f].length > max) return { field: f, error: `${f} must be at most ${max} characters` };
+  }
+  return null;
+}
+// A folder link is opened by staff in a new tab, so it gets a stricter
+// check than the generic "*url" guard above (which only denies dangerous
+// schemes): must parse as a real http(s) URL and carry no embedded
+// credentials. The server never fetches it.
+function sandboxInvalidFolderUrl(v) {
+  if (v == null || v === '') return null;
+  if (typeof v !== 'string' || v.length > 2000) return 'folderUrl must be a link of at most 2000 characters';
+  let u;
+  try { u = new URL(v.trim()); } catch (e) { return 'folderUrl must be a valid http(s) link'; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return 'folderUrl must be a valid http(s) link';
+  if (u.username || u.password) return 'folderUrl must not contain a login or password';
+  return null;
+}
+const sandboxTrim = v => (v == null ? null : (String(v).trim() || null));
+
+app.get('/api/sandbox/people', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  res.json({ people: sandboxPeople(req.tenantId).map(p => ({ email: p.email, name: p.name || p.email, role: p.role })) });
+});
+
+app.get('/api/sandbox', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const archived = req.query.archived === '1' ? 1 : 0;
+  const rows = db.prepare(SANDBOX_SELECT + ' WHERE p.tenant_id = ? AND p.archived = ? ORDER BY p.updated_at DESC, p.id DESC')
+    .all(req.tenantId, archived);
+  const names = sandboxNameMap(req.tenantId);
+  res.json({ tenant: req.tenantSlug, projects: rows.map(r => rowToSandboxProject(r, names)) });
+});
+
+app.get('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const row = loadSandboxProject(req.tenantId, req.params.id);
+  if (!row) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  const names = sandboxNameMap(req.tenantId);
+  const tasks = db.prepare(`SELECT * FROM sandbox_tasks WHERE project_id = ? AND tenant_id = ?
+    ORDER BY CASE WHEN status IN (${SANDBOX_DONE_SQL}) THEN 1 ELSE 0 END,
+             CASE WHEN due_date IS NULL OR due_date = '' THEN 1 ELSE 0 END, due_date, id`).all(row.id, req.tenantId);
+  // The project's own change history (goal/status/owner changes, tasks,
+  // acceptance) — read from audit_log rather than a second history table.
+  // GET /api/audit-log is manageUsers-only, so the project view serves the
+  // slice for this one entity itself.
+  const history = db.prepare(`SELECT id, action, actor_email, summary, created_at FROM audit_log
+    WHERE tenant_id = ? AND entity_type = 'sandbox_projects' AND entity_id = ? ORDER BY id DESC LIMIT 100`)
+    .all(req.tenantId, row.id)
+    .map(h => ({ id: h.id, action: h.action, actorEmail: h.actor_email, actorName: names[h.actor_email] || h.actor_email, summary: h.summary, createdAt: h.created_at }));
+  res.json({ project: rowToSandboxProject(row, names), tasks: tasks.map(t => rowToSandboxTask(t, names)), history });
+});
+
+app.post('/api/sandbox', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  const name = typeof b.name === 'string' ? b.name.trim() : '';
+  if (!name) return res.status(400).json({ error: 'name is required', field: 'name' });
+  const badText = sandboxInvalidText(b);
+  if (badText) return res.status(400).json(badText);
+  const urlError = sandboxInvalidFolderUrl(b.folderUrl);
+  if (urlError) return res.status(400).json({ error: urlError, field: 'folderUrl' });
+  if (sandboxFundInvalid(req.tenantId, b.fundId)) return res.status(400).json({ error: 'fundId does not exist in this tenant', field: 'fundId' });
+  const owner = sandboxTrim(b.owner) || req.user.email;
+  if (sandboxPersonInvalid(req.tenantId, owner)) return res.status(400).json({ error: 'owner must be an active CRM user with FM access', field: 'owner' });
+
+  const info = db.prepare(`
+    INSERT INTO sandbox_projects (tenant_id, fund_id, name, initiator, description, folder_url, goal, owner, created_by)
+    VALUES (@tenantId, @fundId, @name, @initiator, @description, @folderUrl, @goal, @owner, @createdBy)
+  `).run(at({
+    tenantId: req.tenantId, fundId: b.fundId == null || b.fundId === '' ? null : Number(b.fundId), name,
+    initiator: sandboxTrim(b.initiator), description: sandboxTrim(b.description),
+    folderUrl: sandboxTrim(b.folderUrl), goal: sandboxTrim(b.goal), owner, createdBy: req.user.email,
+  }));
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: info.lastInsertRowid, action: 'created', actorEmail: req.user.email, summary: `Проект «${name}» добавлен в песочницу` });
+  res.status(201).json(rowToSandboxProject(loadSandboxProject(req.tenantId, info.lastInsertRowid), sandboxNameMap(req.tenantId)));
+});
+
+app.put('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  const b = req.body || {};
+  const names = sandboxNameMap(req.tenantId);
+  if (!checkVersion(res, existing, b, rowToSandboxProject(loadSandboxProject(req.tenantId, existing.id), names))) return;
+  const has = f => Object.prototype.hasOwnProperty.call(b, f);
+  // Archive/restore is the one thing still allowed on an accepted project.
+  if (existing.promoted_deal_id && Object.keys(b).some(k => k !== 'archived' && k !== 'version')) {
+    return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  }
+  const badText = sandboxInvalidText(b);
+  if (badText) return res.status(400).json(badText);
+
+  const name = has('name') ? (typeof b.name === 'string' ? b.name.trim() : '') : existing.name;
+  if (!name) return res.status(400).json({ error: 'name is required', field: 'name' });
+  if (has('folderUrl')) {
+    const urlError = sandboxInvalidFolderUrl(b.folderUrl);
+    if (urlError) return res.status(400).json({ error: urlError, field: 'folderUrl' });
+  }
+  if (has('fundId') && sandboxFundInvalid(req.tenantId, b.fundId)) return res.status(400).json({ error: 'fundId does not exist in this tenant', field: 'fundId' });
+  if (has('owner') && sandboxPersonInvalid(req.tenantId, b.owner)) return res.status(400).json({ error: 'owner must be an active CRM user with FM access', field: 'owner' });
+
+  let status = existing.status;
+  if (has('status')) {
+    if (!SANDBOX_STATUSES.includes(b.status)) return res.status(400).json({ error: 'status must be one of: ' + SANDBOX_STATUSES.join(', '), field: 'status' });
+    if (b.status === SANDBOX_PROMOTED_STATUS) return res.status(400).json({ error: 'Статус «Передан в скрининг» ставится только кнопкой «Принять в скрининг»', field: 'status' });
+    status = b.status;
+  }
+  let statusReason = has('statusReason') ? sandboxTrim(b.statusReason) : existing.status_reason;
+  if (SANDBOX_REASON_STATUSES.includes(status)) {
+    if (!statusReason) return res.status(400).json({ error: `Укажите причину для статуса «${status}»`, field: 'statusReason' });
+  } else {
+    statusReason = null;
+  }
+  let deferredUntil = has('deferredUntil') ? sandboxTrim(b.deferredUntil) : existing.deferred_until;
+  if (status === 'Отложен') {
+    if (deferredUntil && !isValidDateStr(deferredUntil)) return res.status(400).json({ error: 'deferredUntil must be a valid date', field: 'deferredUntil' });
+  } else {
+    deferredUntil = null;
+  }
+
+  const next = {
+    name,
+    initiator: has('initiator') ? sandboxTrim(b.initiator) : existing.initiator,
+    description: has('description') ? sandboxTrim(b.description) : existing.description,
+    folderUrl: has('folderUrl') ? sandboxTrim(b.folderUrl) : existing.folder_url,
+    goal: has('goal') ? sandboxTrim(b.goal) : existing.goal,
+    fundId: has('fundId') ? (b.fundId == null || b.fundId === '' ? null : Number(b.fundId)) : existing.fund_id,
+    owner: has('owner') ? sandboxTrim(b.owner) : existing.owner,
+    archived: has('archived') ? (b.archived ? 1 : 0) : existing.archived,
+  };
+  db.prepare(`
+    UPDATE sandbox_projects SET
+      fund_id=@fundId, name=@name, initiator=@initiator, description=@description, folder_url=@folderUrl,
+      goal=@goal, status=@status, status_reason=@statusReason, deferred_until=@deferredUntil, owner=@owner,
+      archived=@archived, updated_at=datetime('now'), version=version+1
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({ ...next, status, statusReason, deferredUntil, id: existing.id, tenantId: req.tenantId }));
+
+  const actor = req.user.email;
+  const audit = (action, summary) => recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: existing.id, action, actorEmail: actor, summary });
+  const clip = s => (s && s.length > 160 ? s.slice(0, 157) + '…' : s || '—');
+  const same = (a, c) => (a ?? '') === (c ?? '');
+  if (status !== existing.status) {
+    audit('status_changed', `Проект «${name}»: статус ${existing.status} → ${status}${statusReason ? ` (${clip(statusReason)})` : ''}`);
+  }
+  if (!same(next.goal, existing.goal)) audit('goal_changed', `Проект «${name}»: цель — ${clip(next.goal)}`);
+  if (next.archived !== existing.archived) {
+    audit(next.archived ? 'archived' : 'restored', `Проект «${name}» ${next.archived ? 'в архиве' : 'возвращён из архива'}`);
+  }
+  const otherChanged = !same(next.name, existing.name) || !same(next.initiator, existing.initiator)
+    || !same(next.description, existing.description) || !same(next.folderUrl, existing.folder_url)
+    || !same(next.fundId, existing.fund_id) || !same(next.owner, existing.owner)
+    || !same(deferredUntil, existing.deferred_until);
+  if (otherChanged) audit('updated', `Проект «${name}» изменён`);
+
+  res.json(rowToSandboxProject(loadSandboxProject(req.tenantId, existing.id), names));
+});
+
+/* ----- Sandbox tasks ----- */
+function touchSandboxProject(tenantId, projectId) {
+  db.prepare("UPDATE sandbox_projects SET updated_at = datetime('now') WHERE id = ? AND tenant_id = ?").run(projectId, tenantId);
+}
+
+app.post('/api/sandbox/:id/tasks', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  const b = req.body || {};
+  const title = typeof b.title === 'string' ? b.title.trim() : '';
+  if (!title) return res.status(400).json({ error: 'title is required', field: 'title' });
+  if (title.length > 300) return res.status(400).json({ error: 'title must be at most 300 characters', field: 'title' });
+  const priority = b.priority == null || b.priority === '' ? 'Средний' : b.priority;
+  if (!SANDBOX_TASK_PRIORITIES.includes(priority)) return res.status(400).json({ error: 'priority must be one of: ' + SANDBOX_TASK_PRIORITIES.join(', '), field: 'priority' });
+  const dueDate = sandboxTrim(b.dueDate);
+  if (dueDate && !isValidDateStr(dueDate)) return res.status(400).json({ error: 'dueDate must be a valid date', field: 'dueDate' });
+  const assignee = sandboxTrim(b.assignee);
+  if (sandboxPersonInvalid(req.tenantId, assignee)) return res.status(400).json({ error: 'assignee must be an active CRM user with FM access', field: 'assignee' });
+
+  const info = db.prepare(`
+    INSERT INTO sandbox_tasks (tenant_id, project_id, title, assignee, due_date, priority, created_by)
+    VALUES (@tenantId, @projectId, @title, @assignee, @dueDate, @priority, @createdBy)
+  `).run(at({ tenantId: req.tenantId, projectId: project.id, title, assignee, dueDate, priority, createdBy: req.user.email }));
+  touchSandboxProject(req.tenantId, project.id);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'task_created', actorEmail: req.user.email, summary: `Проект «${project.name}»: задача «${title}»` });
+  const row = db.prepare('SELECT * FROM sandbox_tasks WHERE id = ? AND tenant_id = ?').get(info.lastInsertRowid, req.tenantId);
+  res.status(201).json(rowToSandboxTask(row, sandboxNameMap(req.tenantId)));
+});
+
+app.put('/api/sandbox/tasks/:taskId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const task = db.prepare('SELECT * FROM sandbox_tasks WHERE id = ? AND tenant_id = ?').get(req.params.taskId, req.tenantId);
+  if (!task) return res.status(404).json({ error: 'Sandbox task not found in this tenant' });
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(task.project_id, req.tenantId);
+  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  const b = req.body || {};
+  const has = f => Object.prototype.hasOwnProperty.call(b, f);
+
+  let title = task.title;
+  if (has('title')) {
+    title = typeof b.title === 'string' ? b.title.trim() : '';
+    if (!title) return res.status(400).json({ error: 'title is required', field: 'title' });
+    if (title.length > 300) return res.status(400).json({ error: 'title must be at most 300 characters', field: 'title' });
+  }
+  if (has('priority') && !SANDBOX_TASK_PRIORITIES.includes(b.priority)) return res.status(400).json({ error: 'priority must be one of: ' + SANDBOX_TASK_PRIORITIES.join(', '), field: 'priority' });
+  if (has('status') && !SANDBOX_TASK_STATUSES.includes(b.status)) return res.status(400).json({ error: 'status must be one of: ' + SANDBOX_TASK_STATUSES.join(', '), field: 'status' });
+  const dueDate = has('dueDate') ? sandboxTrim(b.dueDate) : task.due_date;
+  if (has('dueDate') && dueDate && !isValidDateStr(dueDate)) return res.status(400).json({ error: 'dueDate must be a valid date', field: 'dueDate' });
+  const assignee = has('assignee') ? sandboxTrim(b.assignee) : task.assignee;
+  if (has('assignee') && sandboxPersonInvalid(req.tenantId, assignee)) return res.status(400).json({ error: 'assignee must be an active CRM user with FM access', field: 'assignee' });
+
+  const status = has('status') ? b.status : task.status;
+  const nowDone = status === 'Готово';
+  const completedAt = nowDone ? (task.status === 'Готово' ? task.completed_at : new Date().toISOString().slice(0, 19).replace('T', ' ')) : null;
+  db.prepare(`
+    UPDATE sandbox_tasks SET title=@title, assignee=@assignee, due_date=@dueDate, priority=@priority,
+      status=@status, completed_at=@completedAt
+    WHERE id=@id AND tenant_id=@tenantId
+  `).run(at({
+    title, assignee, dueDate, priority: has('priority') ? b.priority : task.priority, status, completedAt,
+    id: task.id, tenantId: req.tenantId,
+  }));
+  touchSandboxProject(req.tenantId, project.id);
+  if (nowDone && task.status !== 'Готово') {
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'task_completed', actorEmail: req.user.email, summary: `Проект «${project.name}»: задача «${title}» выполнена` });
+  }
+  const row = db.prepare('SELECT * FROM sandbox_tasks WHERE id = ? AND tenant_id = ?').get(task.id, req.tenantId);
+  res.json(rowToSandboxTask(row, sandboxNameMap(req.tenantId)));
+});
+
+app.delete('/api/sandbox/tasks/:taskId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const task = db.prepare('SELECT * FROM sandbox_tasks WHERE id = ? AND tenant_id = ?').get(req.params.taskId, req.tenantId);
+  if (!task) return res.status(404).json({ error: 'Sandbox task not found in this tenant' });
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(task.project_id, req.tenantId);
+  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  db.prepare('DELETE FROM sandbox_tasks WHERE id = ? AND tenant_id = ?').run(task.id, req.tenantId);
+  touchSandboxProject(req.tenantId, project.id);
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'task_deleted', actorEmail: req.user.email, summary: `Проект «${project.name}»: задача «${task.title}» удалена` });
+  res.json({ ok: true, deleted: true });
+});
+
+/* ----- Accept into Скрининг ----- */
+// The one place a sandbox project becomes a real deal. Idempotent: a repeat
+// call (double click, retry, second tab) returns the deal that already
+// exists instead of creating another. Nothing here reads the sandbox's
+// goal/tasks into the deal — the deal starts as a clean Скрининг record
+// seeded with the human-confirmed basics only.
+app.post('/api/sandbox/:id/promote', requireAuth, requireInternal, requirePermission('accessFM'), requirePermission('screeningAccept'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  const names = sandboxNameMap(req.tenantId);
+  if (existing.promoted_deal_id) {
+    const deal = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(existing.promoted_deal_id, req.tenantId);
+    return res.json({ project: rowToSandboxProject(loadSandboxProject(req.tenantId, existing.id), names), deal: deal ? rowToDeal(deal) : null, alreadyPromoted: true });
+  }
+  if (existing.archived) return res.status(409).json({ error: 'Проект в архиве — сначала верните его из архива' });
+  if (existing.status === 'Отказ') return res.status(409).json({ error: 'Проект отклонён — сначала верните его в работу' });
+
+  const b = req.body || {};
+  const fundId = b.fundId != null && b.fundId !== '' ? Number(b.fundId) : existing.fund_id;
+  if (fundId == null) return res.status(400).json({ error: 'Выберите фонд, в котором проект пойдёт в скрининг', field: 'fundId' });
+  if (sandboxFundInvalid(req.tenantId, fundId)) return res.status(400).json({ error: 'fundId does not exist in this tenant', field: 'fundId' });
+  { const bad = invalidMoneyField(b, 'amount'); if (bad) return res.status(400).json({ error: `${bad} must be a non-negative number`, field: bad }); }
+  if (b.priority != null && !SANDBOX_TASK_PRIORITIES.includes(b.priority)) return res.status(400).json({ error: 'priority must be one of: ' + SANDBOX_TASK_PRIORITIES.join(', '), field: 'priority' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const amount = b.amount == null ? 0 : b.amount;
+  const type = b.type || 'Equity';
+  const dealParams = dealToParams({
+    fundId, company: existing.name, sector: b.sector || '', stage: 'Скрининг', amount, type,
+    priority: b.priority || 'Средний',
+    manager: (existing.owner && names[existing.owner]) || req.user.name || req.user.email,
+    ic: 'Не подано', icDecision: 'Не подано', updatedAt: today,
+    description: existing.description || '', dataRoomUrl: existing.folder_url || '',
+    checkSize: amount, instrument: type, firstContactDate: String(existing.created_at || today).slice(0, 10),
+  });
+  let dealId;
+  db.exec('BEGIN');
+  try {
+    const info = db.prepare(DEAL_INSERT_SQL).run(at({ tenantId: req.tenantId, ...dealParams }));
+    dealId = info.lastInsertRowid;
+    db.prepare(`
+      UPDATE sandbox_projects SET status=@status, status_reason=NULL, deferred_until=NULL, fund_id=@fundId,
+        promoted_deal_id=@dealId, updated_at=datetime('now'), version=version+1
+      WHERE id=@id AND tenant_id=@tenantId
+    `).run(at({ status: SANDBOX_PROMOTED_STATUS, fundId, dealId, id: existing.id, tenantId: req.tenantId }));
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    logError(err, 'POST /api/sandbox/:id/promote');
+    return res.status(500).json({ error: 'Не удалось передать проект в скрининг' });
+  }
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: existing.id, action: 'promoted', actorEmail: req.user.email, summary: `Проект «${existing.name}» принят в скрининг (сделка №${dealId})` });
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'deals', entityId: dealId, action: 'created', actorEmail: req.user.email, summary: `Сделка «${existing.name}» создана из проекта песочницы` });
+  const dealRow = db.prepare('SELECT * FROM deals WHERE id = ? AND tenant_id = ?').get(dealId, req.tenantId);
+  res.status(201).json({ project: rowToSandboxProject(loadSandboxProject(req.tenantId, existing.id), names), deal: rowToDeal(dealRow), alreadyPromoted: false });
 });
 
 /* ===== Portfolio API — tenant-scoped ===== */

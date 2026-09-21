@@ -56,6 +56,12 @@ function updateUserRoleUI(role) {
   const fundCompareNav = document.querySelector('.nav-item[data-page="fund-compare"]');
   if (fundCompareNav) fundCompareNav.style.display = currentUserPermission('accessFM') ? '' : 'none';
 
+  // Sandbox feeds the Deal Pipeline and is gated the same way server-side
+  // (requireInternal + accessFM on /api/sandbox*) — hide the link for roles
+  // that would only land on a 403.
+  const sandboxNav = document.querySelector('.nav-item[data-page="sandbox"]');
+  if (sandboxNav) sandboxNav.style.display = (currentUserPermission('internal') && currentUserPermission('accessFM')) ? '' : 'none';
+
   // Portfolio (monitoring conclusions, uploaded documents) is internal-GP-
   // staff-only — external IC seats (Independent Member, LP Rep) already get
   // a 403 from the server (requireInternal on /api/portfolio/*), this just
@@ -299,6 +305,7 @@ const PAGE_LABELS = {
   dashboard:     'Дашборд',
   'fund-compare': 'Сравнение фондов',
   closing:       'First Closing',
+  sandbox:       'Песочница — проекты до скрининга',
   deals:         'Сделки / Pipeline',
   portfolio:     'Портфель',
   documents:     'Документы',
@@ -354,6 +361,7 @@ function navigateTo(page) {
   if (page === 'hf-subscriptions')  { renderHfSubscriptionsPage(); }
   if (page === 'hf-nav')            { renderHfNavPage(); }
   if (page === 'spvs')              { renderSpvsPage(); }
+  if (page === 'sandbox')           { renderSandboxPage(); }
 }
 
 /* ===== DASHBOARD ===== */

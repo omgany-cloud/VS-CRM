@@ -10,9 +10,11 @@ const SYSTEM_ROLES = [
   // CEO/CFO — see server/db.js's cc_approve comment. paymentConfirm:
   // confirming a line item as actually Paid (bank reconciliation) is a
   // separate action, same two roles by default — see payment_confirm.
+  // screeningAccept: accepting a Sandbox project into Скрининг — CEO only
+  // by default (see server/db.js's screening_accept comment).
   { code: 'CEO', label: 'CEO', icon: 'fa-crown', color: '#eab308',
     internal: true, manageUsers: true, manageRoles: true, accessFM: true,
-    decideConflicts: true, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, icSeat: 'GP Rep 1' },
+    decideConflicts: true, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, screeningAccept: true, icSeat: 'GP Rep 1' },
   { code: 'CFO', label: 'CFO', icon: 'fa-coins', color: '#f59e0b',
     internal: true, manageUsers: false, manageRoles: false, accessFM: true,
     decideConflicts: false, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, icSeat: 'GP Rep 2' },

@@ -2,6 +2,42 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.43.0] - 2026-09-21
+
+### Added
+- **Песочница** — new page (sidebar, just above «Сделки / Pipeline») for
+  raw projects/companies/assets that might deserve a screening slot.
+  Each project has a name (deliberately one free-text field — company,
+  project or asset), optional initiator, owner, fund (not required until
+  acceptance), a link to the folder holding everything known about it,
+  a short-term goal, a description, a status (Новый / В проработке /
+  Ждём информацию / Отложен / Отказ — the last two require a written
+  reason) and a task list (assignee, due date, priority, done/cancelled).
+  Goal/status/owner changes and task activity are recorded in the audit
+  trail and shown as the project's own history. Projects can be archived
+  but not deleted. Backend: `/api/sandbox*` (server/index.js), new
+  `sandbox_projects` / `sandbox_tasks` tables; frontend: js/sandbox.js.
+  Open to every internal user with FM access — same audience as the Deal
+  Pipeline it feeds (RM/CF&A roles, which lack FM access, don't see it).
+- **Принять в скрининг** — new `screeningAccept` role permission (CEO by
+  default, editable on the Users → Roles page like any other flag).
+  `POST /api/sandbox/:id/promote` creates one real deal at «Скрининг»
+  (name, description, and the folder link as data room carry over; fund
+  is required at this step) and freezes the sandbox project as read-only
+  history linked to that deal. Idempotent — a repeat/double click returns
+  the existing deal instead of creating a second one.
+- Folder links are validated strictly (real http(s) URL, no embedded
+  login/password); the server never opens them. AI processing of project
+  materials is intentionally not part of this release.
+
+### Changed
+- A deal that was accepted from the Sandbox can no longer be hard-deleted
+  (409, «move it to Отклонена instead») — same rule as a deal with IC
+  memos; it is the trail of the acceptance decision.
+- The generic "unsupported URL scheme" 400 (javascript:/data: links in
+  any `*Url` field) now also names the offending field, so forms can
+  highlight it inline instead of only showing a toast.
+
 ## [1.42.0] - 2026-08-24
 
 ### Added
