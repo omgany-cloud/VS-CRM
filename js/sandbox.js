@@ -124,6 +124,7 @@ async function renderSandboxPage() {
         ${filterOptions.map(([v, l]) => `<option value="${escapeHtml(v)}" ${sandboxStatusFilter === v ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}
       </select>
       <button class="btn-ghost" onclick="exportSandboxProjects()"><i class="fas fa-file-excel"></i> Экспорт Excel</button>
+      <button class="btn-ghost" onclick="openSandboxXmindImport()"><i class="fas fa-sitemap"></i> Импорт из XMind</button>
       <button class="btn-primary" onclick="openSandboxNew()"><i class="fas fa-plus"></i> Новый проект</button>
     </div>
     <div id="sandboxList"></div>`;

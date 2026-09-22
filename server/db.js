@@ -1303,6 +1303,33 @@ CREATE TABLE IF NOT EXISTS sandbox_ai_runs (
   created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sandbox_ai_runs_project ON sandbox_ai_runs(tenant_id, project_id, id);
+
+-- "Импорт из XMind" (server/xmindImport.js, POST /api/sandbox/xmind/*) —
+-- offline, file-based only; no live XMind API exists to sync against (see
+-- CHANGELOG). Links one XMind topic id to the Sandbox project/task it
+-- became, keyed by the topic's OWN internal id — not by which upload the
+-- topic came from, not by title (renames are normal). That single key is
+-- what makes re-importing the same map (or its next edited version) after
+-- the user reworks it in XMind idempotent: a topic seen before updates
+-- its linked row instead of creating a duplicate. last_snapshot_json
+-- (title/attachment/parent path at the moment the import was last
+-- ACCEPTED) is what a future re-import diffs against to tell "changed in
+-- XMind" apart from "changed in the CRM since" — see the /import route.
+-- Deliberately no ON DELETE CASCADE from sandbox_projects/sandbox_tasks:
+-- a link row surviving a deleted entity is a harmless, cheap history
+-- fact ("this XMind topic used to be linked to something"), not a
+-- correctness problem — the import route re-checks the entity exists.
+CREATE TABLE IF NOT EXISTS sandbox_xmind_links (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id           INTEGER NOT NULL REFERENCES tenants(id),
+  xmind_topic_id      TEXT NOT NULL,
+  entity_type         TEXT NOT NULL,   -- 'project' | 'task'
+  entity_id           INTEGER NOT NULL,
+  last_snapshot_json  TEXT NOT NULL DEFAULT '{}',
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sandbox_xmind_links_topic ON sandbox_xmind_links(tenant_id, xmind_topic_id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —

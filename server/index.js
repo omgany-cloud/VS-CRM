@@ -41,6 +41,7 @@ const {
   SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX,
   rowToSandboxProject, rowToSandboxTask, rowToSandboxFile, rowToSandboxAiRun, rowToSandboxAiRunSummary,
 } = require('./sandboxMapping');
+const { parseXmindTree, extractResourceBytes } = require('./xmindImport');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
   restrictedToParams, rowToRestricted, RESTRICTED_INSERT_SQL,
@@ -261,6 +262,21 @@ const uploadMiddleware = multer({
   }),
   limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: (req, file, cb) => cb(null, ALLOWED_UPLOAD_MIME_TYPES.has(file.mimetype)),
+});
+
+// Separate multer instance for POST /api/sandbox/xmind/upload — browsers
+// don't agree on a MIME type for .xmind (usually application/octet-stream
+// or application/zip, sometimes empty), so this checks the extension
+// instead of reusing ALLOWED_UPLOAD_MIME_TYPES/uploadMiddleware above,
+// which stays mimetype-strict for every other upload path in this app.
+const XMIND_MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // generous for embedded PDFs/PPTX — see xmindImport.js's own topic/depth caps for the actual bomb guard
+const uploadXmindMiddleware = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    filename: (req, file, cb) => cb(null, crypto.randomUUID() + '.xmind'),
+  }),
+  limits: { fileSize: XMIND_MAX_UPLOAD_BYTES },
+  fileFilter: (req, file, cb) => cb(null, /\.xmind$/i.test(file.originalname || '')),
 });
 
 app.post('/api/uploads', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
@@ -4777,6 +4793,261 @@ app.get('/api/sandbox/runs/:runId', requireAuth, requireInternal, requirePermiss
   const run = db.prepare('SELECT * FROM sandbox_ai_runs WHERE id = ? AND tenant_id = ?').get(req.params.runId, req.tenantId);
   if (!run) return res.status(404).json({ error: 'AI run not found in this tenant' });
   res.json(rowToSandboxAiRun(run));
+});
+
+/* ----- Импорт из XMind -----
+   File-based, one-way import only — deliberately not a "sync": no XMind
+   API exists for a third party to sync against (checked before building
+   this), so the honest, buildable thing is "read the .xmind file the
+   user hands us and turn its topics into Sandbox records," re-runnable
+   without creating duplicates. See CHANGELOG for the fuller reasoning.
+   A topic's SANDBOX_XMIND_LINKS row (keyed by the topic's own XMind id,
+   not by which upload it came from) is what makes re-importing an edited
+   version of the same map update existing projects/tasks instead of
+   duplicating them. */
+function xmindLoadLinks(tenantId) {
+  const rows = db.prepare('SELECT * FROM sandbox_xmind_links WHERE tenant_id = ?').all(tenantId);
+  const map = new Map();
+  for (const r of rows) map.set(r.xmind_topic_id, r);
+  return map;
+}
+
+// Shape sent to the frontend for the checkbox tree — no zip/resource
+// internals, just enough to render + know what's already linked to what.
+function xmindNodeToClientShape(node, links) {
+  const link = links.get(node.id);
+  return {
+    id: node.id, title: node.title, depth: node.depth,
+    isPlaceholder: node.isPlaceholder, hasAttachment: !!node.attachment,
+    attachmentName: node.attachment ? node.attachment.name : null,
+    sourceUrl: node.sourceUrl,
+    linkedEntityType: link ? link.entity_type : null,
+    children: node.children.map(c => xmindNodeToClientShape(c, links)),
+  };
+}
+
+function xmindFindTopic(node, id) {
+  if (node.id === id) return node;
+  for (const c of node.children) { const f = xmindFindTopic(c, id); if (f) return f; }
+  return null;
+}
+
+function xmindUpsertLink(tenantId, topicId, entityType, entityId, snapshot) {
+  db.prepare(`
+    INSERT INTO sandbox_xmind_links (tenant_id, xmind_topic_id, entity_type, entity_id, last_snapshot_json, updated_at)
+    VALUES (@tenantId, @topicId, @entityType, @entityId, @snapshot, datetime('now'))
+    ON CONFLICT(tenant_id, xmind_topic_id) DO UPDATE SET
+      entity_type=@entityType, entity_id=@entityId, last_snapshot_json=@snapshot, updated_at=datetime('now')
+  `).run(at({ tenantId, topicId, entityType, entityId, snapshot: JSON.stringify(snapshot) }));
+}
+
+app.post('/api/sandbox/xmind/upload', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  uploadXmindMiddleware.single('file')(req, res, (err) => {
+    if (err) {
+      const message = err.code === 'LIMIT_FILE_SIZE' ? `Файл больше ${XMIND_MAX_UPLOAD_BYTES / 1024 / 1024} МБ` : err.message;
+      return res.status(400).json({ error: message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Файл не загружен или это не .xmind' });
+    const filePath = path.join(UPLOADS_DIR, req.file.filename);
+    let parsed;
+    try {
+      parsed = parseXmindTree(fs.readFileSync(filePath));
+    } catch (parseErr) {
+      fs.unlink(filePath, () => {});
+      return res.status(400).json({ error: parseErr.message });
+    }
+    let info;
+    try {
+      info = db.prepare(`
+        INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+        VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+      `).run(at({
+        tenantId: req.tenantId, storedName: req.file.filename, originalName: req.file.originalname,
+        mimeType: 'application/vnd.xmind.workbook', sizeBytes: req.file.size, uploadedBy: req.user.email,
+      }));
+    } catch (dbErr) {
+      fs.unlink(filePath, () => {});
+      logError(dbErr, 'POST /api/sandbox/xmind/upload');
+      return res.status(500).json({ error: 'Не удалось сохранить файл' });
+    }
+    const links = xmindLoadLinks(req.tenantId);
+    res.status(201).json({
+      uploadId: info.lastInsertRowid,
+      sheets: parsed.sheets.map(s => ({ id: s.id, title: s.title, root: xmindNodeToClientShape(s.root, links) })),
+    });
+  });
+});
+
+const XMIND_IMPORT_MAX_SELECTIONS = 200; // one map's worth of projects in a single run — a bigger batch is almost certainly a misclick, not intent
+
+app.post('/api/sandbox/xmind/import', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const b = req.body || {};
+  const uploadId = parseInt(b.uploadId, 10);
+  const sheetId = typeof b.sheetId === 'string' ? b.sheetId : null;
+  const selections = Array.isArray(b.selections) ? b.selections : [];
+  if (!Number.isInteger(uploadId)) return res.status(400).json({ error: 'uploadId is required' });
+  if (!sheetId) return res.status(400).json({ error: 'sheetId is required' });
+  if (!selections.length) return res.status(400).json({ error: 'Выберите хотя бы одну тему для импорта' });
+  if (selections.length > XMIND_IMPORT_MAX_SELECTIONS) return res.status(400).json({ error: `За один раз можно импортировать не больше ${XMIND_IMPORT_MAX_SELECTIONS} проектов` });
+
+  const upload = db.prepare('SELECT * FROM uploaded_files WHERE id = ? AND tenant_id = ?').get(uploadId, req.tenantId);
+  if (!upload) return res.status(404).json({ error: 'Файл не найден в этом тенанте — загрузите его заново' });
+  const filePath = path.join(UPLOADS_DIR, upload.stored_name);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Файл отсутствует в хранилище — загрузите его заново' });
+
+  let parsed;
+  try {
+    parsed = parseXmindTree(fs.readFileSync(filePath));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  const sheet = parsed.sheets.find(s => s.id === sheetId);
+  if (!sheet) return res.status(404).json({ error: 'Лист карты не найден в этом файле' });
+
+  const selectedIds = new Set();
+  for (const sel of selections) {
+    if (!sel || typeof sel.topicId !== 'string') return res.status(400).json({ error: 'Каждый выбор должен содержать topicId' });
+    if (!xmindFindTopic(sheet.root, sel.topicId)) return res.status(400).json({ error: `Тема ${sel.topicId} не найдена в этом листе` });
+    if (sel.fundId != null && sel.fundId !== '' && sandboxFundInvalid(req.tenantId, sel.fundId)) {
+      return res.status(400).json({ error: 'fundId does not exist in this tenant' });
+    }
+    selectedIds.add(sel.topicId);
+  }
+
+  const fileBuf = fs.readFileSync(filePath);
+  const links = xmindLoadLinks(req.tenantId);
+  const clip = (s, n) => (s && s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+  // Collects task-candidate + attachment descendants of `node`, stopping
+  // at (not descending past) any topic that is itself separately
+  // selected — that one becomes its own project instead. See the module
+  // header comment for the full rule.
+  function collectDescendants(node, out) {
+    for (const child of node.children) {
+      if (selectedIds.has(child.id)) continue; // handled as its own project
+      if (child.isPlaceholder) { collectDescendants(child, out); continue; }
+      if (child.attachment) { out.files.push(child); collectDescendants(child, out); continue; }
+      if (!child.children.length) { out.tasks.push(child); continue; }
+      collectDescendants(child, out); // structural/context node — not a task itself, but its own children still count
+    }
+  }
+
+  const summary = {
+    projectsCreated: 0, projectsUpdated: 0, projectsSkippedPromoted: 0,
+    tasksCreated: 0, tasksSkipped: 0, filesImported: 0, filesSkipped: 0,
+    fieldsKeptFromCrm: [],
+  };
+
+  db.exec('BEGIN');
+  try {
+    for (const sel of selections) {
+      const topic = xmindFindTopic(sheet.root, sel.topicId);
+      const fundId = sel.fundId != null && sel.fundId !== '' ? Number(sel.fundId) : null;
+      const fullTitle = topic.title || '(без названия)';
+      const name = clip(fullTitle, SANDBOX_TEXT_LIMITS.name) || 'Без названия';
+      const ancestryNote = `Импортировано из XMind, лист «${sheet.title}».`;
+      const descriptionParts = [ancestryNote];
+      if (fullTitle.length > SANDBOX_TEXT_LIMITS.name) descriptionParts.push(`Полное название: ${fullTitle}`);
+      const description = clip(descriptionParts.join('\n'), SANDBOX_TEXT_LIMITS.description);
+
+      const existingLink = links.get(topic.id);
+      let projectId;
+      let projectRow = existingLink && existingLink.entity_type === 'project'
+        ? db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(existingLink.entity_id, req.tenantId)
+        : null;
+
+      if (projectRow && projectRow.promoted_deal_id) {
+        summary.projectsSkippedPromoted++;
+        continue; // frozen — don't touch it, don't touch its tasks/files either
+      }
+
+      if (projectRow) {
+        const lastSnapshot = JSON.parse(existingLink.last_snapshot_json || '{}');
+        const nameChangedInCrm = projectRow.name !== lastSnapshot.name;
+        const descChangedInCrm = projectRow.description !== lastSnapshot.description;
+        const nextName = nameChangedInCrm ? projectRow.name : name;
+        const nextDescription = descChangedInCrm ? projectRow.description : description;
+        if (nameChangedInCrm) summary.fieldsKeptFromCrm.push(`«${projectRow.name}»: название`);
+        if (descChangedInCrm) summary.fieldsKeptFromCrm.push(`«${projectRow.name}»: описание`);
+        db.prepare(`UPDATE sandbox_projects SET name=@name, description=@description, fund_id=COALESCE(@fundId, fund_id), updated_at=datetime('now'), version=version+1 WHERE id=@id AND tenant_id=@tenantId`)
+          .run(at({ name: nextName, description: nextDescription, fundId, id: projectRow.id, tenantId: req.tenantId }));
+        xmindUpsertLink(req.tenantId, topic.id, 'project', projectRow.id, { name: nextName, description: nextDescription });
+        projectId = projectRow.id;
+        summary.projectsUpdated++;
+      } else {
+        const info = db.prepare(`
+          INSERT INTO sandbox_projects (tenant_id, fund_id, name, description, owner, created_by)
+          VALUES (@tenantId, @fundId, @name, @description, @owner, @createdBy)
+        `).run(at({ tenantId: req.tenantId, fundId, name, description, owner: req.user.email, createdBy: req.user.email }));
+        projectId = info.lastInsertRowid;
+        xmindUpsertLink(req.tenantId, topic.id, 'project', projectId, { name, description });
+        summary.projectsCreated++;
+      }
+      const wasNewProject = !projectRow;
+
+      const out = { tasks: [], files: [] };
+      collectDescendants(topic, out);
+      let tasksCreatedHere = 0;
+      let filesImportedHere = 0;
+
+      for (const t of out.tasks) {
+        const existing = links.get(t.id);
+        const stillThere = existing && existing.entity_type === 'task'
+          && db.prepare('SELECT id FROM sandbox_tasks WHERE id = ? AND tenant_id = ?').get(existing.entity_id, req.tenantId);
+        if (stillThere) { summary.tasksSkipped++; continue; }
+        let title = t.title || '(без названия)';
+        if (t.sourceUrl && (title.length + t.sourceUrl.length + 14) <= 300) title += ` (источник: ${t.sourceUrl})`;
+        title = clip(title, 300);
+        const info = db.prepare(`
+          INSERT INTO sandbox_tasks (tenant_id, project_id, title, created_by)
+          VALUES (@tenantId, @projectId, @title, @createdBy)
+        `).run(at({ tenantId: req.tenantId, projectId, title, createdBy: req.user.email }));
+        xmindUpsertLink(req.tenantId, t.id, 'task', info.lastInsertRowid, { title });
+        summary.tasksCreated++;
+        tasksCreatedHere++;
+      }
+
+      for (const f of out.files) {
+        const existing = links.get(f.id);
+        const stillThere = existing && existing.entity_type === 'file'
+          && db.prepare('SELECT id FROM sandbox_project_files WHERE id = ? AND tenant_id = ?').get(existing.entity_id, req.tenantId);
+        if (stillThere) { summary.filesSkipped++; continue; }
+        const bytes = extractResourceBytes(fileBuf, f.attachment.resourcePath);
+        if (!bytes) { summary.filesSkipped++; continue; }
+        const ext = path.extname(f.attachment.name) || path.extname(f.attachment.resourcePath);
+        const storedName = crypto.randomUUID() + ext.slice(0, 20);
+        fs.writeFileSync(path.join(UPLOADS_DIR, storedName), bytes);
+        const uploadInfo = db.prepare(`
+          INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+          VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+        `).run(at({ tenantId: req.tenantId, storedName, originalName: f.attachment.name, mimeType: f.attachment.mimeType, sizeBytes: bytes.length, uploadedBy: req.user.email }));
+        const linkInfo = db.prepare(`
+          INSERT INTO sandbox_project_files (tenant_id, project_id, upload_id, attached_by)
+          VALUES (@tenantId, @projectId, @uploadId, @attachedBy)
+        `).run(at({ tenantId: req.tenantId, projectId, uploadId: uploadInfo.lastInsertRowid, attachedBy: req.user.email }));
+        xmindUpsertLink(req.tenantId, f.id, 'file', linkInfo.lastInsertRowid, { name: f.attachment.name });
+        summary.filesImported++;
+        filesImportedHere++;
+      }
+
+      if (tasksCreatedHere || filesImportedHere) touchSandboxProject(req.tenantId, projectId);
+      recordAudit(db, {
+        tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: projectId,
+        action: wasNewProject ? 'created' : 'updated',
+        actorEmail: req.user.email,
+        summary: wasNewProject
+          ? `Проект «${name}» импортирован из XMind (задач: ${tasksCreatedHere}, файлов: ${filesImportedHere})`
+          : `Проект «${projectRow.name}» обновлён импортом из XMind (новых задач: ${tasksCreatedHere}, новых файлов: ${filesImportedHere})`,
+      });
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    logError(err, 'POST /api/sandbox/xmind/import');
+    return res.status(500).json({ error: 'Не удалось выполнить импорт' });
+  }
+
+  res.status(201).json({ summary });
 });
 
 /* ----- Accept into Скрининг ----- */

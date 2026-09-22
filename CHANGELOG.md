@@ -2,6 +2,43 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.50.0] - 2026-09-22
+
+### Added
+- **"Импорт из XMind"** — one-way, file-based import of a `.xmind` mind
+  map into Sandbox projects/tasks/attached files. No live sync: XMind has
+  no open third-party API to sync against (checked before building this,
+  see docs conversation) — this reads a `.xmind` file (a ZIP with
+  `content.json`, modern XMind/Zen+ only — old XMind 8's `content.xml` is
+  rejected with a clear message) and turns selected topics into records.
+  - `server/xmindImport.js`: pure parser (`adm-zip`) — bomb-guarded
+    (5000-topic / 50-level caps), extracts embedded topic attachments
+    (PDF/PNG/JPEG/GIF/Word/Excel/PPTX/zip) by the same allowlist the
+    server-folder import already uses.
+  - New button on the Sandbox page: upload → a checkbox tree of the
+    map's topics (any depth, any shape — real maps don't put "project"
+    at one consistent depth) → pick which topics are projects → import.
+    Every non-selected, non-placeholder descendant leaf becomes a task;
+    every embedded-attachment topic becomes a real attached file, copied
+    into the same `uploaded_files`/`sandbox_project_files` pipeline as a
+    manual upload (immediately usable by "Запустить ИИ-анализ").
+    Descent stops at any topic the caller separately selected as its own
+    project, so a nested pick doesn't get double-counted as a task under
+    its parent.
+  - **Re-importing an edited version of the same map is idempotent** —
+    matched by each topic's own XMind id (`sandbox_xmind_links`, new
+    table), not by title or which upload it came from, so renames don't
+    create duplicates. If a linked project's name/description was edited
+    inside the CRM since the last accepted import, that field is kept
+    (not silently overwritten) and reported back in the summary. A
+    project already accepted into Скрининг is skipped entirely.
+  - Verified against a real, messy production map (109 topics, depth 8,
+    inconsistent sector/category/project nesting, embedded PDF/PPTX,
+    external source links) through the actual browser UI, not just
+    synthetic fixtures — a real asset ("База отдыха Морячок") imported
+    with its 8 real due-diligence tasks and its embedded PDF attached and
+    ready for AI analysis, no manual re-entry.
+
 ## [1.49.0] - 2026-09-22
 
 ### Added

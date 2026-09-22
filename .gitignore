@@ -8,3 +8,7 @@ Thumbs.db
 server/node_modules/
 server/data/
 .env
+
+# Real business data someone drops into the repo folder for me to read
+# (e.g. via the "Импорт из XMind" feature) — never meant for git/GitHub.
+*.xmind
