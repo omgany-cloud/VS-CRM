@@ -479,9 +479,12 @@ function renderSandboxDetail() {
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap">
-        <div>${p.archived
-          ? `<button class="btn-ghost" onclick="sandboxSetArchived(false)"><i class="fas fa-box-open"></i> Вернуть из архива</button>`
-          : `<button class="btn-ghost" onclick="sandboxSetArchived(true)"><i class="fas fa-box-archive"></i> В архив</button>`}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${p.archived
+            ? `<button class="btn-ghost" onclick="sandboxSetArchived(false)"><i class="fas fa-box-open"></i> Вернуть из архива</button>`
+            : `<button class="btn-ghost" onclick="sandboxSetArchived(true)"><i class="fas fa-box-archive"></i> В архив</button>`}
+          ${locked ? '' : `<button class="btn-ghost" onclick="deleteSandboxProject()" style="color:#f87171;border-color:rgba(239,68,68,0.3)"><i class="fas fa-trash"></i> Удалить проект</button>`}
+        </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           ${acceptBtn}
           ${locked ? '' : '<button class="btn-primary" onclick="saveSandboxProject()"><i class="fas fa-save"></i> Сохранить</button>'}
@@ -648,6 +651,23 @@ async function sandboxSetArchived(archived) {
   try {
     await apiFetch('/api/sandbox/' + p.id, { method: 'PUT', body: JSON.stringify({ archived, version: p.version }) });
     showToast(archived ? '📦 Проект в архиве' : '✅ Проект возвращён из архива');
+    closeSandboxModal();
+    await renderSandboxPage();
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  } finally {
+    _sandboxBusy = false;
+  }
+}
+
+async function deleteSandboxProject() {
+  if (_sandboxBusy || !sandboxDetail) return;
+  const p = sandboxDetail.project;
+  if (!confirm(`Удалить проект «${p.name}» без возможности восстановления? Задачи, прикреплённые файлы и история ИИ-анализа будут удалены вместе с ним.`)) return;
+  _sandboxBusy = true;
+  try {
+    await apiFetch('/api/sandbox/' + p.id, { method: 'DELETE' });
+    showToast('🗑️ Проект удалён');
     closeSandboxModal();
     await renderSandboxPage();
   } catch (err) {

@@ -2,6 +2,20 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.49.0] - 2026-09-22
+
+### Added
+- **Delete a Sandbox project** — new `DELETE /api/sandbox/:id`, "Удалить
+  проект" button in the project card (next to "В архив"). A plain
+  (unpromoted) project is hard-deleted in one transaction along with its
+  tasks, attached-file relations, and AI-run history (its audit_log
+  entries survive, same as every other delete in this app). A project
+  already accepted into Скрининг (`promoted_deal_id` set) cannot be
+  deleted — 409, same "the deal is the real governance record" reasoning
+  as deals/documents elsewhere — its own deal already has its own
+  IC-memo-footprint delete protection. Confirmed via a native `confirm()`
+  naming the project, matching every other destructive action in the app.
+
 ## [1.48.0] - 2026-09-22
 
 ### Added

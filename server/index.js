@@ -4168,6 +4168,41 @@ app.put('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('acc
   res.json(rowToSandboxProject(loadSandboxProject(req.tenantId, existing.id), names));
 });
 
+// Hard delete — unlike deals/users this has no "footprint blocks it"
+// middle ground for an ordinary project: a Sandbox entry has nothing else
+// in the app pointing at it UNLESS it was accepted into Скрининг, in
+// which case the resulting deal (and its own IC-memo/etc. footprint
+// rules) is the real governance record and promoted_deal_id must survive
+// — same "move it, don't erase it" answer as everywhere else this app
+// protects a decision trail. Everything else about a plain, unpromoted
+// project (its tasks, attached-file relations, AI run history) has no
+// external references, so it cascades in one transaction rather than
+// leaving orphaned rows FOREIGN KEY would otherwise reject anyway.
+app.delete('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!existing) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  if (existing.promoted_deal_id) {
+    return res.status(409).json({
+      error: `Нельзя удалить проект — он уже принят в скрининг (сделка №${existing.promoted_deal_id}). История решения хранится в разделе «Сделки».`,
+      footprint: [{ table: 'deals', column: 'id', count: 1 }],
+    });
+  }
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM sandbox_ai_runs WHERE project_id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.prepare('DELETE FROM sandbox_project_files WHERE project_id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.prepare('DELETE FROM sandbox_tasks WHERE project_id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.prepare('DELETE FROM sandbox_projects WHERE id = ? AND tenant_id = ?').run(existing.id, req.tenantId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    logError(err, 'DELETE /api/sandbox/:id');
+    return res.status(500).json({ error: 'Не удалось удалить проект' });
+  }
+  recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: existing.id, action: 'deleted', actorEmail: req.user.email, summary: `Проект «${existing.name}» удалён` });
+  res.json({ ok: true, deleted: true });
+});
+
 /* ----- Sandbox tasks ----- */
 function touchSandboxProject(tenantId, projectId) {
   db.prepare("UPDATE sandbox_projects SET updated_at = datetime('now') WHERE id = ? AND tenant_id = ?").run(projectId, tenantId);

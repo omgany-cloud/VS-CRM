@@ -289,3 +289,56 @@ test('tenant isolation: another tenant sees none of this tenant\'s projects and 
   const after = await (await server.apiFetch(`/api/sandbox/${mine.id}`)).json();
   assert.equal(after.project.goal, '', 'tenant A\'s project must be untouched');
 });
+
+test('delete: removes a plain project and cascades its tasks/files/ai-run rows, and is idempotent-safe (404 on repeat)', async () => {
+  const p = await createProject({ goal: 'Будет удалён' });
+  const task = await (await post(`/api/sandbox/${p.id}/tasks`, { title: 'задача перед удалением' })).json();
+  assert.ok(task.id);
+
+  const res = await server.apiFetch(`/api/sandbox/${p.id}`, { method: 'DELETE' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, deleted: true });
+
+  assert.equal((await server.apiFetch(`/api/sandbox/${p.id}`)).status, 404);
+  const again = await server.apiFetch(`/api/sandbox/${p.id}`, { method: 'DELETE' });
+  assert.equal(again.status, 404, 'deleting an already-deleted project 404s, not a crash');
+
+  const list = await (await server.apiFetch('/api/sandbox')).json();
+  assert.ok(!list.projects.some(x => x.id === p.id));
+
+  // The event survives in the audit trail even though the project itself is gone.
+  const auditLog = await (await server.apiFetch(`/api/audit-log?entityType=sandbox_projects&entityId=${p.id}`)).json();
+  assert.ok(auditLog.entries.some(e => e.action === 'deleted'));
+
+  // A task attached to it must not be independently reachable either (proves the cascade, not just the parent row).
+  assert.equal((await put(`/api/sandbox/tasks/${task.id}`, { title: 'renamed' })).status, 404);
+});
+
+test('delete: a project accepted into screening cannot be deleted', async () => {
+  const p = await createProject({ name: 'SBX_DELETE_PROMOTED' });
+  const promoted = await (await post(`/api/sandbox/${p.id}/promote`, { fundId })).json();
+  assert.equal(promoted.alreadyPromoted, false);
+
+  const res = await server.apiFetch(`/api/sandbox/${p.id}`, { method: 'DELETE' });
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.match(body.error, /принят в скрининг/);
+  assert.equal(body.footprint[0].table, 'deals');
+
+  // Untouched — still readable, deal link intact.
+  const after = await (await server.apiFetch(`/api/sandbox/${p.id}`)).json();
+  assert.equal(after.project.promotedDealId, promoted.deal.id);
+});
+
+test('delete: another tenant cannot delete this tenant\'s project', async () => {
+  const mine = await createProject({ name: 'SBX_DELETE_ISOLATED' });
+  const signup = await fetch(server.baseUrl + '/api/auth/signup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyName: 'ZZZ Sandbox Delete Isolation Co', name: 'Tenant B Admin', email: 'tenantb-sbx-delete@isolationtest.example', password: 'TenantBPassword123' }),
+  });
+  const { token } = await signup.json();
+  const asB = (p, opts = {}) => fetch(server.baseUrl + p, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, ...(opts.headers || {}) } });
+
+  assert.equal((await asB(`/api/sandbox/${mine.id}`, { method: 'DELETE' })).status, 404);
+  assert.equal((await server.apiFetch(`/api/sandbox/${mine.id}`)).status, 200, 'must still exist for its real tenant');
+});
