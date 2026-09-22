@@ -59,6 +59,38 @@ async function xmindPickAndUpload() {
 
 function xmindCurrentSheet() { return _xmindUpload.sheets[_xmindSheetIndex]; }
 
+// Плоская Excel-таблица ВСЕЙ карты — все темы всех листов, независимо от
+// того, что отмечено для импорта. Нужна, чтобы можно было спокойно
+// разобрать сложную/несогласованную карту вне дерева с чекбоксами.
+const XMIND_EXPORT_STATUS_LABEL = { project: 'проект в Песочнице', task: 'задача в Песочнице', file: 'файл в Песочнице' };
+function xmindFlattenRows(sheets) {
+  const rows = [['Лист', 'Уровень', 'Путь', 'Тема', 'Заготовка (пусто)', 'Вложение', 'Ссылка-источник', 'Уже импортировано как']];
+  function walk(node, sheetTitle, pathParts) {
+    rows.push([
+      sheetTitle,
+      node.depth,
+      pathParts.join(' › '),
+      node.title || '(без названия)',
+      node.isPlaceholder ? 'да' : '',
+      node.hasAttachment ? (node.attachmentName || 'файл') : '',
+      node.sourceUrl || '',
+      node.linkedEntityType ? (XMIND_EXPORT_STATUS_LABEL[node.linkedEntityType] || node.linkedEntityType) : '',
+    ]);
+    for (const child of node.children) walk(child, sheetTitle, [...pathParts, node.title || '(без названия)']);
+  }
+  for (const sheet of sheets) {
+    for (const child of sheet.root.children) walk(child, sheet.title, []);
+  }
+  return rows;
+}
+
+function xmindExportToExcel() {
+  if (!_xmindUpload) return;
+  const rows = xmindFlattenRows(_xmindUpload.sheets);
+  const base = (_xmindUpload.originalName || 'xmind-карта').replace(/\.xmind$/i, '').replace(/[\\/:*?"<>|]/g, '_');
+  downloadExcel([{ name: 'XMind', data: rows, colWidths: [16, 8, 50, 40, 14, 22, 40, 22] }], `${base}.xlsx`);
+}
+
 function xmindNodeRowHtml(node) {
   const hasChildren = node.children.length > 0;
   const expanded = _xmindExpanded.has(node.id);
@@ -97,7 +129,12 @@ function xmindRenderTreeModal() {
     ${sbxModalHeader('Импорт из XMind', `<span style="font-size:12px;color:#94a3b8">${escapeHtml(sheet.title)} · выбрано: <span id="xmind_selected_count">${_xmindSelected.size}</span></span>`)}
     <div style="padding:20px 24px">
       ${sheetSelect}
-      <p style="font-size:11px;color:#64748b;margin:0 0 10px">Отметь темы, которые должны стать проектами в Песочнице. Задачи и приложенные файлы под ними перенесутся автоматически; заготовки-«подтемы» пропускаются.</p>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">
+        <p style="font-size:11px;color:#64748b;margin:0">Отметь темы, которые должны стать проектами в Песочнице. Задачи и приложенные файлы под ними перенесутся автоматически; заготовки-«подтемы» пропускаются.</p>
+        <button type="button" class="btn-ghost" style="white-space:nowrap;font-size:11px;padding:5px 10px" onclick="xmindExportToExcel()" title="Скачать всю карту (все листы, все темы) в Excel — независимо от того, что отмечено ниже">
+          <i class="fas fa-file-excel"></i> Вся карта в Excel
+        </button>
+      </div>
       <div class="form-group" style="margin-bottom:14px">
         <label style="${SBX_LABEL}">Фонд для всех выбранных проектов <span style="font-weight:400;color:#64748b">(необязательно, можно назначить позже)</span></label>
         <select id="xmind_fund">${sbxFundOptions(typeof activeFundId !== 'undefined' ? activeFundId : null, '— пока не выбран —')}</select>

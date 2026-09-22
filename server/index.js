@@ -4873,6 +4873,7 @@ app.post('/api/sandbox/xmind/upload', requireAuth, requireInternal, requirePermi
     const links = xmindLoadLinks(req.tenantId);
     res.status(201).json({
       uploadId: info.lastInsertRowid,
+      originalName: req.file.originalname,
       sheets: parsed.sheets.map(s => ({ id: s.id, title: s.title, root: xmindNodeToClientShape(s.root, links) })),
     });
   });

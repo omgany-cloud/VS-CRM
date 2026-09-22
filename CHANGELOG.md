@@ -2,6 +2,32 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.51.0] - 2026-09-22
+
+### Added
+- **"Вся карта в Excel" in the XMind import modal** — before picking which
+  topics become projects, you can now download the entire uploaded map
+  (every sheet, every topic, any depth) as one flat Excel table: level,
+  full breadcrumb path, title, placeholder flag, attachment name, source
+  link, and whether it's already linked to something in Sandbox. Lets you
+  review a large/inconsistent map in a spreadsheet before deciding what
+  to check in the tree, instead of only scrolling the in-app tree.
+
+### Fixed
+- **Real-data correction, not a code bug**: the first live "Импорт из
+  XMind" run selected the map's top-level *direction* topics (Энергетика,
+  Нефть и Газ, IT, Туризм/Бизнес) as the Sandbox "projects", so every
+  actual named project inside them (Табаган, Морячок, dozens of others)
+  landed as a flat task under the direction instead of its own project.
+  The import logic did exactly what was selected — the fix was picking
+  different topics, not changing code. Per the user's choice, deleted
+  those 4 direction-level projects (cascaded tasks/files, audit-logged)
+  so the map can be re-imported selecting the actual project topics.
+  `sandbox_xmind_links` rows for those topics were left in place by
+  design (see `server/db.js` comment) — the import route already
+  re-checks the linked row still exists before treating it as "existing",
+  so re-importing the same topics creates fresh projects/tasks cleanly.
+
 ## [1.50.0] - 2026-09-22
 
 ### Added
