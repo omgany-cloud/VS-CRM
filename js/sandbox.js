@@ -11,6 +11,7 @@
 
 let sandboxProjects = [];
 let sandboxPeople = [];
+let sandboxLocalFilesEnabled = null;  // null = not fetched yet; boolean once known (GET /api/sandbox/config)
 let sandboxSearch = '';
 let sandboxStatusFilter = 'active';   // 'active' | 'all' | 'archive' | a single status
 let sandboxDetail = null;             // { project, tasks, history } of the open project
@@ -34,6 +35,8 @@ const SBX_LABEL = 'display:block;font-size:11px;font-weight:600;color:#8abfbb;ma
 // as a separate client-side copy purely to decide which attached files get
 // a selection checkbox; the server is the one that actually enforces it.
 const SBX_ANALYZABLE_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
+// Matches server/sandboxMapping.js's SANDBOX_ANALYZE_MAX_FILES — display only.
+const SANDBOX_ANALYZE_MAX_FILES = 5;
 const SBX_AI_ACTION_LABELS = {
   consider_screening: { label: 'Рассмотреть для скрининга', color: '#22c55e' },
   request_information: { label: 'Запросить дополнительную информацию', color: '#eab308' },
@@ -91,12 +94,14 @@ async function renderSandboxPage() {
   el.innerHTML = '<div style="text-align:center;padding:32px;color:#4a5568">Загрузка...</div>';
   try {
     const archived = sandboxStatusFilter === 'archive';
-    const [data, people] = await Promise.all([
+    const [data, people, config] = await Promise.all([
       apiFetch('/api/sandbox' + (archived ? '?archived=1' : '')),
       sandboxPeople.length ? Promise.resolve(null) : apiFetch('/api/sandbox/people'),
+      sandboxLocalFilesEnabled === null ? apiFetch('/api/sandbox/config') : Promise.resolve(null),
     ]);
     sandboxProjects = data.projects;
     if (people) sandboxPeople = people.people;
+    if (config) sandboxLocalFilesEnabled = !!config.localFilesEnabled;
   } catch (err) {
     el.innerHTML = `<div style="text-align:center;padding:32px;color:#ef4444">⚠️ ${escapeHtml(err.message)}</div>`;
     return;
@@ -274,9 +279,9 @@ function sbxModalHeader(title, subtitleHtml) {
     </div>`;
 }
 
-const SBX_FIELD_IDS = ['sb_name', 'sb_folder', 'sb_owner', 'sb_fund', 'sb_status', 'sb_reason', 'sb_deferred', 'sb_goal', 'sb_description', 'sb_initiator'];
+const SBX_FIELD_IDS = ['sb_name', 'sb_folder', 'sb_local_path', 'sb_owner', 'sb_fund', 'sb_status', 'sb_reason', 'sb_deferred', 'sb_goal', 'sb_description', 'sb_initiator'];
 const SBX_FIELD_MAP = {
-  name: 'sb_name', folderUrl: 'sb_folder', owner: 'sb_owner', fundId: 'sb_fund', status: 'sb_status',
+  name: 'sb_name', folderUrl: 'sb_folder', localFolderPath: 'sb_local_path', owner: 'sb_owner', fundId: 'sb_fund', status: 'sb_status',
   statusReason: 'sb_reason', deferredUntil: 'sb_deferred', goal: 'sb_goal', description: 'sb_description', initiator: 'sb_initiator',
 };
 
@@ -314,6 +319,11 @@ function openSandboxNew() {
           <label>Ссылка на папку с материалами</label>
           <input type="url" id="sb_folder" placeholder="https://drive.google.com/..." />
         </div>
+        ${sandboxLocalFilesEnabled ? `
+        <div class="form-group">
+          <label>Путь к папке на сервере <span style="font-weight:400;color:#64748b">— для ИИ-анализа документов</span></label>
+          <input type="text" id="sb_local_path" placeholder="например: Deals/2026/Ромашка" />
+        </div>` : ''}
         <div class="form-group full">
           <label>Цель проекта</label>
           <textarea id="sb_goal" rows="2" maxlength="1000" placeholder="Что планируется сделать с проектом в ближайшей перспективе"></textarea>
@@ -339,6 +349,7 @@ async function saveSandboxNew() {
     name: val('sb_name'), initiator: val('sb_initiator'), goal: val('sb_goal'),
     description: val('sb_description'), folderUrl: val('sb_folder'),
   };
+  if (document.getElementById('sb_local_path')) body.localFolderPath = val('sb_local_path');
   if (val('sb_owner')) body.owner = val('sb_owner');
   if (val('sb_fund')) body.fundId = Number(val('sb_fund'));
   _sandboxBusy = true;
@@ -422,6 +433,11 @@ function renderSandboxDetail() {
               style="display:flex;align-items:center;padding:0 12px;border-radius:8px;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;text-decoration:none"><i class="fas fa-folder-open"></i></a>` : ''}
           </div>
         </div>
+        ${sandboxLocalFilesEnabled ? `
+        <div class="form-group">
+          <label>Путь к папке на сервере <span style="font-weight:400;color:#64748b">— для ИИ-анализа документов</span></label>
+          <input type="text" id="sb_local_path" value="${escapeHtml(p.localFolderPath)}" placeholder="например: Deals/2026/Ромашка" ${dis} />
+        </div>` : ''}
         <div class="form-group full">
           <label>Цель проекта <span style="font-weight:400;color:#64748b">— что планируется сделать в ближайшей перспективе</span></label>
           <div style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;white-space:pre-wrap;min-height:18px">${p.goal ? escapeHtml(p.goal) : '<span style="color:#64748b">Цель ещё не задана</span>'}</div>
@@ -574,6 +590,7 @@ async function saveSandboxProject() {
     status: document.getElementById('sb_status').value,
     statusReason: val('sb_reason'), deferredUntil: val('sb_deferred'),
   };   // goal is changed only via openSandboxGoalChange() — see its own required-reason rule
+  if (document.getElementById('sb_local_path')) body.localFolderPath = val('sb_local_path');
   _sandboxBusy = true;
   try {
     await apiFetch('/api/sandbox/' + p.id, { method: 'PUT', body: JSON.stringify(body) });
@@ -759,6 +776,25 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
 
   const uploadBtn = locked ? '' : `<button class="btn-ghost" onclick="sandboxAttachFiles()" style="margin-top:10px"><i class="fas fa-paperclip"></i> Прикрепить файлы</button>`;
 
+  const folderPanel = (!locked && sandboxLocalFilesEnabled && p.localFolderPath) ? `
+    <div style="margin-top:14px;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:12px">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:2px"><i class="fas fa-server" style="color:#38bdf8;margin-right:5px"></i>Папка на сервере</div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:8px;overflow-wrap:anywhere">${escapeHtml(p.localFolderPath)}</div>
+      <button class="btn-ghost" onclick="sandboxToggleFolderPreview()" style="margin-right:8px"><i class="fas fa-eye"></i> Показать файлы</button>
+      <div id="sb_folder_preview" style="display:none;margin-top:8px"></div>
+      ${canAi ? `
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer;margin-top:12px">
+          <input type="checkbox" id="sb_folder_ai_consent" style="margin-top:2px;flex-shrink:0" />
+          <span>Подтверждаю, что вправе передать документы из этой папки внешнему ИИ-провайдеру для анализа</span>
+        </label>
+        <button class="btn-primary" onclick="sandboxAnalyzeFolder()" style="margin-top:10px;background:#38bdf8">
+          <i class="fas fa-folder-tree"></i> Проанализировать всю папку
+        </button>
+        <div style="font-size:10px;color:#4a5568;margin-top:6px">Файлы будут импортированы в CRM и добавлены в список выше; для анализа берутся до ${SANDBOX_ANALYZE_MAX_FILES} самых свежих.</div>
+      ` : `<div style="font-size:11px;color:#64748b;margin-top:10px"><i class="fas fa-lock" style="margin-right:5px"></i>Нужно право «AI-ассистент»</div>`}
+      <div id="sb_folder_ai_result"></div>
+    </div>` : '';
+
   const aiPanel = locked ? '' : `
     <div style="margin-top:14px;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:12px">
       ${canAi ? `
@@ -794,6 +830,7 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
       <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:6px"><i class="fas fa-paperclip" style="color:#22c55e;margin-right:6px"></i>Документы и ИИ-анализ</div>
       ${files.length ? fileRows : '<div style="font-size:12px;color:#4a5568;padding:6px 0">Файлы не прикреплены</div>'}
       ${uploadBtn}
+      ${folderPanel}
       ${aiPanel}
       ${runsList}
     </div>`;
@@ -840,6 +877,55 @@ async function sandboxDetachFile(fileId) {
     await reloadSandboxFilesArea();
   } catch (err) {
     showToast('⚠️ ' + err.message, 'red');
+  } finally {
+    _sandboxBusy = false;
+  }
+}
+
+/* ───────────────────────── Server folder (whole-folder AI analysis) ───────────────────────── */
+
+async function sandboxToggleFolderPreview() {
+  const el = document.getElementById('sb_folder_preview');
+  if (!el || !sandboxDetail) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div style="font-size:11px;color:#64748b"><i class="fas fa-spinner fa-spin"></i> Загрузка списка файлов...</div>';
+  try {
+    const { files, truncated } = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files`);
+    if (!files.length) { el.innerHTML = '<div style="font-size:11px;color:#64748b">Подходящих файлов не найдено (PDF, PNG, JPEG, GIF, Word, Excel)</div>'; return; }
+    el.innerHTML = `
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">${files.length} файл(ов)${truncated ? ' (показаны первые ' + files.length + ')' : ''}</div>
+      ${files.map(f => `
+        <div style="display:flex;gap:10px;padding:3px 0;font-size:11px;color:#e2e8f0">
+          <span style="flex:1;min-width:0;overflow-wrap:anywhere">${escapeHtml(f.relativePath)}</span>
+          <span style="color:#64748b;white-space:nowrap">${sbxFileSize(f.sizeBytes)}</span>
+        </div>`).join('')}`;
+  } catch (err) {
+    el.innerHTML = `<div style="font-size:11px;color:#ef4444">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function sandboxAnalyzeFolder() {
+  if (_sandboxBusy || !sandboxDetail) return;
+  const consent = document.getElementById('sb_folder_ai_consent');
+  if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
+  const resultEl = document.getElementById('sb_folder_ai_result');
+  _sandboxBusy = true;
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> Импортируем файлы и анализируем...</div>';
+  try {
+    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true }) });
+    _sandboxRunCache[run.id] = run;
+    showToast('✅ Анализ папки завершён');
+    await reloadSandboxFilesArea();
+    const area = document.getElementById('sb_folder_ai_result');
+    if (area) {
+      const fi = run.folderImport;
+      const summary = fi ? `<div style="font-size:11px;color:#64748b;margin-top:10px">В папке: ${fi.totalInFolder} · импортировано: ${fi.imported} · в анализ вошло: ${fi.analyzed}${fi.skipped ? ` · не поместилось: ${fi.skipped}` : ''}${fi.errors.length ? ` · ошибок: ${fi.errors.length}` : ''}</div>` : '';
+      area.innerHTML = sandboxRunResultHtml(run) + summary;
+    }
+  } catch (err) {
+    if (resultEl) resultEl.innerHTML = `<div style="font-size:12px;color:#ef4444;margin-top:10px">⚠️ ${escapeHtml(err.message)}</div>`;
+    else showToast('⚠️ ' + err.message, 'red');
   } finally {
     _sandboxBusy = false;
   }

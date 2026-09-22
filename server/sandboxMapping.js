@@ -44,6 +44,7 @@ function rowToSandboxProject(r, names) {
     initiator: r.initiator || '',
     description: r.description || '',
     folderUrl: r.folder_url || '',
+    localFolderPath: r.local_folder_path || '',
     goal: r.goal || '',
     status: r.status,
     statusReason: r.status_reason || '',

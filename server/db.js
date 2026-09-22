@@ -1342,6 +1342,12 @@ db.exec("UPDATE roles SET ai_assist = 1 WHERE is_system = 1 AND code IN ('RELATI
 // Backfill only in the same step that adds the column (unlike the older
 // per-boot backfills above): those re-grant on every restart, which would
 // silently undo an admin deliberately revoking this from the CEO role.
+// Path to this project's own folder, RELATIVE to SANDBOX_FILES_ROOT (see
+// server/index.js's GET/POST /api/sandbox/:id/local-files) — never an
+// absolute path or a path containing '..' (validated on every write, and
+// re-validated by realpath at read time, since a relative path alone
+// can't be trusted to stay inside the configured root).
+if (!columnExists('sandbox_projects', 'local_folder_path')) db.exec('ALTER TABLE sandbox_projects ADD COLUMN local_folder_path TEXT');
 // sandbox_tasks/sandbox_projects themselves already existed before this
 // column/these two tables were added — CREATE TABLE IF NOT EXISTS above
 // only creates a table that doesn't exist yet, it never adds a column to

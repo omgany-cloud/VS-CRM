@@ -2,6 +2,40 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.45.0] - 2026-09-22
+
+### Added
+- **Sandbox: server-side folder documents** — a project can now point at a
+  folder that lives on the SERVER's own disk (a mapped network share, or
+  a Drive/OneDrive desktop client synced on the server itself), via a new
+  `SANDBOX_FILES_ROOT` env var plus a per-project relative path
+  (`localFolderPath`). This is explicitly NOT a way to read a staff
+  member's own computer — no website can reach a visitor's local
+  filesystem — and the whole section stays hidden in the UI unless
+  `SANDBOX_FILES_ROOT` is configured. Each project is confined to its own
+  configured subfolder (re-validated by realpath on every read, not just
+  at save time); one project cannot read a path belonging to another
+  project's folder even though both sit under the same shared root.
+- **"Проанализировать всю папку"** — one click imports every supported
+  document (PDF/PNG/JPEG/GIF/Word/Excel) from the project's server folder
+  into the ordinary attachment pipeline (reusing already-imported files
+  by name+size on a repeat run, so re-running doesn't pile up duplicate
+  copies) and runs the existing AI analysis on up to 5 of the
+  most-recently-modified analyzable ones, same consent/aiAssist/audit
+  trail as picking files by hand. A "Показать файлы" preview lists what's
+  in the folder before running.
+- `GET /api/sandbox/config` lets the frontend hide the whole feature when
+  unconfigured, without leaking the real server path to the browser.
+- **Scanned PDFs are now actually analyzed, not just flagged.** When
+  `pdf-parse` finds no text layer (a scan), the analyze route renders the
+  first 3 pages to PNG (`pdfjs-dist` + `@napi-rs/canvas`, no native build
+  step) and sends them to the model directly — Claude reads the page
+  image itself, so this doubles as OCR without a separate OCR engine. A
+  page that fails to render even that way still falls back to the old
+  "unreadable" marker instead of erroring the whole run. Same 15–20s
+  timeout-race discipline as the existing `pdf-parse` guard, applied to
+  both the document-load and each page-render step.
+
 ## [1.44.0] - 2026-09-22
 
 ### Added

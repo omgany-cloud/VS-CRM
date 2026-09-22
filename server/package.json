@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@napi-rs/canvas": "^1.0.9",
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
@@ -25,6 +26,7 @@
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^4.10.38",
     "zod": "^4.4.3"
   }
 }

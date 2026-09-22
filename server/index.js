@@ -237,6 +237,18 @@ const ALLOWED_UPLOAD_MIME_TYPES = new Set([
 ]);
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB — payment orders/scans, not video
 
+// Extension -> mime type for files found by walking SANDBOX_FILES_ROOT
+// (see below) — a file read straight off disk has no browser-supplied
+// Content-Type the way a real upload does, so this infers one from the
+// extension, restricted to exactly the same set POST /api/uploads already
+// allows (ALLOWED_UPLOAD_MIME_TYPES below) rather than trusting the OS.
+const LOCAL_FILE_EXTENSION_MIME = {
+  '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.zip': 'application/zip',
+};
+
 const uploadMiddleware = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOADS_DIR),
@@ -3900,8 +3912,85 @@ function sandboxInvalidFolderUrl(v) {
 }
 const sandboxTrim = v => (v == null ? null : (String(v).trim() || null));
 
+// Optional: lets the server read documents straight off a folder that
+// already lives on ITS OWN disk (a mapped network share, or a Drive/
+// OneDrive desktop client synced on the server itself) — never the
+// browser's local filesystem, which no website can reach. Unset by
+// default: the local-files routes then return a clear "not configured"
+// error, same safe-default pattern as AI_PROVIDER/JWT_SECRET/SMTP_HOST.
+// Resolved once at startup so every later prefix check compares against
+// one fixed absolute path.
+const SANDBOX_FILES_ROOT = process.env.SANDBOX_FILES_ROOT ? path.resolve(process.env.SANDBOX_FILES_ROOT) : null;
+const SANDBOX_LOCAL_LIST_MAX = 300;
+
+function sandboxInvalidLocalFolderPath(v) {
+  if (v == null || v === '') return null;
+  if (typeof v !== 'string' || v.length > 500) return 'localFolderPath must be a relative path of at most 500 characters';
+  const normalized = v.replace(/\\/g, '/');
+  // Absolute (Windows drive letter, UNC \\server\share, or POSIX /) or any
+  // '..' segment is rejected outright at save time — belt-and-suspenders
+  // with the realpath check done again at actual read time below, since a
+  // format check alone can't rule out a symlink planted inside the root.
+  if (path.isAbsolute(v) || /^[a-zA-Z]:/.test(v) || normalized.startsWith('//') || normalized.split('/').includes('..')) {
+    return 'localFolderPath must be a relative path inside the configured root — no drive letter, no leading slash, no ".."';
+  }
+  return null;
+}
+
+// Resolves `relative` (as stored on a project, or as returned by a prior
+// listing — both are relative to SANDBOX_FILES_ROOT) to a real path and
+// verifies — via realpath, so a symlink can't point back out — that it is
+// still inside the root. Returns null rather than throwing so every call
+// site can turn that into its own 400/404, matching this app's existing
+// validators. Throws only for "the root itself is missing/unreachable"
+// (e.g. a disconnected network share), which callers surface as a
+// distinct, more actionable error.
+function resolveSandboxLocalPath(relative) {
+  const rootReal = fs.realpathSync(SANDBOX_FILES_ROOT); // throws if root itself is unreachable
+  const target = path.resolve(SANDBOX_FILES_ROOT, relative || '.');
+  let targetReal;
+  try { targetReal = fs.realpathSync(target); } catch (err) { return null; } // doesn't exist
+  const rel = path.relative(rootReal, targetReal);
+  if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return null;
+  return targetReal;
+}
+
+// Recursive listing capped at SANDBOX_LOCAL_LIST_MAX files, skipping
+// dotfiles/dotdirs and anything whose extension isn't one this app can
+// actually do something with (same allowlist as a real upload) — a
+// project folder can otherwise contain arbitrary junk (.tmp, thumbs.db,
+// executables) that has no business being offered for import.
+function sandboxWalkLocalFiles(rootDir, dir, out) {
+  if (out.length >= SANDBOX_LOCAL_LIST_MAX) return;
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (err) { return; }
+  for (const entry of entries) {
+    if (out.length >= SANDBOX_LOCAL_LIST_MAX) return;
+    if (entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) { sandboxWalkLocalFiles(rootDir, full, out); continue; }
+    if (!entry.isFile()) continue;
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!LOCAL_FILE_EXTENSION_MIME[ext]) continue;
+    let stat;
+    try { stat = fs.statSync(full); } catch (err) { continue; }
+    out.push({
+      relativePath: path.relative(rootDir, full).split(path.sep).join('/'),
+      name: entry.name, mimeType: LOCAL_FILE_EXTENSION_MIME[ext], sizeBytes: stat.size, modifiedAt: stat.mtime.toISOString(),
+    });
+  }
+}
+
 app.get('/api/sandbox/people', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
   res.json({ people: sandboxPeople(req.tenantId).map(p => ({ email: p.email, name: p.name || p.email, role: p.role })) });
+});
+
+// Lets the frontend hide the whole "server folder" section when nobody
+// has configured SANDBOX_FILES_ROOT, rather than showing a button that
+// always 400s. Deliberately doesn't echo the real root path back — it's
+// server infrastructure, not something an accessFM user needs to see.
+app.get('/api/sandbox/config', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  res.json({ localFilesEnabled: !!SANDBOX_FILES_ROOT });
 });
 
 app.get('/api/sandbox', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
@@ -3946,17 +4035,20 @@ app.post('/api/sandbox', requireAuth, requireInternal, requirePermission('access
   if (badText) return res.status(400).json(badText);
   const urlError = sandboxInvalidFolderUrl(b.folderUrl);
   if (urlError) return res.status(400).json({ error: urlError, field: 'folderUrl' });
+  const localPathError = sandboxInvalidLocalFolderPath(b.localFolderPath);
+  if (localPathError) return res.status(400).json({ error: localPathError, field: 'localFolderPath' });
   if (sandboxFundInvalid(req.tenantId, b.fundId)) return res.status(400).json({ error: 'fundId does not exist in this tenant', field: 'fundId' });
   const owner = sandboxTrim(b.owner) || req.user.email;
   if (sandboxPersonInvalid(req.tenantId, owner)) return res.status(400).json({ error: 'owner must be an active CRM user with FM access', field: 'owner' });
 
   const info = db.prepare(`
-    INSERT INTO sandbox_projects (tenant_id, fund_id, name, initiator, description, folder_url, goal, owner, created_by)
-    VALUES (@tenantId, @fundId, @name, @initiator, @description, @folderUrl, @goal, @owner, @createdBy)
+    INSERT INTO sandbox_projects (tenant_id, fund_id, name, initiator, description, folder_url, local_folder_path, goal, owner, created_by)
+    VALUES (@tenantId, @fundId, @name, @initiator, @description, @folderUrl, @localFolderPath, @goal, @owner, @createdBy)
   `).run(at({
     tenantId: req.tenantId, fundId: b.fundId == null || b.fundId === '' ? null : Number(b.fundId), name,
     initiator: sandboxTrim(b.initiator), description: sandboxTrim(b.description),
-    folderUrl: sandboxTrim(b.folderUrl), goal: sandboxTrim(b.goal), owner, createdBy: req.user.email,
+    folderUrl: sandboxTrim(b.folderUrl), localFolderPath: sandboxTrim(b.localFolderPath),
+    goal: sandboxTrim(b.goal), owner, createdBy: req.user.email,
   }));
   recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: info.lastInsertRowid, action: 'created', actorEmail: req.user.email, summary: `Проект «${name}» добавлен в песочницу` });
   res.status(201).json(rowToSandboxProject(loadSandboxProject(req.tenantId, info.lastInsertRowid), sandboxNameMap(req.tenantId)));
@@ -3981,6 +4073,10 @@ app.put('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('acc
   if (has('folderUrl')) {
     const urlError = sandboxInvalidFolderUrl(b.folderUrl);
     if (urlError) return res.status(400).json({ error: urlError, field: 'folderUrl' });
+  }
+  if (has('localFolderPath')) {
+    const localPathError = sandboxInvalidLocalFolderPath(b.localFolderPath);
+    if (localPathError) return res.status(400).json({ error: localPathError, field: 'localFolderPath' });
   }
   if (has('fundId') && sandboxFundInvalid(req.tenantId, b.fundId)) return res.status(400).json({ error: 'fundId does not exist in this tenant', field: 'fundId' });
   if (has('owner') && sandboxPersonInvalid(req.tenantId, b.owner)) return res.status(400).json({ error: 'owner must be an active CRM user with FM access', field: 'owner' });
@@ -4020,6 +4116,7 @@ app.put('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('acc
     initiator: has('initiator') ? sandboxTrim(b.initiator) : existing.initiator,
     description: has('description') ? sandboxTrim(b.description) : existing.description,
     folderUrl: has('folderUrl') ? sandboxTrim(b.folderUrl) : existing.folder_url,
+    localFolderPath: has('localFolderPath') ? sandboxTrim(b.localFolderPath) : existing.local_folder_path,
     goal: newGoal,
     fundId: has('fundId') ? (b.fundId == null || b.fundId === '' ? null : Number(b.fundId)) : existing.fund_id,
     owner: has('owner') ? sandboxTrim(b.owner) : existing.owner,
@@ -4028,8 +4125,8 @@ app.put('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('acc
   db.prepare(`
     UPDATE sandbox_projects SET
       fund_id=@fundId, name=@name, initiator=@initiator, description=@description, folder_url=@folderUrl,
-      goal=@goal, status=@status, status_reason=@statusReason, deferred_until=@deferredUntil, owner=@owner,
-      archived=@archived, updated_at=datetime('now'), version=version+1
+      local_folder_path=@localFolderPath, goal=@goal, status=@status, status_reason=@statusReason,
+      deferred_until=@deferredUntil, owner=@owner, archived=@archived, updated_at=datetime('now'), version=version+1
     WHERE id=@id AND tenant_id=@tenantId
   `).run(at({ ...next, status, statusReason, deferredUntil, id: existing.id, tenantId: req.tenantId }));
 
@@ -4050,6 +4147,7 @@ app.put('/api/sandbox/:id', requireAuth, requireInternal, requirePermission('acc
   }
   const otherChanged = !same(next.name, existing.name) || !same(next.initiator, existing.initiator)
     || !same(next.description, existing.description) || !same(next.folderUrl, existing.folder_url)
+    || !same(next.localFolderPath, existing.local_folder_path)
     || !same(next.fundId, existing.fund_id) || !same(next.owner, existing.owner)
     || !same(deferredUntil, existing.deferred_until);
   if (otherChanged) audit('updated', `Проект «${name}» изменён`);
@@ -4192,6 +4290,100 @@ app.delete('/api/sandbox/:id/files/:fileId', requireAuth, requireInternal, requi
   res.json({ ok: true, deleted: true });
 });
 
+/* ----- Sandbox local-folder files (server-side folder, not the browser's) -----
+   Only meaningful when SANDBOX_FILES_ROOT is configured (a share/synced
+   folder that already lives on THIS server's own disk) and the project has
+   its own local_folder_path set underneath it. Listing never returns bytes,
+   only metadata — importing one explicitly copies it into the exact same
+   uploaded_files/sandbox_project_files pipeline a manual upload uses, so
+   everything downstream (analysis, download, audit) is one code path. */
+app.get('/api/sandbox/:id/local-files', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  if (!SANDBOX_FILES_ROOT) return res.status(400).json({ error: 'Чтение папки на сервере не настроено (SANDBOX_FILES_ROOT)' });
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  if (!project.local_folder_path) return res.status(400).json({ error: 'Укажите путь к папке проекта (относительно корня на сервере)' });
+  let target;
+  try {
+    target = resolveSandboxLocalPath(project.local_folder_path);
+  } catch (err) {
+    return res.status(502).json({ error: 'Папка на сервере сейчас недоступна (не примонтирована или отключена)' });
+  }
+  if (!target) return res.status(404).json({ error: 'Папка не найдена по указанному пути' });
+  if (!fs.statSync(target).isDirectory()) return res.status(400).json({ error: 'Указанный путь — не папка' });
+  const files = [];
+  sandboxWalkLocalFiles(SANDBOX_FILES_ROOT, target, files);
+  res.json({ files, truncated: files.length >= SANDBOX_LOCAL_LIST_MAX });
+});
+
+app.post('/api/sandbox/:id/local-files/import', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  if (!SANDBOX_FILES_ROOT) return res.status(400).json({ error: 'Чтение папки на сервере не настроено (SANDBOX_FILES_ROOT)' });
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  if (!project.local_folder_path) return res.status(400).json({ error: 'Укажите путь к папке проекта (относительно корня на сервере)', field: 'localFolderPath' });
+  const paths = Array.isArray(req.body && req.body.paths) ? req.body.paths.filter(p => typeof p === 'string') : [];
+  if (!paths.length) return res.status(400).json({ error: 'paths is required', field: 'paths' });
+  if (paths.length > SANDBOX_ANALYZE_MAX_FILES * 4) return res.status(400).json({ error: 'Слишком много файлов за один раз' });
+
+  // Every requested path must resolve inside THIS project's own folder —
+  // not merely somewhere under the shared SANDBOX_FILES_ROOT, which would
+  // let one project pull a file that actually belongs to a different
+  // project's subfolder just by guessing its relative path.
+  let projectRoot;
+  try {
+    projectRoot = resolveSandboxLocalPath(project.local_folder_path);
+  } catch (err) {
+    return res.status(502).json({ error: 'Папка на сервере сейчас недоступна (не примонтирована или отключена)' });
+  }
+  if (!projectRoot) return res.status(404).json({ error: 'Папка не найдена по указанному пути' });
+
+  const imported = [];
+  const errors = [];
+  for (const relative of paths) {
+    let full;
+    try {
+      full = resolveSandboxLocalPath(relative);
+    } catch (err) {
+      errors.push({ path: relative, error: 'Папка на сервере сейчас недоступна' });
+      break; // the root itself is unreachable — retrying the rest won't help
+    }
+    // Re-checked from scratch here, not trusted from the listing response
+    // (which the caller could have edited) — same "never trust a client-
+    // supplied path" reasoning as everywhere else in this route pair.
+    if (!full || !(full === projectRoot || full.startsWith(projectRoot + path.sep))) { errors.push({ path: relative, error: 'Путь вне папки этого проекта' }); continue; }
+    let stat;
+    try { stat = fs.statSync(full); } catch (err) { errors.push({ path: relative, error: 'Файл не найден' }); continue; }
+    if (!stat.isFile()) { errors.push({ path: relative, error: 'Это не файл' }); continue; }
+    const mimeType = LOCAL_FILE_EXTENSION_MIME[path.extname(full).toLowerCase()];
+    if (!mimeType) { errors.push({ path: relative, error: 'Неподдерживаемый тип файла' }); continue; }
+    if (stat.size > MAX_UPLOAD_BYTES) { errors.push({ path: relative, error: `Больше ${MAX_UPLOAD_BYTES / 1024 / 1024} МБ` }); continue; }
+
+    const storedName = crypto.randomUUID() + path.extname(full).slice(0, 20);
+    try {
+      fs.copyFileSync(full, path.join(UPLOADS_DIR, storedName));
+      const info = db.prepare(`
+        INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+        VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+      `).run(at({ tenantId: req.tenantId, storedName, originalName: path.basename(full), mimeType, sizeBytes: stat.size, uploadedBy: req.user.email }));
+      const linkInfo = db.prepare(`
+        INSERT INTO sandbox_project_files (tenant_id, project_id, upload_id, attached_by)
+        VALUES (@tenantId, @projectId, @uploadId, @attachedBy)
+      `).run(at({ tenantId: req.tenantId, projectId: project.id, uploadId: info.lastInsertRowid, attachedBy: req.user.email }));
+      imported.push(rowToSandboxFile({
+        id: linkInfo.lastInsertRowid, upload_id: info.lastInsertRowid, attached_by: req.user.email, attached_at: new Date().toISOString(),
+        original_name: path.basename(full), mime_type: mimeType, size_bytes: stat.size,
+      }));
+    } catch (err) {
+      errors.push({ path: relative, error: 'Не удалось скопировать файл' });
+    }
+  }
+  if (imported.length) {
+    touchSandboxProject(req.tenantId, project.id);
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'file_attached', actorEmail: req.user.email, summary: `Проект «${project.name}»: импортировано файлов с сервера — ${imported.length}` });
+  }
+  res.status(imported.length ? 201 : 400).json({ imported, errors });
+});
+
 /* ----- Sandbox AI analysis ----- */
 // completeJson's provider/permission/logging infrastructure is reused
 // 1:1 from onboarding's AI-assist (server/aiProvider.js) — same aiAssist
@@ -4216,35 +4408,73 @@ const SANDBOX_ANALYSIS_SCHEMA = z.object({
 });
 const SANDBOX_ANALYSIS_CONSENT_NOTE = 'Пользователь подтвердил на этом запуске, что вправе передать выбранные материалы внешнему ИИ-провайдеру для анализа.';
 
-app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermission('accessFM'), requirePermission('aiAssist'), async (req, res) => {
-  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
-  if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
-  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
-  const b = req.body || {};
-  // A per-run affirmative click, distinct from the aiAssist permission —
-  // aiAssist gates who may use the feature at all, this confirms THIS
-  // run's specific documents are actually clear to leave the building.
-  if (b.consent !== true) return res.status(400).json({ error: 'Подтвердите, что вправе передать эти материалы внешнему ИИ-провайдеру', field: 'consent' });
-  const uploadIds = Array.isArray(b.uploadIds) ? [...new Set(b.uploadIds.map(Number))].filter(Number.isInteger) : [];
-  if (!uploadIds.length) return res.status(400).json({ error: 'Выберите хотя бы один прикреплённый документ', field: 'uploadIds' });
-  if (uploadIds.length > SANDBOX_ANALYZE_MAX_FILES) {
-    return res.status(400).json({ error: `За один запуск можно выбрать не больше ${SANDBOX_ANALYZE_MAX_FILES} документов`, field: 'uploadIds' });
+// Fallback for a PDF that pdf-parse extracted no text from (a scan with no
+// text layer) — renders its first pages to PNG and lets the model read
+// them directly instead of just calling the document unreadable. pdfjs-
+// dist ships ESM-only, so it's loaded once via dynamic import() (works
+// fine from this CommonJS file) and cached; @napi-rs/canvas supplies a
+// CanvasRenderingContext2D-compatible surface for pdf.js to render into,
+// with no native build step (prebuilt binary), unlike node-canvas.
+const SANDBOX_OCR_MAX_PAGES_PER_PDF = 3;
+const SANDBOX_OCR_MAX_IMAGES_TOTAL = 10;
+const SANDBOX_OCR_RENDER_SCALE = 1.5;
+const SANDBOX_OCR_TIMEOUT_MS = 20000;
+let _pdfjsLibPromise = null;
+function loadPdfjs() {
+  if (!_pdfjsLibPromise) _pdfjsLibPromise = import('pdfjs-dist/legacy/build/pdf.mjs');
+  return _pdfjsLibPromise;
+}
+// Same "untrusted input, never hang the request" stance as pdf-parse's own
+// timeout guard above — a malformed PDF gets the same bounded budget here.
+async function renderPdfPagesAsImages(buf, maxPages) {
+  if (maxPages <= 0) return [];
+  const { createCanvas } = require('@napi-rs/canvas');
+  const pdfjsLib = await loadPdfjs();
+  const doc = await Promise.race([
+    pdfjsLib.getDocument({ data: new Uint8Array(buf), disableWorker: true, isEvalSupported: false }).promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('pdf render (load) timed out')), SANDBOX_OCR_TIMEOUT_MS)),
+  ]);
+  const images = [];
+  const pageCount = Math.min(doc.numPages, maxPages);
+  for (let i = 1; i <= pageCount; i++) {
+    try {
+      const page = await doc.getPage(i);
+      const viewport = page.getViewport({ scale: SANDBOX_OCR_RENDER_SCALE });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      await Promise.race([
+        page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('pdf render (page) timed out')), SANDBOX_OCR_TIMEOUT_MS)),
+      ]);
+      images.push({ base64: canvas.toBuffer('image/png').toString('base64'), page: i });
+    } catch (err) {
+      // One bad page must not discard pages already rendered before it.
+    }
   }
+  return images;
+}
 
+// Shared by POST /api/sandbox/:id/analyze (explicit file picks) and
+// POST /api/sandbox/:id/local-files/analyze-folder (auto-picks up to
+// SANDBOX_ANALYZE_MAX_FILES analyzable files already attached) — same
+// validation, extraction, model call, and persistence either way; the two
+// routes differ only in HOW uploadIds gets built. Returns {httpStatus,
+// body} rather than writing to res directly so the folder-analyze route
+// can attach its own import summary to a 201 before responding.
+async function runSandboxAnalysis(req, project, uploadIds) {
   const placeholders = uploadIds.map(() => '?').join(',');
   const attached = db.prepare(`
     SELECT u.* FROM sandbox_project_files sf JOIN uploaded_files u ON u.id = sf.upload_id AND u.tenant_id = sf.tenant_id
     WHERE sf.project_id = ? AND sf.tenant_id = ? AND sf.upload_id IN (${placeholders})`).all(project.id, req.tenantId, ...uploadIds);
   if (attached.length !== uploadIds.length) {
-    return res.status(400).json({ error: 'Все выбранные документы должны быть сначала прикреплены к проекту', field: 'uploadIds' });
+    return { httpStatus: 400, body: { error: 'Все выбранные документы должны быть сначала прикреплены к проекту', field: 'uploadIds' } };
   }
   const badMime = attached.find(f => !SANDBOX_ANALYZABLE_MIME_TYPES.has(f.mime_type));
-  if (badMime) return res.status(400).json({ error: `«${badMime.original_name}»: ИИ-анализ поддерживает только PDF и изображения (PNG/JPEG/GIF)`, field: 'uploadIds' });
+  if (badMime) return { httpStatus: 400, body: { error: `«${badMime.original_name}»: ИИ-анализ поддерживает только PDF и изображения (PNG/JPEG/GIF)`, field: 'uploadIds' } };
   const tooBig = attached.find(f => f.size_bytes > SANDBOX_ANALYZE_MAX_FILE_BYTES);
-  if (tooBig) return res.status(400).json({ error: `«${tooBig.original_name}» больше ${Math.round(SANDBOX_ANALYZE_MAX_FILE_BYTES / 1024 / 1024)} МБ — выберите файл меньшего размера`, field: 'uploadIds' });
+  if (tooBig) return { httpStatus: 400, body: { error: `«${tooBig.original_name}» больше ${Math.round(SANDBOX_ANALYZE_MAX_FILE_BYTES / 1024 / 1024)} МБ — выберите файл меньшего размера`, field: 'uploadIds' } };
   const totalBytes = attached.reduce((s, f) => s + (f.size_bytes || 0), 0);
   if (totalBytes > SANDBOX_ANALYZE_MAX_TOTAL_BYTES) {
-    return res.status(400).json({ error: `Суммарный размер выбранных файлов превышает ${Math.round(SANDBOX_ANALYZE_MAX_TOTAL_BYTES / 1024 / 1024)} МБ — выберите меньше документов`, field: 'uploadIds' });
+    return { httpStatus: 400, body: { error: `Суммарный размер выбранных файлов превышает ${Math.round(SANDBOX_ANALYZE_MAX_TOTAL_BYTES / 1024 / 1024)} МБ — выберите меньше документов`, field: 'uploadIds' } };
   }
 
   const textParts = [];
@@ -4253,7 +4483,7 @@ app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermis
   let totalChars = 0;
   for (const f of attached) {
     const filePath = path.join(UPLOADS_DIR, f.stored_name);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: `Файл «${f.original_name}» отсутствует в хранилище — обновите список и попробуйте снова` });
+    if (!fs.existsSync(filePath)) return { httpStatus: 404, body: { error: `Файл «${f.original_name}» отсутствует в хранилище — обновите список и попробуйте снова` } };
     if (f.mime_type === 'application/pdf') {
       const pdfParse = require('pdf-parse');
       // A malformed/corrupt PDF can make this old bundled pdf.js build
@@ -4275,8 +4505,29 @@ app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermis
         text = '';
       }
       if (!text) {
-        unreadable.push(f.original_name);
-        textParts.push(`--- BEGIN FILE upload_id=${f.id} name="${f.original_name}" ---\n[не удалось извлечь текст — вероятно, скан без OCR или повреждённый файл]\n--- END FILE ---`);
+        // No text layer — most likely a scan. Fall back to rendering its
+        // first pages as images and let the model read them directly
+        // (this IS the OCR path here: Claude has vision, so a rasterized
+        // page works instead of a separate OCR engine) rather than
+        // silently calling the whole document unreadable.
+        let rendered = [];
+        const budget = SANDBOX_OCR_MAX_IMAGES_TOTAL - images.length;
+        if (budget > 0) {
+          try {
+            rendered = await renderPdfPagesAsImages(fs.readFileSync(filePath), Math.min(SANDBOX_OCR_MAX_PAGES_PER_PDF, budget));
+          } catch (err) {
+            rendered = []; // rendering itself failed/timed out — falls through to the unreadable marker below
+          }
+        }
+        if (rendered.length) {
+          for (const r of rendered) {
+            images.push({ mimeType: 'image/png', base64: r.base64 });
+            textParts.push(`[скан upload_id=${f.id} name="${f.original_name}" стр.${r.page} — изображение ${images.length}, текстового слоя нет, распознавайте по содержимому картинки]`);
+          }
+        } else {
+          unreadable.push(f.original_name);
+          textParts.push(`--- BEGIN FILE upload_id=${f.id} name="${f.original_name}" ---\n[не удалось извлечь текст и не удалось отрисовать как изображение — вероятно, повреждённый файл]\n--- END FILE ---`);
+        }
       } else {
         textParts.push(`--- BEGIN FILE upload_id=${f.id} name="${f.original_name}" ---\n${text}\n--- END FILE ---`);
         totalChars += text.length;
@@ -4288,10 +4539,10 @@ app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermis
     }
   }
   if (totalChars > SANDBOX_ANALYZE_MAX_TOTAL_CHARS) {
-    return res.status(400).json({
+    return { httpStatus: 400, body: {
       error: `Извлечённый текст (${totalChars} символов) превышает лимит одного запуска (${SANDBOX_ANALYZE_MAX_TOTAL_CHARS}) — выберите меньше или более коротких документов`,
       field: 'uploadIds',
-    });
+    } };
   }
 
   const allowedSourceIds = new Set(uploadIds.map(String));
@@ -4322,7 +4573,7 @@ app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermis
     touchSandboxProject(req.tenantId, project.id);
     logAiCall({ userEmail: req.user.email, entityType: 'sandbox_analyze', entityId: project.id, promptDigest, model, status: 'ok' });
     recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'ai_analyzed', actorEmail: req.user.email, summary: `Проект «${project.name}»: ИИ-анализ (${attached.length} документ(ов)) — рекомендация: ${data.recommendation.action}` });
-    res.status(201).json(rowToSandboxAiRun(run));
+    return { httpStatus: 201, body: rowToSandboxAiRun(run) };
   } catch (err) {
     const info = db.prepare(`
       INSERT INTO sandbox_ai_runs (tenant_id, project_id, status, provider, model, input_snapshot_json, error_message, consent_note, created_by)
@@ -4334,8 +4585,106 @@ app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermis
     }));
     logAiCall({ userEmail: req.user.email, entityType: 'sandbox_analyze', entityId: project.id, promptDigest, model: null, status: 'error: ' + err.message });
     recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'ai_analysis_failed', actorEmail: req.user.email, summary: `Проект «${project.name}»: ИИ-анализ не удался — ${err.message}` });
-    res.status(502).json({ error: 'AI analysis failed: ' + err.message, runId: info.lastInsertRowid });
+    return { httpStatus: 502, body: { error: 'AI analysis failed: ' + err.message, runId: info.lastInsertRowid } };
   }
+}
+
+app.post('/api/sandbox/:id/analyze', requireAuth, requireInternal, requirePermission('accessFM'), requirePermission('aiAssist'), async (req, res) => {
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  const b = req.body || {};
+  // A per-run affirmative click, distinct from the aiAssist permission —
+  // aiAssist gates who may use the feature at all, this confirms THIS
+  // run's specific documents are actually clear to leave the building.
+  if (b.consent !== true) return res.status(400).json({ error: 'Подтвердите, что вправе передать эти материалы внешнему ИИ-провайдеру', field: 'consent' });
+  const uploadIds = Array.isArray(b.uploadIds) ? [...new Set(b.uploadIds.map(Number))].filter(Number.isInteger) : [];
+  if (!uploadIds.length) return res.status(400).json({ error: 'Выберите хотя бы один прикреплённый документ', field: 'uploadIds' });
+  if (uploadIds.length > SANDBOX_ANALYZE_MAX_FILES) {
+    return res.status(400).json({ error: `За один запуск можно выбрать не больше ${SANDBOX_ANALYZE_MAX_FILES} документов`, field: 'uploadIds' });
+  }
+  const { httpStatus, body } = await runSandboxAnalysis(req, project, uploadIds);
+  res.status(httpStatus).json(body);
+});
+
+// One click: pulls every supported document straight out of the
+// project's own server-side folder (SANDBOX_FILES_ROOT +
+// local_folder_path — never the browser's local filesystem) and analyzes
+// them, instead of attaching + picking files by hand. Files already
+// imported earlier (matched by name+size, same folder) are reused rather
+// than copied again, so clicking this repeatedly as new documents land in
+// the folder doesn't pile up duplicate copies.
+app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInternal, requirePermission('accessFM'), requirePermission('aiAssist'), async (req, res) => {
+  if (!SANDBOX_FILES_ROOT) return res.status(400).json({ error: 'Чтение папки на сервере не настроено (SANDBOX_FILES_ROOT)' });
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
+  if (project.promoted_deal_id) return res.status(409).json({ error: SANDBOX_PROMOTED_MSG });
+  if (!project.local_folder_path) return res.status(400).json({ error: 'Укажите путь к папке проекта (относительно корня на сервере)', field: 'localFolderPath' });
+  const b = req.body || {};
+  if (b.consent !== true) return res.status(400).json({ error: 'Подтвердите, что вправе передать эти материалы внешнему ИИ-провайдеру', field: 'consent' });
+
+  let target;
+  try {
+    target = resolveSandboxLocalPath(project.local_folder_path);
+  } catch (err) {
+    return res.status(502).json({ error: 'Папка на сервере сейчас недоступна (не примонтирована или отключена)' });
+  }
+  if (!target) return res.status(404).json({ error: 'Папка не найдена по указанному пути' });
+  const localFiles = [];
+  sandboxWalkLocalFiles(SANDBOX_FILES_ROOT, target, localFiles);
+  if (!localFiles.length) return res.status(400).json({ error: 'В папке нет файлов, подходящих для ИИ-анализа (PDF, PNG, JPEG, GIF)' });
+  // Most recently modified first — if the folder holds more analyzable
+  // files than one run can take, the newest paperwork is the more likely
+  // "what changed" versus the AI's last look at this project.
+  localFiles.sort((a, b2) => b2.modifiedAt.localeCompare(a.modifiedAt));
+
+  const existingAttached = db.prepare(`
+    SELECT u.id, u.original_name, u.size_bytes, u.mime_type FROM sandbox_project_files sf
+    JOIN uploaded_files u ON u.id = sf.upload_id AND u.tenant_id = sf.tenant_id
+    WHERE sf.project_id = ? AND sf.tenant_id = ?`).all(project.id, req.tenantId);
+
+  const resolved = [];      // { id, mime_type } for every local file, imported or reused
+  const importErrors = [];
+  let newlyImported = 0;
+  for (const lf of localFiles) {
+    const already = existingAttached.find(e => e.original_name === lf.name && e.size_bytes === lf.sizeBytes);
+    if (already) { resolved.push(already); continue; }
+    const fullPath = path.join(SANDBOX_FILES_ROOT, lf.relativePath);
+    const storedName = crypto.randomUUID() + path.extname(fullPath).slice(0, 20);
+    try {
+      fs.copyFileSync(fullPath, path.join(UPLOADS_DIR, storedName));
+      const info = db.prepare(`
+        INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+        VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
+      `).run(at({ tenantId: req.tenantId, storedName, originalName: lf.name, mimeType: lf.mimeType, sizeBytes: lf.sizeBytes, uploadedBy: req.user.email }));
+      db.prepare(`
+        INSERT INTO sandbox_project_files (tenant_id, project_id, upload_id, attached_by)
+        VALUES (@tenantId, @projectId, @uploadId, @attachedBy)
+      `).run(at({ tenantId: req.tenantId, projectId: project.id, uploadId: info.lastInsertRowid, attachedBy: req.user.email }));
+      resolved.push({ id: info.lastInsertRowid, mime_type: lf.mimeType });
+      newlyImported++;
+    } catch (err) {
+      importErrors.push({ path: lf.relativePath, error: 'Не удалось скопировать файл' });
+    }
+  }
+  if (newlyImported) {
+    touchSandboxProject(req.tenantId, project.id);
+    recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'file_attached', actorEmail: req.user.email, summary: `Проект «${project.name}»: импортировано файлов с сервера — ${newlyImported}` });
+  }
+
+  const analyzable = resolved.filter(f => SANDBOX_ANALYZABLE_MIME_TYPES.has(f.mime_type));
+  if (!analyzable.length) {
+    return res.status(400).json({ error: 'В папке нет файлов, подходящих для ИИ-анализа (PDF, PNG, JPEG, GIF) — остальные типы можно только прикрепить', errors: importErrors });
+  }
+  const chosen = analyzable.slice(0, SANDBOX_ANALYZE_MAX_FILES).map(f => f.id);
+  const { httpStatus, body } = await runSandboxAnalysis(req, project, chosen);
+  if (httpStatus === 201) {
+    body.folderImport = {
+      totalInFolder: localFiles.length, imported: newlyImported, analyzed: chosen.length,
+      skipped: analyzable.length - chosen.length, errors: importErrors,
+    };
+  }
+  res.status(httpStatus).json(body);
 });
 
 app.get('/api/sandbox/runs/:runId', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {

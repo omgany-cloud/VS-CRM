@@ -18,12 +18,17 @@ const AI_STUB_RESPONSE = {
   suggestedTasks: [{ title: 'Запросить финмодель', priority: 'Средний' }],
 };
 
-// A structurally valid but content-less PDF — pdf-parse handles it without
-// throwing but extracts no text, exercising the "unreadable" branch.
+// A structurally valid but content-less PDF (no text stream) — pdf-parse
+// extracts no text, but pdfjs-dist CAN still render its (blank) page as an
+// image, so this exercises the OCR-fallback success path, not the
+// truly-unreadable one.
 const BLANK_PDF = Buffer.from(
   '%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
   '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 3 3]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF'
 );
+// Not a PDF at all — neither pdf-parse nor pdfjs-dist can make anything of
+// this, so it's the one that should actually land in `unreadable`.
+const GARBAGE_NOT_A_PDF = Buffer.from('this is not a pdf at all, just garbage text bytes 12345');
 
 let server;
 let projectId;
@@ -145,14 +150,24 @@ test('analyze: happy path on an image — validated result, sourceIds clamped to
   assert.ok(history.some(h => h.action === 'ai_analyzed'));
 });
 
-test('analyze: a PDF with no extractable text is flagged unreadable, not silently dropped or errored', async () => {
+test('analyze: a PDF with no text layer is rendered to an image and analyzed (OCR fallback), not silently dropped or errored', async () => {
   const up = await uploadTestFile(rawFetchAs(server.token), BLANK_PDF, 'application/pdf', 'scan.pdf');
   const { id: uploadId } = await up.json();
   await attach(uploadId);
   const res = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
   assert.equal(res.status, 201);
   const run = await res.json();
-  assert.deepEqual(run.inputSnapshot.unreadable, ['scan.pdf']);
+  assert.deepEqual(run.inputSnapshot.unreadable, [], 'a renderable scan must not be marked unreadable — it was analyzed as an image instead');
+});
+
+test('analyze: a file that is genuinely not a PDF (extraction AND rendering both fail) is flagged unreadable, not silently dropped or errored', async () => {
+  const up = await uploadTestFile(rawFetchAs(server.token), GARBAGE_NOT_A_PDF, 'application/pdf', 'corrupt.pdf');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const res = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+  assert.equal(res.status, 201);
+  const run = await res.json();
+  assert.deepEqual(run.inputSnapshot.unreadable, ['corrupt.pdf']);
 });
 
 test('a task can be created from an AI suggestion (sourceAiRunId) and is rejected if the run belongs to another project', async () => {
