@@ -36,6 +36,10 @@ const AUDIT_ACTION_LABELS = {
   task_created:   { label: 'Новая задача', color: '#3b82f6' },
   task_completed: { label: 'Задача выполнена', color: '#14b8a6' },
   task_deleted:   { label: 'Задача удалена', color: '#ef4444' },
+  file_attached:  { label: 'Файл прикреплён', color: '#22c55e' },
+  file_detached:  { label: 'Файл откреплён', color: '#94a3b8' },
+  ai_analyzed:    { label: 'ИИ-анализ выполнен', color: '#a78bfa' },
+  ai_analysis_failed: { label: 'ИИ-анализ не удался', color: '#ef4444' },
 };
 
 function auditEntityBadge(entityType) {

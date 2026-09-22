@@ -755,6 +755,16 @@ function renderExportPage() {
       tag: 'Регулятор',
     },
     {
+      id: 'sandbox',
+      icon: 'fa-flask',
+      color: 'purple',
+      title: 'Песочница',
+      subtitle: 'Проекты до скрининга',
+      desc: 'Все проекты «Песочницы»: статус, цель, ответственный, фонд, открытые/просроченные задачи, ссылка на папку. Текущий фильтр страницы (если она открыта) учитывается.',
+      fn: 'exportSandboxProjects()',
+      tag: 'Internal',
+    },
+    {
       id: 'full',
       icon: 'fa-database',
       color: 'red',

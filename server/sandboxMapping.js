@@ -15,6 +15,17 @@ const SANDBOX_TASK_STATUSES = ['К выполнению', 'В работе', 'Г
 const SANDBOX_TASK_DONE_STATUSES = ['Готово', 'Отменена'];
 const SANDBOX_TASK_PRIORITIES = ['Высокий', 'Средний', 'Низкий'];
 
+// AI analysis (POST /api/sandbox/:id/analyze) — deliberately narrow v1
+// limits (Astra's numbers): enough for a real memo + a few exhibits,
+// small enough that a run stays cheap and fast and a runaway attachment
+// list fails BEFORE calling the model, not after paying for the call.
+const SANDBOX_ANALYZABLE_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
+const SANDBOX_ANALYZE_MAX_FILES = 5;
+const SANDBOX_ANALYZE_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const SANDBOX_ANALYZE_MAX_TOTAL_BYTES = 25 * 1024 * 1024;
+const SANDBOX_ANALYZE_MAX_TOTAL_CHARS = 40000;
+const SANDBOX_ANALYZE_ACTIONS = ['consider_screening', 'request_information', 'do_not_proceed'];
+
 // names: { [email]: display name } — built once per request so a list of N
 // projects doesn't do N user lookups.
 function displayName(names, email) {
@@ -50,6 +61,43 @@ function rowToSandboxProject(r, names) {
   };
 }
 
+function rowToSandboxFile(r) {
+  return {
+    id: r.id,
+    uploadId: r.upload_id,
+    name: r.original_name,
+    mimeType: r.mime_type,
+    sizeBytes: r.size_bytes,
+    url: `/api/uploads/${r.upload_id}`,
+    attachedBy: r.attached_by,
+    attachedAt: r.attached_at,
+  };
+}
+
+// List view (GET /api/sandbox/:id's aiRuns[]) — no result_json/
+// input_snapshot_json, just enough to show a history row and let the
+// user open one run's full detail (GET /api/sandbox/runs/:runId).
+function rowToSandboxAiRunSummary(r) {
+  return {
+    id: r.id,
+    status: r.status,
+    provider: r.provider,
+    model: r.model,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+  };
+}
+
+function rowToSandboxAiRun(r) {
+  return {
+    ...rowToSandboxAiRunSummary(r),
+    inputSnapshot: JSON.parse(r.input_snapshot_json || '{}'),
+    result: r.result_json ? JSON.parse(r.result_json) : null,
+    errorMessage: r.error_message,
+    consentNote: r.consent_note,
+  };
+}
+
 function rowToSandboxTask(r, names) {
   return {
     id: r.id,
@@ -63,11 +111,14 @@ function rowToSandboxTask(r, names) {
     createdBy: r.created_by,
     createdAt: r.created_at,
     completedAt: r.completed_at || null,
+    sourceAiRunId: r.source_ai_run_id || null,
   };
 }
 
 module.exports = {
   SANDBOX_STATUSES, SANDBOX_PROMOTED_STATUS, SANDBOX_REASON_STATUSES,
   SANDBOX_TASK_STATUSES, SANDBOX_TASK_DONE_STATUSES, SANDBOX_TASK_PRIORITIES,
-  rowToSandboxProject, rowToSandboxTask,
+  SANDBOX_ANALYZABLE_MIME_TYPES, SANDBOX_ANALYZE_MAX_FILES, SANDBOX_ANALYZE_MAX_FILE_BYTES,
+  SANDBOX_ANALYZE_MAX_TOTAL_BYTES, SANDBOX_ANALYZE_MAX_TOTAL_CHARS, SANDBOX_ANALYZE_ACTIONS,
+  rowToSandboxProject, rowToSandboxTask, rowToSandboxFile, rowToSandboxAiRun, rowToSandboxAiRunSummary,
 };

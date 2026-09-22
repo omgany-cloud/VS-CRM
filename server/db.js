@@ -1237,19 +1237,72 @@ CREATE INDEX IF NOT EXISTS idx_sandbox_projects_tenant ON sandbox_projects(tenan
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sandbox_projects_promoted_deal ON sandbox_projects(promoted_deal_id) WHERE promoted_deal_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS sandbox_tasks (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+  project_id        INTEGER NOT NULL REFERENCES sandbox_projects(id),
+  title             TEXT NOT NULL,
+  assignee          TEXT,
+  due_date          TEXT,
+  priority          TEXT NOT NULL DEFAULT 'Средний',
+  status            TEXT NOT NULL DEFAULT 'К выполнению',
+  created_by        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at      TEXT,
+  -- Set only when this task was created by one click on an AI suggestion
+  -- (POST /api/sandbox/:id/tasks with sourceAiRunId) — provenance only,
+  -- never written to by the AI itself and never required.
+  source_ai_run_id  INTEGER REFERENCES sandbox_ai_runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_tasks_project ON sandbox_tasks(tenant_id, project_id, status);
+
+-- Which uploaded_files (real bytes on disk, see that table's own comment)
+-- a sandbox project has attached for review/AI analysis. A join table
+-- rather than a column on uploaded_files: a file could in principle be
+-- attached to more than one project's own review copy, and this keeps
+-- uploaded_files itself ignorant of which product module is using it,
+-- same reasoning as documents/deals/portfolio never storing a foreign key
+-- into uploaded_files directly (they hold a /api/uploads/:id URL string
+-- instead) — this one case needs a real relation because the AI analyze
+-- route has to enumerate "every file attached to project N".
+CREATE TABLE IF NOT EXISTS sandbox_project_files (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id     INTEGER NOT NULL REFERENCES tenants(id),
   project_id    INTEGER NOT NULL REFERENCES sandbox_projects(id),
-  title         TEXT NOT NULL,
-  assignee      TEXT,
-  due_date      TEXT,
-  priority      TEXT NOT NULL DEFAULT 'Средний',
-  status        TEXT NOT NULL DEFAULT 'К выполнению',
-  created_by    TEXT,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-  completed_at  TEXT
+  upload_id     INTEGER NOT NULL REFERENCES uploaded_files(id),
+  attached_by   TEXT,
+  attached_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_sandbox_tasks_project ON sandbox_tasks(tenant_id, project_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sandbox_project_files_unique ON sandbox_project_files(project_id, upload_id);
+CREATE INDEX IF NOT EXISTS idx_sandbox_project_files_tenant ON sandbox_project_files(tenant_id, project_id);
+
+-- One record per AI analysis run (POST /api/sandbox/:id/analyze) — kept
+-- as real history, not overwritten by the next run, so "what did the AI
+-- say before we changed the goal" stays answerable. result_json is only
+-- ever the zod-validated shape (server/sandboxMapping.js's
+-- SANDBOX_ANALYSIS_SCHEMA); a run whose model output failed validation is
+-- still recorded (status='error') but with result_json NULL — never a raw
+-- unvalidated blob. input_snapshot_json is metadata only (file ids/names/
+-- sizes, goal/description AT RUN TIME) — never the extracted document
+-- text itself, so this table can't become a second copy of NDA material.
+-- consent_note is the free-text confirmation the caller typed before
+-- sending real project documents to an external model (see the analyze
+-- route) — required, not optional, distinct from the aiAssist permission
+-- that only gates who may use the feature at all.
+CREATE TABLE IF NOT EXISTS sandbox_ai_runs (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id             INTEGER NOT NULL REFERENCES tenants(id),
+  project_id            INTEGER NOT NULL REFERENCES sandbox_projects(id),
+  status                TEXT NOT NULL,
+  provider              TEXT,
+  model                 TEXT,
+  input_snapshot_json   TEXT NOT NULL DEFAULT '{}',
+  result_json           TEXT,
+  error_message         TEXT,
+  consent_note          TEXT NOT NULL,
+  created_by            TEXT,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sandbox_ai_runs_project ON sandbox_ai_runs(tenant_id, project_id, id);
 `);
 
 // `CREATE TABLE IF NOT EXISTS` above only applies to a brand-new DB file —
@@ -1289,6 +1342,12 @@ db.exec("UPDATE roles SET ai_assist = 1 WHERE is_system = 1 AND code IN ('RELATI
 // Backfill only in the same step that adds the column (unlike the older
 // per-boot backfills above): those re-grant on every restart, which would
 // silently undo an admin deliberately revoking this from the CEO role.
+// sandbox_tasks/sandbox_projects themselves already existed before this
+// column/these two tables were added — CREATE TABLE IF NOT EXISTS above
+// only creates a table that doesn't exist yet, it never adds a column to
+// one that already does, so this needs the same explicit guarded ALTER as
+// every other column added after go-live.
+if (!columnExists('sandbox_tasks', 'source_ai_run_id')) db.exec('ALTER TABLE sandbox_tasks ADD COLUMN source_ai_run_id INTEGER REFERENCES sandbox_ai_runs(id)');
 if (!columnExists('roles', 'screening_accept')) {
   db.exec("ALTER TABLE roles ADD COLUMN screening_accept INTEGER NOT NULL DEFAULT 0");
   db.exec("UPDATE roles SET screening_accept = 1 WHERE is_system = 1 AND code = 'CEO'");

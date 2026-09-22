@@ -102,7 +102,7 @@ test('status rules: Отказ/Отложен need a reason, Передан в �
 
 test('goal and status changes land in the project history', async () => {
   const p = await createProject({ goal: 'Первая цель' });
-  await put(`/api/sandbox/${p.id}`, { goal: 'Запросить финмодель' });
+  await put(`/api/sandbox/${p.id}`, { goal: 'Запросить финмодель', goalChangeReason: 'Появились новые обстоятельства' });
   await put(`/api/sandbox/${p.id}`, { status: 'В проработке' });
   const detail = await (await server.apiFetch(`/api/sandbox/${p.id}`)).json();
   const actions = detail.history.map(h => h.action);
@@ -120,6 +120,30 @@ test('a stale version is rejected with 409 when the caller sends one', async () 
   const stale = await put(`/api/sandbox/${p.id}`, { goal: 'B', version: p.version });
   assert.equal(stale.status, 409);
   assert.equal((await stale.json()).current.goal, 'A');
+});
+
+test('goal changes: a reason is required once a goal is actually changed, not for the first-ever goal', async () => {
+  const p = await createProject();   // goal starts empty
+  const firstSet = await put(`/api/sandbox/${p.id}`, { goal: 'Понять структуру собственности' });
+  assert.equal(firstSet.status, 200, 'setting the goal for the first time needs no reason');
+
+  const noReason = await put(`/api/sandbox/${p.id}`, { goal: 'Запросить финмодель' });
+  assert.equal(noReason.status, 400);
+  assert.equal((await noReason.json()).field, 'goalChangeReason');
+
+  const withReason = await put(`/api/sandbox/${p.id}`, { goal: 'Запросить финмодель', goalChangeReason: 'Основатель поднял раунд по-другому' });
+  assert.equal(withReason.status, 200);
+  const updated = await withReason.json();
+  assert.equal(updated.goal, 'Запросить финмодель');
+
+  const detail = await (await server.apiFetch(`/api/sandbox/${p.id}`)).json();
+  const entry = detail.history.find(h => h.action === 'goal_changed' && h.summary.includes('Запросить финмодель'));
+  assert.ok(entry);
+  assert.match(entry.summary, /Основатель поднял раунд по-другому/);
+
+  // resending the identical goal is not a change and needs no reason
+  const same = await put(`/api/sandbox/${p.id}`, { goal: 'Запросить финмодель' });
+  assert.equal(same.status, 200);
 });
 
 test('tasks: create, validate, complete, count open/overdue, delete', async () => {

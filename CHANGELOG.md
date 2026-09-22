@@ -2,6 +2,50 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.44.0] - 2026-09-22
+
+### Added
+- **Sandbox AI analysis** — projects can now have documents attached
+  (upload via the existing `/api/uploads`, then `POST /api/sandbox/:id/
+  files` links it; new `sandbox_project_files` join table, the file
+  itself is never duplicated). `POST /api/sandbox/:id/analyze` sends
+  selected PDF/PNG/JPEG/GIF attachments (PDF text via `pdf-parse`, images
+  as base64) through the existing `completeJson` infra (same Anthropic
+  provider/`aiAssist` permission/`logAiCall` as onboarding's AI-assist —
+  no separate AI path) and returns a validated summary, risk flags,
+  missing-information list, a consider_screening/request_information/
+  do_not_proceed recommendation, and suggested tasks — advisory only,
+  never auto-applied. Every run is stored in full (`sandbox_ai_runs`:
+  provider, model, input snapshot — file names/sizes/hashes, never raw
+  document text — and the validated result) so past analyses stay
+  readable after the goal/documents change. A per-run consent checkbox
+  is required beyond the `aiAssist` permission itself (permission gates
+  who may use the feature; consent confirms *this run's* documents are
+  actually clear to send externally). Model-cited source references are
+  clamped server-side to the files actually sent — never trusted
+  verbatim. One click turns a suggested task into a real sandbox task
+  (tagged with its originating run, `sandbox_tasks.source_ai_run_id`).
+- **Sandbox → Excel export** — toolbar button on the Песочница page
+  (also listed on the central Export page) downloads the current
+  filtered/searched list: status, goal, owner, fund, open/overdue task
+  counts, folder link, dates. Reuses the existing `downloadExcel` helper.
+- **Investment goal changes get a reason** — since a Sandbox project's
+  goal is expected to change as circumstances change, changing an
+  already-set goal (not the first time it's filled in) now requires a
+  short "why" via a dedicated "Изменить цель" action; old goal → new
+  goal → reason is recorded in the project's history, with a collapsible
+  "История целей" view scoped to just goal changes.
+
+### Fixed
+- `pdf-parse` (bundled pdf.js v1.10.100) can hang indefinitely — never
+  resolving or rejecting — on a structurally-valid-but-content-less PDF,
+  discovered while testing document analysis. The new analyze route
+  races every PDF extraction against a 15s timeout and treats a timeout
+  the same as an unreadable scan; the pre-existing onboarding AI-extract
+  route (`POST /api/ob-tasks/:id/ai-extract`) has the same unguarded
+  `await pdfParse(...)` call and was NOT touched here — same latent risk,
+  left for a separate pass.
+
 ## [1.43.0] - 2026-09-21
 
 ### Added

@@ -30,6 +30,25 @@ const SBX_DEAL_TYPES = ['Equity', 'Convertible Note', 'SAFE', 'Debt', 'Mezzanine
 const SBX_INPUT = 'background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:8px 12px;color:#e2e8f0;font-size:13px;width:100%;box-sizing:border-box';
 const SBX_LABEL = 'display:block;font-size:11px;font-weight:600;color:#8abfbb;margin-bottom:4px';
 
+// Matches server/sandboxMapping.js's SANDBOX_ANALYZABLE_MIME_TYPES — kept
+// as a separate client-side copy purely to decide which attached files get
+// a selection checkbox; the server is the one that actually enforces it.
+const SBX_ANALYZABLE_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
+const SBX_AI_ACTION_LABELS = {
+  consider_screening: { label: 'Рассмотреть для скрининга', color: '#22c55e' },
+  request_information: { label: 'Запросить дополнительную информацию', color: '#eab308' },
+  do_not_proceed: { label: 'Не продолжать', color: '#ef4444' },
+};
+const SBX_AI_SEVERITY_LABELS = { low: { label: 'низкий', color: '#64748b' }, medium: { label: 'средний', color: '#f97316' }, high: { label: 'высокий', color: '#ef4444' } };
+const _sandboxRunCache = {};   // runId -> full run detail, fetched once per open modal session
+
+function sbxFileSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' Б';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' КБ';
+  return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+}
+
 const sbxToday = () => new Date().toISOString().slice(0, 10);
 // The server already validates folder links; this only guards rendering
 // (a legacy/foreign value must never become a live non-http href).
@@ -97,6 +116,7 @@ async function renderSandboxPage() {
       <select id="sandboxStatusSelect" onchange="sandboxSetStatusFilter(this.value)">
         ${filterOptions.map(([v, l]) => `<option value="${escapeHtml(v)}" ${sandboxStatusFilter === v ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}
       </select>
+      <button class="btn-ghost" onclick="exportSandboxProjects()"><i class="fas fa-file-excel"></i> Экспорт Excel</button>
       <button class="btn-primary" onclick="openSandboxNew()"><i class="fas fa-plus"></i> Новый проект</button>
     </div>
     <div id="sandboxList"></div>`;
@@ -190,6 +210,40 @@ function sandboxResetFilters() {
   const sel = document.getElementById('sandboxStatusSelect');
   if (sel) sel.value = 'active';
   renderSandboxList();
+}
+
+/* ───────────────────────── Excel export ───────────────────────── */
+
+// Reuses the shared downloadExcel() helper (js/export.js) — same as every
+// other report in this app. Exports the currently filtered/searched list
+// (Astra's advice: what's on screen, not a silent superset of it), with a
+// second sheet naming the filters actually applied.
+function exportSandboxProjects() {
+  if (typeof downloadExcel !== 'function') { showToast('❌ Модуль экспорта не загружен', 'red'); return; }
+  const rows = sandboxFiltered();
+  const header = [
+    'ID', 'Название', 'Фонд', 'Инициатор', 'Ответственный', 'Email ответственного',
+    'Статус', 'Причина статуса', 'Отложено до', 'Цель проекта', 'Описание',
+    'Открытых задач', 'Просроченных задач', 'Ссылка на папку', 'Создан', 'Обновлён',
+  ];
+  const data = rows.map(p => [
+    p.id, p.name, p.fundId != null ? (sbxFundName(p.fundId) || `Фонд #${p.fundId}`) : 'Без фонда',
+    p.initiator || '', p.ownerName || '', p.owner || '',
+    p.status, p.statusReason || '', p.deferredUntil || '', p.goal || '', p.description || '',
+    p.openTasks || 0, p.overdueTasks || 0, p.folderUrl || '',
+    String(p.createdAt || '').slice(0, 10), String(p.updatedAt || '').slice(0, 10),
+  ]);
+  const paramsSheet = [
+    ['Параметры экспорта'],
+    ['Дата', sbxToday()],
+    ['Фильтр статуса', sandboxStatusFilter],
+    ['Поиск', sandboxSearch || '(нет)'],
+    ['Проектов в выгрузке', rows.length],
+  ];
+  downloadExcel([
+    { name: 'Песочница', data: [header, ...data], colWidths: [6, 26, 18, 20, 20, 26, 16, 26, 12, 34, 40, 10, 10, 34, 12, 12] },
+    { name: 'Параметры', data: paramsSheet, colWidths: [20, 30] },
+  ], `Sandbox_${sbxToday()}.xlsx`);
 }
 
 /* ───────────────────────── Modal shell ───────────────────────── */
@@ -327,6 +381,7 @@ function renderSandboxDetail() {
   const dis = locked ? 'disabled' : '';
   const link = sbxSafeLink(p.folderUrl);
   const showReason = SBX_REASON_STATUSES.includes(p.status);
+  const goalHistoryCount = history.filter(h => h.action === 'goal_changed').length;
 
   const lockedBanner = locked ? `
     <div style="margin:16px 24px 0;padding:10px 14px;border-radius:8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#86efac;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -369,7 +424,12 @@ function renderSandboxDetail() {
         </div>
         <div class="form-group full">
           <label>Цель проекта <span style="font-weight:400;color:#64748b">— что планируется сделать в ближайшей перспективе</span></label>
-          <textarea id="sb_goal" rows="2" maxlength="1000" ${dis}>${escapeHtml(p.goal)}</textarea>
+          <div style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;white-space:pre-wrap;min-height:18px">${p.goal ? escapeHtml(p.goal) : '<span style="color:#64748b">Цель ещё не задана</span>'}</div>
+          <div style="display:flex;gap:14px;align-items:center;margin-top:6px">
+            ${locked ? '' : `<button type="button" onclick="openSandboxGoalChange()" style="background:none;border:none;color:#5eead4;cursor:pointer;font-size:11px;padding:0"><i class="fas fa-pen"></i> Изменить цель</button>`}
+            ${goalHistoryCount ? `<button type="button" onclick="sandboxToggleGoalHistory()" style="background:none;border:none;color:#8abfbb;cursor:pointer;font-size:11px;padding:0">История целей (${goalHistoryCount})</button>` : ''}
+          </div>
+          <div id="sb_goal_history" style="display:none;margin-top:8px"></div>
         </div>
         <div class="form-group full">
           <label>Описание</label>
@@ -402,8 +462,81 @@ function renderSandboxDetail() {
         </div>
       </div>
 
+      <div id="sb_files_area">${sandboxFilesAiHtml(p, sandboxDetail.files || [], sandboxDetail.aiRuns || [], locked)}</div>
       <div id="sb_tasks_area">${sandboxTasksHtml(p, tasks, locked)}${sandboxHistoryHtml(history)}</div>
     </div>`);
+}
+
+/* ───────────────────────── Goal (changes with new circumstances) ───────────────────────── */
+
+function sandboxToggleGoalHistory() {
+  const el = document.getElementById('sb_goal_history');
+  if (!el || !sandboxDetail) return;
+  if (el.style.display === 'none') {
+    const entries = sandboxDetail.history.filter(h => h.action === 'goal_changed');
+    el.innerHTML = entries.map(h => `
+      <div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px">
+        <span style="color:#64748b;white-space:nowrap;flex-shrink:0">${escapeHtml(String(h.createdAt).slice(0, 16))}</span>
+        <span style="color:#94a3b8;flex-shrink:0">${escapeHtml(h.actorName)}</span>
+        <span style="color:#e2e8f0;overflow-wrap:anywhere">${escapeHtml(h.summary)}</span>
+      </div>`).join('');
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function openSandboxGoalChange() {
+  if (!sandboxDetail) return;
+  const p = sandboxDetail.project;
+  showSandboxModal(`
+    ${sbxModalHeader('Изменить цель', `<span style="font-size:12px;color:#94a3b8">${escapeHtml(p.name)}</span>`)}
+    <div style="padding:20px 24px">
+      <div class="form-group full">
+        <label>Текущая цель</label>
+        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#94a3b8;font-size:13px;white-space:pre-wrap">${p.goal ? escapeHtml(p.goal) : '— не задана —'}</div>
+      </div>
+      <div class="form-group full" style="margin-top:12px">
+        <label>Новая цель *</label>
+        <textarea id="sbg_goal" rows="3" maxlength="1000" placeholder="Что планируется сделать дальше">${escapeHtml(p.goal)}</textarea>
+      </div>
+      <div class="form-group full" style="margin-top:12px">
+        <label>Что изменилось / почему меняем цель ${p.goal ? '<span style="color:#ef4444">*</span>' : ''}</label>
+        <textarea id="sbg_reason" rows="2" maxlength="1000" placeholder="Новые обстоятельства, из-за которых меняется цель"></textarea>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+        <button class="btn-ghost" onclick="renderSandboxDetail()">Отмена</button>
+        <button class="btn-primary" onclick="saveSandboxGoalChange()"><i class="fas fa-save"></i> Сохранить цель</button>
+      </div>
+    </div>`);
+  document.getElementById('sbg_goal').focus();
+}
+
+async function saveSandboxGoalChange() {
+  if (_sandboxBusy || !sandboxDetail) return;
+  clearFieldErrors(['sbg_goal', 'sbg_reason']);
+  const p = sandboxDetail.project;
+  const goal = document.getElementById('sbg_goal').value.trim();
+  const reason = document.getElementById('sbg_reason').value.trim();
+  if (!goal) { showFieldError('sbg_goal', 'Введите цель'); return; }
+  _sandboxBusy = true;
+  try {
+    await apiFetch('/api/sandbox/' + p.id, { method: 'PUT', body: JSON.stringify({ goal, goalChangeReason: reason, version: p.version }) });
+    showToast('✅ Цель обновлена');
+    await reloadSandboxDetail();
+    renderSandboxPageQuiet();
+  } catch (err) {
+    if (/Version conflict/i.test(err.message)) {
+      showToast('⚠️ Проект изменил кто-то другой — показана актуальная версия', 'orange');
+      await reloadSandboxDetail().catch(() => {});
+    } else if (err.field === 'goalChangeReason') {
+      showFieldError('sbg_reason', err.message);
+    } else {
+      sbxReportError(err, { goal: 'sbg_goal' });
+    }
+  } finally {
+    _sandboxBusy = false;
+  }
 }
 
 // Task actions refresh only this area, never the form above it — a full
@@ -437,10 +570,10 @@ async function saveSandboxProject() {
     version: p.version,
     name: val('sb_name'), initiator: val('sb_initiator'), owner: val('sb_owner') || null,
     fundId: val('sb_fund') ? Number(val('sb_fund')) : null,
-    folderUrl: val('sb_folder'), goal: val('sb_goal'), description: val('sb_description'),
+    folderUrl: val('sb_folder'), description: val('sb_description'),
     status: document.getElementById('sb_status').value,
     statusReason: val('sb_reason'), deferredUntil: val('sb_deferred'),
-  };
+  };   // goal is changed only via openSandboxGoalChange() — see its own required-reason rule
   _sandboxBusy = true;
   try {
     await apiFetch('/api/sandbox/' + p.id, { method: 'PUT', body: JSON.stringify(body) });
@@ -599,6 +732,227 @@ async function sandboxDeleteTask(taskId) {
     renderSandboxPageQuiet();
   } catch (err) {
     showToast('⚠️ ' + err.message, 'red');
+  } finally {
+    _sandboxBusy = false;
+  }
+}
+
+/* ───────────────────────── Documents + AI analysis ───────────────────────── */
+
+function sandboxFilesAiHtml(p, files, aiRuns, locked) {
+  const canAi = currentUserPermission('aiAssist');
+  const analyzableCount = files.filter(f => SBX_ANALYZABLE_MIME.has(f.mimeType)).length;
+
+  const fileRows = files.map(f => {
+    const canSelect = SBX_ANALYZABLE_MIME.has(f.mimeType);
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #1e293b">
+        ${canSelect
+          ? `<input type="checkbox" class="sb_ai_file_cb" value="${f.uploadId}" style="width:15px;height:15px;flex-shrink:0" ${locked ? 'disabled' : ''} />`
+          : `<span style="width:15px;flex-shrink:0;text-align:center" title="Тип не поддерживается для ИИ-анализа (только PDF/PNG/JPEG/GIF)"><i class="fas fa-ban" style="color:#475569;font-size:10px"></i></span>`}
+        <a href="${escapeHtml(resolveDocUrl(f.url))}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;font-size:12px;flex:1;min-width:0;overflow-wrap:anywhere">${escapeHtml(f.name)}</a>
+        <span style="font-size:10px;color:#64748b;white-space:nowrap">${sbxFileSize(f.sizeBytes)}</span>
+        ${locked ? '' : `<button onclick="sandboxDetachFile(${f.id})" aria-label="Открепить" title="Открепить"
+          style="background:none;border:none;color:#64748b;cursor:pointer"><i class="fas fa-times"></i></button>`}
+      </div>`;
+  }).join('');
+
+  const uploadBtn = locked ? '' : `<button class="btn-ghost" onclick="sandboxAttachFiles()" style="margin-top:10px"><i class="fas fa-paperclip"></i> Прикрепить файлы</button>`;
+
+  const aiPanel = locked ? '' : `
+    <div style="margin-top:14px;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:12px">
+      ${canAi ? `
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer">
+          <input type="checkbox" id="sb_ai_consent" style="margin-top:2px;flex-shrink:0" />
+          <span>Подтверждаю, что вправе передать выбранные материалы внешнему ИИ-провайдеру для анализа</span>
+        </label>
+        <button class="btn-primary" onclick="sandboxRunAnalysis()" style="margin-top:10px" ${analyzableCount ? '' : 'disabled'}>
+          <i class="fas fa-wand-magic-sparkles"></i> Запустить ИИ-анализ
+        </button>
+        ${analyzableCount ? '' : '<div style="font-size:11px;color:#64748b;margin-top:6px">Прикрепите PDF или изображение, чтобы запустить анализ</div>'}
+      ` : `<div style="font-size:11px;color:#64748b"><i class="fas fa-lock" style="margin-right:5px"></i>Нужно право «AI-ассистент» — обратитесь к CEO / администратору ролей</div>`}
+      <div id="sb_ai_result"></div>
+    </div>`;
+
+  const runsList = aiRuns.length ? `
+    <div style="margin-top:10px">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:4px">История анализов</div>
+      ${aiRuns.map(r => `
+        <div onclick="sandboxToggleRun(${r.id})" style="cursor:pointer;display:flex;gap:10px;padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px;align-items:center">
+          <i class="fas fa-chevron-right" style="color:#4a5568;font-size:9px"></i>
+          <span style="color:#64748b;white-space:nowrap">${escapeHtml(String(r.createdAt).slice(0, 16))}</span>
+          <span style="color:#94a3b8">${escapeHtml(r.createdBy)}</span>
+          <span style="color:${r.status === 'ok' ? '#5eead4' : '#ef4444'}">${r.status === 'ok' ? 'выполнен' : 'ошибка'}</span>
+          ${r.model ? `<span style="color:#64748b">· ${escapeHtml(r.model)}</span>` : ''}
+        </div>
+        <div id="sb_ai_run_${r.id}" style="display:none"></div>
+      `).join('')}
+    </div>` : '';
+
+  return `
+    <div style="margin-top:26px">
+      <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:6px"><i class="fas fa-paperclip" style="color:#22c55e;margin-right:6px"></i>Документы и ИИ-анализ</div>
+      ${files.length ? fileRows : '<div style="font-size:12px;color:#4a5568;padding:6px 0">Файлы не прикреплены</div>'}
+      ${uploadBtn}
+      ${aiPanel}
+      ${runsList}
+    </div>`;
+}
+
+async function reloadSandboxFilesArea() {
+  if (!sandboxDetail) return;
+  const fresh = await apiFetch('/api/sandbox/' + sandboxDetail.project.id);
+  sandboxDetail.files = fresh.files;
+  sandboxDetail.aiRuns = fresh.aiRuns;
+  const area = document.getElementById('sb_files_area');
+  if (area) area.innerHTML = sandboxFilesAiHtml(fresh.project, fresh.files, fresh.aiRuns, !!fresh.project.promotedDealId);
+}
+
+async function sandboxAttachFiles() {
+  if (_sandboxBusy || !sandboxDetail) return;
+  const files = await pickFiles('.pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx');
+  if (!files.length) return;
+  _sandboxBusy = true;
+  let okCount = 0;
+  try {
+    for (const file of files) {
+      try {
+        const uploaded = await uploadFile(file);
+        await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/files`, { method: 'POST', body: JSON.stringify({ uploadId: uploaded.id }) });
+        okCount++;
+      } catch (err) {
+        showToast(`⚠️ ${file.name}: ${err.message}`, 'red');
+      }
+    }
+    if (okCount) showToast(`✅ Прикреплено файлов: ${okCount}`);
+    await reloadSandboxFilesArea();
+  } finally {
+    _sandboxBusy = false;
+  }
+}
+
+async function sandboxDetachFile(fileId) {
+  if (_sandboxBusy || !sandboxDetail) return;
+  if (!confirm('Открепить файл от проекта? Сам файл останется в хранилище.')) return;
+  _sandboxBusy = true;
+  try {
+    await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/files/${fileId}`, { method: 'DELETE' });
+    await reloadSandboxFilesArea();
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  } finally {
+    _sandboxBusy = false;
+  }
+}
+
+async function sandboxRunAnalysis() {
+  if (_sandboxBusy || !sandboxDetail) return;
+  const consent = document.getElementById('sb_ai_consent');
+  if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
+  const uploadIds = Array.from(document.querySelectorAll('.sb_ai_file_cb:checked')).map(cb => Number(cb.value));
+  if (!uploadIds.length) { showToast('⚠️ Выберите хотя бы один документ (PDF или изображение)', 'orange'); return; }
+  const resultEl = document.getElementById('sb_ai_result');
+  _sandboxBusy = true;
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> Анализируем...</div>';
+  try {
+    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds }) });
+    _sandboxRunCache[run.id] = run;
+    showToast('✅ Анализ завершён');
+    await reloadSandboxFilesArea();
+    const area = document.getElementById('sb_ai_result');
+    if (area) area.innerHTML = sandboxRunResultHtml(run);
+  } catch (err) {
+    if (resultEl) resultEl.innerHTML = `<div style="font-size:12px;color:#ef4444;margin-top:10px">⚠️ ${escapeHtml(err.message)}</div>`;
+    else showToast('⚠️ ' + err.message, 'red');
+  } finally {
+    _sandboxBusy = false;
+  }
+}
+
+async function sandboxToggleRun(runId) {
+  const el = document.getElementById('sb_ai_run_' + runId);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  if (!_sandboxRunCache[runId]) {
+    el.innerHTML = '<div style="font-size:11px;color:#64748b;padding:8px 0"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+    try {
+      _sandboxRunCache[runId] = await apiFetch('/api/sandbox/runs/' + runId);
+    } catch (err) {
+      el.innerHTML = `<div style="font-size:11px;color:#ef4444;padding:8px 0">⚠️ ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+  }
+  el.innerHTML = sandboxRunResultHtml(_sandboxRunCache[runId]);
+}
+
+function sandboxRunResultHtml(run) {
+  if (run.status !== 'ok' || !run.result) {
+    return `<div id="sb_ai_panel_${run.id}" style="font-size:12px;color:#ef4444;margin-top:10px;padding:8px 0">⚠️ ${escapeHtml(run.errorMessage || 'Анализ не удался')}</div>`;
+  }
+  const r = run.result;
+  const action = SBX_AI_ACTION_LABELS[r.recommendation.action] || { label: r.recommendation.action, color: '#64748b' };
+  return `
+    <div id="sb_ai_panel_${run.id}" style="margin-top:12px;padding-top:12px;border-top:1px solid #2a4846">
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:6px">Резюме</div>
+      <div style="font-size:12px;color:#e2e8f0;white-space:pre-wrap;margin-bottom:12px">${escapeHtml(r.summary)}</div>
+
+      <div style="display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:${action.color}22;color:${action.color};border:1px solid ${action.color}44;margin-bottom:6px">
+        ${escapeHtml(action.label)}
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">${escapeHtml(r.recommendation.rationale)}</div>
+
+      ${r.risks.length ? `
+        <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:6px">Риски</div>
+        ${r.risks.map(risk => {
+          const sev = SBX_AI_SEVERITY_LABELS[risk.severity] || { label: risk.severity, color: '#64748b' };
+          return `<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px">
+            <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:${sev.color}22;color:${sev.color};white-space:nowrap;margin-top:1px">${escapeHtml(sev.label)}</span>
+            <span style="font-size:12px;color:#e2e8f0">${escapeHtml(risk.text)}</span>
+          </div>`;
+        }).join('')}` : ''}
+
+      ${r.missingInfo.length ? `
+        <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin:10px 0 6px">Не хватает информации</div>
+        <ul style="margin:0 0 10px 18px;padding:0">${r.missingInfo.map(m => `<li style="font-size:12px;color:#e2e8f0;margin-bottom:3px">${escapeHtml(m)}</li>`).join('')}</ul>` : ''}
+
+      ${r.suggestedTasks.length ? `
+        <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin:10px 0 6px">Предлагаемые задачи</div>
+        ${r.suggestedTasks.map(t => `
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#e2e8f0;margin-bottom:5px;cursor:pointer">
+            <input type="checkbox" class="sb_ai_task_cb" data-title="${escapeAttr(t.title)}" data-priority="${escapeAttr(t.priority)}" checked style="width:14px;height:14px;flex-shrink:0" />
+            ${escapeHtml(t.title)} <span style="color:${SBX_PRIORITY_COLORS[t.priority] || '#64748b'};font-size:10px">● ${escapeHtml(t.priority)}</span>
+          </label>`).join('')}
+        <button class="btn-ghost" onclick="sandboxCreateTasksFromRun(${run.id})" style="margin-top:4px"><i class="fas fa-list-check"></i> Создать выбранные задачи</button>` : ''}
+
+      <div style="font-size:10px;color:#4a5568;margin-top:12px">Провайдер: ${escapeHtml(run.provider || '—')} · Модель: ${escapeHtml(run.model || '—')} · ${escapeHtml(String(run.createdAt).slice(0, 16))}</div>
+    </div>`;
+}
+
+async function sandboxCreateTasksFromRun(runId) {
+  if (_sandboxBusy || !sandboxDetail) return;
+  const panel = document.getElementById('sb_ai_panel_' + runId);
+  if (!panel) return;
+  const checked = Array.from(panel.querySelectorAll('.sb_ai_task_cb:checked'));
+  if (!checked.length) { showToast('⚠️ Выберите хотя бы одну задачу', 'orange'); return; }
+  _sandboxBusy = true;
+  let okCount = 0;
+  try {
+    for (const cb of checked) {
+      try {
+        await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/tasks`, {
+          method: 'POST',
+          body: JSON.stringify({ title: cb.dataset.title, priority: cb.dataset.priority, sourceAiRunId: runId }),
+        });
+        okCount++;
+        cb.closest('label').style.opacity = '0.5';
+        cb.disabled = true;
+      } catch (err) {
+        showToast(`⚠️ ${cb.dataset.title}: ${err.message}`, 'red');
+      }
+    }
+    if (okCount) showToast(`✅ Создано задач: ${okCount}`);
+    await reloadSandboxTasksArea();
   } finally {
     _sandboxBusy = false;
   }
