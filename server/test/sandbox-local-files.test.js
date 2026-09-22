@@ -184,11 +184,16 @@ test('analyze-folder: imports every supported file from the folder, reuses alrea
     assert.equal(noConsent.status, 400);
     assert.equal((await noConsent.json()).field, 'consent');
 
-    const res = await aiServer.apiFetch(`/api/sandbox/${p.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true }) });
+    const tooLong = await aiServer.apiFetch(`/api/sandbox/${p.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true, customInstructions: 'x'.repeat(2001) }) });
+    assert.equal(tooLong.status, 400);
+    assert.equal((await tooLong.json()).field, 'customInstructions');
+
+    const res = await aiServer.apiFetch(`/api/sandbox/${p.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true, customInstructions: 'Проверь риски цепочки поставок' }) });
     assert.equal(res.status, 201);
     const body = await res.json();
     assert.equal(body.status, 'ok');
     assert.equal(body.result.summary, 'обзор папки');
+    assert.equal(body.inputSnapshot.customInstructions, 'Проверь риски цепочки поставок');
     assert.equal(body.folderImport.totalInFolder, 6, 'the .txt file must never be counted or imported');
     assert.equal(body.folderImport.imported, 6);
     assert.equal(body.folderImport.analyzed, 5, 'capped at SANDBOX_ANALYZE_MAX_FILES');

@@ -163,6 +163,28 @@ test('analyze: happy path on an image — validated result, sourceIds clamped to
   assert.ok(listed.lastAiRunAt);
 });
 
+test('analyze: customInstructions is optional, persisted with the run, and rejected past its length limit', async () => {
+  const up = await uploadTestFile(rawFetchAs(server.token), Buffer.from([0x89, 0x50, 0x4e, 0x47, 3]), 'image/png', 'ci.png');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+
+  const noInstructions = await (await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) })).json();
+  assert.equal(noInstructions.inputSnapshot.customInstructions, null, 'omitted customInstructions must be recorded as absent, not an empty string');
+
+  const withInstructions = await (await server.apiFetch(`/api/sandbox/${projectId}/analyze`, {
+    method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId], customInstructions: 'Обрати внимание на юридические риски' }),
+  })).json();
+  assert.equal(withInstructions.inputSnapshot.customInstructions, 'Обрати внимание на юридические риски');
+  const standalone = await (await server.apiFetch(`/api/sandbox/runs/${withInstructions.id}`)).json();
+  assert.equal(standalone.inputSnapshot.customInstructions, 'Обрати внимание на юридические риски', 'must round-trip from GET /runs/:id too, not just the create response');
+
+  const tooLong = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, {
+    method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId], customInstructions: 'x'.repeat(2001) }),
+  });
+  assert.equal(tooLong.status, 400);
+  assert.equal((await tooLong.json()).field, 'customInstructions');
+});
+
 test('analyze: a PDF with no text layer is rendered to an image and analyzed (OCR fallback), not silently dropped or errored', async () => {
   const up = await uploadTestFile(rawFetchAs(server.token), BLANK_PDF, 'application/pdf', 'scan.pdf');
   const { id: uploadId } = await up.json();

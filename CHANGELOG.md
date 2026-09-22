@@ -2,6 +2,22 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.48.0] - 2026-09-22
+
+### Added
+- **Custom focus for Sandbox AI analysis** — a new optional "Что важно
+  проверить" field (both the per-file analyze panel and "Проанализировать
+  всю папку") lets the caller tell the AI what to prioritize for that one
+  run (e.g. "только юридическая и налоговая структура, финансы не
+  анализируй") instead of always getting the same generic pass. Sent as
+  `customInstructions` (2000-char cap) to `POST /api/sandbox/:id/analyze`
+  and `.../local-files/analyze-folder`, recorded in the run's
+  `inputSnapshot` (so past runs show what was actually asked), and shown
+  above the summary when viewing a result. Verified live: a request
+  scoped to "only legal/tax structure, don't analyze financials or
+  product" produced a response that explicitly said it skipped financials
+  and product, matching the ask.
+
 ## [1.47.0] - 2026-09-22
 
 ### Fixed

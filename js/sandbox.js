@@ -37,6 +37,8 @@ const SBX_LABEL = 'display:block;font-size:11px;font-weight:600;color:#8abfbb;ma
 const SBX_ANALYZABLE_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
 // Matches server/sandboxMapping.js's SANDBOX_ANALYZE_MAX_FILES — display only.
 const SANDBOX_ANALYZE_MAX_FILES = 5;
+// Matches server/sandboxMapping.js's SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX.
+const SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX = 2000;
 const SBX_AI_ACTION_LABELS = {
   consider_screening: { label: 'Рассмотреть для скрининга', color: '#22c55e' },
   request_information: { label: 'Запросить дополнительную информацию', color: '#eab308' },
@@ -803,7 +805,9 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
       <button class="btn-ghost" onclick="sandboxToggleFolderPreview()" style="margin-right:8px"><i class="fas fa-eye"></i> Показать файлы</button>
       <div id="sb_folder_preview" style="display:none;margin-top:8px"></div>
       ${canAi ? `
-        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer;margin-top:12px">
+        <label style="${SBX_LABEL}margin-top:10px">Что важно проверить <span style="font-weight:400;color:#64748b">(необязательно)</span></label>
+        <textarea id="sb_folder_ai_custom_instructions" rows="2" maxlength="${SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX}" placeholder="Например: обрати внимание на юридические риски и структуру собственности" style="${SBX_INPUT};resize:vertical"></textarea>
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer;margin-top:10px">
           <input type="checkbox" id="sb_folder_ai_consent" style="margin-top:2px;flex-shrink:0" />
           <span>Подтверждаю, что вправе передать документы из этой папки внешнему ИИ-провайдеру для анализа</span>
         </label>
@@ -818,7 +822,9 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
   const aiPanel = locked ? '' : `
     <div style="margin-top:14px;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:12px">
       ${canAi ? `
-        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer">
+        <label style="${SBX_LABEL}">Что важно проверить <span style="font-weight:400;color:#64748b">(необязательно)</span></label>
+        <textarea id="sb_ai_custom_instructions" rows="2" maxlength="${SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX}" placeholder="Например: проверь соответствие мандату фонда и юнит-экономику" style="${SBX_INPUT};resize:vertical"></textarea>
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer;margin-top:10px">
           <input type="checkbox" id="sb_ai_consent" style="margin-top:2px;flex-shrink:0" />
           <span>Подтверждаю, что вправе передать выбранные материалы внешнему ИИ-провайдеру для анализа</span>
         </label>
@@ -929,11 +935,13 @@ async function sandboxAnalyzeFolder() {
   if (_sandboxBusy || !sandboxDetail) return;
   const consent = document.getElementById('sb_folder_ai_consent');
   if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
+  const customInstructionsEl = document.getElementById('sb_folder_ai_custom_instructions');
+  const customInstructions = customInstructionsEl ? customInstructionsEl.value.trim() : '';
   const resultEl = document.getElementById('sb_folder_ai_result');
   _sandboxBusy = true;
   if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> Импортируем файлы и анализируем...</div>';
   try {
-    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true }) });
+    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true, customInstructions: customInstructions || undefined }) });
     _sandboxRunCache[run.id] = run;
     showToast('✅ Анализ папки завершён');
     await reloadSandboxFilesArea();
@@ -957,11 +965,13 @@ async function sandboxRunAnalysis() {
   if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
   const uploadIds = Array.from(document.querySelectorAll('.sb_ai_file_cb:checked')).map(cb => Number(cb.value));
   if (!uploadIds.length) { showToast('⚠️ Выберите хотя бы один документ (PDF или изображение)', 'orange'); return; }
+  const customInstructionsEl = document.getElementById('sb_ai_custom_instructions');
+  const customInstructions = customInstructionsEl ? customInstructionsEl.value.trim() : '';
   const resultEl = document.getElementById('sb_ai_result');
   _sandboxBusy = true;
   if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> Анализируем...</div>';
   try {
-    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds }) });
+    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds, customInstructions: customInstructions || undefined }) });
     _sandboxRunCache[run.id] = run;
     showToast('✅ Анализ завершён');
     await reloadSandboxFilesArea();
@@ -998,8 +1008,12 @@ function sandboxRunResultHtml(run) {
   }
   const r = run.result;
   const action = SBX_AI_ACTION_LABELS[r.recommendation.action] || { label: r.recommendation.action, color: '#64748b' };
+  const customInstructions = run.inputSnapshot?.customInstructions;
   return `
     <div id="sb_ai_panel_${run.id}" style="margin-top:12px;padding-top:12px;border-top:1px solid #2a4846">
+      ${customInstructions ? `
+      <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:4px">Запрос пользователя</div>
+      <div style="font-size:12px;color:#94a3b8;white-space:pre-wrap;margin-bottom:12px;font-style:italic">«${escapeHtml(customInstructions)}»</div>` : ''}
       <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:6px">Резюме</div>
       <div style="font-size:12px;color:#e2e8f0;white-space:pre-wrap;margin-bottom:12px">${escapeHtml(r.summary)}</div>
 

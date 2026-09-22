@@ -25,6 +25,10 @@ const SANDBOX_ANALYZE_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const SANDBOX_ANALYZE_MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 const SANDBOX_ANALYZE_MAX_TOTAL_CHARS = 40000;
 const SANDBOX_ANALYZE_ACTIONS = ['consider_screening', 'request_information', 'do_not_proceed'];
+// Free-text focus/question the caller can attach to one analysis run
+// ("на что обратить особое внимание") — from an authenticated accessFM+
+// aiAssist staff member, not from an untrusted document, but still bounded.
+const SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX = 2000;
 // Mirrors js/sandbox.js's SBX_AI_ACTION_LABELS — used server-side only for
 // the Excel export column, so it reads as Russian text instead of a code.
 const SANDBOX_ANALYZE_ACTION_LABELS_RU = {
@@ -147,6 +151,6 @@ module.exports = {
   SANDBOX_TASK_STATUSES, SANDBOX_TASK_DONE_STATUSES, SANDBOX_TASK_PRIORITIES,
   SANDBOX_ANALYZABLE_MIME_TYPES, SANDBOX_ANALYZE_MAX_FILES, SANDBOX_ANALYZE_MAX_FILE_BYTES,
   SANDBOX_ANALYZE_MAX_TOTAL_BYTES, SANDBOX_ANALYZE_MAX_TOTAL_CHARS, SANDBOX_ANALYZE_ACTIONS,
-  SANDBOX_ANALYZE_ACTION_LABELS_RU,
+  SANDBOX_ANALYZE_ACTION_LABELS_RU, SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX,
   rowToSandboxProject, rowToSandboxTask, rowToSandboxFile, rowToSandboxAiRun, rowToSandboxAiRunSummary,
 };
