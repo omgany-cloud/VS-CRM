@@ -33,10 +33,15 @@ const GARBAGE_NOT_A_PDF = Buffer.from('this is not a pdf at all, just garbage te
 let server;
 let projectId;
 
-async function uploadTestFile(client, bytes, mime, filename) {
+// baseUrl defaults to the outer shared `server` — pass one explicitly for
+// any call against a standalone server spun up inside a single test (e.g.
+// the oversized-response test below), otherwise the upload silently lands
+// on the wrong server's database and every call after it 404s/400s in a
+// way that looks unrelated to the actual mistake.
+async function uploadTestFile(client, bytes, mime, filename, baseUrl = server.baseUrl) {
   const form = new FormData();
   form.append('file', new Blob([bytes], { type: mime }), filename);
-  return client(server.baseUrl + '/api/uploads', { method: 'POST', headers: {}, body: form });
+  return client(baseUrl + '/api/uploads', { method: 'POST', headers: {}, body: form });
 }
 // server.apiFetch always sends Content-Type: application/json, which
 // breaks a multipart body — build a raw-fetch variant that carries the
@@ -148,6 +153,14 @@ test('analyze: happy path on an image — validated result, sourceIds clamped to
 
   const history = detail.history;
   assert.ok(history.some(h => h.action === 'ai_analyzed'));
+
+  // The list view (Excel export's data source) surfaces the latest run
+  // without a second round trip per project.
+  const { projects } = await (await server.apiFetch('/api/sandbox')).json();
+  const listed = projects.find(p => p.id === projectId);
+  assert.equal(listed.lastAiSummary, 'stub summary of the project');
+  assert.equal(listed.lastAiRecommendation, 'Запросить дополнительную информацию');
+  assert.ok(listed.lastAiRunAt);
 });
 
 test('analyze: a PDF with no text layer is rendered to an image and analyzed (OCR fallback), not silently dropped or errored', async () => {
@@ -234,4 +247,42 @@ test('tenant isolation: another tenant cannot attach files, analyze, or read a r
   assert.equal((await asB(`/api/sandbox/${projectId}/files`, { method: 'POST', body: JSON.stringify({ uploadId }) })).status, 404);
   assert.equal((await asB(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) })).status, 404);
   assert.equal((await asB(`/api/sandbox/runs/${run.id}`)).status, 404);
+});
+
+// A real provider doesn't reliably obey a count instruction given only in
+// the prompt (no live account needed to reproduce — a stub with more items
+// than the display limits does the same thing). Own server: the oversized
+// fixture has to be fixed at server-start time via extraEnv.
+test('analyze: a response with more items than the display limits is truncated, not rejected outright', async () => {
+  const OVERSIZED_RESPONSE = {
+    summary: 'x'.repeat(2500),
+    risks: Array.from({ length: 12 }, (_, i) => ({ severity: 'low', text: `risk ${i}`, sourceIds: [] })),
+    missingInfo: Array.from({ length: 11 }, (_, i) => `missing ${i}`),
+    recommendation: { action: 'consider_screening', rationale: 'y'.repeat(1200) },
+    suggestedTasks: Array.from({ length: 9 }, (_, i) => ({ title: `task ${i}`, priority: 'Средний' })),
+  };
+  const bigServer = await createTestServer({
+    port: 4146,
+    extraEnv: { AI_PROVIDER: 'stub', AI_STUB_RESPONSE: JSON.stringify(OVERSIZED_RESPONSE) },
+  });
+  try {
+    const { roles } = await (await bigServer.apiFetch('/api/roles')).json();
+    await bigServer.apiFetch(`/api/roles/${roles.find(r => r.code === 'CEO').id}`, { method: 'PUT', body: JSON.stringify({ aiAssist: true }) });
+    const p = await (await bigServer.apiFetch('/api/sandbox', { method: 'POST', body: JSON.stringify({ name: 'SBX_OVERSIZED' }) })).json();
+    const up = await uploadTestFile(rawFetchAs(bigServer.token), Buffer.from([1, 2]), 'image/png', 'x.png', bigServer.baseUrl);
+    const { id: uploadId } = await up.json();
+    const attached = await bigServer.apiFetch(`/api/sandbox/${p.id}/files`, { method: 'POST', body: JSON.stringify({ uploadId }) });
+    assert.equal(attached.status, 201);
+
+    const res = await bigServer.apiFetch(`/api/sandbox/${p.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+    assert.equal(res.status, 201, 'an oversized-but-otherwise-valid response must not be rejected');
+    const run = await res.json();
+    assert.equal(run.result.summary.length, 2000);
+    assert.equal(run.result.risks.length, 8);
+    assert.equal(run.result.missingInfo.length, 8);
+    assert.equal(run.result.suggestedTasks.length, 6);
+    assert.equal(run.result.recommendation.rationale.length, 1000);
+  } finally {
+    await bigServer.stop();
+  }
 });

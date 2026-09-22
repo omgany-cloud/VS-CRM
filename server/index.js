@@ -3853,7 +3853,12 @@ const SANDBOX_SELECT = `
          AND t.due_date IS NOT NULL AND t.due_date <> '' AND t.due_date < date('now')) AS overdue_tasks,
     (SELECT MIN(t.due_date) FROM sandbox_tasks t
        WHERE t.project_id = p.id AND t.tenant_id = p.tenant_id AND t.status NOT IN (${SANDBOX_DONE_SQL})
-         AND t.due_date IS NOT NULL AND t.due_date <> '') AS next_due
+         AND t.due_date IS NOT NULL AND t.due_date <> '') AS next_due,
+    -- Latest successful AI run only (not the full history — that stays
+    -- behind GET /api/sandbox/:id/aiRuns) so the list/export can show
+    -- "what did the AI last say" without a second round trip per project.
+    (SELECT result_json FROM sandbox_ai_runs r WHERE r.project_id = p.id AND r.tenant_id = p.tenant_id AND r.status = 'ok' ORDER BY r.id DESC LIMIT 1) AS last_ai_result_json,
+    (SELECT created_at FROM sandbox_ai_runs r WHERE r.project_id = p.id AND r.tenant_id = p.tenant_id AND r.status = 'ok' ORDER BY r.id DESC LIMIT 1) AS last_ai_run_at
   FROM sandbox_projects p`;
 const SANDBOX_TEXT_LIMITS = { name: 200, initiator: 200, description: 5000, goal: 1000, statusReason: 1000 };
 const SANDBOX_PROMOTED_MSG = 'Проект уже передан в скрининг — дальнейшая работа ведётся в разделе «Сделки»';
@@ -4389,29 +4394,51 @@ app.post('/api/sandbox/:id/local-files/import', requireAuth, requireInternal, re
 // 1:1 from onboarding's AI-assist (server/aiProvider.js) — same aiAssist
 // permission, same provider config, same logAiCall — rather than standing
 // up a parallel AI path just for this module.
+// No .max() on arrays or strings here on purpose — a real model doesn't
+// reliably obey a count/length instruction given only in the prompt (no
+// JSON-Schema-level enforcement reaches most providers), and rejecting an
+// otherwise-good analysis outright over "9 risks instead of 8" throws
+// away real, useful output for a purely cosmetic bound. Type/enum fields
+// (severity, action, priority) stay strict — those are meaningful
+// categories, not a volume knob — and clampSandboxAnalysis() below
+// truncates counts/lengths to the same limits AFTER parsing succeeds,
+// so storage/display stays bounded without discarding the whole result.
 const SANDBOX_ANALYSIS_SCHEMA = z.object({
-  summary: z.string().max(2000),
+  summary: z.string(),
   risks: z.array(z.object({
     severity: z.enum(['low', 'medium', 'high']),
-    text: z.string().max(600),
+    text: z.string(),
     // upload_id is numeric everywhere else in this app, and models don't
     // consistently quote it as a string in JSON output (observed with a
     // real OpenAI call) — accept either and normalize to string here so
     // the allowedSourceIds clamping below (which compares as strings)
     // keeps working regardless of which shape a given provider returns.
-    sourceIds: z.array(z.union([z.string(), z.number()])).max(5).transform(arr => arr.map(String)),
-  })).max(8),
-  missingInfo: z.array(z.string().max(400)).max(8),
+    sourceIds: z.array(z.union([z.string(), z.number()])).transform(arr => arr.map(String)),
+  })),
+  missingInfo: z.array(z.string()),
   recommendation: z.object({
     action: z.enum(SANDBOX_ANALYZE_ACTIONS),
-    rationale: z.string().max(1000),
+    rationale: z.string(),
   }),
   suggestedTasks: z.array(z.object({
-    title: z.string().max(200),
+    title: z.string(),
     priority: z.enum(SANDBOX_TASK_PRIORITIES),
-  })).max(6),
+  })),
 });
 const SANDBOX_ANALYSIS_CONSENT_NOTE = 'Пользователь подтвердил на этом запуске, что вправе передать выбранные материалы внешнему ИИ-провайдеру для анализа.';
+
+// Truncates to the same limits SANDBOX_ANALYSIS_SCHEMA used to enforce via
+// zod .max() — moved here so an over-long (but otherwise valid) response
+// gets shortened instead of the whole analysis being rejected.
+function clampSandboxAnalysis(data) {
+  const clip = (s, n) => (typeof s === 'string' && s.length > n ? s.slice(0, n) : s);
+  data.summary = clip(data.summary, 2000);
+  data.risks = data.risks.slice(0, 8).map(r => ({ ...r, text: clip(r.text, 600), sourceIds: r.sourceIds.slice(0, 5) }));
+  data.missingInfo = data.missingInfo.slice(0, 8).map(s => clip(s, 400));
+  data.recommendation.rationale = clip(data.recommendation.rationale, 1000);
+  data.suggestedTasks = data.suggestedTasks.slice(0, 6).map(t => ({ ...t, title: clip(t.title, 200) }));
+  return data;
+}
 
 // Fallback for a PDF that pdf-parse extracted no text from (a scan with no
 // text layer) — renders its first pages to PNG and lets the model read
@@ -4561,7 +4588,8 @@ async function runSandboxAnalysis(req, project, uploadIds) {
 
   let run;
   try {
-    const { data, model } = await completeJson({ system, prompt, schema: SANDBOX_ANALYSIS_SCHEMA, images });
+    const { data: rawData, model } = await completeJson({ system, prompt, schema: SANDBOX_ANALYSIS_SCHEMA, images });
+    const data = clampSandboxAnalysis(rawData);
     // Defense in depth: completeJson already validated shape via zod, but
     // the model could still cite an upload_id we never gave it — clamp
     // rather than trust, same reasoning as never trusting client input.

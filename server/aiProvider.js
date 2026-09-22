@@ -61,7 +61,15 @@ async function completeJsonOpenAI({ system, prompt, schema, images }) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      max_completion_tokens: 4096,
+      // Some models (reasoning models, e.g. the o1/o3 family and — found
+      // in practice — 'gpt-6-astra') spend part of this budget on hidden
+      // "reasoning" tokens before ever emitting visible content; a low
+      // budget can be entirely consumed by reasoning on a complex prompt,
+      // leaving zero tokens for the actual answer (finish_reason:'length',
+      // empty message.content — reproduced with a 6-line-of-business risk
+      // analysis prompt against 4096). Generous on purpose so a real
+      // (non-trivial) Sandbox/onboarding analysis has room for both.
+      max_completion_tokens: 16000,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: `${system}\n\nRespond with ONLY a single valid JSON object matching the requested shape. No markdown code fences, no commentary before or after.` },
@@ -74,7 +82,20 @@ async function completeJsonOpenAI({ system, prompt, schema, images }) {
     throw new Error(`OpenAI request failed (${res.status}): ${errText.slice(0, 300)}`);
   }
   const body = await res.json();
-  const text = body.choices?.[0]?.message?.content || '';
+  const choice = body.choices?.[0];
+  const text = choice?.message?.content || '';
+  if (!text && choice?.finish_reason === 'length') {
+    // Distinct from "the model wrote garbage" below — it never got to
+    // write anything. Surface this as its own actionable error rather
+    // than the generic "not valid JSON: " (empty string), which told the
+    // caller nothing about why.
+    const reasoningTokens = body.usage?.completion_tokens_details?.reasoning_tokens;
+    throw new Error(
+      `OpenAI response was cut off by the token limit before producing any output` +
+      (reasoningTokens ? ` (spent all ${reasoningTokens} completion tokens on internal reasoning)` : '') +
+      ` — try a shorter request (fewer/smaller attached documents)`
+    );
+  }
   let parsed;
   try {
     parsed = JSON.parse(text);

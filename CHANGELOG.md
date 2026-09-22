@@ -2,6 +2,39 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.47.0] - 2026-09-22
+
+### Fixed
+- `SANDBOX_ANALYSIS_SCHEMA` rejected the whole AI analysis outright when a
+  real model returned more items than the display limits (>8 risks, >8
+  missing-info items, >6 suggested tasks) — reported in production against
+  a real document. A model doesn't reliably obey a count instruction given
+  only in the prompt. Removed the rejecting `.max()`/`.max(length)`
+  constraints and added `clampSandboxAnalysis()`, which truncates
+  arrays/strings to the same limits AFTER a structurally-valid response
+  parses, instead of discarding a real, useful analysis over pure volume.
+- `completeJsonOpenAI` (`server/aiProvider.js`) could return a completely
+  empty response on a complex prompt: some models (found in practice with
+  `gpt-6-astra`) spend part of the completion-token budget on hidden
+  "reasoning" tokens before any visible output, and a low budget can be
+  entirely consumed by reasoning alone (`finish_reason: 'length'`,
+  `usage.completion_tokens_details.reasoning_tokens` == the whole budget,
+  zero content) — surfaced as a confusing "AI response was not valid
+  JSON: " (empty string). Raised the budget from 4096 to 16000 and added
+  a specific, actionable error for this exact case instead of the generic
+  JSON-parse failure.
+- Sandbox project list / Excel export now includes the latest successful
+  AI analysis (`GET /api/sandbox`'s `lastAiSummary`/`lastAiRecommendation`/
+  `lastAiRunAt`, sourced from a single extra subquery per list, not a
+  second request per project) — the "Резюме ИИ-анализа" / "Рекомендация
+  ИИ" / "Дата ИИ-анализа" columns in `exportSandboxProjects()`.
+- Both real bugs above were found via a live (non-stub) call against a
+  real account, not the existing test suite — added deterministic
+  regression coverage for the first one (an oversized stub response) since
+  that's reproducible without a live account; the token-budget one is
+  provider/model-specific behavior with no local repro, verified instead
+  by re-running the exact live prompt that triggered it.
+
 ## [1.46.0] - 2026-09-22
 
 ### Added

@@ -25,6 +25,13 @@ const SANDBOX_ANALYZE_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const SANDBOX_ANALYZE_MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 const SANDBOX_ANALYZE_MAX_TOTAL_CHARS = 40000;
 const SANDBOX_ANALYZE_ACTIONS = ['consider_screening', 'request_information', 'do_not_proceed'];
+// Mirrors js/sandbox.js's SBX_AI_ACTION_LABELS — used server-side only for
+// the Excel export column, so it reads as Russian text instead of a code.
+const SANDBOX_ANALYZE_ACTION_LABELS_RU = {
+  consider_screening: 'Рассмотреть для скрининга',
+  request_information: 'Запросить дополнительную информацию',
+  do_not_proceed: 'Не продолжать',
+};
 
 // names: { [email]: display name } — built once per request so a list of N
 // projects doesn't do N user lookups.
@@ -33,8 +40,26 @@ function displayName(names, email) {
   return (names && names[email]) || email;
 }
 
+// The list SELECT's last_ai_result_json is the raw stored result of the
+// most recent successful run — malformed/missing is treated as "no AI
+// analysis yet" rather than a hard failure, since this is a display
+// convenience, not authoritative data (that's GET /api/sandbox/:id/aiRuns).
+function lastAiSummaryFields(r) {
+  if (!r.last_ai_result_json) return { lastAiSummary: '', lastAiRecommendation: '', lastAiRunAt: null };
+  try {
+    const parsed = JSON.parse(r.last_ai_result_json);
+    return {
+      lastAiSummary: parsed.summary || '',
+      lastAiRecommendation: SANDBOX_ANALYZE_ACTION_LABELS_RU[parsed.recommendation?.action] || parsed.recommendation?.action || '',
+      lastAiRunAt: r.last_ai_run_at || null,
+    };
+  } catch (e) {
+    return { lastAiSummary: '', lastAiRecommendation: '', lastAiRunAt: null };
+  }
+}
+
 // Row from the list/detail SELECT in server/index.js — that query adds the
-// aggregate columns (open_tasks/overdue_tasks/next_due) next to p.*.
+// aggregate columns (open_tasks/overdue_tasks/next_due/last_ai_*) next to p.*.
 function rowToSandboxProject(r, names) {
   return {
     id: r.id,
@@ -59,6 +84,7 @@ function rowToSandboxProject(r, names) {
     openTasks: r.open_tasks || 0,
     overdueTasks: r.overdue_tasks || 0,
     nextDue: r.next_due || null,
+    ...lastAiSummaryFields(r),
   };
 }
 
@@ -121,5 +147,6 @@ module.exports = {
   SANDBOX_TASK_STATUSES, SANDBOX_TASK_DONE_STATUSES, SANDBOX_TASK_PRIORITIES,
   SANDBOX_ANALYZABLE_MIME_TYPES, SANDBOX_ANALYZE_MAX_FILES, SANDBOX_ANALYZE_MAX_FILE_BYTES,
   SANDBOX_ANALYZE_MAX_TOTAL_BYTES, SANDBOX_ANALYZE_MAX_TOTAL_CHARS, SANDBOX_ANALYZE_ACTIONS,
+  SANDBOX_ANALYZE_ACTION_LABELS_RU,
   rowToSandboxProject, rowToSandboxTask, rowToSandboxFile, rowToSandboxAiRun, rowToSandboxAiRunSummary,
 };

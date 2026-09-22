@@ -230,6 +230,7 @@ function exportSandboxProjects() {
     'ID', 'Название', 'Фонд', 'Инициатор', 'Ответственный', 'Email ответственного',
     'Статус', 'Причина статуса', 'Отложено до', 'Цель проекта', 'Описание',
     'Открытых задач', 'Просроченных задач', 'Ссылка на папку', 'Создан', 'Обновлён',
+    'Резюме ИИ-анализа', 'Рекомендация ИИ', 'Дата ИИ-анализа',
   ];
   const data = rows.map(p => [
     p.id, p.name, p.fundId != null ? (sbxFundName(p.fundId) || `Фонд #${p.fundId}`) : 'Без фонда',
@@ -237,6 +238,7 @@ function exportSandboxProjects() {
     p.status, p.statusReason || '', p.deferredUntil || '', p.goal || '', p.description || '',
     p.openTasks || 0, p.overdueTasks || 0, p.folderUrl || '',
     String(p.createdAt || '').slice(0, 10), String(p.updatedAt || '').slice(0, 10),
+    p.lastAiSummary || '', p.lastAiRecommendation || '', p.lastAiRunAt ? String(p.lastAiRunAt).slice(0, 16) : '',
   ]);
   const paramsSheet = [
     ['Параметры экспорта'],
@@ -246,7 +248,7 @@ function exportSandboxProjects() {
     ['Проектов в выгрузке', rows.length],
   ];
   downloadExcel([
-    { name: 'Песочница', data: [header, ...data], colWidths: [6, 26, 18, 20, 20, 26, 16, 26, 12, 34, 40, 10, 10, 34, 12, 12] },
+    { name: 'Песочница', data: [header, ...data], colWidths: [6, 26, 18, 20, 20, 26, 16, 26, 12, 34, 40, 10, 10, 34, 12, 12, 50, 26, 16] },
     { name: 'Параметры', data: paramsSheet, colWidths: [20, 30] },
   ], `Sandbox_${sbxToday()}.xlsx`);
 }
