@@ -2,6 +2,27 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.46.0] - 2026-09-22
+
+### Added
+- **OpenAI as a second AI provider** (`server/aiProvider.js`) alongside
+  Anthropic — same `completeJson()` contract, same `aiAssist` permission,
+  same routes (onboarding AI-assist + Sandbox analysis), just
+  `AI_PROVIDER=openai` + `OPENAI_API_KEY` (+ optional `OPENAI_MODEL`,
+  `OPENAI_BASE_URL`) in `.env` instead of the Anthropic variables. Chosen
+  over Anthropic on cost grounds; verified end-to-end against a real
+  account running the `gpt-6-astra` model (same key already used by the
+  separate dev-only `tools/astra.js` helper) — a live Sandbox analysis
+  request, through the actual browser UI, returned a valid, schema-
+  conforming Russian-language result.
+
+### Fixed
+- `SANDBOX_ANALYSIS_SCHEMA`'s `risks[].sourceIds` required strings; a real
+  OpenAI response cited them as numbers (`upload_id` is numeric
+  everywhere else in this app) and failed validation. Now accepts either
+  and normalizes to string before the existing allowed-ids clamp — found
+  by the live OpenAI verification above, not by the stub-based test suite.
+
 ## [1.45.0] - 2026-09-22
 
 ### Added

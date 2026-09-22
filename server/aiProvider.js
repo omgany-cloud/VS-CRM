@@ -39,6 +39,51 @@ async function completeJsonAnthropic({ system, prompt, schema, images }) {
   return { parsed, model };
 }
 
+// Plain fetch against the OpenAI-compatible Chat Completions API — no SDK
+// dependency. OPENAI_BASE_URL is optional and lets this point at any
+// OpenAI-compatible endpoint instead of api.openai.com (e.g. a proxy/
+// gateway in front of it). Same images[] shape as the Anthropic branch
+// above ({mimeType, base64}), converted to OpenAI's data-URL image format.
+async function completeJsonOpenAI({ system, prompt, schema, images }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("AI_PROVIDER is 'openai' but OPENAI_API_KEY is not set in .env");
+
+  const model = process.env.OPENAI_MODEL || 'gpt-4o';
+  const baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+
+  const content = [{ type: 'text', text: prompt }];
+  for (const img of images || []) {
+    content.push({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` } });
+  }
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      max_completion_tokens: 4096,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: `${system}\n\nRespond with ONLY a single valid JSON object matching the requested shape. No markdown code fences, no commentary before or after.` },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`OpenAI request failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
+  const body = await res.json();
+  const text = body.choices?.[0]?.message?.content || '';
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    throw new Error('AI response was not valid JSON: ' + text.slice(0, 200));
+  }
+  return { parsed, model: body.model || model };
+}
+
 // Test-only seam — never documented in .env.example, only ever set by
 // server/test/*.test.js (which spawns a real `node index.js` subprocess
 // per createTestServer(), so there's no way to inject a JS-level stub
@@ -61,10 +106,12 @@ async function completeJson({ system, prompt, schema, images }) {
   let result;
   if (provider === 'anthropic') {
     result = await completeJsonAnthropic({ system, prompt, schema, images });
+  } else if (provider === 'openai') {
+    result = await completeJsonOpenAI({ system, prompt, schema, images });
   } else if (provider === 'stub') {
     result = completeJsonStub();
   } else {
-    throw new Error(`Unknown AI_PROVIDER '${provider}' — supported: anthropic`);
+    throw new Error(`Unknown AI_PROVIDER '${provider}' — supported: anthropic, openai`);
   }
   const data = schema ? schema.parse(result.parsed) : result.parsed;
   return { data, model: result.model };

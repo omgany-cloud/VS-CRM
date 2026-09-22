@@ -4394,7 +4394,12 @@ const SANDBOX_ANALYSIS_SCHEMA = z.object({
   risks: z.array(z.object({
     severity: z.enum(['low', 'medium', 'high']),
     text: z.string().max(600),
-    sourceIds: z.array(z.string()).max(5),
+    // upload_id is numeric everywhere else in this app, and models don't
+    // consistently quote it as a string in JSON output (observed with a
+    // real OpenAI call) — accept either and normalize to string here so
+    // the allowedSourceIds clamping below (which compares as strings)
+    // keeps working regardless of which shape a given provider returns.
+    sourceIds: z.array(z.union([z.string(), z.number()])).max(5).transform(arr => arr.map(String)),
   })).max(8),
   missingInfo: z.array(z.string().max(400)).max(8),
   recommendation: z.object({
