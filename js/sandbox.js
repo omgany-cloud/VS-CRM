@@ -431,12 +431,18 @@ function renderSandboxDetail() {
             <input type="url" id="sb_folder" value="${escapeHtml(p.folderUrl)}" placeholder="https://drive.google.com/..." ${dis} style="flex:1" />
             ${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="Открыть папку"
               style="display:flex;align-items:center;padding:0 12px;border-radius:8px;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);color:#5eead4;text-decoration:none"><i class="fas fa-folder-open"></i></a>` : ''}
+            ${!locked && p.folderUrl ? `<button type="button" onclick="sandboxClearField('sb_folder')" title="Очистить ссылку" aria-label="Очистить ссылку"
+              style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:8px;width:36px;cursor:pointer;flex-shrink:0"><i class="fas fa-times"></i></button>` : ''}
           </div>
         </div>
         ${sandboxLocalFilesEnabled ? `
         <div class="form-group">
           <label>Путь к папке на сервере <span style="font-weight:400;color:#64748b">— для ИИ-анализа документов</span></label>
-          <input type="text" id="sb_local_path" value="${escapeHtml(p.localFolderPath)}" placeholder="например: Deals/2026/Ромашка" ${dis} />
+          <div style="display:flex;gap:6px">
+            <input type="text" id="sb_local_path" value="${escapeHtml(p.localFolderPath)}" placeholder="например: Deals/2026/Ромашка" ${dis} style="flex:1" />
+            ${!locked && p.localFolderPath ? `<button type="button" onclick="sandboxClearField('sb_local_path')" title="Очистить путь" aria-label="Очистить путь"
+              style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:8px;width:36px;cursor:pointer;flex-shrink:0"><i class="fas fa-times"></i></button>` : ''}
+          </div>
         </div>` : ''}
         <div class="form-group full">
           <label>Цель проекта <span style="font-weight:400;color:#64748b">— что планируется сделать в ближайшей перспективе</span></label>
@@ -569,6 +575,18 @@ async function reloadSandboxTasksArea() {
   sandboxDetail.project.overdueTasks = fresh.project.overdueTasks;
   const area = document.getElementById('sb_tasks_area');
   if (area) area.innerHTML = sandboxTasksHtml(sandboxDetail.project, fresh.tasks, !!sandboxDetail.project.promotedDealId) + sandboxHistoryHtml(fresh.history);
+}
+
+// Clears one link/path field in place (folderUrl or localFolderPath) —
+// doesn't save by itself, same as every other field in this form; the
+// user still confirms with "Сохранить", so a clear can be undone by
+// closing the modal without saving.
+function sandboxClearField(id) {
+  const el = document.getElementById(id);
+  if (!el || el.disabled) return;
+  el.value = '';
+  el.focus();
+  showToast('Поле очищено — нажмите «Сохранить», чтобы применить', 'orange');
 }
 
 function sandboxStatusChanged() {
