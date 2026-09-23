@@ -19,7 +19,16 @@ const SANDBOX_TASK_PRIORITIES = ['Высокий', 'Средний', 'Низки
 // limits (Astra's numbers): enough for a real memo + a few exhibits,
 // small enough that a run stays cheap and fast and a runaway attachment
 // list fails BEFORE calling the model, not after paying for the call.
-const SANDBOX_ANALYZABLE_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
+// .doc/.xls (legacy, pre-2007 binary OLE formats) are deliberately NOT
+// analyzable — see server/officeTextExtract.js's header comment for why
+// (the obvious npm library for the legacy formats carries unpatched CVEs
+// in exactly this attack surface). .docx/.xlsx are zip+XML and covered by
+// a narrow custom extractor instead.
+const SANDBOX_ANALYZABLE_MIME_TYPES = new Set([
+  'application/pdf', 'image/png', 'image/jpeg', 'image/gif',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
 const SANDBOX_ANALYZE_MAX_FILES = 5;
 const SANDBOX_ANALYZE_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const SANDBOX_ANALYZE_MAX_TOTAL_BYTES = 25 * 1024 * 1024;

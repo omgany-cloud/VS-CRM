@@ -2,6 +2,32 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.53.0] - 2026-09-23
+
+### Added
+- **Sandbox AI analysis now reads Word (.docx) and Excel (.xlsx) too**, not
+  just PDF/images. `server/officeTextExtract.js` — a small, hand-rolled
+  extractor built on `adm-zip` (already a dependency, used by
+  `xmindImport.js`) rather than the obvious npm package for this
+  (`xlsx`/SheetJS), which carries two unpatched CVEs (prototype pollution
+  + ReDoS) sitting directly in the path of untrusted user-uploaded files —
+  exactly what these documents are. `.docx`/`.xlsx` are both just a zip of
+  XML, so a narrow, bomb-guarded regex parser (paragraph/table-cell/row
+  boundaries preserved, not just a flat text blob) covers the real need —
+  readable context for an AI summary — without that risk.
+- **Legacy `.doc`/`.xls` (pre-2007 binary OLE formats) are deliberately
+  NOT supported** — a real binary parser for those formats would need
+  either that same vulnerable library or an equally obscure one; declined
+  with a clear error instead of silently mishandling them (same stance as
+  rejecting legacy XMind 8 in the v1.50.0 import).
+- Coverage (from v1.52.0) gets a new `office` mode — no page concept once
+  flattened to text, so it reads as "text extracted whole" rather than
+  reusing the PDF page-count wording.
+- 4 new tests (docx with a table, xlsx via sharedStrings, a corrupted
+  .docx handled gracefully, legacy .doc/.xls still rejected). Full suite
+  309/309. Live-verified against the real configured provider
+  (`gpt-6-astra`) with a real .docx.
+
 ## [1.52.0] - 2026-09-23
 
 ### Added

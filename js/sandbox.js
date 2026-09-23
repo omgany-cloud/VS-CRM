@@ -34,7 +34,11 @@ const SBX_LABEL = 'display:block;font-size:11px;font-weight:600;color:#8abfbb;ma
 // Matches server/sandboxMapping.js's SANDBOX_ANALYZABLE_MIME_TYPES — kept
 // as a separate client-side copy purely to decide which attached files get
 // a selection checkbox; the server is the one that actually enforces it.
-const SBX_ANALYZABLE_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif']);
+const SBX_ANALYZABLE_MIME = new Set([
+  'application/pdf', 'image/png', 'image/jpeg', 'image/gif',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
 // Matches server/sandboxMapping.js's SANDBOX_ANALYZE_MAX_FILES — display only.
 const SANDBOX_ANALYZE_MAX_FILES = 5;
 // Matches server/sandboxMapping.js's SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX.
@@ -60,6 +64,7 @@ const SBX_AI_COVERAGE_MODE_LABELS = {
   text: (c) => `«${c.name}»: текст, ${c.pagesTotal ? c.pagesTotal + ' стр.' : 'без разбивки на страницы'}`,
   ocr: (c) => `«${c.name}»: скан, распознано ${c.pagesProcessed}${c.pagesTotal ? ' из ' + c.pagesTotal : ''} стр.`,
   image: (c) => `«${c.name}»: изображение`,
+  office: (c) => `«${c.name}»: Word/Excel, текст извлечён целиком`,
   unreadable: (c) => `«${c.name}»: не распознан`,
 };
 const _sandboxRunCache = {};   // runId -> full run detail, fetched once per open modal session
@@ -826,7 +831,7 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
       <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #1e293b">
         ${canSelect
           ? `<input type="checkbox" class="sb_ai_file_cb" value="${f.uploadId}" style="width:15px;height:15px;flex-shrink:0" ${locked ? 'disabled' : ''} />`
-          : `<span style="width:15px;flex-shrink:0;text-align:center" title="Тип не поддерживается для ИИ-анализа (только PDF/PNG/JPEG/GIF)"><i class="fas fa-ban" style="color:#475569;font-size:10px"></i></span>`}
+          : `<span style="width:15px;flex-shrink:0;text-align:center" title="Тип не поддерживается для ИИ-анализа (PDF, PNG/JPEG/GIF, .docx, .xlsx — старые .doc/.xls нет)"><i class="fas fa-ban" style="color:#475569;font-size:10px"></i></span>`}
         <a href="${escapeHtml(resolveDocUrl(f.url))}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;font-size:12px;flex:1;min-width:0;overflow-wrap:anywhere">${escapeHtml(f.name)}</a>
         <span style="font-size:10px;color:#64748b;white-space:nowrap">${sbxFileSize(f.sizeBytes)}</span>
         ${locked ? '' : `<button onclick="sandboxDetachFile(${f.id})" aria-label="Открепить" title="Открепить"
@@ -869,7 +874,7 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
         <button class="btn-primary" onclick="sandboxRunAnalysis()" style="margin-top:10px" ${analyzableCount ? '' : 'disabled'}>
           <i class="fas fa-wand-magic-sparkles"></i> Запустить ИИ-анализ
         </button>
-        ${analyzableCount ? '' : '<div style="font-size:11px;color:#64748b;margin-top:6px">Прикрепите PDF или изображение, чтобы запустить анализ</div>'}
+        ${analyzableCount ? '' : '<div style="font-size:11px;color:#64748b;margin-top:6px">Прикрепите PDF, изображение, .docx или .xlsx, чтобы запустить анализ</div>'}
       ` : `<div style="font-size:11px;color:#64748b"><i class="fas fa-lock" style="margin-right:5px"></i>Нужно право «AI-ассистент» — обратитесь к CEO / администратору ролей</div>`}
       <div id="sb_ai_result"></div>
     </div>`;
@@ -1002,7 +1007,7 @@ async function sandboxRunAnalysis() {
   const consent = document.getElementById('sb_ai_consent');
   if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
   const uploadIds = Array.from(document.querySelectorAll('.sb_ai_file_cb:checked')).map(cb => Number(cb.value));
-  if (!uploadIds.length) { showToast('⚠️ Выберите хотя бы один документ (PDF или изображение)', 'orange'); return; }
+  if (!uploadIds.length) { showToast('⚠️ Выберите хотя бы один документ (PDF, изображение, .docx или .xlsx)', 'orange'); return; }
   const customInstructionsEl = document.getElementById('sb_ai_custom_instructions');
   const customInstructions = customInstructionsEl ? customInstructionsEl.value.trim() : '';
   const resultEl = document.getElementById('sb_ai_result');

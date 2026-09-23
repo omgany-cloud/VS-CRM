@@ -6,7 +6,45 @@
 // clamping, run persistence — without a live API key.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const AdmZip = require('adm-zip');
 const { createTestServer } = require('./helpers');
+
+// Minimal, valid-enough .docx/.xlsx fixtures for server/officeTextExtract.js
+// — real Word/Excel files carry a lot more (styles, [Content_Types].xml,
+// relationship files) that the extractor never reads, so building only the
+// parts it actually opens keeps this focused on the extraction logic.
+function buildDocxFixture(paragraphs) {
+  const body = paragraphs.map(p => `<w:p><w:r><w:t>${p.replace(/&/g, '&amp;')}</w:t></w:r></w:p>`).join('');
+  const xml = `<?xml version="1.0"?><w:document xmlns:w="ns"><w:body>${body}</w:body></w:document>`;
+  const zip = new AdmZip();
+  zip.addFile('word/document.xml', Buffer.from(xml, 'utf8'));
+  return zip.toBuffer();
+}
+function buildXlsxFixture(sheetName, rows) {
+  const strings = [];
+  const internIndex = (s) => {
+    const i = strings.indexOf(s);
+    if (i !== -1) return i;
+    strings.push(s);
+    return strings.length - 1;
+  };
+  const rowsXml = rows.map((row, ri) => {
+    const cellsXml = row.map((cell, ci) => {
+      const col = String.fromCharCode(65 + ci);
+      if (typeof cell === 'number') return `<c r="${col}${ri + 1}"><v>${cell}</v></c>`;
+      return `<c r="${col}${ri + 1}" t="s"><v>${internIndex(String(cell))}</v></c>`;
+    }).join('');
+    return `<row r="${ri + 1}">${cellsXml}</row>`;
+  }).join('');
+  const sharedStringsXml = `<?xml version="1.0"?><sst xmlns="ns" count="${strings.length}" uniqueCount="${strings.length}">${strings.map(s => `<si><t>${s.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</t></si>`).join('')}</sst>`;
+  const workbookXml = `<?xml version="1.0"?><workbook xmlns="ns"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+  const sheetXml = `<?xml version="1.0"?><worksheet xmlns="ns"><sheetData>${rowsXml}</sheetData></worksheet>`;
+  const zip = new AdmZip();
+  zip.addFile('xl/sharedStrings.xml', Buffer.from(sharedStringsXml, 'utf8'));
+  zip.addFile('xl/workbook.xml', Buffer.from(workbookXml, 'utf8'));
+  zip.addFile('xl/worksheets/sheet1.xml', Buffer.from(sheetXml, 'utf8'));
+  return zip.toBuffer();
+}
 
 // Deliberately does not include either real upload_id used below — proves
 // the server clamps a model-cited source rather than trusting it verbatim.
@@ -217,6 +255,59 @@ test('analyze: a file that is genuinely not a PDF (extraction AND rendering both
   assert.equal(res.status, 201);
   const run = await res.json();
   assert.deepEqual(run.inputSnapshot.unreadable, ['corrupt.pdf']);
+});
+
+test('analyze: a .docx is analyzable — text (including a table) is extracted and reaches the model, coverage mode "office"', async () => {
+  const buf = buildDocxFixture(['Teaser: SkyView Resort', 'Revenue 2025: 4,800,000 USD & growing']);
+  const up = await uploadTestFile(rawFetchAs(server.token), buf, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'teaser.docx');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const res = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+  assert.equal(res.status, 201);
+  const run = await res.json();
+  assert.equal(run.status, 'ok');
+  const cov = run.inputSnapshot.coverage.find(c => c.uploadId === uploadId);
+  assert.equal(cov.mode, 'office');
+  assert.deepEqual(run.inputSnapshot.unreadable, []);
+});
+
+test('analyze: an .xlsx is analyzable — cell text (via sharedStrings) is extracted, coverage mode "office"', async () => {
+  const buf = buildXlsxFixture('DealSummary', [['Item', 'Amount'], ['Revenue 2025', 4800000], ['Risk note', 'Single-supplier dependency']]);
+  const up = await uploadTestFile(rawFetchAs(server.token), buf, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'model.xlsx');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const res = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+  assert.equal(res.status, 201);
+  const run = await res.json();
+  assert.equal(run.status, 'ok');
+  const cov = run.inputSnapshot.coverage.find(c => c.uploadId === uploadId);
+  assert.equal(cov.mode, 'office');
+  assert.deepEqual(run.inputSnapshot.unreadable, []);
+});
+
+test('analyze: a corrupted .docx (not a real zip) is flagged unreadable, not crashed on', async () => {
+  const up = await uploadTestFile(rawFetchAs(server.token), Buffer.from('not actually a zip'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'broken.docx');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const res = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+  assert.equal(res.status, 201);
+  const run = await res.json();
+  assert.deepEqual(run.inputSnapshot.unreadable, ['broken.docx']);
+});
+
+test('analyze: legacy .doc/.xls (binary, pre-2007 formats) are still rejected, not silently mis-handled as .docx/.xlsx', async () => {
+  const upDoc = await uploadTestFile(rawFetchAs(server.token), Buffer.from('legacy binary doc'), 'application/msword', 'old.doc');
+  const { id: docId } = await upDoc.json();
+  await attach(docId);
+  const resDoc = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [docId] }) });
+  assert.equal(resDoc.status, 400);
+  assert.match((await resDoc.json()).error, /\.doc\/\.xls/);
+
+  const upXls = await uploadTestFile(rawFetchAs(server.token), Buffer.from('legacy binary xls'), 'application/vnd.ms-excel', 'old.xls');
+  const { id: xlsId } = await upXls.json();
+  await attach(xlsId);
+  const resXls = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [xlsId] }) });
+  assert.equal(resXls.status, 400);
 });
 
 test('analyze: a scanned multi-page PDF records real page coverage (mode "ocr", pagesTotal/pagesProcessed), and a citation page beyond what was actually shown is nulled, not trusted', async () => {

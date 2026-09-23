@@ -4607,7 +4607,7 @@ async function runSandboxAnalysis(req, project, uploadIds, customInstructions) {
     return { httpStatus: 400, body: { error: 'Все выбранные документы должны быть сначала прикреплены к проекту', field: 'uploadIds' } };
   }
   const badMime = attached.find(f => !SANDBOX_ANALYZABLE_MIME_TYPES.has(f.mime_type));
-  if (badMime) return { httpStatus: 400, body: { error: `«${badMime.original_name}»: ИИ-анализ поддерживает только PDF и изображения (PNG/JPEG/GIF)`, field: 'uploadIds' } };
+  if (badMime) return { httpStatus: 400, body: { error: `«${badMime.original_name}»: ИИ-анализ поддерживает только PDF, изображения (PNG/JPEG/GIF), Word (.docx) и Excel (.xlsx) — старые .doc/.xls не поддерживаются`, field: 'uploadIds' } };
   const tooBig = attached.find(f => f.size_bytes > SANDBOX_ANALYZE_MAX_FILE_BYTES);
   if (tooBig) return { httpStatus: 400, body: { error: `«${tooBig.original_name}» больше ${Math.round(SANDBOX_ANALYZE_MAX_FILE_BYTES / 1024 / 1024)} МБ — выберите файл меньшего размера`, field: 'uploadIds' } };
   const totalBytes = attached.reduce((s, f) => s + (f.size_bytes || 0), 0);
@@ -4702,6 +4702,33 @@ async function runSandboxAnalysis(req, project, uploadIds, customInstructions) {
         coverage.push({ uploadId: f.id, name: f.original_name, mode: 'text', pagesTotal, pagesProcessed: pagesTotal });
         coveragePages.set(String(f.id), pagesTotal || Infinity); // pdf-parse's default max:0 reads every page, so "processed" == "total"
       }
+    } else if (f.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      || f.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      // .docx/.xlsx — no page concept once flattened to text (a sheet with
+      // many rows or a long doc is one continuous read, not pages), so
+      // coverage here just means "did extraction succeed at all", same as
+      // an image: pagesTotal/pagesProcessed of 1 (rather than null, which
+      // the UI would render as "без разбивки на страницы" — equivalent in
+      // meaning, this is just consistent with the image branch above).
+      const isSheet = f.mime_type.endsWith('spreadsheetml.sheet');
+      let text = '';
+      try {
+        const { extractDocxText, extractXlsxText } = require('./officeTextExtract');
+        text = ((isSheet ? extractXlsxText : extractDocxText)(fs.readFileSync(filePath)) || '').trim();
+      } catch (err) {
+        text = '';
+      }
+      if (text) {
+        textParts.push(`--- BEGIN FILE upload_id=${f.id} name="${f.original_name}" ---\n${text}\n--- END FILE ---`);
+        totalChars += text.length;
+        coverage.push({ uploadId: f.id, name: f.original_name, mode: 'office', pagesTotal: 1, pagesProcessed: 1 });
+        coveragePages.set(String(f.id), 1);
+      } else {
+        unreadable.push(f.original_name);
+        textParts.push(`--- BEGIN FILE upload_id=${f.id} name="${f.original_name}" ---\n[не удалось извлечь текст — вероятно, повреждённый или нестандартный файл]\n--- END FILE ---`);
+        coverage.push({ uploadId: f.id, name: f.original_name, mode: 'unreadable', pagesTotal: null, pagesProcessed: 0 });
+        coveragePages.set(String(f.id), 0);
+      }
     } else {
       const base64 = fs.readFileSync(filePath).toString('base64');
       images.push({ mimeType: f.mime_type, base64 });
@@ -4727,6 +4754,7 @@ async function runSandboxAnalysis(req, project, uploadIds, customInstructions) {
     if (c.mode === 'text') return `- upload_id=${c.uploadId} «${c.name}»: текстовый слой, обработаны все страницы (${c.pagesTotal ?? '?'}).`;
     if (c.mode === 'ocr') return `- upload_id=${c.uploadId} «${c.name}»: скан без текстового слоя, распознаны как изображения только первые ${c.pagesProcessed} из ${c.pagesTotal ?? '?'} страниц — остальные НЕ показаны и не проверены.`;
     if (c.mode === 'image') return `- upload_id=${c.uploadId} «${c.name}»: одно изображение.`;
+    if (c.mode === 'office') return `- upload_id=${c.uploadId} «${c.name}»: Word/Excel, текст извлечён целиком (без разбивки на страницы — при цитировании используйте page: null).`;
     return `- upload_id=${c.uploadId} «${c.name}»: не удалось прочитать — не анализировался.`;
   });
   const promptDigest = crypto.createHash('sha256').update(JSON.stringify({ projectId: project.id, uploadIds, customInstructions })).digest('hex').slice(0, 16);
