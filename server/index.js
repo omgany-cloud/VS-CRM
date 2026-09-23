@@ -4911,7 +4911,7 @@ app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInte
         INSERT INTO sandbox_project_files (tenant_id, project_id, upload_id, attached_by)
         VALUES (@tenantId, @projectId, @uploadId, @attachedBy)
       `).run(at({ tenantId: req.tenantId, projectId: project.id, uploadId: info.lastInsertRowid, attachedBy: req.user.email }));
-      resolved.push({ id: info.lastInsertRowid, mime_type: lf.mimeType });
+      resolved.push({ id: info.lastInsertRowid, mime_type: lf.mimeType, size_bytes: lf.sizeBytes });
       newlyImported++;
     } catch (err) {
       const msg = err.message === 'copy timed out'
@@ -4925,16 +4925,38 @@ app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInte
     recordAudit(db, { tenantId: req.tenantId, entityType: 'sandbox_projects', entityId: project.id, action: 'file_attached', actorEmail: req.user.email, summary: `Проект «${project.name}»: импортировано файлов с сервера — ${newlyImported}` });
   }
 
-  const analyzable = resolved.filter(f => SANDBOX_ANALYZABLE_MIME_TYPES.has(f.mime_type));
+  // A file over the per-file cap (or one that would push the batch over
+  // the combined cap) must never reach runSandboxAnalysis here — that
+  // route rejects the WHOLE run over a single oversized file (correct for
+  // an explicit hand-picked selection, since the caller chose it on
+  // purpose), but this route is auto-picking "the newest N" on the
+  // caller's behalf, so silently skipping an oversized one and picking
+  // the next-best instead is the only way "analyze the folder" can ever
+  // succeed on a folder that happens to contain one big file. Found live:
+  // a real folder's newest 5 files included one 15MB .docx (cap is 10MB)
+  // and the whole run 400'd instead of just leaving that file out.
+  const analyzableAll = resolved.filter(f => SANDBOX_ANALYZABLE_MIME_TYPES.has(f.mime_type));
+  const tooLargeCount = analyzableAll.filter(f => f.size_bytes > SANDBOX_ANALYZE_MAX_FILE_BYTES).length;
+  const analyzable = analyzableAll.filter(f => f.size_bytes <= SANDBOX_ANALYZE_MAX_FILE_BYTES);
   if (!analyzable.length) {
-    return res.status(400).json({ error: 'В папке нет файлов, подходящих для ИИ-анализа (PDF, изображения, .docx, .xlsx) — остальные типы можно только прикрепить', errors: importErrors });
+    const reason = tooLargeCount
+      ? `В папке есть файлы для анализа, но все они больше ${Math.round(SANDBOX_ANALYZE_MAX_FILE_BYTES / 1024 / 1024)} МБ`
+      : 'В папке нет файлов, подходящих для ИИ-анализа (PDF, изображения, .docx, .xlsx) — остальные типы можно только прикрепить';
+    return res.status(400).json({ error: reason, errors: importErrors });
   }
-  const chosen = analyzable.slice(0, SANDBOX_ANALYZE_MAX_FILES).map(f => f.id);
+  const chosen = [];
+  let chosenBytes = 0;
+  for (const f of analyzable) {
+    if (chosen.length >= SANDBOX_ANALYZE_MAX_FILES) break;
+    if (chosenBytes + f.size_bytes > SANDBOX_ANALYZE_MAX_TOTAL_BYTES) continue; // skip, keep looking for a smaller one that still fits
+    chosen.push(f.id);
+    chosenBytes += f.size_bytes;
+  }
   const { httpStatus, body } = await runSandboxAnalysis(req, project, chosen, customInstructions);
   if (httpStatus === 201) {
     body.folderImport = {
       totalInFolder: localFiles.length, imported: newlyImported, analyzed: chosen.length,
-      skipped: analyzable.length - chosen.length, errors: importErrors,
+      skipped: analyzableAll.length - chosen.length, tooLarge: tooLargeCount, errors: importErrors,
     };
   }
   res.status(httpStatus).json(body);

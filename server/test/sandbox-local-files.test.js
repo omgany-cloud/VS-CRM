@@ -213,3 +213,46 @@ test('analyze-folder: imports every supported file from the folder, reuses alrea
     fs.rmSync(aiRoot, { recursive: true, force: true });
   }
 });
+
+// Real bug, found live: a folder's newest SANDBOX_ANALYZE_MAX_FILES files
+// happened to include one over SANDBOX_ANALYZE_MAX_FILE_BYTES (10MB) —
+// the whole run 400'd instead of that one file just being left out in
+// favor of the next-newest one that fit. Fixed to pre-filter by size
+// before picking, the same way the client-side scope preview does.
+test('analyze-folder: a file over the per-file size cap is skipped, not left to fail the whole run', async () => {
+  const aiRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ai-root-big-'));
+  const AI_STUB_RESPONSE = {
+    summary: 'обзор без большого файла', risks: [], missingInfo: [],
+    recommendation: { action: 'consider_screening', rationale: 'ок' }, suggestedTasks: [],
+  };
+  fs.mkdirSync(path.join(aiRoot, 'Deal'));
+  // Newest file (by mtime) is the oversized one — proves it's actively
+  // skipped in favor of an older-but-smaller one, not just coincidentally
+  // never reaching the top of the recency sort.
+  fs.writeFileSync(path.join(aiRoot, 'Deal', 'small.png'), Buffer.from([1, 2, 3]));
+  const bigPath = path.join(aiRoot, 'Deal', 'huge.png');
+  fs.writeFileSync(bigPath, Buffer.alloc(11 * 1024 * 1024)); // 11MB > the 10MB per-file cap
+  fs.utimesSync(bigPath, new Date(), new Date());
+
+  const aiServer = await createTestServer({
+    port: 4145,
+    extraEnv: { SANDBOX_FILES_ROOT: aiRoot, AI_PROVIDER: 'stub', AI_STUB_RESPONSE: JSON.stringify(AI_STUB_RESPONSE) },
+  });
+  try {
+    const { roles } = await (await aiServer.apiFetch('/api/roles')).json();
+    await aiServer.apiFetch(`/api/roles/${roles.find(r => r.code === 'CEO').id}`, { method: 'PUT', body: JSON.stringify({ aiAssist: true }) });
+    const p = await (await aiServer.apiFetch('/api/sandbox', { method: 'POST', body: JSON.stringify({ name: 'SBX_FOLDER_BIGFILE', localFolderPath: 'Deal' }) })).json();
+
+    const res = await aiServer.apiFetch(`/api/sandbox/${p.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true }) });
+    assert.equal(res.status, 201, 'the oversized file must not fail the whole run');
+    const body = await res.json();
+    assert.equal(body.status, 'ok');
+    assert.equal(body.folderImport.totalInFolder, 2);
+    assert.equal(body.folderImport.imported, 2, 'both files still get imported/attached — only the AI run itself skips the big one');
+    assert.equal(body.folderImport.analyzed, 1, 'only the small file was actually sent to the model');
+    assert.equal(body.folderImport.tooLarge, 1);
+  } finally {
+    await aiServer.stop();
+    fs.rmSync(aiRoot, { recursive: true, force: true });
+  }
+});

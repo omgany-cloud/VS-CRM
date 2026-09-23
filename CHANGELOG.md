@@ -2,6 +2,28 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.54.1] - 2026-09-23
+
+### Fixed
+- **Server-folder AI analysis: an oversized file among the auto-picked
+  "5 newest" no longer fails the whole run.** Found live on a real
+  folder: the newest 5 analyzable files happened to include one 15MB
+  .docx (the per-file cap is 10MB) — `POST .../analyze-folder` passed it
+  straight through to the same validation the explicit-file-pick route
+  uses, which correctly rejects an oversized file, but wrongly rejected
+  the ENTIRE batch over it instead of just leaving that one out. This
+  route auto-picks files on the caller's behalf, so it now pre-filters by
+  the same per-file and combined-size caps before picking, and prefers
+  the next-newest file that fits — the explicit-file-pick route still
+  rejects outright on an oversized file a human specifically chose,
+  unchanged. The "Источник документов: Папка на сервере" scope preview
+  (v1.54.0) mirrors the same fix, so what it shows never promises a file
+  the run would actually reject.
+- 1 new test. Full suite 310/310. Live-verified against the real
+  configured provider on the real triggering folder — 5 of its 6 files
+  analyzed successfully (the 6th, oversized, correctly skipped), no
+  console errors.
+
 ## [1.54.0] - 2026-09-23
 
 ### Changed

@@ -50,6 +50,14 @@ const SBX_ANALYZABLE_MIME = new Set([
 ]);
 // Matches server/sandboxMapping.js's SANDBOX_ANALYZE_MAX_FILES — display only.
 const SANDBOX_ANALYZE_MAX_FILES = 5;
+// Matches server/sandboxMapping.js's SANDBOX_ANALYZE_MAX_FILE_BYTES/
+// _MAX_TOTAL_BYTES — the folder-source scope preview needs these too, so
+// it can pre-filter the same way POST .../analyze-folder does server-side
+// (found live: an oversized file auto-picked as "one of the 5 newest"
+// used to 400 the whole run instead of just being skipped for the next
+// one that fits).
+const SANDBOX_ANALYZE_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const SANDBOX_ANALYZE_MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 // Matches server/sandboxMapping.js's SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX.
 const SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX = 2000;
 const SBX_AI_ACTION_LABELS = {
@@ -1052,18 +1060,33 @@ async function sandboxAiRenderScope() {
   try {
     const { files } = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files`);
     // Same rule as the server's own selection in POST .../analyze-folder
-    // (analyzable types only, newest-modified first, capped) — computed
+    // (analyzable types only, newest-modified first, per-file and
+    // combined size caps, capped at SANDBOX_ANALYZE_MAX_FILES) — computed
     // here too so the preview matches what will actually be sent, not
-    // just "everything in the folder".
-    const analyzable = files.filter(f => SBX_ANALYZABLE_MIME.has(f.mimeType)).sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
-    const chosen = analyzable.slice(0, SANDBOX_ANALYZE_MAX_FILES);
+    // just "everything in the folder". A file over the per-file cap is
+    // skipped in favor of the next one that fits, not just left in the
+    // list to fail the whole run later.
+    const analyzableAll = files.filter(f => SBX_ANALYZABLE_MIME.has(f.mimeType)).sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+    const tooLarge = analyzableAll.filter(f => f.sizeBytes > SANDBOX_ANALYZE_MAX_FILE_BYTES);
+    const analyzable = analyzableAll.filter(f => f.sizeBytes <= SANDBOX_ANALYZE_MAX_FILE_BYTES);
+    const chosen = [];
+    let chosenBytes = 0;
+    for (const f of analyzable) {
+      if (chosen.length >= SANDBOX_ANALYZE_MAX_FILES) break;
+      if (chosenBytes + f.sizeBytes > SANDBOX_ANALYZE_MAX_TOTAL_BYTES) continue;
+      chosen.push(f);
+      chosenBytes += f.sizeBytes;
+    }
     if (!chosen.length) {
-      scopeEl.innerHTML = `В папке нет файлов, подходящих для анализа (PDF, изображения, .docx, .xlsx) — всего файлов: ${files.length}.`;
+      scopeEl.innerHTML = tooLarge.length
+        ? `В папке есть подходящие файлы, но все они больше ${Math.round(SANDBOX_ANALYZE_MAX_FILE_BYTES / 1024 / 1024)} МБ.`
+        : `В папке нет файлов, подходящих для анализа (PDF, изображения, .docx, .xlsx) — всего файлов: ${files.length}.`;
       setBtn(false, 'В папке нет подходящих файлов');
     } else {
-      const rest = analyzable.length - chosen.length;
+      const rest = analyzableAll.length - chosen.length - tooLarge.length;
       scopeEl.innerHTML = `<b style="color:#94a3b8">В анализ: ${chosen.length} самых свежих из ${files.length} файлов в папке</b><br>` +
         chosen.map(f => `· ${escapeHtml(f.relativePath)}`).join('<br>') +
+        (tooLarge.length ? `<br><span style="color:#eab308">${tooLarge.length} файл(ов) пропущено — больше ${Math.round(SANDBOX_ANALYZE_MAX_FILE_BYTES / 1024 / 1024)} МБ</span>` : '') +
         (rest > 0 ? `<br><span style="color:#eab308">+ ещё ${rest} подходящих — в этот запуск не поместятся</span>` : '');
       setBtn(true, 'Файлы будут импортированы в CRM и добавлены в список прикреплённых.');
     }
