@@ -45,6 +45,23 @@ const SBX_AI_ACTION_LABELS = {
   do_not_proceed: { label: 'Не продолжать', color: '#ef4444' },
 };
 const SBX_AI_SEVERITY_LABELS = { low: { label: 'низкий', color: '#64748b' }, medium: { label: 'средний', color: '#f97316' }, high: { label: 'высокий', color: '#ef4444' } };
+// "basis" — what kind of claim a risk is, not just how severe: a source
+// literally saying it, the model inferring it, an acknowledged gap, or
+// documents disagreeing. Added alongside citations[] so a risk reads as
+// "checkable" or "the model's own read" rather than one undifferentiated
+// bullet list (Astra's "источники и границы анализа" proposal).
+const SBX_AI_BASIS_LABELS = {
+  source_claim: { label: 'из документа', color: '#38bdf8' },
+  ai_inference: { label: 'вывод ИИ', color: '#a78bfa' },
+  no_data: { label: 'данных нет', color: '#64748b' },
+  conflicting: { label: 'источники расходятся', color: '#f97316' },
+};
+const SBX_AI_COVERAGE_MODE_LABELS = {
+  text: (c) => `«${c.name}»: текст, ${c.pagesTotal ? c.pagesTotal + ' стр.' : 'без разбивки на страницы'}`,
+  ocr: (c) => `«${c.name}»: скан, распознано ${c.pagesProcessed}${c.pagesTotal ? ' из ' + c.pagesTotal : ''} стр.`,
+  image: (c) => `«${c.name}»: изображение`,
+  unreadable: (c) => `«${c.name}»: не распознан`,
+};
 const _sandboxRunCache = {};   // runId -> full run detail, fetched once per open modal session
 
 function sbxFileSize(bytes) {
@@ -1030,11 +1047,22 @@ function sandboxRunResultHtml(run) {
   const r = run.result;
   const action = SBX_AI_ACTION_LABELS[r.recommendation.action] || { label: r.recommendation.action, color: '#64748b' };
   const customInstructions = run.inputSnapshot?.customInstructions;
+  const coverage = run.inputSnapshot?.coverage || [];
+  const coverageByUploadId = new Map(coverage.map(c => [String(c.uploadId), c]));
+  const coverageGaps = coverage.filter(c => c.mode === 'ocr' && c.pagesTotal && c.pagesProcessed < c.pagesTotal || c.mode === 'unreadable');
   return `
     <div id="sb_ai_panel_${run.id}" style="margin-top:12px;padding-top:12px;border-top:1px solid #2a4846">
       ${customInstructions ? `
       <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:4px">Запрос пользователя</div>
       <div style="font-size:12px;color:#94a3b8;white-space:pre-wrap;margin-bottom:12px;font-style:italic">«${escapeHtml(customInstructions)}»</div>` : ''}
+
+      ${coverage.length ? `
+      <div style="font-size:10px;color:#64748b;margin-bottom:12px;padding:6px 10px;background:#0a0f1a;border-radius:6px">
+        <span style="font-weight:700;color:#8abfbb">Охват:</span>
+        ${coverage.map(c => (SBX_AI_COVERAGE_MODE_LABELS[c.mode] || (() => c.name))(c)).join(' · ')}
+        ${coverageGaps.length ? `<div style="color:#eab308;margin-top:3px"><i class="fas fa-triangle-exclamation"></i> Не всё проверено — часть страниц/файлов ИИ не видел, см. выше</div>` : ''}
+      </div>` : ''}
+
       <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:6px">Резюме</div>
       <div style="font-size:12px;color:#e2e8f0;white-space:pre-wrap;margin-bottom:12px">${escapeHtml(r.summary)}</div>
 
@@ -1047,9 +1075,24 @@ function sandboxRunResultHtml(run) {
         <div style="font-size:11px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:6px">Риски</div>
         ${r.risks.map(risk => {
           const sev = SBX_AI_SEVERITY_LABELS[risk.severity] || { label: risk.severity, color: '#64748b' };
-          return `<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px">
-            <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:${sev.color}22;color:${sev.color};white-space:nowrap;margin-top:1px">${escapeHtml(sev.label)}</span>
-            <span style="font-size:12px;color:#e2e8f0">${escapeHtml(risk.text)}</span>
+          const basis = SBX_AI_BASIS_LABELS[risk.basis];
+          const citations = risk.citations || [];
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;gap:6px;align-items:flex-start">
+              <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:${sev.color}22;color:${sev.color};white-space:nowrap;margin-top:1px">${escapeHtml(sev.label)}</span>
+              ${basis ? `<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;background:${basis.color}22;color:${basis.color};white-space:nowrap;margin-top:1px">${escapeHtml(basis.label)}</span>` : ''}
+              <span style="font-size:12px;color:#e2e8f0">${escapeHtml(risk.text)}</span>
+            </div>
+            ${citations.length ? `
+            <div style="margin:4px 0 0 0;padding-left:2px">
+              ${citations.map(c => {
+                const file = coverageByUploadId.get(c.uploadId);
+                const href = resolveDocUrl('/api/uploads/' + c.uploadId) + (c.page ? '#page=' + c.page : '');
+                return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:10px;color:#5eead4;text-decoration:none;margin-bottom:2px">
+                  <i class="fas fa-quote-left" style="font-size:8px"></i> ${escapeHtml(file ? file.name : c.uploadId)}${c.page ? ', стр. ' + c.page : ''}${c.quote ? ': «' + escapeHtml(c.quote) + '»' : ''}
+                </a>`;
+              }).join('')}
+            </div>` : ''}
           </div>`;
         }).join('')}` : ''}
 

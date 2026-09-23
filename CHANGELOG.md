@@ -2,6 +2,59 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.52.0] - 2026-09-23
+
+### Added
+- **Sources and boundaries for Sandbox AI analysis** (Astra's top P0 pick
+  from a review of the whole module, asked for by the user). Two things
+  were true before this: `risks[].sourceIds` was computed but never shown
+  in the UI, and analysis of a large scan silently read like "the document
+  was reviewed" even when only its first 3 pages were actually OCR'd.
+  - Each risk now carries `basis` (`source_claim` / `ai_inference` /
+    `no_data` / `conflicting`) and `citations[]` (`uploadId`, `page`,
+    a short `quote`) instead of a bare list of file ids — shown in the UI
+    as a badge + a clickable "file, стр. N: «quote»" link that opens the
+    actual document (jumps to that page via `#page=N` in the browser's own
+    PDF viewer).
+  - PDF text extraction now tags every page with a `[[СТР.N]]` marker
+    (`pdf-parse`'s own page-render hook, reused almost verbatim, just
+    prefixed) so a citation's page number is real, not guessed — and the
+    prompt tells the model to only cite pages it was actually shown.
+  - A per-file coverage record (`mode`: text/ocr/image/unreadable,
+    `pagesTotal`, `pagesProcessed`) is computed independently of the model
+    and stored in `input_snapshot_json.coverage` — shown as a line above
+    the summary ("Табаган.pdf: скан, распознано 3 из 9 стр.") with a
+    warning if anything was left unreviewed. This is the server's own
+    accounting, not something the model reports about itself.
+  - Server-side defense in depth: a citation's `uploadId` must be one of
+    the files actually given to the model (as before), and now its `page`
+    is nulled (not trusted) if it exceeds that specific file's own
+    `pagesProcessed` — a model citing "page 7" of a scan only 3 pages of
+    which were ever rendered gets that page number dropped, not believed.
+  - Deliberately not added: an "AI confidence %" score — decorative
+    without calibration against real outcomes, per Astra's explicit
+    recommendation.
+  - `risks[].sourceIds` is replaced by `citations[]`/`basis` outright (no
+    migration needed — older runs' stored `result_json` simply renders
+    without the new fields, same as any other optional display data).
+  - Live-verified against the real configured provider (`gpt-6-astra`), not
+    just the stub test suite: uploaded a real teaser image with a stated
+    risk plus two unverifiable claims — the model correctly returned
+    `basis: source_claim` for the stated risk and `basis: no_data` for the
+    unverified claims (a real distinction, not just echoing the field
+    back), with accurate quotes and coverage.
+  - **Bonus finding, fixed:** live-testing the PDF path (not the image
+    path above) surfaced `pdf-parse`'s ancient bundled pdf.js
+    intermittently throwing on an otherwise-parseable file — added one
+    retry before falling back to OCR (see the code comment at the call
+    site). A PDF using only bare standard fonts with no embedded glyphs
+    can still end up fully unreadable (both text extraction and the OCR
+    render fallback fail on it, missing `standardFontDataUrl` for
+    glyph/path generation) — rare for real documents (Word/scan exports
+    embed their fonts), but a known residual gap, not silently papered
+    over: it correctly lands as `coverage: unreadable` and the model is
+    told so rather than fed nothing without explanation.
+
 ## [1.51.0] - 2026-09-22
 
 ### Added

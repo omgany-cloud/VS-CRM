@@ -12,7 +12,7 @@ const { createTestServer } = require('./helpers');
 // the server clamps a model-cited source rather than trusting it verbatim.
 const AI_STUB_RESPONSE = {
   summary: 'stub summary of the project',
-  risks: [{ severity: 'medium', text: 'stub risk finding', sourceIds: ['not-a-real-upload-id'] }],
+  risks: [{ severity: 'medium', text: 'stub risk finding', basis: 'ai_inference', citations: [{ uploadId: 'not-a-real-upload-id', page: 1, quote: 'stub quote' }] }],
   missingInfo: ['stub missing info item'],
   recommendation: { action: 'request_information', rationale: 'stub rationale' },
   suggestedTasks: [{ title: 'Запросить финмодель', priority: 'Средний' }],
@@ -29,6 +29,17 @@ const BLANK_PDF = Buffer.from(
 // Not a PDF at all — neither pdf-parse nor pdfjs-dist can make anything of
 // this, so it's the one that should actually land in `unreadable`.
 const GARBAGE_NOT_A_PDF = Buffer.from('this is not a pdf at all, just garbage text bytes 12345');
+// Two content-less pages (no text stream) — both pdf-parse and pdfjs-dist
+// agree this is a 2-page document, so it exercises the OCR coverage path
+// (SANDBOX_OCR_MAX_PAGES_PER_PDF=3 covers both, "pagesProcessed < pagesTotal"
+// stays false here — a THIRD-page variant would be needed to see a partial
+// scan; 2 pages is enough to prove pagesTotal/pagesProcessed are populated
+// and agree, which is what the citation-page clamp below depends on).
+const TWO_PAGE_BLANK_PDF = Buffer.from(
+  '%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj\n' +
+  '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 3 3]>>endobj\n4 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 3 3]>>endobj\n' +
+  'trailer<</Root 1 0 R>>\n%%EOF'
+);
 
 let server;
 let projectId;
@@ -130,7 +141,7 @@ test('analyze rejects more than the per-run file limit', async () => {
   assert.equal(res.status, 400);
 });
 
-test('analyze: happy path on an image — validated result, sourceIds clamped to real ids, run persisted and readable both from the project and standalone', async () => {
+test('analyze: happy path on an image — validated result, citations clamped to real ids, coverage recorded, run persisted and readable both from the project and standalone', async () => {
   const up = await uploadTestFile(rawFetchAs(server.token), Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2]), 'image/png', 'teaser.png');
   const { id: uploadId } = await up.json();
   await attach(uploadId);
@@ -141,9 +152,12 @@ test('analyze: happy path on an image — validated result, sourceIds clamped to
   assert.equal(run.status, 'ok');
   assert.equal(run.result.summary, 'stub summary of the project');
   assert.equal(run.result.recommendation.action, 'request_information');
-  assert.deepEqual(run.result.risks[0].sourceIds, [], 'a sourceId the model invented (not one of the real upload ids) must be dropped, not trusted');
+  assert.deepEqual(run.result.risks[0].citations, [], 'a citation to an upload id the model invented (not one of the real upload ids) must be dropped, not trusted');
+  assert.equal(run.result.risks[0].basis, 'ai_inference');
   assert.equal(run.consentNote.length > 0, true);
   assert.equal(run.inputSnapshot.goal, 'Оценить документы');
+  assert.equal(run.inputSnapshot.coverage.length, 1);
+  assert.equal(run.inputSnapshot.coverage[0].mode, 'image');
 
   const detail = await (await server.apiFetch(`/api/sandbox/${projectId}`)).json();
   assert.ok(detail.aiRuns.some(r => r.id === run.id && r.status === 'ok'));
@@ -203,6 +217,58 @@ test('analyze: a file that is genuinely not a PDF (extraction AND rendering both
   assert.equal(res.status, 201);
   const run = await res.json();
   assert.deepEqual(run.inputSnapshot.unreadable, ['corrupt.pdf']);
+});
+
+test('analyze: a scanned multi-page PDF records real page coverage (mode "ocr", pagesTotal/pagesProcessed), and a citation page beyond what was actually shown is nulled, not trusted', async () => {
+  const up = await uploadTestFile(rawFetchAs(server.token), TWO_PAGE_BLANK_PDF, 'application/pdf', 'two-page-scan.pdf');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const res = await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+  assert.equal(res.status, 201);
+  const run = await res.json();
+  const cov = run.inputSnapshot.coverage.find(c => c.uploadId === uploadId);
+  assert.equal(cov.mode, 'ocr');
+  assert.equal(cov.pagesTotal, 2);
+  assert.equal(cov.pagesProcessed, 2, 'both pages fit under SANDBOX_OCR_MAX_PAGES_PER_PDF');
+});
+
+// Own server: needs a stub response that cites a specific real+fake page
+// number, fixed at server-start time via extraEnv, so it can't reuse the
+// shared AI_STUB_RESPONSE above. A brand-new throwaway DB's uploaded_files
+// table starts its autoincrement at 1, so the first upload's id is
+// predictable — asserted explicitly below rather than just assumed.
+test('analyze: a citation page beyond a file\'s actual page count is nulled server-side, even though the uploadId/quote it came with is legitimate', async () => {
+  const CITING_RESPONSE = {
+    summary: 'stub summary citing pages',
+    risks: [{
+      severity: 'high', text: 'cites a page that was never shown to the model', basis: 'source_claim',
+      citations: [{ uploadId: 1, page: 99, quote: 'made up' }],
+    }],
+    missingInfo: [], recommendation: { action: 'consider_screening', rationale: 'r' }, suggestedTasks: [],
+  };
+  const citeServer = await createTestServer({
+    port: 4148,
+    extraEnv: { AI_PROVIDER: 'stub', AI_STUB_RESPONSE: JSON.stringify(CITING_RESPONSE) },
+  });
+  try {
+    const { roles } = await (await citeServer.apiFetch('/api/roles')).json();
+    await citeServer.apiFetch(`/api/roles/${roles.find(r => r.code === 'CEO').id}`, { method: 'PUT', body: JSON.stringify({ aiAssist: true }) });
+    const p = await (await citeServer.apiFetch('/api/sandbox', { method: 'POST', body: JSON.stringify({ name: 'SBX_CITE_TEST' }) })).json();
+    const up = await uploadTestFile(rawFetchAs(citeServer.token), Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'image/png', 'single.png', citeServer.baseUrl);
+    const { id: uploadId } = await up.json();
+    assert.equal(uploadId, 1, 'this test assumes a fresh DB\'s first upload gets id 1 — the fixture above is written against that id');
+    await citeServer.apiFetch(`/api/sandbox/${p.id}/files`, { method: 'POST', body: JSON.stringify({ uploadId }) });
+
+    const res = await citeServer.apiFetch(`/api/sandbox/${p.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) });
+    assert.equal(res.status, 201);
+    const run = await res.json();
+    const citation = run.result.risks[0].citations[0];
+    assert.equal(citation.uploadId, '1', 'the uploadId itself is real (it was in allowedSourceIds) so the citation is kept');
+    assert.equal(citation.page, null, 'a single image only has "page 1" — page 99 was never shown, so it must be nulled, not trusted');
+    assert.equal(citation.quote, 'made up', 'only the page is distrusted; the rest of the citation is not thrown away');
+  } finally {
+    await citeServer.stop();
+  }
 });
 
 test('a task can be created from an AI suggestion (sourceAiRunId) and is rejected if the run belongs to another project', async () => {
@@ -278,7 +344,7 @@ test('tenant isolation: another tenant cannot attach files, analyze, or read a r
 test('analyze: a response with more items than the display limits is truncated, not rejected outright', async () => {
   const OVERSIZED_RESPONSE = {
     summary: 'x'.repeat(2500),
-    risks: Array.from({ length: 12 }, (_, i) => ({ severity: 'low', text: `risk ${i}`, sourceIds: [] })),
+    risks: Array.from({ length: 12 }, (_, i) => ({ severity: 'low', text: `risk ${i}`, citations: [] })),
     missingInfo: Array.from({ length: 11 }, (_, i) => `missing ${i}`),
     recommendation: { action: 'consider_screening', rationale: 'y'.repeat(1200) },
     suggestedTasks: Array.from({ length: 9 }, (_, i) => ({ title: `task ${i}`, priority: 'Средний' })),
