@@ -49,6 +49,19 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
     PORT: String(port),
     AUTH_RATE_LIMIT_WINDOW_MS: String(authRateLimitWindowMs),
     JWT_SECRET: 'test-only-secret-not-for-real-use',
+    // Cleared by default, not just "unset here" — index.js's own
+    // `require('dotenv').config(...)` re-reads the real root .env inside
+    // the spawned child regardless of what this object contains, and
+    // dotenv only fills in a key that ISN'T already present in that
+    // child's env. So a real optional path configured in the developer's
+    // own .env (e.g. SANDBOX_FILES_ROOT, set up while testing that
+    // feature live against a real folder) would otherwise leak into every
+    // test server that doesn't explicitly override it — caught when
+    // "feature is hidden when SANDBOX_FILES_ROOT is unset" started
+    // failing for exactly this reason. Explicit empty string here means
+    // "already set" as far as dotenv is concerned, so its value from .env
+    // is never applied unless a test's own extraEnv asks for it.
+    SANDBOX_FILES_ROOT: '',
     // extraEnv: e.g. { AI_PROVIDER: 'stub', AI_STUB_RESPONSE: '{...}' } for
     // ai-assist.test.js — AI_PROVIDER is otherwise unset in tests, same as
     // a fresh deploy with no AI configured yet.

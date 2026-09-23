@@ -3984,6 +3984,23 @@ function resolveSandboxLocalPath(relative) {
   return targetReal;
 }
 
+// A file inside SANDBOX_FILES_ROOT can be a placeholder for a cloud-sync
+// client (Nextcloud/OneDrive/Dropbox "online-only"/Files-On-Demand mode)
+// that hasn't actually downloaded its bytes yet — fs.statSync succeeds
+// (it only reads the placeholder's metadata) but a real read/copy can
+// hang or fail outright while the client fetches it, observed in practice
+// taking over a minute before even producing an error. Same "untrusted/
+// unreliable external input must never hang the request" stance as the
+// pdf-parse timeout guard above — bounded here the same way rather than
+// letting one slow or not-yet-synced file block the whole import.
+const SANDBOX_LOCAL_COPY_TIMEOUT_MS = 20000;
+async function sandboxCopyLocalFile(src, dest) {
+  await Promise.race([
+    fs.promises.copyFile(src, dest),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('copy timed out')), SANDBOX_LOCAL_COPY_TIMEOUT_MS)),
+  ]);
+}
+
 // Recursive listing capped at SANDBOX_LOCAL_LIST_MAX files, skipping
 // dotfiles/dotdirs and anything whose extension isn't one this app can
 // actually do something with (same allowlist as a real upload) — a
@@ -4379,7 +4396,7 @@ app.get('/api/sandbox/:id/local-files', requireAuth, requireInternal, requirePer
   res.json({ files, truncated: files.length >= SANDBOX_LOCAL_LIST_MAX });
 });
 
-app.post('/api/sandbox/:id/local-files/import', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+app.post('/api/sandbox/:id/local-files/import', requireAuth, requireInternal, requirePermission('accessFM'), async (req, res) => {
   if (!SANDBOX_FILES_ROOT) return res.status(400).json({ error: 'Чтение папки на сервере не настроено (SANDBOX_FILES_ROOT)' });
   const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!project) return res.status(404).json({ error: 'Sandbox project not found in this tenant' });
@@ -4424,7 +4441,7 @@ app.post('/api/sandbox/:id/local-files/import', requireAuth, requireInternal, re
 
     const storedName = crypto.randomUUID() + path.extname(full).slice(0, 20);
     try {
-      fs.copyFileSync(full, path.join(UPLOADS_DIR, storedName));
+      await sandboxCopyLocalFile(full, path.join(UPLOADS_DIR, storedName));
       const info = db.prepare(`
         INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
         VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
@@ -4438,7 +4455,10 @@ app.post('/api/sandbox/:id/local-files/import', requireAuth, requireInternal, re
         original_name: path.basename(full), mime_type: mimeType, size_bytes: stat.size,
       }));
     } catch (err) {
-      errors.push({ path: relative, error: 'Не удалось скопировать файл' });
+      const msg = err.message === 'copy timed out'
+        ? 'Файл долго не отвечает — возможно, ещё не скачан с облака на сервер'
+        : 'Не удалось скопировать файл';
+      errors.push({ path: relative, error: msg });
     }
   }
   if (imported.length) {
@@ -4862,7 +4882,7 @@ app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInte
   if (!target) return res.status(404).json({ error: 'Папка не найдена по указанному пути' });
   const localFiles = [];
   sandboxWalkLocalFiles(SANDBOX_FILES_ROOT, target, localFiles);
-  if (!localFiles.length) return res.status(400).json({ error: 'В папке нет файлов, подходящих для ИИ-анализа (PDF, PNG, JPEG, GIF)' });
+  if (!localFiles.length) return res.status(400).json({ error: 'В папке нет поддерживаемых файлов (PDF, изображения, Word, Excel, ZIP)' });
   // Most recently modified first — if the folder holds more analyzable
   // files than one run can take, the newest paperwork is the more likely
   // "what changed" versus the AI's last look at this project.
@@ -4882,7 +4902,7 @@ app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInte
     const fullPath = path.join(SANDBOX_FILES_ROOT, lf.relativePath);
     const storedName = crypto.randomUUID() + path.extname(fullPath).slice(0, 20);
     try {
-      fs.copyFileSync(fullPath, path.join(UPLOADS_DIR, storedName));
+      await sandboxCopyLocalFile(fullPath, path.join(UPLOADS_DIR, storedName));
       const info = db.prepare(`
         INSERT INTO uploaded_files (tenant_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
         VALUES (@tenantId, @storedName, @originalName, @mimeType, @sizeBytes, @uploadedBy)
@@ -4894,7 +4914,10 @@ app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInte
       resolved.push({ id: info.lastInsertRowid, mime_type: lf.mimeType });
       newlyImported++;
     } catch (err) {
-      importErrors.push({ path: lf.relativePath, error: 'Не удалось скопировать файл' });
+      const msg = err.message === 'copy timed out'
+        ? 'Файл долго не отвечает — возможно, ещё не скачан с облака на сервер'
+        : 'Не удалось скопировать файл';
+      importErrors.push({ path: lf.relativePath, error: msg });
     }
   }
   if (newlyImported) {
@@ -4904,7 +4927,7 @@ app.post('/api/sandbox/:id/local-files/analyze-folder', requireAuth, requireInte
 
   const analyzable = resolved.filter(f => SANDBOX_ANALYZABLE_MIME_TYPES.has(f.mime_type));
   if (!analyzable.length) {
-    return res.status(400).json({ error: 'В папке нет файлов, подходящих для ИИ-анализа (PDF, PNG, JPEG, GIF) — остальные типы можно только прикрепить', errors: importErrors });
+    return res.status(400).json({ error: 'В папке нет файлов, подходящих для ИИ-анализа (PDF, изображения, .docx, .xlsx) — остальные типы можно только прикрепить', errors: importErrors });
   }
   const chosen = analyzable.slice(0, SANDBOX_ANALYZE_MAX_FILES).map(f => f.id);
   const { httpStatus, body } = await runSandboxAnalysis(req, project, chosen, customInstructions);
