@@ -16,6 +16,15 @@ let sandboxSearch = '';
 let sandboxStatusFilter = 'active';   // 'active' | 'all' | 'archive' | a single status
 let sandboxDetail = null;             // { project, tasks, history } of the open project
 let _sandboxBusy = false;             // one in-flight save/accept at a time (double-click guard)
+// One merged "ИИ-анализ" panel with two mutually exclusive document
+// sources (was two separate panels/buttons before — real user complaint
+// that it was confusing to have "analyze attached files" and "analyze the
+// server folder" as unrelated-looking blocks). 'attached' = whatever's
+// checked in the file list above; 'folder' = the project's configured
+// server folder (only offered when one is set). Reset whenever a
+// different project is opened — never carries over between projects.
+let _sandboxAiSource = 'attached';
+let _sandboxAiFolderScope = null;     // cached { files, error, loading } for the folder-source preview — refetched each time the panel needs it, not persisted across project switches
 
 const SBX_STATUS_COLORS = {
   'Новый': '#06b6d4', 'В проработке': '#8b5cf6', 'Ждём информацию': '#eab308',
@@ -402,6 +411,8 @@ async function openSandboxProject(id) {
     showToast('⚠️ Не удалось открыть проект: ' + err.message, 'red');
     return;
   }
+  _sandboxAiSource = 'attached';
+  _sandboxAiFolderScope = null;
   renderSandboxDetail();
 }
 
@@ -517,6 +528,12 @@ function renderSandboxDetail() {
       <div id="sb_files_area">${sandboxFilesAiHtml(p, sandboxDetail.files || [], sandboxDetail.aiRuns || [], locked)}</div>
       <div id="sb_tasks_area">${sandboxTasksHtml(p, tasks, locked)}${sandboxHistoryHtml(history)}</div>
     </div>`);
+  // Composition preview (which documents would actually go into a run) is
+  // computed client-side, not baked into the HTML above — for the default
+  // "attached files" source it's synchronous (0 checked yet), but the
+  // "server folder" source needs its own fetch, so this always runs after
+  // the modal is in the DOM rather than being awaited by the render itself.
+  sandboxAiRenderScope();
 }
 
 /* ───────────────────────── Goal (changes with new circumstances) ───────────────────────── */
@@ -823,14 +840,13 @@ async function sandboxDeleteTask(taskId) {
 
 function sandboxFilesAiHtml(p, files, aiRuns, locked) {
   const canAi = currentUserPermission('aiAssist');
-  const analyzableCount = files.filter(f => SBX_ANALYZABLE_MIME.has(f.mimeType)).length;
 
   const fileRows = files.map(f => {
     const canSelect = SBX_ANALYZABLE_MIME.has(f.mimeType);
     return `
       <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #1e293b">
         ${canSelect
-          ? `<input type="checkbox" class="sb_ai_file_cb" value="${f.uploadId}" style="width:15px;height:15px;flex-shrink:0" ${locked ? 'disabled' : ''} />`
+          ? `<input type="checkbox" class="sb_ai_file_cb" value="${f.uploadId}" data-name="${escapeAttr(f.name)}" style="width:15px;height:15px;flex-shrink:0" ${locked ? 'disabled' : ''} onchange="sandboxAiRenderScope()" />`
           : `<span style="width:15px;flex-shrink:0;text-align:center" title="Тип не поддерживается для ИИ-анализа (PDF, PNG/JPEG/GIF, .docx, .xlsx — старые .doc/.xls нет)"><i class="fas fa-ban" style="color:#475569;font-size:10px"></i></span>`}
         <a href="${escapeHtml(resolveDocUrl(f.url))}" target="_blank" rel="noopener noreferrer" style="color:#5eead4;font-size:12px;flex:1;min-width:0;overflow-wrap:anywhere">${escapeHtml(f.name)}</a>
         <span style="font-size:10px;color:#64748b;white-space:nowrap">${sbxFileSize(f.sizeBytes)}</span>
@@ -841,40 +857,40 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
 
   const uploadBtn = locked ? '' : `<button class="btn-ghost" onclick="sandboxAttachFiles()" style="margin-top:10px"><i class="fas fa-paperclip"></i> Прикрепить файлы</button>`;
 
-  const folderPanel = (!locked && sandboxLocalFilesEnabled && p.localFolderPath) ? `
-    <div style="margin-top:14px;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:12px">
-      <div style="font-size:11px;font-weight:700;color:#8abfbb;margin-bottom:2px"><i class="fas fa-server" style="color:#38bdf8;margin-right:5px"></i>Папка на сервере</div>
-      <div style="font-size:11px;color:#64748b;margin-bottom:8px;overflow-wrap:anywhere">${escapeHtml(p.localFolderPath)}</div>
-      <button class="btn-ghost" onclick="sandboxToggleFolderPreview()" style="margin-right:8px"><i class="fas fa-eye"></i> Показать файлы</button>
-      <div id="sb_folder_preview" style="display:none;margin-top:8px"></div>
-      ${canAi ? `
-        <label style="${SBX_LABEL}margin-top:10px">Что важно проверить <span style="font-weight:400;color:#64748b">(необязательно)</span></label>
-        <textarea id="sb_folder_ai_custom_instructions" rows="2" maxlength="${SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX}" placeholder="Например: обрати внимание на юридические риски и структуру собственности" style="${SBX_INPUT};resize:vertical"></textarea>
-        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer;margin-top:10px">
-          <input type="checkbox" id="sb_folder_ai_consent" style="margin-top:2px;flex-shrink:0" />
-          <span>Подтверждаю, что вправе передать документы из этой папки внешнему ИИ-провайдеру для анализа</span>
-        </label>
-        <button class="btn-primary" onclick="sandboxAnalyzeFolder()" style="margin-top:10px;background:#38bdf8">
-          <i class="fas fa-folder-tree"></i> Проанализировать всю папку
-        </button>
-        <div style="font-size:10px;color:#4a5568;margin-top:6px">Файлы будут импортированы в CRM и добавлены в список выше; для анализа берутся до ${SANDBOX_ANALYZE_MAX_FILES} самых свежих.</div>
-      ` : `<div style="font-size:11px;color:#64748b;margin-top:10px"><i class="fas fa-lock" style="margin-right:5px"></i>Нужно право «AI-ассистент»</div>`}
-      <div id="sb_folder_ai_result"></div>
+  // One merged panel, one source at a time — see _sandboxAiSource comment.
+  // The source radios only appear when a server folder is actually
+  // configured; otherwise there's only ever one possible source, so
+  // showing a picker would just be a second confusing no-op control.
+  const hasFolder = !!(sandboxLocalFilesEnabled && p.localFolderPath);
+  const sourceHtml = hasFolder ? `
+    <div style="margin-bottom:10px">
+      <div style="${SBX_LABEL}">Источник документов</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#e2e8f0;cursor:pointer;margin:4px 0">
+        <input type="radio" name="sb_ai_source" value="attached" ${_sandboxAiSource === 'attached' ? 'checked' : ''} onchange="sandboxAiSourceChanged('attached')" />
+        Отмеченные файлы выше
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#e2e8f0;cursor:pointer;margin:4px 0">
+        <input type="radio" name="sb_ai_source" value="folder" ${_sandboxAiSource === 'folder' ? 'checked' : ''} onchange="sandboxAiSourceChanged('folder')" />
+        Папка на сервере <span style="color:#64748b">(${escapeHtml(p.localFolderPath)})</span>
+      </label>
     </div>` : '';
 
   const aiPanel = locked ? '' : `
     <div style="margin-top:14px;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:12px">
+      <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:10px"><i class="fas fa-wand-magic-sparkles" style="color:#a78bfa;margin-right:6px"></i>ИИ-анализ</div>
       ${canAi ? `
+        ${sourceHtml}
+        <div id="sb_ai_scope" style="font-size:11px;color:#64748b;margin-bottom:10px"></div>
         <label style="${SBX_LABEL}">Что важно проверить <span style="font-weight:400;color:#64748b">(необязательно)</span></label>
         <textarea id="sb_ai_custom_instructions" rows="2" maxlength="${SANDBOX_ANALYZE_CUSTOM_INSTRUCTIONS_MAX}" placeholder="Например: проверь соответствие мандату фонда и юнит-экономику" style="${SBX_INPUT};resize:vertical"></textarea>
         <label style="display:flex;align-items:flex-start;gap:8px;font-size:11px;color:#94a3b8;cursor:pointer;margin-top:10px">
           <input type="checkbox" id="sb_ai_consent" style="margin-top:2px;flex-shrink:0" />
-          <span>Подтверждаю, что вправе передать выбранные материалы внешнему ИИ-провайдеру для анализа</span>
+          <span>Подтверждаю, что вправе передать перечисленные документы внешнему ИИ-провайдеру для анализа</span>
         </label>
-        <button class="btn-primary" onclick="sandboxRunAnalysis()" style="margin-top:10px" ${analyzableCount ? '' : 'disabled'}>
+        <button class="btn-primary" id="sb_ai_run_btn" onclick="sandboxRunAnalysis()" style="margin-top:10px" disabled>
           <i class="fas fa-wand-magic-sparkles"></i> Запустить ИИ-анализ
         </button>
-        ${analyzableCount ? '' : '<div style="font-size:11px;color:#64748b;margin-top:6px">Прикрепите PDF, изображение, .docx или .xlsx, чтобы запустить анализ</div>'}
+        <div id="sb_ai_run_hint" style="font-size:11px;color:#64748b;margin-top:6px"></div>
       ` : `<div style="font-size:11px;color:#64748b"><i class="fas fa-lock" style="margin-right:5px"></i>Нужно право «AI-ассистент» — обратитесь к CEO / администратору ролей</div>`}
       <div id="sb_ai_result"></div>
     </div>`;
@@ -899,7 +915,6 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
       <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:6px"><i class="fas fa-paperclip" style="color:#22c55e;margin-right:6px"></i>Документы и ИИ-анализ</div>
       ${files.length ? fileRows : '<div style="font-size:12px;color:#4a5568;padding:6px 0">Файлы не прикреплены</div>'}
       ${uploadBtn}
-      ${folderPanel}
       ${aiPanel}
       ${runsList}
     </div>`;
@@ -907,11 +922,18 @@ function sandboxFilesAiHtml(p, files, aiRuns, locked) {
 
 async function reloadSandboxFilesArea() {
   if (!sandboxDetail) return;
+  // sandboxFilesAiHtml() below rebuilds this whole block's DOM from
+  // scratch (new file list, fresh nodes) — without capturing/restoring
+  // first, attaching or detaching a file would silently wipe whatever the
+  // user had already typed/ticked in the AI panel above it.
+  const preserved = sandboxAiCaptureFormState();
   const fresh = await apiFetch('/api/sandbox/' + sandboxDetail.project.id);
   sandboxDetail.files = fresh.files;
   sandboxDetail.aiRuns = fresh.aiRuns;
   const area = document.getElementById('sb_files_area');
   if (area) area.innerHTML = sandboxFilesAiHtml(fresh.project, fresh.files, fresh.aiRuns, !!fresh.project.promotedDealId);
+  sandboxAiRestoreFormState(preserved);
+  sandboxAiRenderScope();
 }
 
 async function sandboxAttachFiles() {
@@ -951,54 +973,103 @@ async function sandboxDetachFile(fileId) {
   }
 }
 
-/* ───────────────────────── Server folder (whole-folder AI analysis) ───────────────────────── */
+/* ───────────────────────── ИИ-анализ: единая панель, два источника документов ─────────────────────────
+   Was two separate-looking panels/buttons (attached files vs. server
+   folder) — merged per a direct user complaint that this read as two
+   unrelated features instead of one choice. sandboxAiRenderScope() is the
+   core of it: shows, before the run button is even enabled, exactly which
+   documents THIS run will use — for the folder source that means
+   replicating the server's own newest-first/cap-N selection client-side
+   (server/index.js's POST .../analyze-folder), not just listing "what's
+   in the folder", so the preview is never a promise the run doesn't keep. */
 
-async function sandboxToggleFolderPreview() {
-  const el = document.getElementById('sb_folder_preview');
-  if (!el || !sandboxDetail) return;
-  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
-  el.style.display = 'block';
-  el.innerHTML = '<div style="font-size:11px;color:#64748b"><i class="fas fa-spinner fa-spin"></i> Загрузка списка файлов...</div>';
-  try {
-    const { files, truncated } = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files`);
-    if (!files.length) { el.innerHTML = '<div style="font-size:11px;color:#64748b">Подходящих файлов не найдено (PDF, PNG, JPEG, GIF, Word, Excel)</div>'; return; }
-    el.innerHTML = `
-      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">${files.length} файл(ов)${truncated ? ' (показаны первые ' + files.length + ')' : ''}</div>
-      ${files.map(f => `
-        <div style="display:flex;gap:10px;padding:3px 0;font-size:11px;color:#e2e8f0">
-          <span style="flex:1;min-width:0;overflow-wrap:anywhere">${escapeHtml(f.relativePath)}</span>
-          <span style="color:#64748b;white-space:nowrap">${sbxFileSize(f.sizeBytes)}</span>
-        </div>`).join('')}`;
-  } catch (err) {
-    el.innerHTML = `<div style="font-size:11px;color:#ef4444">⚠️ ${escapeHtml(err.message)}</div>`;
+function sandboxAiCaptureFormState() {
+  return {
+    source: _sandboxAiSource,
+    customInstructions: document.getElementById('sb_ai_custom_instructions')?.value || '',
+    consent: document.getElementById('sb_ai_consent')?.checked || false,
+    checkedIds: Array.from(document.querySelectorAll('.sb_ai_file_cb:checked')).map(cb => cb.value),
+  };
+}
+function sandboxAiRestoreFormState(state) {
+  if (!state) return;
+  _sandboxAiSource = state.source;
+  const radio = document.querySelector(`input[name="sb_ai_source"][value="${state.source}"]`);
+  if (radio) radio.checked = true;
+  const ci = document.getElementById('sb_ai_custom_instructions');
+  if (ci) ci.value = state.customInstructions;
+  const consent = document.getElementById('sb_ai_consent');
+  if (consent) consent.checked = state.consent;
+  for (const cb of document.querySelectorAll('.sb_ai_file_cb')) {
+    if (state.checkedIds.includes(cb.value)) cb.checked = true;
+    cb.disabled = cb.disabled || state.source === 'folder';
   }
 }
 
-async function sandboxAnalyzeFolder() {
-  if (_sandboxBusy || !sandboxDetail) return;
-  const consent = document.getElementById('sb_folder_ai_consent');
-  if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
-  const customInstructionsEl = document.getElementById('sb_folder_ai_custom_instructions');
-  const customInstructions = customInstructionsEl ? customInstructionsEl.value.trim() : '';
-  const resultEl = document.getElementById('sb_folder_ai_result');
-  _sandboxBusy = true;
-  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> Импортируем файлы и анализируем...</div>';
+// User deliberately switched source — unlike a mere DOM-preserving reload
+// above, the actual material set just changed, so consent is re-asked for
+// (not silently carried over from a checkbox ticked for a different set
+// of documents) and any previous result is cleared, not left stale.
+function sandboxAiSourceChanged(source) {
+  _sandboxAiSource = source;
+  for (const cb of document.querySelectorAll('.sb_ai_file_cb')) cb.disabled = source === 'folder';
+  const consent = document.getElementById('sb_ai_consent');
+  if (consent) consent.checked = false;
+  const result = document.getElementById('sb_ai_result');
+  if (result) result.innerHTML = '';
+  sandboxAiRenderScope();
+}
+
+async function sandboxAiRenderScope() {
+  const scopeEl = document.getElementById('sb_ai_scope');
+  if (!scopeEl || !sandboxDetail) return; // panel not rendered (locked project, or no aiAssist permission)
+  const btn = document.getElementById('sb_ai_run_btn');
+  const hint = document.getElementById('sb_ai_run_hint');
+  const setBtn = (enabled, hintText) => {
+    if (btn) btn.disabled = !enabled;
+    if (hint) hint.textContent = hintText || '';
+  };
+
+  if (_sandboxAiSource === 'attached') {
+    const checked = Array.from(document.querySelectorAll('.sb_ai_file_cb:checked'));
+    if (!checked.length) {
+      scopeEl.innerHTML = 'Отметьте документы в списке выше, которые нужно передать ИИ.';
+      setBtn(false, 'Отметьте хотя бы один документ (PDF, изображение, .docx или .xlsx)');
+    } else if (checked.length > SANDBOX_ANALYZE_MAX_FILES) {
+      scopeEl.innerHTML = `Отмечено: ${checked.length} — максимум ${SANDBOX_ANALYZE_MAX_FILES} за один запуск.`;
+      setBtn(false, `Отметьте не больше ${SANDBOX_ANALYZE_MAX_FILES} документов`);
+    } else {
+      scopeEl.innerHTML = `<b style="color:#94a3b8">В анализ: ${checked.length} из максимум ${SANDBOX_ANALYZE_MAX_FILES}</b><br>` +
+        checked.map(cb => `· ${escapeHtml(cb.dataset.name || cb.value)}`).join('<br>');
+      setBtn(true);
+    }
+    return;
+  }
+
+  // 'folder' source
+  setBtn(false);
+  scopeEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загрузка списка файлов из папки...';
   try {
-    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true, customInstructions: customInstructions || undefined }) });
-    _sandboxRunCache[run.id] = run;
-    showToast('✅ Анализ папки завершён');
-    await reloadSandboxFilesArea();
-    const area = document.getElementById('sb_folder_ai_result');
-    if (area) {
-      const fi = run.folderImport;
-      const summary = fi ? `<div style="font-size:11px;color:#64748b;margin-top:10px">В папке: ${fi.totalInFolder} · импортировано: ${fi.imported} · в анализ вошло: ${fi.analyzed}${fi.skipped ? ` · не поместилось: ${fi.skipped}` : ''}${fi.errors.length ? ` · ошибок: ${fi.errors.length}` : ''}</div>` : '';
-      area.innerHTML = sandboxRunResultHtml(run) + summary;
+    const { files } = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files`);
+    // Same rule as the server's own selection in POST .../analyze-folder
+    // (analyzable types only, newest-modified first, capped) — computed
+    // here too so the preview matches what will actually be sent, not
+    // just "everything in the folder".
+    const analyzable = files.filter(f => SBX_ANALYZABLE_MIME.has(f.mimeType)).sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+    const chosen = analyzable.slice(0, SANDBOX_ANALYZE_MAX_FILES);
+    if (!chosen.length) {
+      scopeEl.innerHTML = `В папке нет файлов, подходящих для анализа (PDF, изображения, .docx, .xlsx) — всего файлов: ${files.length}.`;
+      setBtn(false, 'В папке нет подходящих файлов');
+    } else {
+      const rest = analyzable.length - chosen.length;
+      scopeEl.innerHTML = `<b style="color:#94a3b8">В анализ: ${chosen.length} самых свежих из ${files.length} файлов в папке</b><br>` +
+        chosen.map(f => `· ${escapeHtml(f.relativePath)}`).join('<br>') +
+        (rest > 0 ? `<br><span style="color:#eab308">+ ещё ${rest} подходящих — в этот запуск не поместятся</span>` : '');
+      setBtn(true, 'Файлы будут импортированы в CRM и добавлены в список прикреплённых.');
     }
   } catch (err) {
-    if (resultEl) resultEl.innerHTML = `<div style="font-size:12px;color:#ef4444;margin-top:10px">⚠️ ${escapeHtml(err.message)}</div>`;
-    else showToast('⚠️ ' + err.message, 'red');
-  } finally {
-    _sandboxBusy = false;
+    scopeEl.innerHTML = `<span style="color:#ef4444">⚠️ ${escapeHtml(err.message)}</span>`;
+    setBtn(false);
   }
 }
 
@@ -1006,20 +1077,29 @@ async function sandboxRunAnalysis() {
   if (_sandboxBusy || !sandboxDetail) return;
   const consent = document.getElementById('sb_ai_consent');
   if (!consent || !consent.checked) { showToast('⚠️ Подтвердите согласие на передачу материалов ИИ', 'orange'); return; }
-  const uploadIds = Array.from(document.querySelectorAll('.sb_ai_file_cb:checked')).map(cb => Number(cb.value));
-  if (!uploadIds.length) { showToast('⚠️ Выберите хотя бы один документ (PDF, изображение, .docx или .xlsx)', 'orange'); return; }
   const customInstructionsEl = document.getElementById('sb_ai_custom_instructions');
   const customInstructions = customInstructionsEl ? customInstructionsEl.value.trim() : '';
+  let uploadIds = null;
+  if (_sandboxAiSource === 'attached') {
+    uploadIds = Array.from(document.querySelectorAll('.sb_ai_file_cb:checked')).map(cb => Number(cb.value));
+    if (!uploadIds.length) { showToast('⚠️ Отметьте хотя бы один документ', 'orange'); return; }
+  }
   const resultEl = document.getElementById('sb_ai_result');
   _sandboxBusy = true;
-  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> Анализируем...</div>';
+  if (resultEl) resultEl.innerHTML = `<div style="font-size:12px;color:#64748b;margin-top:10px"><i class="fas fa-spinner fa-spin"></i> ${_sandboxAiSource === 'folder' ? 'Импортируем файлы и анализируем' : 'Анализируем'}...</div>`;
   try {
-    const run = await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds, customInstructions: customInstructions || undefined }) });
+    const run = _sandboxAiSource === 'folder'
+      ? await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/local-files/analyze-folder`, { method: 'POST', body: JSON.stringify({ consent: true, customInstructions: customInstructions || undefined }) })
+      : await apiFetch(`/api/sandbox/${sandboxDetail.project.id}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds, customInstructions: customInstructions || undefined }) });
     _sandboxRunCache[run.id] = run;
     showToast('✅ Анализ завершён');
     await reloadSandboxFilesArea();
     const area = document.getElementById('sb_ai_result');
-    if (area) area.innerHTML = sandboxRunResultHtml(run);
+    if (area) {
+      const fi = run.folderImport;
+      const summary = fi ? `<div style="font-size:11px;color:#64748b;margin-top:10px">В папке: ${fi.totalInFolder} · импортировано: ${fi.imported} · в анализ вошло: ${fi.analyzed}${fi.skipped ? ` · не поместилось: ${fi.skipped}` : ''}${fi.errors.length ? ` · ошибок: ${fi.errors.length}` : ''}</div>` : '';
+      area.innerHTML = sandboxRunResultHtml(run) + summary;
+    }
   } catch (err) {
     if (resultEl) resultEl.innerHTML = `<div style="font-size:12px;color:#ef4444;margin-top:10px">⚠️ ${escapeHtml(err.message)}</div>`;
     else showToast('⚠️ ' + err.message, 'red');

@@ -2,6 +2,40 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.54.0] - 2026-09-23
+
+### Changed
+- **Merged Sandbox's two separate AI-analysis panels into one** (real user
+  complaint: "attach files and analyze" and "analyze the server folder"
+  read as two unrelated features, each with its own duplicate custom-
+  instructions box, consent checkbox, and result area). Consulted Astra
+  for the UI pattern before building.
+  - Now one "ИИ-анализ" panel with a "Источник документов" radio choice
+    (`Отмеченные файлы выше` / `Папка на сервере`) — only shown at all
+    when a project actually has a server folder configured, since with
+    only one possible source a picker would just be a confusing no-op.
+    One shared instructions field, one consent checkbox, one run button,
+    one result area.
+  - The panel shows, before the run button is even enabled, exactly which
+    documents THIS run will use — for the folder source that means
+    replicating the server's own newest-first/cap-5 selection client-side
+    (same rule `POST .../analyze-folder` uses), not just listing what's
+    in the folder, so the preview is never a promise the run doesn't
+    keep.
+  - Switching source is a deliberate action: it re-asks for consent
+    (the material set just changed) and clears any previous result, but
+    does NOT throw away attached-file checkbox ticks — they're disabled
+    while "folder" is active and restored exactly as left if the user
+    switches back.
+  - Attaching/detaching a file no longer silently wipes an in-progress
+    typed request or ticked consent — `reloadSandboxFilesArea()` now
+    captures and restores the panel's form state across its own DOM
+    rebuild.
+  - Live-verified via a real headless-browser (CDP) pass against the
+    actual dev server, not just read — 16/16 checks, including the
+    source-switch-and-back round trip and the "no picker on a plain
+    project" case.
+
 ## [1.53.1] - 2026-09-23
 
 ### Fixed
