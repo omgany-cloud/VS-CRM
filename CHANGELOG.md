@@ -2,6 +2,31 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.55.0] - 2026-09-23
+
+### Added
+- **"Скачать в Word" for a Sandbox AI-analysis result** — a real .docx
+  (not a text dump), for sharing/printing outside the CRM (email to IC
+  members, attach to a memo): project name, run meta, custom
+  instructions, summary, recommendation, risks (with severity/basis and
+  page-cited quotes), missing info, suggested tasks, and document
+  coverage.
+  - `server/officeDocExport.js` — hand-rolled minimal OOXML on `adm-zip`
+    (already a dependency, same reasoning as `officeTextExtract.js`'s
+    read side: a well-understood few hundred lines beats pulling in a
+    whole docx-generation library for one export button). Validated with
+    a strict XML parser (all three parts well-formed) and round-tripped
+    through the app's own `.docx` reader — both against a synthetic
+    fixture and against a real run's real content.
+  - `GET /api/sandbox/runs/:runId/export.docx` — same tenant scoping as
+    the existing `GET .../runs/:runId`, binary response instead of JSON.
+  - Downloaded via `fetch` + Blob (not a bare link) since the route needs
+    the same Bearer-token auth as every other API call and there's no
+    query-param-token fallback for it (unlike `/api/uploads/:id`).
+  - 2 new tests (a real generated .docx contains the actual analysis
+    text and the right filename header; 404 for an unknown/other-tenant
+    run). Full suite 312/312.
+
 ## [1.54.1] - 2026-09-23
 
 ### Fixed

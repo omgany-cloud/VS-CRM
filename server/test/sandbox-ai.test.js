@@ -380,6 +380,47 @@ test('a task can be created from an AI suggestion (sourceAiRunId) and is rejecte
   assert.equal(bad.status, 400);
 });
 
+test('export.docx: a successful run downloads a real, well-formed .docx containing the actual analysis text', async () => {
+  const up = await uploadTestFile(rawFetchAs(server.token), Buffer.from([0x89, 0x50, 0x4e, 0x47, 7]), 'image/png', 'export-test.png');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const run = await (await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) })).json();
+
+  const res = await rawFetchAs(server.token)(server.baseUrl + `/api/sandbox/runs/${run.id}/export.docx`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  assert.match(res.headers.get('content-disposition') || '', /attachment; filename\*=UTF-8''/);
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.ok(buf.length > 500, 'a real docx zip, not an empty/stub response');
+
+  const AdmZip = require('adm-zip');
+  const { extractDocxText } = require('../officeTextExtract');
+  const zip = new AdmZip(buf);
+  const names = zip.getEntries().map(e => e.entryName).sort();
+  assert.deepEqual(names, ['[Content_Types].xml', '_rels/.rels', 'word/document.xml'], 'the three parts a minimal valid .docx needs');
+  const text = extractDocxText(buf);
+  assert.match(text, /stub summary of the project/, 'the actual AI summary made it into the document');
+  assert.match(text, /Запросить дополнительную информацию/, 'the recommendation label made it in, not just the raw enum code');
+});
+
+test('export.docx: 404 for an unknown run id, and for another tenant\'s run', async () => {
+  const missing = await rawFetchAs(server.token)(server.baseUrl + '/api/sandbox/runs/999999/export.docx');
+  assert.equal(missing.status, 404);
+
+  const up = await uploadTestFile(rawFetchAs(server.token), Buffer.from([1, 2, 3, 4]), 'image/png', 'iso.png');
+  const { id: uploadId } = await up.json();
+  await attach(uploadId);
+  const run = await (await server.apiFetch(`/api/sandbox/${projectId}/analyze`, { method: 'POST', body: JSON.stringify({ consent: true, uploadIds: [uploadId] }) })).json();
+
+  const signup = await fetch(server.baseUrl + '/api/auth/signup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyName: 'Export Isolation Co', name: 'Tenant B Admin', email: 'tenantb-export@isolationtest.example', password: 'TenantBPassword123' }),
+  });
+  const { token } = await signup.json();
+  const asB = await rawFetchAs(token)(server.baseUrl + `/api/sandbox/runs/${run.id}/export.docx`);
+  assert.equal(asB.status, 404);
+});
+
 test('permissions: accessFM alone is not enough to analyze — aiAssist is required too, and to attach/detach files only accessFM is needed', async () => {
   const email = 'sbx-ai-analyst@example.com';
   await server.apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ email, password: 'SandboxAiTest2026!', role: 'ANALYST', name: 'TEST_ANALYST_AI' }) });

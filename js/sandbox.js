@@ -1217,8 +1217,41 @@ function sandboxRunResultHtml(run) {
           </label>`).join('')}
         <button class="btn-ghost" onclick="sandboxCreateTasksFromRun(${run.id})" style="margin-top:4px"><i class="fas fa-list-check"></i> Создать выбранные задачи</button>` : ''}
 
-      <div style="font-size:10px;color:#4a5568;margin-top:12px">Провайдер: ${escapeHtml(run.provider || '—')} · Модель: ${escapeHtml(run.model || '—')} · ${escapeHtml(String(run.createdAt).slice(0, 16))}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <div style="font-size:10px;color:#4a5568">Провайдер: ${escapeHtml(run.provider || '—')} · Модель: ${escapeHtml(run.model || '—')} · ${escapeHtml(String(run.createdAt).slice(0, 16))}</div>
+        <button class="btn-ghost" onclick="sandboxExportRunDocx(${run.id})" style="font-size:11px;padding:5px 10px"><i class="fas fa-file-word"></i> Скачать в Word</button>
+      </div>
     </div>`;
+}
+
+// Server generates a real .docx (server/officeDocExport.js) — fetched as
+// a blob rather than a bare <a href> because the route needs the same
+// Bearer-token auth as every other API call, and (unlike /api/uploads/:id)
+// there's no existing query-param-token fallback for it; a fetch + object
+// URL avoids adding one just for this button.
+async function sandboxExportRunDocx(runId) {
+  const auth = getAuth();
+  try {
+    const res = await fetch(`${API_BASE}/api/sandbox/runs/${runId}/export.docx`, {
+      headers: auth ? { Authorization: 'Bearer ' + auth.token } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const projectName = (sandboxDetail && sandboxDetail.project && sandboxDetail.project.name) || 'проект';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AI-анализ ${projectName}.docx`.replace(/[\\/:*?"<>|]/g, '_');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (err) {
+    showToast('⚠️ ' + err.message, 'red');
+  }
 }
 
 async function sandboxCreateTasksFromRun(runId) {

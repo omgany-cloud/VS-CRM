@@ -42,6 +42,7 @@ const {
   rowToSandboxProject, rowToSandboxTask, rowToSandboxFile, rowToSandboxAiRun, rowToSandboxAiRunSummary,
 } = require('./sandboxMapping');
 const { parseXmindTree, extractResourceBytes } = require('./xmindImport');
+const { buildSandboxAnalysisDocx } = require('./officeDocExport');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
   restrictedToParams, rowToRestricted, RESTRICTED_INSERT_SQL,
@@ -4966,6 +4967,27 @@ app.get('/api/sandbox/runs/:runId', requireAuth, requireInternal, requirePermiss
   const run = db.prepare('SELECT * FROM sandbox_ai_runs WHERE id = ? AND tenant_id = ?').get(req.params.runId, req.tenantId);
   if (!run) return res.status(404).json({ error: 'AI run not found in this tenant' });
   res.json(rowToSandboxAiRun(run));
+});
+
+// A real .docx of one AI-analysis run, for sharing/printing outside the
+// CRM (email to IC members, attach to a memo) — same tenant scoping as
+// GET .../runs/:runId above, just a binary response instead of JSON.
+app.get('/api/sandbox/runs/:runId/export.docx', requireAuth, requireInternal, requirePermission('accessFM'), (req, res) => {
+  const run = db.prepare('SELECT * FROM sandbox_ai_runs WHERE id = ? AND tenant_id = ?').get(req.params.runId, req.tenantId);
+  if (!run) return res.status(404).json({ error: 'AI run not found in this tenant' });
+  if (run.status !== 'ok' || !run.result_json) return res.status(400).json({ error: 'У этого запуска нет результата для экспорта' });
+  const project = db.prepare('SELECT * FROM sandbox_projects WHERE id = ? AND tenant_id = ?').get(run.project_id, req.tenantId);
+  let buf;
+  try {
+    buf = buildSandboxAnalysisDocx(rowToSandboxAiRun(run), project);
+  } catch (err) {
+    logError(err, 'GET /api/sandbox/runs/:runId/export.docx');
+    return res.status(500).json({ error: 'Не удалось собрать документ' });
+  }
+  const rawName = `AI-анализ ${(project && project.name) || 'проект'} ${String(run.created_at).slice(0, 10)}.docx`.replace(/[\\/:*?"<>|]/g, '_');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(rawName)}`);
+  res.send(buf);
 });
 
 /* ----- Импорт из XMind -----
