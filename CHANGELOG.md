@@ -2,6 +2,28 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.53.1] - 2026-09-23
+
+### Fixed
+- Server-folder file copy (Sandbox's "Путь к папке на сервере") could
+  hang a request indefinitely on a file a cloud-sync client (Nextcloud/
+  OneDrive/Dropbox "online-only" mode) hasn't actually downloaded to disk
+  yet — `fs.statSync` succeeds (metadata only) but a real read/copy can
+  hang or fail, reproduced live taking well over a minute before even
+  erroring. Bounded to 20s with a clear, distinct error instead of an
+  opaque hang.
+- The "no analyzable files" error text still said "PDF, PNG, JPEG, GIF",
+  stale since v1.53.0 added .docx/.xlsx — fixed to match what's actually
+  checked.
+- Test-isolation bug in `server/test/helpers.js`: since a spawned test
+  server loads the real root `.env` same as any dev/prod run,
+  `SANDBOX_FILES_ROOT` being configured there for real-folder testing was
+  silently leaking into every test server that didn't explicitly override
+  it — broke a test asserting the feature is hidden when that var is
+  unset. Fixed at the helper level (cleared by default, `extraEnv` still
+  opts back in) so this class of leak can't recur for other optional env
+  vars either. Full suite 309/309.
+
 ## [1.53.0] - 2026-09-23
 
 ### Added
