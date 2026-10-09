@@ -2,6 +2,14 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.56.2] - 2026-10-09
+
+### Fixed
+- Task 2.1 now opens saved local/network data-room folders in Windows
+  Explorer via the local CRM. Windows Copy-as-path quotes are supported;
+  web links still open in a new tab. The folder must exist, and the action
+  requires client access and a direct localhost request.
+
 ## [1.56.1] - 2026-10-09
 
 ### Changed

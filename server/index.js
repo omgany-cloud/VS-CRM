@@ -43,6 +43,7 @@ const {
 } = require('./sandboxMapping');
 const { parseXmindTree, extractResourceBytes } = require('./xmindImport');
 const { buildSandboxAnalysisDocx } = require('./officeDocExport');
+const { isLocalDesktopRequest, openDataRoomFolder } = require('./dataRoom');
 const { portfolioToParams, rowToPortfolio, INSERT_SQL: PORTFOLIO_INSERT_SQL, UPDATE_SQL: PORTFOLIO_UPDATE_SQL } = require('./portfolioMapping');
 const {
   restrictedToParams, rowToRestricted, RESTRICTED_INSERT_SQL,
@@ -5458,6 +5459,20 @@ app.put('/api/ob-clients/:id', requireAuth, requireInternal, validateObDataRoom,
   db.prepare(OB_CLIENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   res.json(rowToObClient(row));
+});
+
+// Open only the saved folder for an authorized client, on this local desktop.
+app.post('/api/ob-clients/:id/open-data-room', requireAuth, requireInternal, async (req, res) => {
+  const client = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
+  if (!client) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
+  if (chineseWallBlocks(req.user.permissions, client.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  if (!isLocalDesktopRequest(req)) return res.status(403).json({ error: 'Папка на компьютере открывается через локальную CRM (localhost). Для удалённой CRM укажите веб-ссылку на дата-рум.' });
+  try {
+    await openDataRoomFolder(client.data_room_path);
+    res.json({ opened: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Only a never-activated client can be deleted — once activated, an LP

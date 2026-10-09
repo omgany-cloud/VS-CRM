@@ -616,10 +616,10 @@ function kycChecklistItems(c) {
 }
 
 // Data-room control appears only in Task 2.1's document-collection summary.
-// Only http(s) values become links; filesystem paths remain copyable text.
+// Web links open in a new tab; saved local folders open through the local CRM.
 function obDataRoomWebUrl(value) {
   try {
-    const url = new URL(value);
+    const url = new URL(String(value || '').trim().replace(/^"(.*)"$/, '$1'));
     return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
   } catch (_) { return ''; }
 }
@@ -636,11 +636,12 @@ function renderObDataRoom(client) {
       <button id="obDataRoomSave" type="button" onclick="saveObDataRoom(${client.id})"
         style="background:#14b8a6;border:none;border-radius:6px;padding:8px 12px;color:#fff;font-size:12px;cursor:pointer">Сохранить</button>
       ${webUrl ? `<a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer"
-        style="display:inline-flex;align-items:center;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);border-radius:6px;padding:8px 12px;color:#5eead4;font-size:12px;font-weight:700;text-decoration:none">Ссылка на дата-рум ↗</a>` : ''}
+        style="display:inline-flex;align-items:center;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);border-radius:6px;padding:8px 12px;color:#5eead4;font-size:12px;font-weight:700;text-decoration:none">Открыть дата-рум ↗</a>` : location ? `<button id="obDataRoomOpen" type="button" onclick="openObDataRoom(${client.id})"
+        style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);border-radius:6px;padding:8px 12px;color:#5eead4;font-size:12px;font-weight:700;cursor:pointer">Открыть дата-рум ↗</button>` : ''}
       <button type="button" onclick="copyObDataRoom()"
         style="background:transparent;border:1px solid #2a4846;border-radius:6px;padding:8px 12px;color:#8abfbb;font-size:12px;cursor:pointer">Скопировать</button>
     </div>
-    <div id="obDataRoomHint" style="font-size:11px;color:#8abfbb;margin-top:7px">Веб-ссылка открывается в браузере. Путь к локальной или сетевой папке скопируйте в Проводник. Чтобы убрать привязку, очистите поле и сохраните.</div>
+    <div id="obDataRoomHint" style="font-size:11px;color:#8abfbb;margin-top:7px">Сохраните адрес и нажмите «Открыть дата-рум». Веб-ссылка откроется в новой вкладке, папка — в Проводнике при работе через локальную CRM. Чтобы убрать привязку, очистите поле и сохраните.</div>
   </div>`;
 }
 
@@ -665,6 +666,22 @@ async function saveObDataRoom(clientId) {
   } finally {
     input.disabled = button.disabled = false;
     button.textContent = 'Сохранить';
+  }
+}
+
+async function openObDataRoom(clientId) {
+  const button = document.getElementById('obDataRoomOpen');
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = 'Открытие…';
+  try {
+    await apiFetch(`/api/ob-clients/${clientId}/open-data-room`, { method: 'POST' });
+    showToast('Дата-рум открыт в Проводнике');
+  } catch (err) {
+    showToast(err.message || 'Не удалось открыть дата-рум', 'red');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Открыть дата-рум ↗';
   }
 }
 
