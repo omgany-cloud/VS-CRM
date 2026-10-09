@@ -2,6 +2,14 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.56.0] - 2026-10-09
+
+### Added
+- Client data-room location: save a web link or local/network folder path in
+  the client card and all onboarding task views, including completed tasks.
+  Web links open in a new tab; paths can be copied for opening in Explorer.
+  The location is stored on the client independently of document/task status.
+
 ## [1.55.0] - 2026-09-23
 
 ### Added

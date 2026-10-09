@@ -5426,7 +5426,17 @@ app.get('/api/onboarding', requireAuth, requireInternal, (req, res) => {
   res.json({ tenant: req.tenantSlug, restrictedList, coiRegistry, obClients, obTasks, engagements });
 });
 
-app.post('/api/ob-clients', requireAuth, requireInternal, (req, res) => {
+// Validate only the optional location; it is never read as a server file path.
+function validateObDataRoom(req, res, next) {
+  const value = req.body?.dataRoomPath;
+  if (value != null && (typeof value !== 'string' || value.length > 4096)) {
+    return res.status(400).json({ error: 'Дата-рум: укажите ссылку или путь длиной до 4096 символов', field: 'dataRoomPath' });
+  }
+  if (typeof value === 'string') req.body.dataRoomPath = value.trim();
+  next();
+}
+
+app.post('/api/ob-clients', requireAuth, requireInternal, validateObDataRoom, (req, res) => {
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction clients' });
@@ -5438,7 +5448,7 @@ app.post('/api/ob-clients', requireAuth, requireInternal, (req, res) => {
   res.status(201).json(rowToObClient(row));
 });
 
-app.put('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
+app.put('/api/ob-clients/:id', requireAuth, requireInternal, validateObDataRoom, (req, res) => {
   const existing = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });

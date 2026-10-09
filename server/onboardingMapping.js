@@ -55,7 +55,7 @@ const COI_INSERT_SQL = `
 const OB_CLIENT_SCALARS = [
   'clientId', 'name', 'type', 'classification', 'serviceType', 'lpType', 'commitment',
   'direction', 'rm', 'phase', 'onboardingStatus', 'riskRating', 'startDate', 'targetDate',
-  'nextAction', 'notes', 'contractUrl', 'activatedBy', 'lpaUrl', 'amlReviewDate', 'reClassDate',
+  'nextAction', 'notes', 'dataRoomPath', 'contractUrl', 'activatedBy', 'lpaUrl', 'amlReviewDate', 'reClassDate',
   'internalPortfolioId', 'pepStatus', 'sanctionsCheckedAt', 'idDocumentExpiry',
 ];
 function obClientToParams(c) {
@@ -78,6 +78,7 @@ function rowToObClient(row) {
     commitment: row.commitment, direction: row.direction, rm: row.rm, phase: row.phase,
     onboardingStatus: row.onboarding_status, riskRating: row.risk_rating,
     startDate: row.start_date, targetDate: row.target_date, nextAction: row.next_action,
+    dataRoomPath: row.data_room_path || '',
     notes: row.notes, restrictedMatch: !!row.restricted_match, activated: !!row.activated,
     contractUrl: row.contract_url, activatedBy: row.activated_by, lpaUrl: row.lpa_url,
     amlReviewDate: row.aml_review_date, reClassDate: row.re_class_date,
@@ -92,13 +93,13 @@ function rowToObClient(row) {
 const OB_CLIENT_INSERT_SQL = `
   INSERT INTO ob_clients
     (tenant_id, client_id, name, type, classification, service_type, lp_type, commitment, direction, rm,
-     phase, onboarding_status, risk_rating, start_date, target_date, next_action, notes,
+     phase, onboarding_status, risk_rating, start_date, target_date, next_action, notes, data_room_path,
      restricted_match, activated, contract_url, activated_by, lpa_url, aml_review_date, re_class_date,
      is_internal_client, internal_portfolio_id, identity_verified, sof_verified, sow_verified,
      pep_status, sanctions_cleared, sanctions_checked_at, professional_client_verified, id_document_expiry)
   VALUES
     (@tenantId, @clientId, @name, @type, @classification, @serviceType, @lpType, @commitment, @direction, @rm,
-     @phase, @onboardingStatus, @riskRating, @startDate, @targetDate, @nextAction, @notes,
+     @phase, @onboardingStatus, @riskRating, @startDate, @targetDate, @nextAction, @notes, @dataRoomPath,
      @restrictedMatch, @activated, @contractUrl, @activatedBy, @lpaUrl, @amlReviewDate, @reClassDate,
      @isInternalClient, @internalPortfolioId, @identityVerified, @sofVerified, @sowVerified,
      @pepStatus, @sanctionsCleared, @sanctionsCheckedAt, @professionalClientVerified, @idDocumentExpiry)
@@ -108,7 +109,7 @@ const OB_CLIENT_UPDATE_SQL = `
     client_id=@clientId, name=@name, type=@type, classification=@classification, service_type=@serviceType,
     lp_type=@lpType, commitment=@commitment, direction=@direction, rm=@rm, phase=@phase,
     onboarding_status=@onboardingStatus, risk_rating=@riskRating, start_date=@startDate, target_date=@targetDate,
-    next_action=@nextAction, notes=@notes, restricted_match=@restrictedMatch, activated=@activated,
+    next_action=@nextAction, notes=@notes, data_room_path=@dataRoomPath, restricted_match=@restrictedMatch, activated=@activated,
     contract_url=@contractUrl, activated_by=@activatedBy, lpa_url=@lpaUrl, aml_review_date=@amlReviewDate,
     re_class_date=@reClassDate, is_internal_client=@isInternalClient, internal_portfolio_id=@internalPortfolioId,
     identity_verified=@identityVerified, sof_verified=@sofVerified, sow_verified=@sowVerified,

@@ -615,6 +615,72 @@ function kycChecklistItems(c) {
   return items;
 }
 
+// One shared location for the client card and every onboarding task.
+// Only http(s) values become links; filesystem paths remain copyable text.
+function obDataRoomWebUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+  } catch (_) { return ''; }
+}
+
+function renderObDataRoom(client) {
+  const location = client.dataRoomPath || '';
+  const webUrl = obDataRoomWebUrl(location);
+  return `<div id="obDataRoomPanel" style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:12px;margin-bottom:16px">
+    <label for="obDataRoomPath" style="display:block;font-size:12px;font-weight:700;color:#8abfbb;margin-bottom:8px">📁 Дата-рум клиента</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="obDataRoomPath" type="text" maxlength="4096" value="${escapeHtml(location)}"
+        placeholder="Вставьте ссылку или путь к папке" aria-describedby="obDataRoomHint"
+        style="flex:1;min-width:180px;background:#1c3332;border:1px solid #2a4846;border-radius:6px;color:#e2e8f0;padding:8px;font-size:12px">
+      <button id="obDataRoomSave" type="button" onclick="saveObDataRoom(${client.id})"
+        style="background:#14b8a6;border:none;border-radius:6px;padding:8px 12px;color:#fff;font-size:12px;cursor:pointer">Сохранить</button>
+      ${webUrl ? `<a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer"
+        style="color:#5eead4;font-size:12px">Открыть папку ↗</a>` : ''}
+      <button type="button" onclick="copyObDataRoom()"
+        style="background:transparent;border:1px solid #2a4846;border-radius:6px;padding:8px 12px;color:#8abfbb;font-size:12px;cursor:pointer">Скопировать</button>
+    </div>
+    <div id="obDataRoomHint" style="font-size:11px;color:#8abfbb;margin-top:7px">Веб-ссылка открывается в браузере. Путь к локальной или сетевой папке скопируйте в Проводник. Чтобы убрать привязку, очистите поле и сохраните.</div>
+  </div>`;
+}
+
+async function saveObDataRoom(clientId) {
+  const input = document.getElementById('obDataRoomPath');
+  const button = document.getElementById('obDataRoomSave');
+  const panel = document.getElementById('obDataRoomPanel');
+  const client = obClients.find(c => c.id === clientId);
+  if (!input || !button || !client || button.disabled) return;
+  input.disabled = button.disabled = true;
+  button.textContent = 'Сохранение…';
+  try {
+    const saved = await apiFetch(`/api/ob-clients/${clientId}`, {
+      method: 'PUT', body: JSON.stringify({ dataRoomPath: input.value.trim() })
+    });
+    client.dataRoomPath = saved.dataRoomPath || '';
+    // Leave task form fields and completed-task status untouched.
+    if (panel.isConnected) panel.outerHTML = renderObDataRoom(client);
+    showToast('Дата-рум сохранён');
+  } catch (err) {
+    showToast('Не удалось сохранить дата-рум: ' + err.message, 'red');
+  } finally {
+    input.disabled = button.disabled = false;
+    button.textContent = 'Сохранить';
+  }
+}
+
+async function copyObDataRoom() {
+  const input = document.getElementById('obDataRoomPath');
+  if (!input || !input.value.trim()) return showToast('Сначала вставьте ссылку или путь', 'orange');
+  try {
+    await navigator.clipboard.writeText(input.value.trim());
+    showToast('Ссылка или путь скопированы');
+  } catch (_) {
+    input.focus();
+    input.select();
+    showToast('Нажмите Ctrl+C, чтобы скопировать выделенный путь', 'orange');
+  }
+}
+
 function renderObClientModal(clientId) {
   const c = obClients.find(x => x.id === clientId);
   if (!c) return;
@@ -656,6 +722,8 @@ function renderObClientModal(clientId) {
         </div>
       </div>
     </div>
+
+    ${renderObDataRoom(c)}
 
     <!-- Info grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
@@ -861,6 +929,7 @@ function openObTaskForm(taskId) {
     <!-- Скроллируемый контейнер формы -->
     <div style="overflow-y:auto;max-height:calc(100% - 70px);padding-right:4px">
       ${renderChineseWallBanner(client)}
+      ${renderObDataRoom(client)}
       ${buildTaskForm(task, client)}
       ${renderObTaskComments(task)}
     </div>`;

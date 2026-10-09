@@ -1464,6 +1464,9 @@ if (!columnExists('funds', 'waterfall_type')) db.exec("ALTER TABLE funds ADD COL
 // the document-expiry digest check (server/notifications/digestChecks.js).
 if (!columnExists('ob_clients', 'id_document_expiry')) db.exec("ALTER TABLE ob_clients ADD COLUMN id_document_expiry TEXT");
 
+// Shared data-room location: a web link or a local/network folder path.
+if (!columnExists('ob_clients', 'data_room_path')) db.exec("ALTER TABLE ob_clients ADD COLUMN data_room_path TEXT");
+
 // Multi-strategy foundation (docs/ARCHITECTURE_Multi_Strategy_Roadmap.md
 // §3) — asset_class is the client-settable driver ('pe' | 'vc' | 'reit' |
 // 'hedge_fund'); operating_model is DERIVED from it server-side (see
