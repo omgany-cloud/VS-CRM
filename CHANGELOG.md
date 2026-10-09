@@ -2,6 +2,13 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.56.1] - 2026-10-09
+
+### Changed
+- Moved the data-room field and link button into Task 2.1, under the
+  document-collection summary. Removed it from the general client card and
+  other tasks; existing saved links and paths are preserved.
+
 ## [1.56.0] - 2026-10-09
 
 ### Added

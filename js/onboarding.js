@@ -615,7 +615,7 @@ function kycChecklistItems(c) {
   return items;
 }
 
-// One shared location for the client card and every onboarding task.
+// Data-room control appears only in Task 2.1's document-collection summary.
 // Only http(s) values become links; filesystem paths remain copyable text.
 function obDataRoomWebUrl(value) {
   try {
@@ -627,8 +627,8 @@ function obDataRoomWebUrl(value) {
 function renderObDataRoom(client) {
   const location = client.dataRoomPath || '';
   const webUrl = obDataRoomWebUrl(location);
-  return `<div id="obDataRoomPanel" style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:12px;margin-bottom:16px">
-    <label for="obDataRoomPath" style="display:block;font-size:12px;font-weight:700;color:#8abfbb;margin-bottom:8px">📁 Дата-рум клиента</label>
+  return `<div id="obDataRoomPanel" style="border-top:1px solid #2a4846;padding-top:12px;margin-top:12px">
+    <label for="obDataRoomPath" style="display:block;font-size:12px;font-weight:700;color:#8abfbb;margin-bottom:8px">📁 Дата-рум</label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="obDataRoomPath" type="text" maxlength="4096" value="${escapeHtml(location)}"
         placeholder="Вставьте ссылку или путь к папке" aria-describedby="obDataRoomHint"
@@ -636,7 +636,7 @@ function renderObDataRoom(client) {
       <button id="obDataRoomSave" type="button" onclick="saveObDataRoom(${client.id})"
         style="background:#14b8a6;border:none;border-radius:6px;padding:8px 12px;color:#fff;font-size:12px;cursor:pointer">Сохранить</button>
       ${webUrl ? `<a href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer"
-        style="color:#5eead4;font-size:12px">Открыть папку ↗</a>` : ''}
+        style="display:inline-flex;align-items:center;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);border-radius:6px;padding:8px 12px;color:#5eead4;font-size:12px;font-weight:700;text-decoration:none">Ссылка на дата-рум ↗</a>` : ''}
       <button type="button" onclick="copyObDataRoom()"
         style="background:transparent;border:1px solid #2a4846;border-radius:6px;padding:8px 12px;color:#8abfbb;font-size:12px;cursor:pointer">Скопировать</button>
     </div>
@@ -722,8 +722,6 @@ function renderObClientModal(clientId) {
         </div>
       </div>
     </div>
-
-    ${renderObDataRoom(c)}
 
     <!-- Info grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
@@ -929,7 +927,6 @@ function openObTaskForm(taskId) {
     <!-- Скроллируемый контейнер формы -->
     <div style="overflow-y:auto;max-height:calc(100% - 70px);padding-right:4px">
       ${renderChineseWallBanner(client)}
-      ${renderObDataRoom(client)}
       ${buildTaskForm(task, client)}
       ${renderObTaskComments(task)}
     </div>`;
@@ -1304,6 +1301,7 @@ function buildTaskForm(task, client) {
               <input type="date" id="f_receivedDate" value="${fd.f_receivedDate||''}" ${disabledAttr} style="${inputStyle}" />
             </div>
           </div>
+          ${renderObDataRoom(client)}
           ${isFM ? `<div style="margin-top:10px"><label style="${labelStyle}">LP Questionnaire — версия / дата</label>
             <input type="text" id="f_lpqVersion" value="${fd.f_lpqVersion||''}" ${disabledAttr} style="${inputStyle}" placeholder="LPQ v2.1 — 10.06.2026" /></div>` : ''}
           <div style="margin-top:10px"><label style="${labelStyle}">Комментарий RM</label>
