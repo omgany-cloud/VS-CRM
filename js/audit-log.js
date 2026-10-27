@@ -10,6 +10,7 @@ let auditLogEntries = [];
 let auditLogEntityFilter = '';
 
 const AUDIT_ENTITY_LABELS = {
+  contract_approval_routes: { label: 'Маршруты договоров', color: '#0ea5e9' },
   lp_register:        { label: 'LP Register',        color: '#14b8a6' },
   capital_calls:       { label: 'Capital Calls',       color: '#f97316' },
   distributions:        { label: 'Distributions',        color: '#22c55e' },
@@ -17,10 +18,19 @@ const AUDIT_ENTITY_LABELS = {
   deals:                { label: 'Deal Pipeline',         color: '#3b82f6' },
   conflict_approvals:   { label: 'Conflicts / COI',        color: '#ef4444' },
   engagements:          { label: 'Реестр договоров',       color: '#22c55e' },
+  contract_templates:   { label: 'Шаблоны договоров',      color: '#0ea5e9' },
   sandbox_projects:     { label: 'Песочница',              color: '#a78bfa' },
 };
 
 const AUDIT_ACTION_LABELS = {
+  contract_submitted: { label: 'На согласование', color: '#0ea5e9' },
+  contract_decided: { label: 'Решение по договору', color: '#22c55e' },
+  contract_message: { label: 'Сообщение по договору', color: '#38bdf8' },
+  discussion: { label: 'Задача', color: '#38bdf8' },
+  contract_withdrawn: { label: 'Отозвано', color: '#94a3b8' },
+  contract_rework: { label: 'На доработку', color: '#f97316' },
+  version_added:  { label: 'Редакция шаблона', color: '#0ea5e9' },
+  document_version_added: { label: 'Редакция договора', color: '#0ea5e9' },
   created:        { label: 'Создано',      color: '#22c55e' },
   updated:        { label: 'Изменено',     color: '#94a3b8' },
   deleted:        { label: 'Удалено',      color: '#ef4444' },

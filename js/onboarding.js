@@ -589,6 +589,7 @@ function openObClientModal(clientId) {
   if (overlay) overlay.style.display = 'block';
   document.body.style.overflow = 'hidden';
   renderObClientModal(clientId);
+  addDiscussionRecordButton(document.getElementById('obClientModalContent'), 'client', clientId, closeObClientModal);
   modal.style.display = 'flex';
 }
 
@@ -789,6 +790,8 @@ function renderObClientModal(clientId) {
           <span style="color:#8abfbb;font-size:11px">${item.extra||''}</span>
         </div>`).join('')}
     </div>
+
+    ${renderClientContracts(c)}
 
     <!-- 7 Tasks timeline -->
     <div style="font-size:12px;font-weight:700;color:#8abfbb;text-transform:uppercase;margin-bottom:12px">
@@ -5810,6 +5813,7 @@ function renderEngagementsPage() {
       ${(engFilter||engStatusFilter||engDirFilter) ? `<button onclick="engFilter='';engStatusFilter='';engDirFilter='';renderEngagementsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
       <span style="font-size:11px;color:#5a8a85;white-space:nowrap">${filtered.length} из ${engagements.length}</span>
+      <button onclick="openContractTemplateLibrary()" style="background:#193735;border:1px solid #37665f;color:#b6efe4;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Шаблоны Word</button>
       <button onclick="openNewEngagementModal()"
         style="background:#14b8a6;border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-plus"></i> Новый договор</button>
     </div>
@@ -5846,7 +5850,7 @@ function renderEngagementsPage() {
                   </td>
                   <td>
                     <div style="font-weight:700;color:#e2e8f0;font-size:13px">${escapeHtml(e.clientName)}</div>
-                    <div style="font-size:10px;color:#8abfbb">${e.rm.split('(')[0].trim()}</div>
+                    <div style="font-size:10px;color:#8abfbb">${escapeHtml((e.rm || '').split('(')[0].trim())}</div>
                   </td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${dirBg};color:${dirColor}">${dirLabel}</span>
                     <div style="font-size:10px;color:#5a8a85;margin-top:2px">${e.serviceType}</div>
@@ -5863,7 +5867,9 @@ function renderEngagementsPage() {
                   <td style="font-size:12px;color:#22c55e">${fmtCurrency(e.paid||0, e.currency||'USD')}</td>
                   <td style="font-weight:700;color:${balance>0?'#f97316':'#22c55e'};font-size:12px">${fmtCurrency(balance, e.currency||'USD')}</td>
                   <td style="text-align:center">
-                    ${docUrl
+                    ${e.documentVersion > 0
+                      ? `<button onclick="event.stopPropagation();openEngagementModal(${e.id})" title="История версий" style="background:#193735;border:1px solid #37665f;color:#b6efe4;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">Версия ${e.documentVersion}</button>`
+                      : docUrl
                       ? `<button onclick="event.stopPropagation();engOpenDocPreview(${e.id})"
                           title="Открыть документ"
                           style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#c4b5fd;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">
@@ -5929,7 +5935,8 @@ function openEngagementModal(engId) {
   // Build info rows dynamically (skip empty optional fields)
   const infoRows = [
     ['Договор №',         e.contractNum || '—'],
-    ['Дата подписания',   e.signedDate  || e.date || '—'],
+    ['Дата договора',     e.date || '—'],
+    ['Дата подписания',   e.signedDate || '—'],
     ['Клиент',            e.clientName],
     ['Тип услуги',        e.serviceType],
     ['Тип fee',           statusLabel(e.feeType)],
@@ -5943,12 +5950,13 @@ function openEngagementModal(engId) {
   ];
 
   document.getElementById('engagementModalContent').innerHTML = `
+    ${!engEditMode ? contractDocumentsPanel(e.id) : ''}
     ${engEditMode ? `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
       <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Договор №</label>
         <input type="text" id="engEdit_contractNum" value="${escapeAttr(e.contractNum||'')}"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата подписания</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
         <input type="date" id="engEdit_signedDate" value="${escapeAttr(e.signedDate || e.date || '')}"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       ${isFM
@@ -5997,7 +6005,7 @@ function openEngagementModal(engId) {
     ${docUrl ? `
     <div style="background:#0f1623;border-radius:8px;padding:9px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-left:3px solid #8b5cf6">
       <div style="min-width:0">
-        <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${isFM ? 'LP Agreement (LPA)' : 'Ссылка на договор'}</div>
+        <div style="font-size:10px;color:#5a8a85;text-transform:uppercase;font-weight:700;margin-bottom:2px">${e.documentVersion > 0 ? 'Ранее прикреплённая ссылка' : (isFM ? 'LP Agreement (LPA)' : 'Ссылка на договор')}</div>
         <div style="font-size:11px;color:#a78bfa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(docUrl.length>65 ? docUrl.slice(0,65)+'…' : docUrl)}</div>
       </div>
       <button onclick="engOpenDocPreview(${e.id})"
@@ -6096,6 +6104,7 @@ function openEngagementModal(engId) {
     </div>` : ''}`;
 
   modal.style.display = 'flex';
+  if (!engEditMode) { loadContractDocuments(engId); loadContractProcess(engId); loadContractApprovals(engId); }
 }
 
 function closeEngagementModal() {
@@ -6195,7 +6204,7 @@ async function updateEngPayment(engId) {
   renderEngagementsPage();
 }
 
-function openNewEngagementModal() {
+function openNewEngagementModal(template = null, selectedClientId = null) {
   const modal   = document.getElementById('modal-ob-new');
   if (!modal) return;
   document.body.style.overflow = 'hidden';
@@ -6207,19 +6216,24 @@ function openNewEngagementModal() {
   // (LPA, LP signed date, first capital call date) — this generic form
   // always creates a CF&A engagement, so only CF&A clients are offered
   // here to avoid mislabeling an FM client's contract as CF&A.
-  const clientOptions = obClients.filter(c => c.activated && c.direction !== 'FM').map(c =>
-    `<option value="${c.id}">${escapeHtml(c.name)} (${c.clientId})</option>`).join('');
+  const clientOptions = obClients.filter(c => c.direction !== 'FM').map(c =>
+    `<option value="${c.id}"${c.id === selectedClientId ? ' selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.clientId)})${c.activated ? '' : ' · онбординг в процессе'}</option>`).join('');
 
   document.getElementById('obNewModalContent').innerHTML = `
     <div style="font-size:14px;font-weight:800;color:#f1f5f9;margin-bottom:16px">
       <i class="fas fa-file-contract" style="color:#22c55e;margin-right:8px"></i>Новый договор
     </div>
+    ${template ? `<div class="contract-metadata-warning">Будет создана отдельная копия шаблона «${escapeHtml(template.name)}», редакция ${template.version}. Реквизиты карточки пока не подставляются в текст автоматически.</div>
+      <input type="hidden" id="eng_templateId" value="${template.id}" />
+      <input type="hidden" id="eng_templateVersionId" value="${template.versionId}" />
+      <input type="hidden" id="eng_templateRequestKey" value="${contractTemplateRequestKey()}" />` : ''}
     <div style="font-size:11px;color:#5a8a85;margin-bottom:12px">Только для клиентов CF&amp;A — договоры FM (LP Investment) создаются автоматически на этапе онбординга LP.</div>
+    <p class="contract-empty">Черновик можно подготовить до завершения онбординга. Создание договора не активирует клиента и не означает согласование или подписание.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div style="grid-column:1/-1">
         <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
         <select id="eng_clientId" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
-          ${clientOptions || '<option value="">— Нет активированных клиентов CF&A —</option>'}
+          ${clientOptions || '<option value="">— Сначала создайте карточку клиента CF&A —</option>'}
         </select>
       </div>
       ${obNewSelect('eng_serviceType','Тип услуги',['Advising','Arranging','Both'],null)}
@@ -6238,12 +6252,12 @@ function openNewEngagementModal() {
         <input type="text" id="eng_dealRef" placeholder="DEAL-XXX-2026"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         <div style="font-size:10px;color:#5a8a85;margin-top:3px">Если у клиента уже есть договор с тем же Deal Ref, система считает это Dual-Mandate — требует рассмотрения CF Deal Committee.</div></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Ссылка на договор (опционально)</label>
+      ${!template ? `<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Ссылка на договор (опционально)</label>
         <div style="display:flex;gap:6px">
           <input type="url" id="eng_contractUrl" placeholder="https://drive.google.com/... или загрузите файл"
             style="flex:1;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
           ${docUploadBtn('eng_contractUrl')}
-        </div></div>
+        </div></div>` : ''}
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Примечания</label>
         <textarea id="eng_notes" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
     </div>
@@ -6259,12 +6273,14 @@ function openNewEngagementModal() {
 }
 
 async function saveNewEngagement() {
+  const templateId = Number(document.getElementById('eng_templateId')?.value) || null;
+  const templateVersionId = Number(document.getElementById('eng_templateVersionId')?.value) || null;
   const clientIdVal = document.getElementById('eng_clientId')?.value;
   const client = obClients.find(c => String(c.id) === String(clientIdVal));
-  const feeAmount = parseFloat(document.getElementById('eng_feeAmount')?.value) || 0;
+  const feeAmount = parseFloat(document.getElementById('eng_feeAmount')?.value);
   const dealRef = document.getElementById('eng_dealRef')?.value.trim() || null;
   if (!client) { showToast('⚠️ Выберите клиента', 'red'); return; }
-  if (feeAmount <= 0) { showToast('⚠️ Сумма гонорара должна быть больше 0', 'red'); return; }
+  if (!Number.isFinite(feeAmount) || (templateId ? feeAmount < 0 : feeAmount <= 0)) { showToast(templateId ? '⚠️ Укажите неотрицательную сумму' : '⚠️ Сумма гонорара должна быть больше 0', 'red'); return; }
 
   // Two engagements for the same client sharing a Deal Ref is exactly the
   // Dual-Mandate scenario (COI Addendum Section D) — flag it up front
@@ -6300,10 +6316,15 @@ async function saveNewEngagement() {
     dealRef,
   };
   try {
-    const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(eng) });
-    engagements.push(created);
+    const result = await apiFetch(templateId ? `/api/contract-templates/${templateId}/versions/${templateVersionId}/create-contract` : '/api/engagements', {
+      method: 'POST', body: JSON.stringify(templateId ? { ...eng, requestKey: document.getElementById('eng_templateRequestKey').value } : eng),
+    });
+    const created = templateId ? result.contract : result;
+    const known = engagements.find(e => e.id === created.id);
+    if (known) Object.assign(known, created); else engagements.push(created);
     closeObNewModalSilent();
-    renderEngagementsPage();
+    navigateTo('engagements');
+    if (templateId) openEngagementModal(created.id);
     showToast(`✅ Договор ${created.engId} создан`, 'green');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить договор: ' + err.message, 'red');
@@ -6589,6 +6610,7 @@ function openConflictApprovalDetail(id) {
     </div>` : (isDecidable ? `<div style="padding-top:14px;border-top:1px solid #2a4846;margin-top:16px;font-size:12px;color:#64748b;text-align:right">
       <i class="fas fa-lock" style="margin-right:5px"></i>У вас нет прав на это решение</div>` : '')}`;
 
+  addDiscussionRecordButton(document.getElementById('obNewModalContent'), 'conflict', id, closeObNewModalSilent);
   modal.style.display = 'flex';
 }
 

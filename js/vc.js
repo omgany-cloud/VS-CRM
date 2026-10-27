@@ -193,6 +193,7 @@ async function openSpvDetailModal(id) {
   if (modal) modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   await renderSpvDetailModal();
+  addDiscussionRecordButton(document.getElementById('spvDetailTitle')?.parentElement, 'spv', id, closeSpvDetailModal);
 }
 function closeSpvDetailModal() {
   spvDetailId = null;

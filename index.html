@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Turan Capital CRM — Golden Leaves Ltd</title>
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/contract-documents.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -95,7 +96,8 @@
   <div class="fund-switcher-dropdown" id="fundSwitcherDropdown"></div>
 
   <nav class="sidebar-nav">
-    <div class="nav-group-label">Обзор</div>
+    <div class="nav-group-label">Работа</div>
+    <a href="#" class="nav-item" data-page="discussions"><i class="fas fa-comments"></i><span>Задачи</span></a>
     <a href="#" class="nav-item active" data-page="dashboard">
       <i class="fas fa-th-large"></i><span>Дашборд</span>
     </a>
@@ -103,7 +105,10 @@
       <i class="fas fa-scale-balanced" style="color:#8b5cf6"></i><span>Сравнение фондов</span>
     </a>
 
-    <div class="nav-group-label">FM — Жизненный цикл LP</div>
+    <details class="sidebar-processes" id="sidebarProcesses">
+      <summary><i class="fas fa-layer-group" aria-hidden="true"></i><span>Процессы CRM</span><i class="fas fa-chevron-down sidebar-processes-chevron" aria-hidden="true"></i></summary>
+      <div class="sidebar-process-links">
+    <div class="nav-group-label">Клиенты и инвесторы</div>
     <a href="#" class="nav-item" data-page="ob-clients" style="border-left:2px solid #22c55e;padding-left:14px">
       <i class="fas fa-user-check" style="color:#22c55e"></i><span>Онбординг FM + CF&A</span>
       <span class="nav-badge warning" id="badge-ob-clients">0</span>
@@ -185,6 +190,8 @@
     <a href="#" class="nav-item" data-page="calendar">
       <i class="fas fa-calendar-alt"></i><span>Compliance Calendar</span>
     </a>
+      </div>
+    </details>
 
     <div class="nav-group-label">Система</div>
     <a href="#" class="nav-item" data-page="vault">
@@ -236,6 +243,7 @@
       <div id="globalSearchResults" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#131c2e;border:1px solid #2a3448;border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,0.4);max-height:60vh;overflow-y:auto;z-index:500"></div>
     </div>
     <div class="topbar-right">
+      <button id="discussionPageEntry" type="button" class="contract-secondary discussion-page-entry" hidden onclick="showDiscussionProcesses(this.dataset.kind)"><i class="fas fa-comments" aria-hidden="true"></i> Задачи</button>
       <div class="fund-phase-indicator" id="fundPhaseIndicator">
         <i class="fas fa-circle-dot"></i>
         <span id="fundPhaseText">Investment Period · Year 2</span>
@@ -625,7 +633,23 @@
     </section>
 
     <!-- ===== APPROVAL WORKFLOW ===== -->
+    <section id="page-discussions" class="page">
+      <div class="discussion-hub-heading"><div><h1>Задачи — центр работы</h1><p>Коллеги, документы и процессы CRM — в одной задаче.</p></div><button type="button" class="contract-primary" onclick="showDiscussionProcesses()"><i class="fas fa-layer-group" aria-hidden="true"></i> Задача по процессу</button></div>
+      <div class="discussion-workspace">
+        <aside class="discussion-sidebar" aria-label="Список задач">
+          <div class="discussion-sidebar-heading"><h2>Мои задачи</h2><button id="discussionNew" type="button" class="discussion-icon-button contract-primary" title="Новая задача" aria-label="Новая задача" onclick="newDiscussion()"><i class="fas fa-plus" aria-hidden="true"></i></button></div>
+          <input id="discussionSearch" type="search" placeholder="Найти задачу…" aria-label="Найти задачу" oninput="renderDiscussionList()" />
+          <select id="discussionChatFilter" aria-label="Задачи по разделу CRM" onchange="renderDiscussionList()"><option value="">Все мои задачи</option><option value="free">Без процесса CRM</option></select>
+          <div id="discussionList"><p class="discussion-empty">Загрузка…</p></div>
+        </aside>
+        <main id="discussionMain" class="discussion-main"><div id="discussionWelcome"></div></main>
+      </div>
+    </section>
     <section id="page-workflow" class="page">
+      <div class="contract-versions">
+        <div class="contract-versions-heading"><h3>Согласование договоров</h3><button class="contract-secondary" onclick="renderContractApprovalInbox()">Обновить</button></div>
+        <div id="contractApprovalInbox"></div>
+      </div>
       <div class="section-header">
         <h1>Согласования <span class="fund-label">Approval Workflow</span></h1>
         <p>KYC/AML · Инвестиционный комитет · Capital Call · GP Conclusion · Конфликты/Одобрения · Отчётность регулятору — все процессы согласования фонда в одном месте</p>
@@ -741,6 +765,11 @@
         <p>Все договоры с клиентами CF&amp;A: статус, гонорары, инвойсы, оплата</p>
       </div>
       <div id="engagementsContent"></div>
+    </section>
+
+    <section id="page-contract-templates" class="page">
+      <div class="section-header"><h1>Шаблоны договоров</h1><p>Библиотека Word-шаблонов и их редакций</p></div>
+      <div id="contractTemplatesContent"></div>
     </section>
 
     <!-- ===== CONFLICT APPROVALS / CF DEAL COMMITTEE ===== -->
@@ -1408,6 +1437,13 @@
 <script src="js/workflow.js"></script>
 <script src="js/modules.js"></script>
 <script src="js/onboarding.js"></script>
+<script src="js/contract-documents.js"></script>
+<script src="js/contract-templates.js"></script>
+<script src="js/contract-approvals.js"></script>
+<script src="js/contract-discussion.js"></script>
+<script src="js/discussion-mentions.js"></script>
+<script src="js/discussions.js"></script>
+<script src="js/discussion-processes.js"></script>
 <script src="js/lp-register.js"></script>
 <script src="js/distributions.js"></script>
 <script src="js/audit-log.js"></script>

@@ -2,6 +2,54 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.57.0] - 2026-10-27
+
+### Added
+- Tasks workspace: free-standing tasks with shared messages, attachments,
+  participant suggestions by name (no required @), and highlighted mentions.
+  Sending a selected name atomically invites an eligible colleague. Related
+  conversations are labelled subtasks and retain separate histories and access.
+- A searchable catalogue of 20 CRM process types, including onboarding,
+  contracts, conflicts/approvals, deals, portfolio, SPV, LP Register, Capital
+  Calls, distributions, funds, subscriptions/redemptions, NAV and reporting.
+  Empty categories remain visible. Users can open accessible tasks per record
+  or create a task with an atomic process link; cards preserve fund context.
+- Task entry points in CRM sections and record cards, task filters, and a
+  shorter sidebar with Tasks first and processes in a collapsed group.
+- Immutable DOCX/PDF contract revisions with author, checksum, change reason
+  and terms snapshots; a versioned Word template library with archive/restore
+  and independent contract copies from a specific template revision.
+- Parallel contract approval by selected colleagues: approve, return, reject,
+  withdraw and rework, with deadlines, immutable approval snapshots and history.
+  Every selected reviewer can decide immediately; approval requires all votes.
+  Existing sequential approval cycles retain their original policy.
+- Linked onboarding and contract cards. CF&A drafts can be prepared before
+  onboarding completion; drafting/approval does not activate or sign a client.
+- Editable contract/template/route permissions, live tenant/FM access checks,
+  idempotent commands, stale-write protection, and guards preserving linked
+  process identities and author history.
+- CRM specification v1.8 and collaborative-editor integration specification.
+
+### Fixed
+- Static HTTP serving exposes only frontend assets/pages instead of the
+  repository root, protecting server code, databases and backup files.
+- Contracts and linked clients cannot change direction or be deleted while
+  doing so would break document, approval or conversation history.
+- Material contract terms and files are frozen during review/after approval
+  until explicit rework; financial bookkeeping remains available.
+- Contract date is labelled separately from signature evidence.
+
+### Validation and remaining work
+- Full suite: 406 tests using isolated temporary databases. UI/API checks cover
+  task access, attachments, mentions, links, process navigation and approvals.
+- Browser verification covered messages, name suggestions/highlighting, linked
+  tasks, process catalogue and empty sections. Sidebar links were checked after
+  regrouping; existing role/fund visibility hooks remain in place.
+- Browser-based simultaneous Word editing is specified but not connected.
+  Nextcloud's editor configuration still needs verification. Automatic template
+  data substitution, electronic signatures and a directional subtask execution
+  hierarchy are not implemented in this release.
+
 ## [1.56.2] - 2026-10-09
 
 ### Fixed

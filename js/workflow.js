@@ -76,6 +76,7 @@ let activeWfId  = null;   // currently open modal
    PAGE RENDER
 ───────────────────────────────────────────────────────── */
 function renderWorkflowPage() {
+  renderContractApprovalInbox();
   renderWfKPIs();
   renderWfList();
   renderPendingApprovalsBoard();

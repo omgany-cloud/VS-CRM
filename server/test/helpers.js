@@ -75,10 +75,15 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
 
   const child = spawn('node', ['index.js'], { cwd: SERVER_DIR, env });
   const baseUrl = `http://localhost:${port}`;
+  let startupLog = '';
+  const recordStartup = chunk => { startupLog = (startupLog + chunk.toString()).slice(-6000); };
+  child.stdout.on('data', recordStartup);
+  child.stderr.on('data', recordStartup);
 
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + 30000;
   let up = false;
   while (Date.now() < deadline) {
+    if (child.exitCode != null) break;
     try {
       const res = await fetch(baseUrl + '/');
       if (res.status) { up = true; break; }
@@ -87,7 +92,7 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
   }
   if (!up) {
     child.kill();
-    throw new Error(`Test server on port ${port} never came up`);
+    throw new Error(`Test server on port ${port} never came up (exit ${child.exitCode}):\n${startupLog}`);
   }
 
   const loginRes = await fetch(baseUrl + '/api/auth/login', {

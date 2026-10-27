@@ -504,6 +504,7 @@ function openICModal(id) {
   if (overlay) overlay.style.display = 'block';
   document.body.style.overflow = 'hidden';
   renderICModalContent(m);
+  addDiscussionRecordButton(document.getElementById('icModalContent'), 'ic', id, closeICModal);
   modal.style.display = 'flex';
 }
 

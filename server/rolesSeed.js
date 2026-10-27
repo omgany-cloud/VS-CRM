@@ -13,6 +13,7 @@ const SYSTEM_ROLES = [
   // screeningAccept: accepting a Sandbox project into Скрининг — CEO only
   // by default (see server/db.js's screening_accept comment).
   { code: 'CEO', label: 'CEO', icon: 'fa-crown', color: '#eab308',
+    manageContractTemplates: true, manageContracts: true, manageContractRoutes: true,
     internal: true, manageUsers: true, manageRoles: true, accessFM: true,
     decideConflicts: true, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, screeningAccept: true, icSeat: 'GP Rep 1' },
   { code: 'CFO', label: 'CFO', icon: 'fa-coins', color: '#f59e0b',
@@ -22,6 +23,7 @@ const SYSTEM_ROLES = [
     internal: true, manageUsers: false, manageRoles: false, accessFM: true,
     decideConflicts: false, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: false, icSeat: null },
   { code: 'RELATIONSHIP_MANAGER', label: 'RM (Relationship Manager)', icon: 'fa-handshake', color: '#3b82f6',
+    manageContracts: true,
     internal: true, manageUsers: false, manageRoles: false, accessFM: false,
     decideConflicts: false, authorICMemo: false, riskVeto: false, amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: true, icSeat: null },
   // AML/SoF clearance on a capital-call payment is restricted to the

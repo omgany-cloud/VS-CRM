@@ -39,6 +39,9 @@ function joinFullName(lastName, firstName) {
 }
 
 const PERMISSION_DEFS = [
+  { key: 'manageContracts', label: 'Ведение согласования договоров', hint: 'Подача редакции на согласование, отзыв своих циклов и возврат в доработку' },
+  { key: 'manageContractRoutes', label: 'Маршруты согласования договоров', hint: 'Настройка маршрутов и правил самосогласования; отзыв и доработка чужих циклов' },
+  { key: 'manageContractTemplates', label: 'Управление шаблонами договоров', hint: 'Загрузка Word-шаблонов, новые редакции, архивирование и восстановление' },
   { key: 'internal', label: 'Internal', hint: 'Доступ к внутренним данным (не внешний участник IC)' },
   { key: 'manageUsers', label: 'Управление пользователями', hint: 'Создание/деактивация/удаление аккаунтов' },
   { key: 'manageRoles', label: 'Управление ролями', hint: 'Создание и настройка ролей' },

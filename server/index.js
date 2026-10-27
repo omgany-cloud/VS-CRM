@@ -64,6 +64,10 @@ const { computeDistributionSplit } = require('./waterfallEngine');
 const { computeFundMetrics, computeLpMetrics, computeMetrics } = require('./metricsEngine');
 const { computeFeeCrystallization, daysBetween } = require('./performanceFeeEngine');
 const { recordAudit } = require('./auditLog');
+const { router: contractDocumentsRouter, assertContractAccess, ContractError } = require('./contractDocuments');
+const contractTemplatesRouter = require('./contractTemplates');
+const contractApprovalsRouter = require('./contractApprovals');
+const { contractMetadata, assertApprovalEditable } = require('./contractApprovalState');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL, operatingModelForAssetClass } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
@@ -141,6 +145,8 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use('/api/discussions', require('./discussions').router);
+app.use('/api', require('./discussions').guard);
 
 // Blocks javascript:/data:/vbscript:/file: schemes in any "*url" field
 // anywhere in a request body (LP's lpaUrl/saUrl, a deal's pitchDeckUrl/
@@ -892,7 +898,7 @@ app.delete('/api/users/:id', requireAuth, requirePermission('manageUsers'), (req
   if (Number(req.params.id) === req.user.id) {
     return res.status(400).json({ error: 'You cannot delete your own account' });
   }
-  const footprint = computeUserFootprint(req.tenantId, existing.email, existing.name);
+  const footprint = computeUserFootprint(req.tenantId, existing.email, existing.name, existing.id);
   if (footprint.length) {
     const summary = footprint.map(f => `${f.table}.${f.column} ×${f.count}`).join(', ');
     return res.status(409).json({
@@ -5405,7 +5411,8 @@ app.get('/api/onboarding', requireAuth, requireInternal, (req, res) => {
   const obClients = filterClientsForPermissions(allClients, req.user.permissions);
   const visibleClientIds = new Set(obClients.map(c => c.id));
   const obTasks = allTasks.filter(t => visibleClientIds.has(t.clientId));
-  const engagements = allEngagements.filter(e => !e.clientId || visibleClientIds.has(e.clientId));
+  const engagements = allEngagements.filter(e => (!e.clientId || visibleClientIds.has(e.clientId)) &&
+    (req.user.permissions.accessFM || (e.direction !== 'FM' && e.serviceType !== 'LP Investment (FM)')));
 
   // Attach comments to each visible task — only for tasks that survived the
   // Chinese Wall filter above, so an FM task's comments never leak to a
@@ -5455,6 +5462,9 @@ app.put('/api/ob-clients/:id', requireAuth, requireInternal, validateObDataRoom,
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   const merged = Object.assign(rowToObClient(existing), req.body || {});
   if (chineseWallBlocks(req.user.permissions, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  if (merged.direction !== existing.direction && db.prepare('SELECT id FROM engagements WHERE tenant_id = ? AND client_id = ? LIMIT 1').get(req.tenantId, existing.id)) {
+    return res.status(409).json({ error: 'У клиента есть связанные договоры. Направление нельзя менять отдельно от договорного процесса.' });
+  }
   const params = obClientToParams(merged);
   db.prepare(OB_CLIENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
@@ -5480,14 +5490,17 @@ app.post('/api/ob-clients/:id/open-data-room', requireAuth, requireInternal, asy
 // js/lp-register.js) and the onboarding record becomes governance history.
 // Re-checked here server-side rather than trusted from the client-side
 // !c.activated gate (js/onboarding.js). Cascades to its own owned rows
-// (ob_tasks/ob_task_comments) — nothing else ever references an
-// unactivated client, so this is always safe.
+// (ob_tasks/ob_task_comments). Early contract drafts also reference clients
+// that have not finished onboarding; preserve those links before deleting.
 app.delete('/api/ob-clients/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM ob_clients WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   if (existing.activated) {
     return res.status(409).json({ error: 'Cannot delete: client is already activated (has an LP register entry).' });
+  }
+  if (db.prepare('SELECT id FROM engagements WHERE tenant_id = ? AND client_id = ? LIMIT 1').get(req.tenantId, existing.id)) {
+    return res.status(409).json({ error: 'У клиента есть связанные договоры. Удаление клиента разорвёт их историю.' });
   }
   db.exec('BEGIN');
   try {
@@ -5779,10 +5792,24 @@ function engagementHasNegativeAmount(b) {
   return ['invoiced', 'paid', 'feeAmount', 'successFee', 'retainer'].some(f => b[f] != null && Number(b[f]) < 0);
 }
 
+app.use('/api/engagements', contractDocumentsRouter);
+app.use('/api/contract-templates', contractTemplatesRouter);
+app.use('/api', contractApprovalsRouter);
+
+function checkEngagementAccess(req, res, row) {
+  try { assertContractAccess(req, row); return true; }
+  catch (err) {
+    if (!(err instanceof ContractError)) throw err;
+    res.status(err.status).json({ error: err.message });
+    return false;
+  }
+}
+
 app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
   if (engagementHasNegativeAmount(b)) return res.status(400).json({ error: 'amount fields cannot be negative' });
+  if (!checkEngagementAccess(req, res, { client_id: b.clientId, direction: b.direction, service_type: b.serviceType })) return;
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
   // currency has NOT NULL DEFAULT 'USD' at the schema level, but *ToParams()
   // binds an explicit NULL for any field the caller omits, which overrides
@@ -5801,10 +5828,26 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Engagement not found in this tenant' });
   if (engagementHasNegativeAmount(req.body || {})) return res.status(400).json({ error: 'amount fields cannot be negative' });
+  if (!checkEngagementAccess(req, res, existing)) return;
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const merged = Object.assign(rowToEngagement(existing), req.body || {});
+  const hasContractHistory = existing.document_version > 0 || !!db.prepare('SELECT id FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? LIMIT 1').get(req.tenantId, existing.id);
+  if (hasContractHistory && (
+    merged.clientId !== existing.client_id || merged.direction !== existing.direction ||
+    (merged.serviceType === 'LP Investment (FM)') !== (existing.service_type === 'LP Investment (FM)')
+  )) return res.status(409).json({ error: 'Договор с историей версий или обсуждением нельзя переносить к другому клиенту или направлению' });
+  if (!checkEngagementAccess(req, res, { client_id: merged.clientId, direction: merged.direction, service_type: merged.serviceType })) return;
   if (chineseWallBlocks(req.user.permissions, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const params = engagementToParams(merged);
+  try {
+    // Use the same canonical mapping as file snapshots, including default/null handling.
+    const proposed = { ...existing, contract_num: params.contractNum, client_name: params.clientName, date: params.date, deal_ref: params.dealRef,
+      service_type: params.serviceType, fee_type: params.feeType, fee_amount: params.feeAmount,
+      currency: params.currency, success_fee: params.successFee, retainer: params.retainer,
+      fee_rate: params.feeRate, deal_value: params.dealValue, pay_terms: params.payTerms,
+      start_date: params.startDate, end_date: params.endDate };
+    if (JSON.stringify(contractMetadata(existing)) !== JSON.stringify(contractMetadata(proposed))) assertApprovalEditable(existing);
+  } catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
   db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   const statusChanged = Object.prototype.hasOwnProperty.call(req.body || {}, 'status') && row.status !== existing.status;
@@ -5823,9 +5866,13 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
 app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
   if (!existing) return res.status(404).json({ error: 'Engagement not found in this tenant' });
+  if (!checkEngagementAccess(req, res, existing)) return;
+  if (existing.document_version > 0) return res.status(409).json({ error: 'У договора есть история версий. Сохраните её и используйте статус «Прекращён»' });
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const linked = db.prepare('SELECT id FROM conflict_approvals WHERE tenant_id = ? AND engagement_id = ?').all(req.tenantId, existing.id);
   const footprint = [];
+  const discussionCount = db.prepare('SELECT COUNT(*) AS n FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ?').get(req.tenantId, existing.id).n;
+  if (discussionCount) footprint.push({ table: 'contract_discussion_messages', column: 'engagement_id', count: discussionCount });
   if (linked.length) footprint.push({ table: 'conflict_approvals', column: 'engagement_id', count: linked.length });
   if (Number(existing.paid) > 0 || Number(existing.invoiced) > 0) footprint.push({ table: 'engagements', column: 'paid/invoiced', count: 1 });
   if (footprint.length) {
@@ -6366,7 +6413,14 @@ const FRONTEND_ROOT = path.join(__dirname, '..');
 // own URL exactly as before — every existing bookmark/internal link to it
 // keeps working.
 app.get('/', (req, res) => res.sendFile(path.join(FRONTEND_ROOT, 'company.html')));
-app.use(express.static(FRONTEND_ROOT));
+// Publish only frontend assets. Serving the repository root also exposed
+// server/data (including SQLite files/backups), bypassing all API access rules.
+for (const directory of ['css', 'js', 'img', 'docs']) {
+  app.use('/' + directory, express.static(path.join(FRONTEND_ROOT, directory)));
+}
+for (const page of ['index.html', 'company.html', 'portal.html', 'lp-portal.html']) {
+  app.get('/' + page, (req, res) => res.sendFile(path.join(FRONTEND_ROOT, page)));
+}
 
 // Express only treats a 4-arg function as error-handling middleware, and
 // only reaches it for errors passed to next(err) or thrown inside an

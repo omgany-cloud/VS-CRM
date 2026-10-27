@@ -575,6 +575,7 @@ function openLPDetail(lpId) {
       </button>
     </div>`;
 
+  addDiscussionRecordButton(document.getElementById('lpDetailContent'), 'lp', lpId, closeLPDetail);
   modal.style.display = 'flex';
 }
 
@@ -1956,6 +1957,7 @@ function openCCDetail(ccId) {
         style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
     </div>`;
 
+  addDiscussionRecordButton(document.getElementById('ccDetailContent'), 'capital-call', ccId, closeCCDetail);
   modal.style.display = 'flex';
 }
 

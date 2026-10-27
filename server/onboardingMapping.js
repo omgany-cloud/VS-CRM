@@ -185,6 +185,7 @@ function rowToEngagement(row) {
     lpSignedDate: row.lp_signed_date, capitalCallDate: row.capital_call_date,
     amendments: row.amendments_json, contractUrl: row.contract_url, dealValue: row.deal_value, feeRate: row.fee_rate,
     dealRef: row.deal_ref, currency: row.currency, paymentHistory: row.payment_history_json,
+    documentVersion: row.document_version || 0,
   };
 }
 const ENGAGEMENT_INSERT_SQL = `

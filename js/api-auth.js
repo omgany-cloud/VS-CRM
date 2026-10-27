@@ -56,6 +56,7 @@ function setAuth(auth) {
 }
 
 function clearAuth() {
+  if (typeof resetDiscussions === 'function') resetDiscussions();
   localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
@@ -122,6 +123,7 @@ async function apiFetch(path, options = {}) {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const err = new Error(body.error || ('HTTP ' + res.status));
+    err.status = res.status;
     // QA P3 audit finding ("field-level errors нет вообще") — the server
     // now names which field a 400 is about on the routes that matter most
     // (LP/Deal/Portfolio/Capital Call); attach it here so a caller CAN
@@ -972,6 +974,7 @@ async function finishLoginSequence() {
   if (typeof initUserRole === 'function') initUserRole();
   loadAllApiData();
   startAuthRefreshLoop();
+  if (typeof openContractApprovalLink === 'function') await openContractApprovalLink();
 }
 
 (function initAuthGate() {

@@ -1385,6 +1385,18 @@ if (!columnExists('roles', 'screening_accept')) {
   db.exec("ALTER TABLE roles ADD COLUMN screening_accept INTEGER NOT NULL DEFAULT 0");
   db.exec("UPDATE roles SET screening_accept = 1 WHERE is_system = 1 AND code = 'CEO'");
 }
+if (!columnExists('roles', 'manage_contract_templates')) {
+  db.exec('ALTER TABLE roles ADD COLUMN manage_contract_templates INTEGER NOT NULL DEFAULT 0');
+  db.exec("UPDATE roles SET manage_contract_templates = 1 WHERE is_system = 1 AND code = 'CEO'");
+}
+if (!columnExists('roles', 'manage_contracts')) {
+  db.exec('ALTER TABLE roles ADD COLUMN manage_contracts INTEGER NOT NULL DEFAULT 0');
+  db.exec("UPDATE roles SET manage_contracts = 1 WHERE is_system = 1 AND code IN ('CEO', 'RELATIONSHIP_MANAGER')");
+}
+if (!columnExists('roles', 'manage_contract_routes')) {
+  db.exec('ALTER TABLE roles ADD COLUMN manage_contract_routes INTEGER NOT NULL DEFAULT 0');
+  db.exec("UPDATE roles SET manage_contract_routes = 1 WHERE is_system = 1 AND code = 'CEO'");
+}
 if (!columnExists('documents', 'document_url')) db.exec("ALTER TABLE documents ADD COLUMN document_url TEXT");
 if (!columnExists('documents', 'archived')) db.exec("ALTER TABLE documents ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
 if (!columnExists('documents', 'archived_at')) db.exec("ALTER TABLE documents ADD COLUMN archived_at TEXT");
@@ -1561,6 +1573,239 @@ if (!columnExists('lp_register', 'version')) db.exec("ALTER TABLE lp_register AD
 // template. A real UNIQUE index (not just an application-level check) so
 // the invariant holds even if a future code path forgets to check first.
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_ob_tasks_client_tasknum ON ob_tasks(tenant_id, client_id, task_num)');
+
+// Contract files are stored in the same transaction/backup as their immutable
+// revision metadata. Lists must select metadata explicitly, never the BLOB.
+if (!columnExists('engagements', 'document_version')) db.exec('ALTER TABLE engagements ADD COLUMN document_version INTEGER NOT NULL DEFAULT 0');
+db.exec(`
+CREATE TABLE IF NOT EXISTS engagement_document_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  version_number INTEGER NOT NULL CHECK(version_number > 0),
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+  sha256 TEXT NOT NULL,
+  file_bytes BLOB NOT NULL,
+  change_note TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  author_name TEXT NOT NULL,
+  author_email TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(tenant_id, engagement_id, version_number)
+);
+`);
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS contract_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  contract_type TEXT NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN ('CF&A', 'FM')),
+  archived INTEGER NOT NULL DEFAULT 0,
+  latest_version INTEGER NOT NULL DEFAULT 1,
+  revision INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contract_templates_tenant ON contract_templates(tenant_id);
+CREATE TABLE IF NOT EXISTS contract_template_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  template_id INTEGER NOT NULL REFERENCES contract_templates(id),
+  version_number INTEGER NOT NULL CHECK(version_number > 0),
+  original_name TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+  sha256 TEXT NOT NULL,
+  file_bytes BLOB NOT NULL,
+  change_note TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  author_name TEXT NOT NULL,
+  author_email TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(tenant_id, template_id, version_number)
+);
+CREATE TABLE IF NOT EXISTS contract_template_uses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  request_key TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  payload_hash TEXT NOT NULL,
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  template_version_id INTEGER NOT NULL REFERENCES contract_template_versions(id),
+  UNIQUE(tenant_id, request_key)
+);
+`);
+if (!columnExists('engagement_document_versions', 'source_template_version_id')) db.exec('ALTER TABLE engagement_document_versions ADD COLUMN source_template_version_id INTEGER REFERENCES contract_template_versions(id)');
+if (!columnExists('engagement_document_versions', 'template_source_json')) db.exec('ALTER TABLE engagement_document_versions ADD COLUMN template_source_json TEXT');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS contract_approval_routes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN ('CF&A', 'FM')),
+  revision INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  allow_self INTEGER NOT NULL DEFAULT 0,
+  self_reason TEXT NOT NULL DEFAULT '',
+  steps_json TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  updated_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS contract_approval_cycles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  document_version_id INTEGER NOT NULL REFERENCES engagement_document_versions(id),
+  cycle_number INTEGER NOT NULL,
+  route_id INTEGER NOT NULL REFERENCES contract_approval_routes(id),
+  route_revision INTEGER NOT NULL,
+  route_json TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  initiator_id INTEGER NOT NULL REFERENCES users(id),
+  initiator_name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('active','approved','returned','rejected','withdrawn')),
+  current_step INTEGER NOT NULL DEFAULT 0,
+  revision INTEGER NOT NULL DEFAULT 1,
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  resolved_at TEXT,
+  invalidated_at TEXT,
+  invalidated_by INTEGER REFERENCES users(id),
+  close_reason TEXT NOT NULL DEFAULT '',
+  UNIQUE(tenant_id, engagement_id, cycle_number)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contract_approval_active ON contract_approval_cycles(tenant_id, engagement_id) WHERE status = 'active';
+CREATE TABLE IF NOT EXISTS contract_approval_steps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  cycle_id INTEGER NOT NULL REFERENCES contract_approval_cycles(id),
+  position INTEGER NOT NULL,
+  assignee_id INTEGER NOT NULL REFERENCES users(id),
+  assignee_name TEXT NOT NULL,
+  due_days INTEGER NOT NULL CHECK(due_days BETWEEN 1 AND 30),
+  due_at TEXT,
+  status TEXT NOT NULL CHECK(status IN ('waiting','pending','approved','returned','rejected','cancelled')),
+  comment TEXT NOT NULL DEFAULT '',
+  decided_at TEXT,
+  decided_by INTEGER REFERENCES users(id),
+  UNIQUE(tenant_id, cycle_id, position)
+);
+CREATE TABLE IF NOT EXISTS contract_approval_commands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  request_key TEXT NOT NULL,
+  actor_id INTEGER NOT NULL REFERENCES users(id),
+  payload_hash TEXT NOT NULL,
+  cycle_id INTEGER NOT NULL REFERENCES contract_approval_cycles(id),
+  UNIQUE(tenant_id, request_key)
+);
+`);
+// Existing routes/cycles keep their sequential policy. New direct selections
+// use parallel routes; each cycle retains the policy in its immutable snapshot.
+if (!columnExists('contract_approval_routes', 'approval_mode')) {
+  db.exec("ALTER TABLE contract_approval_routes ADD COLUMN approval_mode TEXT NOT NULL DEFAULT 'sequential' CHECK(approval_mode IN ('sequential','parallel'))");
+}
+if (!columnExists('contract_approval_cycles', 'closed_by')) db.exec('ALTER TABLE contract_approval_cycles ADD COLUMN closed_by INTEGER REFERENCES users(id)');
+if (!columnExists('contract_approval_cycles', 'closed_by_name')) db.exec('ALTER TABLE contract_approval_cycles ADD COLUMN closed_by_name TEXT');
+db.exec(`
+CREATE TABLE IF NOT EXISTS contract_discussion_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  cycle_id INTEGER REFERENCES contract_approval_cycles(id),
+  document_version_id INTEGER REFERENCES engagement_document_versions(id),
+  document_version INTEGER NOT NULL,
+  author_id INTEGER NOT NULL REFERENCES users(id),
+  author_name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+CREATE INDEX IF NOT EXISTS idx_contract_discussion ON contract_discussion_messages(tenant_id, engagement_id, id);
+CREATE TABLE IF NOT EXISTS discussion_rooms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  title TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+CREATE TABLE IF NOT EXISTS discussion_members (
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  room_id INTEGER NOT NULL REFERENCES discussion_rooms(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  PRIMARY KEY(room_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS discussion_links (
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  room_id INTEGER NOT NULL REFERENCES discussion_rooms(id),
+  kind TEXT NOT NULL,
+  entity_id INTEGER NOT NULL,
+  PRIMARY KEY(room_id, kind, entity_id)
+);
+CREATE TABLE IF NOT EXISTS discussion_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  room_id INTEGER NOT NULL REFERENCES discussion_rooms(id),
+  author_id INTEGER NOT NULL REFERENCES users(id),
+  author_name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+CREATE INDEX IF NOT EXISTS idx_discussion_messages ON discussion_messages(tenant_id, room_id, id);
+CREATE TABLE IF NOT EXISTS discussion_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  contract_message_id INTEGER REFERENCES contract_discussion_messages(id),
+  message_id INTEGER REFERENCES discussion_messages(id),
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  file_bytes BLOB NOT NULL,
+  CHECK ((contract_message_id IS NULL) != (message_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_discussion_files_contract ON discussion_files(tenant_id, contract_message_id);
+CREATE INDEX IF NOT EXISTS idx_discussion_files_message ON discussion_files(tenant_id, message_id);
+CREATE TABLE IF NOT EXISTS contract_discussion_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  added_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  UNIQUE(tenant_id, engagement_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS discussion_relations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  room_id INTEGER NOT NULL REFERENCES discussion_rooms(id),
+  other_room_id INTEGER REFERENCES discussion_rooms(id),
+  engagement_id INTEGER REFERENCES engagements(id),
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  CHECK ((other_room_id IS NULL) != (engagement_id IS NULL)),
+  CHECK (other_room_id IS NULL OR room_id < other_room_id),
+  UNIQUE(tenant_id, room_id, other_room_id),
+  UNIQUE(tenant_id, room_id, engagement_id)
+);
+`);
+for (const table of ['discussion_messages', 'contract_discussion_messages']) {
+  if (!columnExists(table, 'mentions_json')) db.exec(`ALTER TABLE ${table} ADD COLUMN mentions_json TEXT NOT NULL DEFAULT '[]'`);
+}
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

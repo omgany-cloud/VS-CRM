@@ -131,6 +131,18 @@ body {
 
 .nav-item span { flex: 1; }
 
+.sidebar-processes { margin: 8px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 5px 0; }
+.sidebar-processes > summary { display: flex; align-items: center; gap: 10px; padding: 10px 12px; list-style: none; border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; font-size: 13px; font-weight: 500; }
+.sidebar-processes > summary::-webkit-details-marker { display: none; }
+.sidebar-processes > summary:hover { background: var(--bg-card); color: var(--text-primary); }
+.sidebar-processes > summary:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+.sidebar-processes > summary > span { flex: 1; }
+.sidebar-processes > summary > i:first-child { width: 18px; text-align: center; }
+.sidebar-processes-chevron { font-size: 10px; transition: transform var(--transition); }
+.sidebar-processes[open] > summary .sidebar-processes-chevron { transform: rotate(180deg); }
+.sidebar-processes:has(.nav-item.active) > summary { color: var(--accent-blue); background: rgba(20,184,166,0.10); }
+.sidebar-process-links { padding-bottom: 6px; }
+
 .nav-badge {
   background: var(--accent-blue);
   color: #fff;

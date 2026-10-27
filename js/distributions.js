@@ -301,6 +301,7 @@ function openDistDetail(distId) {
         style="background:#14b8a6;border:none;color:#fff;padding:8px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">Закрыть</button>
     </div>`;
 
+  addDiscussionRecordButton(document.getElementById('distDetailContent'), 'distribution', distId, closeDistDetail);
   modal.style.display = 'flex';
 }
 

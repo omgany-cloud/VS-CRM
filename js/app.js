@@ -311,6 +311,7 @@ const PAGE_LABELS = {
   documents:     'Документы',
   export:        'Экспорт Excel',
   workflow:      'Согласования',
+  discussions:   'Задачи',
   kycrenewal:    'KYC Renewal',
   calendar:      'Compliance Calendar',
   ic:            'Investment Committee',
@@ -318,6 +319,7 @@ const PAGE_LABELS = {
   'ob-clients':  'Клиенты FM + CF&A — Онбординг',
   'ob-restricted': 'Restricted List / COI',
   engagements:   'Реестр договоров',
+  'contract-templates': 'Шаблоны договоров',
   'conflict-approvals': 'Конфликты / Одобрения — CF Deal Committee',
   subscription:  'Подписка',
   'lp-register':      'LP Register — Реестр партнёров',
@@ -331,11 +333,13 @@ const PAGE_LABELS = {
 };
 
 function navigateTo(page) {
+  if (page !== 'discussions' && typeof stopContractConversation === 'function') stopContractConversation();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.getElementById('pageBreadcrumb').textContent = PAGE_LABELS[page] || page;
+  if (typeof updateDiscussionEntryPoint === 'function') updateDiscussionEntryPoint(page);
   // Close fund dropdown if open
   const dd = document.getElementById('fundSwitcherDropdown');
   if (dd) dd.classList.remove('open');
@@ -345,6 +349,7 @@ function navigateTo(page) {
   if (page === 'subscription') { renderSubscriptionPage(); }
   if (page === 'export')       { renderExportPage(); }
   if (page === 'workflow')     { renderWorkflowPage(); }
+  if (page === 'discussions')  { renderDiscussionsPage(); }
   if (page === 'kycrenewal')   { renderKycRenewalPage(); }
   if (page === 'calendar')     { renderComplianceCalendar(); }
   if (page === 'ic')           { renderICPage(); }
@@ -352,6 +357,7 @@ function navigateTo(page) {
   if (page === 'ob-clients')       { renderOnboardingPage(); }
   if (page === 'ob-restricted')     { renderRestrictedListPage(); }
   if (page === 'engagements')       { renderEngagementsPage(); }
+  if (page === 'contract-templates') { renderContractTemplatesPage(); }
   if (page === 'conflict-approvals'){ renderConflictApprovalsPage(); }
   if (page === 'lp-register')       { renderLPRegisterPage(); }
   if (page === 'lp-capital-calls')  { renderCapitalCallsPage(); }
@@ -1216,6 +1222,7 @@ function openDealDetailModal(dealId) {
   if (!d) return;
   _activeDealTab = 'overview';
   _renderDealModal(d);
+  addDiscussionRecordButton(document.getElementById('dealDetailContent').firstElementChild, 'deal', dealId, closeDealDetailModal);
   document.getElementById('dealDetailOverlay').style.display = 'block';
   document.getElementById('modal-deal-detail').style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -2789,6 +2796,7 @@ function openPortfolioModal(portId) {
   const p = portfolio.find(x => x.id === portId);
   if (!p) return;
   _renderPortfolioModal(p);
+  addDiscussionRecordButton(document.getElementById('portDetailContent').firstElementChild, 'portfolio', portId, closePortfolioModal);
   document.getElementById('portDetailOverlay').style.display = 'block';
   document.getElementById('modal-port-detail').style.display = 'flex';
   document.body.style.overflow = 'hidden';
