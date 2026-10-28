@@ -43,7 +43,7 @@ before(async () => {
   await json(await change('room', mine, { action: 'assign', assigneeId: rm.id, expectedVersion: 0 }));
   await task('Next week', day(7));
   const done = await task('Done late', day(-2));
-  await json(await change('room', done, { action: 'complete', expectedVersion: 0 }));
+  await json(await change('room', done, { action: 'complete', expectedVersion: 0, result: 'Done' }));
   const closed = await task('FM tomorrow', day(1), { participants: [co.id], source: { kind: 'client', id: fm.id } });
   await json(await change('room', closed, { action: 'assign', assigneeId: co.id, expectedVersion: 0 }));
   await json(await change('contract', contract.id, { action: 'due', dueDate: day(0), expectedVersion: 0 }));

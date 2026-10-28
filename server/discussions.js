@@ -12,6 +12,7 @@ const { relatedDiscussions, relationSources, addRelation } = require('./discussi
 const {replyId,replyTarget}=require('./discussionReplies');
 const {purgeTask}=require('./discussionPurge');
 const {taskState,taskView,taskAssignees,assertTaskOpen,dueDate,initializeDueDate,changeTask,taskUnread,markTaskRead} = require('./discussionTasks');
+const { latestCycle, approvalSummary } = require('./contractApprovalState');
 const router = express.Router();
 router.use(requireAuth, requireInternal, (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 const fail = (text, status = 400) => { throw new ContractError(status, text); };
@@ -88,6 +89,27 @@ router.get('/source/:kind/:entityId', handle((req, res) => {
   if (source.kind === 'contract') {const task=taskState(req.tenantId,'contract',source.id);if(!task.purgedAt)items.unshift({ kind: 'contract', id: source.id, title:task.title||'Задача по договору · '+source.title, task });}
   res.json({ source, items, canCreate: !req.user.permissions.readOnly });
 }));
+// For the Tasks filters "Жду моего решения" / "На доработке": my pending vote on
+// the contract's current review, or my own submission that came back
+// (returned, rejected, withdrawn or outdated) and waits for a new revision.
+function contractReview(req, contract) {
+  const cycle = latestCycle(req.tenantId, contract.id); if (!cycle || req.user.permissions.readOnly) return null;
+  const status = approvalSummary(contract).status;
+  if (status === 'active') return db.prepare("SELECT 1 FROM contract_approval_steps WHERE tenant_id = ? AND cycle_id = ? AND assignee_id = ? AND status = 'pending'")
+    .get(req.tenantId, cycle.id, req.user.id) ? 'decide' : null;
+  return ['returned', 'rejected', 'withdrawn', 'needs_revision'].includes(status) && cycle.initiator_id === req.user.id && req.user.permissions.manageContracts ? 'rework' : null;
+}
+// Clients a task concerns, directly or through a linked contract, for the client filter.
+function sourceClients(req, sources) {
+  const found = new Map();
+  for (const s of sources) {
+    if (s.kind === 'client') found.set(s.id, s.title);
+    if (s.kind !== 'contract') continue;
+    const row = db.prepare('SELECT c.id, c.name FROM engagements e JOIN ob_clients c ON c.tenant_id = e.tenant_id AND c.id = e.client_id WHERE e.tenant_id = ? AND e.id = ?').get(req.tenantId, s.id);
+    if (row) found.set(row.id, row.name);
+  }
+  return [...found].map(([id, name]) => ({ id, name }));
+}
 router.get('/', handle((req, res) => {
   const rooms = db.prepare(`SELECT r.* FROM discussion_rooms r JOIN discussion_members m ON m.room_id = r.id AND m.tenant_id = r.tenant_id
     WHERE r.tenant_id = ? AND m.user_id = ?`).all(req.tenantId, req.user.id);
@@ -95,14 +117,14 @@ router.get('/', handle((req, res) => {
   for (const r of rooms) {
     let sources; try { sources = links(req, r.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
     const latest = db.prepare('SELECT body, created_at, author_name FROM discussion_messages WHERE tenant_id = ? AND room_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, r.id);
-    items.push({ kind: 'room', id: r.id, title: r.title, label: 'Задача', sources, task: taskView(req,'room',r.id,r), unread: taskUnread(req,'room',r.id), lastAuthor: latest?.author_name || '', createdAt: r.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Пока нет сообщений'), updatedAt: latest?.created_at || r.created_at });
+    items.push({ kind: 'room', id: r.id, title: r.title, label: 'Задача', sources, clients: sourceClients(req, sources), task: taskView(req,'room',r.id,r), unread: taskUnread(req,'room',r.id), lastAuthor: latest?.author_name || '', createdAt: r.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Пока нет сообщений'), updatedAt: latest?.created_at || r.created_at });
   }
   for (const row of db.prepare('SELECT id FROM engagements WHERE tenant_id = ?').all(req.tenantId)) {
     if(taskState(req.tenantId,'contract',row.id).purgedAt)continue;
     let source; try { source = getSource(req, 'contract', row.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
     const latest = db.prepare('SELECT body, created_at, author_name FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, row.id);
-    const task=taskView(req,'contract',row.id,source.row);
-    items.push({ ...sourceView(source), title:task.title, sources: [sourceView(source)], task, unread: taskUnread(req,'contract',row.id), lastAuthor: latest?.author_name || '', createdAt: source.row.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Задача по договору'), updatedAt: latest?.created_at || source.row.created_at || '' });
+    const task={...taskView(req,'contract',row.id,source.row),review:contractReview(req,source.row)};
+    items.push({ ...sourceView(source), title:task.title, sources: [sourceView(source)], clients: sourceClients(req, [source]), task, unread: taskUnread(req,'contract',row.id), lastAuthor: latest?.author_name || '', createdAt: source.row.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Задача по договору'), updatedAt: latest?.created_at || source.row.created_at || '' });
   }
   items.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt) || b.id-a.id);
   res.json({ items, categories: sourceCategories(req, []).map(({count, ...category}) => category), canCreate: !req.user.permissions.readOnly });

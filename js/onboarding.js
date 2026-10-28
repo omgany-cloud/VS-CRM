@@ -27,21 +27,21 @@ let obClients = [];  // populated at runtime by js/api-auth.js via GET /api/onbo
 // FM: Fund Management (управление фондом)
 //   Клиент: Limited Partner (LP), инвестирует в фонд
 //   НЕТ Suitability/Appropriateness (регуляторные COBS-правила не применяются к LP onboarding в том же объёме)
-//   Вместо Engagement Letter → Subscription Agreement
+//   Вместо договора с клиентом (4.1) → Subscription Agreement
 const OB_TASK_TEMPLATES_CFA = [
   { num: '1.1', title: 'Conflict Pre-Check (Go/No-Go)',  phase: 1, role: 'RM', dayStart: 1,  dayEnd: 2,  formKey: 'conflict_precheck' },
   { num: '2.1', title: 'Documentation Collection',       phase: 2, role: 'RM', dayStart: 3,  dayEnd: 5,  formKey: 'doc_collection' },
-  { num: '2.2', title: 'Client Due Diligence Outcome',   phase: 2, role: 'CO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
+  { num: '2.2', title: 'Client Due Diligence Outcome',   phase: 2, role: 'MLRO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
   { num: '3.1', title: 'Client Classification',          phase: 3, role: 'RM', dayStart: 8,  dayEnd: 9,  formKey: 'classification' },
   { num: '3.2', title: 'Suitability / Appropriateness',  phase: 3, role: 'RM', dayStart: 9,  dayEnd: 10, formKey: 'suitability' },
-  { num: '4.1', title: 'Draft & Sign Engagement Letter', phase: 4, role: 'RM', dayStart: 11, dayEnd: 13, formKey: 'engagement_letter' },
+  { num: '4.1', title: 'Client Contract',                phase: 4, role: 'RM', dayStart: 11, dayEnd: 13, formKey: 'engagement_letter' },
   { num: '5.1', title: 'Client Activation',              phase: 5, role: 'RM', dayStart: 14, dayEnd: 15, formKey: 'activation' },
 ];
 
 const OB_TASK_TEMPLATES_FM = [
   { num: '1.1', title: 'Conflict Pre-Check (Go/No-Go)',  phase: 1, role: 'RM', dayStart: 1,  dayEnd: 2,  formKey: 'conflict_precheck' },
   { num: '2.1', title: 'Documentation Collection (LP)',  phase: 2, role: 'RM', dayStart: 3,  dayEnd: 5,  formKey: 'doc_collection' },
-  { num: '2.2', title: 'AML / KYC Due Diligence',        phase: 2, role: 'CO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
+  { num: '2.2', title: 'AML / KYC Due Diligence',        phase: 2, role: 'MLRO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
   { num: '3.1', title: 'LP Qualification Check',         phase: 3, role: 'RM', dayStart: 8,  dayEnd: 9,  formKey: 'lp_qualification' },
   { num: '3.2', title: 'Investment Profile & Suitability',phase: 3, role: 'RM', dayStart: 9,  dayEnd: 10, formKey: 'lp_investment_profile' },
   { num: '4.1', title: 'Subscription Agreement',         phase: 4, role: 'RM', dayStart: 11, dayEnd: 13, formKey: 'subscription_agreement' },
@@ -463,7 +463,7 @@ function renderObPhaseBoard(clients) {
     { num:1, label:'Phase 1', sub:'Conflict Check',    color:'#8b5cf6', icon:'fa-search' },
     { num:2, label:'Phase 2', sub:'Documentation',     color:'#f97316', icon:'fa-folder-open' },
     { num:3, label:'Phase 3', sub:'KYC/Classification',color:'#14b8a6', icon:'fa-shield-alt' },
-    { num:4, label:'Phase 4', sub:'Engagement Letter', color:'#22c55e', icon:'fa-file-signature' },
+    { num:4, label:'Phase 4', sub:'Договор',           color:'#22c55e', icon:'fa-file-signature' },
     { num:5, label:'Phase 5', sub:'Activation',        color:'#eab308', icon:'fa-rocket' },
   ];
 
@@ -1060,8 +1060,6 @@ async function obAddTaskComment(taskId) {
 function obTaskPdfButtonHtml(task, client) {
   return task.formKey === 'dd_outcome'
     ? '<button onclick="obGenerateDDReport(' + task.id + ')" style="background:linear-gradient(135deg,#14b8a6,#0f9488);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-pdf\\"></i>Сохранить PDF</button>'
-    : (task.formKey === 'engagement_letter')
-    ? '<button onclick="obGenerateTermSheet(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>Term Sheet PDF</button>'
     : (task.formKey === 'subscription_agreement')
     ? '<button onclick="obGenerateSubscriptionAgreement(' + task.id + ')" style="background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;display:flex;align-items:center;gap:5px"><i class=\\"fas fa-file-contract\\"></i>SA PDF</button>'
     : (task.formKey === 'activation' && client.direction === 'FM' && (task.formData?.f_lpaUrl || task.formData?.lpaUrl || client.lpaUrl))
@@ -2037,7 +2035,7 @@ function buildTaskForm(task, client) {
       break;
     }
 
-    /* ─── ФОРМА 7 — Engagement Letter (4.1) ─────────── */
+    /* ─── ФОРМА 7 — Договор с клиентом (4.1) ─────────── */
     case 'engagement_letter': {
       const engSeq   = String(engIdCounter).padStart(3,'0');
       const prevSuit = obTasks.find(t => t.clientId === client.id && t.taskNum === '3.2');
@@ -2058,21 +2056,21 @@ function buildTaskForm(task, client) {
           <b style="color:${suitResult.includes('Not')||suitResult.includes('Нет')?'#ef4444':'#22c55e'}">${suitResult||'—'}</b>
         </div>` : ''}
 
-        <!-- TS info banner -->
+        <!-- Contract info banner -->
         <div style="background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:12px;color:#fdba74;display:flex;align-items:center;gap:8px">
           <i class="fas fa-file-contract"></i>
-          <span>Задача 4.1 — <b>Term Sheet</b> для CF&A. Документ подписывается <b>до</b> основного Engagement Letter и передаётся юристам для подготовки договора.</span>
+          <span>Задача 4.1 — <b>договор с клиентом</b>. Здесь — реквизиты и условия; текст договора готовится по шаблону, согласование и подписание — в карточке договора.</span>
         </div>
 
-        <!-- ══ Section 1: TS Identification ══ -->
+        <!-- ══ Section 1: Contract Identification ══ -->
         <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-            <i class="fas fa-hashtag"></i>Реквизиты Term Sheet
+            <i class="fas fa-hashtag"></i>Реквизиты договора
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div><label style="${labelStyle}">Номер TS *</label>
-              <input type="text" id="f_engNum" value="${fd.engNum||`TS-${new Date().getFullYear()}-${engSeq}`}" ${disabledAttr} style="${inputStyle}" /></div>
-            <div><label style="${labelStyle}">Дата TS *</label>
+            <div><label style="${labelStyle}">Номер договора *</label>
+              <input type="text" id="f_engNum" value="${fd.engNum||`GL-${new Date().getFullYear()}-${engSeq}`}" ${disabledAttr} style="${inputStyle}" /></div>
+            <div><label style="${labelStyle}">Дата договора *</label>
               <input type="date" id="f_engDate" value="${fd.engDate||today()}" ${disabledAttr} style="${inputStyle}" /></div>
             ${buildSelect('f_governingLaw','Применимое право',
               ['AIFC Law','Казахстанское право (ГК РК)','English Law','Other'],
@@ -2156,23 +2154,9 @@ function buildTaskForm(task, client) {
               placeholder="Общие комментарии по сделке...">${fd.rmComment||''}</textarea></div>
         </div>
 
-        <!-- ══ Section 6: Signing Status ══ -->
-        <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
-          <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-            <i class="fas fa-signature"></i>Статус подписания Term Sheet
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            ${buildSelect('f_clientSigned','Term Sheet подписан клиентом?',
-              ['Нет','Ожидается','Да — оригинал','Да — эл. подпись'],
-              fd.clientSigned, disabledAttr, selectStyle, labelStyle)}
-            <div><label style="${labelStyle}">Дата подписания клиентом</label>
-              <input type="date" id="f_signDate" value="${fd.signDate||''}" ${disabledAttr} style="${inputStyle}" /></div>
-          </div>
-        </div>
-
         <div style="background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.15);border-radius:8px;padding:10px 14px;font-size:11px;color:#fdba74">
           <i class="fas fa-info-circle" style="margin-right:5px"></i>
-          После завершения задачи Term Sheet автоматически появится в <b>Реестре договоров</b>. Для генерации PDF Term Sheet нажмите кнопку в баннере завершённой задачи.
+          После завершения задачи черновик договора появится в <b>Реестре договоров</b>. Дальше в карточке договора: текст по шаблону, согласование, регистрация подписанного PDF и начало работы.
         </div>`;
       break;
     }
@@ -2203,9 +2187,8 @@ function buildTaskForm(task, client) {
       const engVal     = isFmClient
         ? (engTask?.formData?.f_subNum   || '—')
         : (engTask?.formData?.f_engNum   || '—');
-      const engSub     = isFmClient
-        ? (engTask?.formData?.f_lpSigned || '')
-        : (engTask?.formData?.f_clientSigned || '');
+      // CF&A signing is registered in the contract card, not in stage 4.1.
+      const engSub     = isFmClient ? (engTask?.formData?.f_lpSigned || '') : '';
 
       const amlMonths   = client.riskRating === 'High' ? 6 : 12;
       const amlDate     = (() => { const d = new Date(); d.setMonth(d.getMonth()+amlMonths); return d.toISOString().slice(0,10); })();
@@ -2666,7 +2649,9 @@ function buildTaskForm(task, client) {
       </div>`;
   } else {
     const wallCheck  = chineseWallCheck(client);
-    const wallBlocked = !wallCheck.allowed;
+    // Owner's decision: the client check conclusion (2.2) is saved by the MLRO only (server/onboardingRules.js).
+    const kycLocked  = task.formKey === 'dd_outcome' && currentUserRole() !== 'MLRO';
+    const wallBlocked = !wallCheck.allowed || kycLocked;
     // For doc_collection: compute initial readiness to pre-set button state
     const isDocForm   = task.formKey === 'doc_collection';
     // We'll set id="obSubmitTaskBtn" so obDocStatusChange() can control it
@@ -2677,8 +2662,8 @@ function buildTaskForm(task, client) {
     const submitColor  = wallBlocked ? '#4a5568' : '#fff';
     const submitCursor = wallBlocked ? 'not-allowed' : 'pointer';
     const submitIcon   = wallBlocked ? 'lock' : 'check';
-    const submitLabel  = wallBlocked ? 'Заблокировано' : 'Завершить задачу';
-    const submitTitle  = wallBlocked ? 'title="Китайская стена: запрещено"' : '';
+    const submitLabel  = kycLocked ? 'Заключение сохраняет MLRO' : wallBlocked ? 'Заблокировано' : 'Завершить задачу';
+    const submitTitle  = kycLocked ? 'title="Этап 2.2 завершает сотрудник с ролью MLRO"' : wallBlocked ? 'title="Китайская стена: запрещено"' : '';
     html += `
       <div style="padding-top:14px;border-top:1px solid #2a4846;margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
         ${isDocForm ? `<span id="obSubmitDocHint" style="font-size:11px;color:#eab308;flex:1;display:none">
@@ -3042,7 +3027,7 @@ async function submitObTask(taskId) {
     }
   }
 
-  // ── Engagement Letter: auto-create + persist in engagements[] ─────
+  // ── Client contract (4.1): auto-create a draft + persist in engagements[] ─────
   if (task.formKey === 'engagement_letter' && !rejected) {
     // Check for duplicate by contract number
     const engNum = fd.f_engNum || `GL-${new Date().getFullYear()}-${String(engIdCounter).padStart(3,'0')}`;
@@ -3083,15 +3068,16 @@ async function submitObTask(taskId) {
   // ── Activation: blocker check ──────────────────────────
   if (task.formKey === 'activation') {
     const allPrevTasks = obTasks.filter(t => t.clientId === client.id && t.taskNum !== '5.1');
-    const allDoneNow   = allPrevTasks.every(t => t.status === 'completed' || t.status === 'escalated');
+    // Escalation means a decision is still awaited, not permission to activate (TZ 13.1 п. 5).
+    const allDoneNow   = allPrevTasks.every(t => t.status === 'completed');
     if (!allDoneNow) {
       // Revert status — activation is blocked
       task.status      = 'open';
       task.completedAt = null;
       task.completedBy = null;
       const blockerNames = allPrevTasks
-        .filter(t => t.status !== 'completed' && t.status !== 'escalated')
-        .map(t => `${t.taskNum}: ${t.title}`).join(', ');
+        .filter(t => t.status !== 'completed')
+        .map(t => `${t.taskNum}: ${t.title}${t.status === 'escalated' ? ' (на эскалации)' : ''}`).join(', ');
       showToast(`⛔ Активация заблокирована. Незавершено: ${blockerNames}`, 'red');
       closeObTaskForm();
       renderObContent();
@@ -3169,9 +3155,10 @@ async function submitObTask(taskId) {
       if (client.direction === 'FM' && typeof registerLPFromOnboarding === 'function') {
         // POST /api/lp validates obClientId against a server-side
         // activated=1 client — must land before registerLPFromOnboarding
-        // fires, not race it (the client-level PUT further below runs in
-        // Promise.allSettled and isn't guaranteed to finish first).
+        // fires, not race it. The server activates a client only through a
+        // saved, completed stage 5.1, so that stage is saved first.
         try {
+          await apiFetch(`/api/ob-tasks/${task.id}`, { method: 'PUT', body: JSON.stringify({ status: 'completed', formData: task.formData, completedAt: task.completedAt, completedBy: task.completedBy }) });
           await apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify({ activated: true }) });
         } catch (err) {
           showToast('⚠️ Не удалось активировать клиента перед созданием LP: ' + err.message, 'red');
@@ -3227,16 +3214,22 @@ async function submitObTask(taskId) {
   // committed these changes and this function's branching is too entangled
   // to safely unwind on a failed save, so a failure here is a warning, not
   // a rollback.
-  const clientTasks = obTasks.filter(t => t.clientId === client.id);
-  const persistResults = await Promise.allSettled([
-    ...clientTasks.map(t => apiFetch(`/api/ob-tasks/${t.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status: t.status, formData: t.formData, completedAt: t.completedAt, completedBy: t.completedBy }),
-    })),
-    apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify(client) }),
-  ]);
-  if (persistResults.some(r => r.status === 'rejected')) {
-    showToast('⚠️ Часть изменений не удалось сохранить на сервере — обновите страницу и проверьте', 'orange');
+  // One by one: the server checks stage order (server/onboardingRules.js), so the
+  // submitted stage is saved before the stages it unlocks, and the client last.
+  const clientTasks = obTasks.filter(t => t.clientId === client.id)
+    .sort((a, b) => (a.id === task.id ? -1 : b.id === task.id ? 1 : a.taskNum.localeCompare(b.taskNum)));
+  const refused = [];
+  for (const t of clientTasks) {
+    try {
+      await apiFetch(`/api/ob-tasks/${t.id}`, { method: 'PUT', body: JSON.stringify({ status: t.status, formData: t.formData, completedAt: t.completedAt, completedBy: t.completedBy }) });
+    } catch (err) { refused.push(`${t.taskNum}: ${err.message}`); }
+  }
+  try { await apiFetch(`/api/ob-clients/${client.id}`, { method: 'PUT', body: JSON.stringify(client) }); }
+  catch (err) { refused.push(`карточка клиента: ${err.message}`); }
+  if (refused.length) {
+    // Show what the server refused and reload, so the screen matches the saved state.
+    showToast('⚠️ Сервер не принял часть изменений — ' + refused.join('; '), 'orange');
+    await loadOnboardingFromApi();
   }
 
   updateBadges();
@@ -3260,6 +3253,10 @@ async function reopenObTask(taskId) {
 
   const task = obTasks.find(t => t.id === taskId);
   if (!task) return;
+  if (task.formKey === 'dd_outcome' && currentUserRole() !== 'MLRO') {
+    showToast('⛔ Заключение по проверке клиента (2.2) пересматривает MLRO', 'red');
+    return;
+  }
   if (task.status !== 'completed' && task.status !== 'escalated' && task.status !== 'rejected') {
     showToast('Задача уже открыта для редактирования', 'blue');
     return;
@@ -4410,278 +4407,6 @@ function obDraftAttachListeners(taskId, formKey) {
    PDF REPORT — DD OUTCOME (Task 2.2)
 ═══════════════════════════════════════════════════ */
 
-
-/**
- * obGenerateTermSheet(taskId)
- * CF&A Task 4.1 — Generates a legally binding Term Sheet PDF
- * Pulls data from Task 3.1 (Classification) and Task 3.2 (Suitability/Appropriateness)
- * Opens in new window → triggers window.print() → Save as PDF
- */
-function obGenerateTermSheet(taskId) {
-  var task   = obTasks.find(function(t){ return t.id === taskId; });
-  if (!task) { showToast('Задача не найдена', 'red'); return; }
-  var client = obClients.find(function(c){ return c.id === task.clientId; });
-  if (!client) { showToast('Клиент не найден', 'red'); return; }
-  var fd = task.formData || {};
-
-  var t31 = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '3.1'; });
-  var t32 = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '3.2'; });
-  var t22 = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '2.2'; });
-  var t21 = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '2.1'; });
-  var fd31 = (t31 && t31.formData) || {};
-  var fd32 = (t32 && t32.formData) || {};
-  var fd22 = (t22 && t22.formData) || {};
-
-  var tsNum    = fd.engNum   || ('TS-' + new Date().getFullYear() + '-XXX');
-  var tsDate   = fd.engDate  || new Date().toLocaleDateString('en-GB');
-  var isAdv    = client.serviceType === 'Advising' || client.serviceType === 'Both';
-
-  // ── helpers ──────────────────────────────────────────────────
-  function esc(v) { return (v||'—').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function row(lbl, val) {
-    return '<tr><td class="lbl">' + lbl + '</td><td class="val">' + esc(val) + '</td></tr>';
-  }
-  function row2(lbl, val, lbl2, val2) {
-    return '<tr><td class="lbl">' + lbl + '</td><td class="val">' + esc(val) +
-           '</td><td class="lbl">' + lbl2 + '</td><td class="val">' + esc(val2) + '</td></tr>';
-  }
-  function section(icon, num, title) {
-    return '<div class="sec-hdr"><span class="sec-ico">' + icon + '</span><span class="sec-num">SECTION ' + num + '</span>' + title + '</div>';
-  }
-  function tbl(rows) { return '<table>' + rows + '</table>'; }
-  function sigLine(role, name) {
-    return '<tr>' +
-      '<td style="padding:6pt 10pt;border:1px solid #e5e7eb;font-weight:700;font-size:9pt;background:#f8fafc;width:28%">' + role + '</td>' +
-      '<td style="padding:6pt 10pt;border:1px solid #e5e7eb;font-size:9pt;width:36%">' + (name||'') + '</td>' +
-      '<td style="padding:6pt 10pt;border:1px solid #e5e7eb;font-size:9pt;width:18%;color:#94a3b8">Signature</td>' +
-      '<td style="padding:6pt 10pt;border:1px solid #e5e7eb;font-size:9pt;width:18%;color:#94a3b8">Date</td>' +
-      '</tr>';
-  }
-
-  // investment objectives (checkboxes from 3.2)
-  var objList = [
-    fd32.objPreservation === true || fd32.objPreservation === 'true' ? 'Capital Preservation' : null,
-    fd32.objIncome       === true || fd32.objIncome       === 'true' ? 'Income Generation'    : null,
-    fd32.objGrowth       === true || fd32.objGrowth       === 'true' ? 'Capital Growth'       : null,
-    fd32.objSpeculation  === true || fd32.objSpeculation  === 'true' ? 'Speculation'          : null,
-  ].filter(Boolean);
-  var objStr = objList.length ? objList.join(' · ') : (fd32.investGoals || '—');
-
-  var docStyle =
-  '*{box-sizing:border-box;margin:0;padding:0}' +
-  'body{font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:10pt;color:#1a1a2e}' +
-  '@page{size:A4;margin:15mm 18mm 18mm 18mm}' +
-
-  /* Header bar */
-  '.doc-header{background:#0f172a;color:#fff;padding:16pt 20pt;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}' +
-  '.doc-header .co-name{font-size:16pt;font-weight:800;letter-spacing:.5pt;color:#f8fafc}' +
-  '.doc-header .co-sub{font-size:8pt;color:#94a3b8;margin-top:3pt}' +
-  '.doc-header .ts-ref{text-align:right}' +
-  '.doc-header .ts-ref .ts-num{font-size:14pt;font-weight:700;color:#f97316}' +
-  '.doc-header .ts-ref .ts-label{font-size:8pt;color:#94a3b8;text-transform:uppercase;letter-spacing:1pt}' +
-
-  /* Title strip */
-  '.title-strip{background:#f97316;color:#fff;text-align:center;padding:10pt 20pt;font-size:14pt;font-weight:800;letter-spacing:1.5pt;text-transform:uppercase}' +
-  '.title-strip .ts-sub{font-size:8pt;font-weight:400;letter-spacing:.5pt;opacity:.9;margin-top:2pt}' +
-
-  /* Meta bar */
-  '.meta-bar{background:#0f172a;color:#e2e8f0;display:flex;gap:0;border-bottom:2px solid #f97316}' +
-  '.meta-item{flex:1;padding:7pt 14pt;border-right:1px solid #1e293b;font-size:8.5pt}' +
-  '.meta-item:last-child{border-right:none}' +
-  '.meta-item .mi-label{color:#64748b;font-size:7.5pt;text-transform:uppercase;letter-spacing:.5pt;margin-bottom:2pt}' +
-  '.meta-item .mi-val{font-weight:700;color:#f8fafc}' +
-
-  /* Sections */
-  '.body-wrap{padding:10pt 20pt 20pt}' +
-  '.sec-hdr{background:#0f172a;color:#fff;padding:7pt 12pt;margin:14pt 0 6pt;display:flex;align-items:center;gap:10pt;border-left:4pt solid #f97316}' +
-  '.sec-ico{font-size:12pt}' +
-  '.sec-num{font-size:7.5pt;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:1pt;min-width:70pt}' +
-  '.sec-hdr{font-size:10.5pt;font-weight:700;color:#f8fafc}' +
-
-  /* Tables */
-  'table{width:100%;border-collapse:collapse;margin-bottom:8pt;font-size:9.5pt}' +
-  'td.lbl{background:#f1f5f9;font-weight:700;width:32%;padding:5pt 8pt;border:1px solid #e2e8f0;color:#374151;vertical-align:top}' +
-  'td.val{padding:5pt 8pt;border:1px solid #e2e8f0;color:#1a1a2e;vertical-align:top}' +
-  'td.lbl2{background:#fafafa;font-weight:700;width:18%;padding:5pt 8pt;border:1px solid #e2e8f0;color:#374151;font-size:9pt}' +
-
-  /* Badges */
-  '.badge{display:inline-block;padding:2pt 7pt;border-radius:3pt;font-size:8pt;font-weight:700}' +
-  '.badge-green{background:#dcfce7;color:#166534}' +
-  '.badge-blue{background:#dbeafe;color:#1e40af}' +
-  '.badge-orange{background:#ffedd5;color:#9a3412}' +
-  '.badge-red{background:#fee2e2;color:#991b1b}' +
-  '.badge-purple{background:#ede9fe;color:#5b21b6}' +
-
-  /* Summary boxes */
-  '.sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:8pt;margin-bottom:8pt}' +
-  '.sum-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4pt;padding:8pt 10pt}' +
-  '.sum-box .sb-label{font-size:7.5pt;color:#64748b;text-transform:uppercase;letter-spacing:.5pt;margin-bottom:3pt}' +
-  '.sum-box .sb-val{font-size:10pt;font-weight:700;color:#0f172a}' +
-  '.sum-box .sb-sub{font-size:8pt;color:#64748b;margin-top:2pt}' +
-
-  /* Notice */
-  '.notice{background:#fffbeb;border:1pt solid #fcd34d;border-radius:4pt;padding:8pt 12pt;margin:10pt 0;font-size:9pt;color:#92400e}' +
-
-  /* Sig table */
-  '.sig-section{margin-top:14pt;border-top:2pt solid #0f172a;padding-top:10pt}' +
-  '.sig-table{width:100%;border-collapse:collapse;margin-top:8pt}' +
-
-  /* Footer */
-  '.doc-footer{margin-top:14pt;padding-top:8pt;border-top:1pt solid #e2e8f0;display:flex;justify-content:space-between;font-size:7.5pt;color:#94a3b8}';
-
-  var body =
-  // ── HEADER ──────────────────────────────────────────────────
-  '<div class="doc-header">' +
-    '<div><div class="co-name">' + companyName() + '</div>' +
-    '<div class="co-sub">' + FUND_PARAMS.license + ' · AIFC, Astana, Republic of Kazakhstan</div>' +
-    '<div class="co-sub">CF&A Division — Advisory Services</div></div>' +
-    '<div class="ts-ref"><div class="ts-label">Term Sheet</div><div class="ts-num">' + tsNum + '</div></div>' +
-  '</div>' +
-  '<div class="title-strip">TERM SHEET — ENGAGEMENT OF ADVISORY SERVICES' +
-    '<div class="ts-sub">' + (isAdv ? 'Advising on Investments' : 'Arranging Deals in Investments') + ' · Legally Binding</div>' +
-  '</div>' +
-
-  // ── META BAR ────────────────────────────────────────────────
-  '<div class="meta-bar">' +
-    '<div class="meta-item"><div class="mi-label">Date</div><div class="mi-val">' + esc(tsDate) + '</div></div>' +
-    '<div class="meta-item"><div class="mi-label">Client</div><div class="mi-val">' + esc(client.name) + '</div></div>' +
-    '<div class="meta-item"><div class="mi-label">Classification</div><div class="mi-val">' + esc(fd31.proposedClass || fd31.f_proposedClass || client.classification || '—') + '</div></div>' +
-    '<div class="meta-item"><div class="mi-label">Service Type</div><div class="mi-val">' + (isAdv ? 'Advising' : 'Arranging') + '</div></div>' +
-    '<div class="meta-item"><div class="mi-label">Governing Law</div><div class="mi-val">' + esc(fd.governingLaw || 'AIFC Law') + '</div></div>' +
-  '</div>' +
-
-  '<div class="body-wrap">' +
-
-  // ── SECTION 1: PARTIES ───────────────────────────────────────
-  section('⚖️', '1', 'PARTIES') +
-  tbl(
-    row2('Client (Full Name)', client.name, 'BIN / IIN', client.bin || '—') +
-    row2('Client Type', client.type, 'Client Classification', fd31.proposedClass || fd31.f_proposedClass || client.classification || '—') +
-    row2('Address', client.address || '—', 'Email', client.email || '—') +
-    row2('Phone', client.phone || '—', 'KYC/AML Risk Rating', fd22.riskTotal || fd22.f_riskTotal || client.riskRating || '—') +
-    row('Service Provider', companyName() + ' · ' + FUND_PARAMS.license + ' · AIFC, Astana, Republic of Kazakhstan')
-  ) +
-
-  // ── SECTION 2: SCOPE OF ENGAGEMENT ──────────────────────────
-  section('📋', '2', 'SCOPE OF ENGAGEMENT') +
-  tbl(
-    row('Service Type', isAdv ? 'Advising on Investments (Full Suitability Assessment applied — Section 3.2)' : 'Arranging Deals in Investments (Appropriateness Assessment applied — Section 3.3)') +
-    row('Scope of Work / Description of Mandate', fd.engScope || fd32.recProduct || '—') +
-    row2('Proposed Start Date', fd.engStart || '—', 'Proposed End Date / Duration', fd.engExpiry || '—') +
-    row('Exclusivity', fd.exclusivity || 'Not specified')
-  ) +
-
-  // ── SECTION 3: COMMERCIAL TERMS ─────────────────────────────
-  section('💰', '3', 'COMMERCIAL TERMS') +
-  tbl(
-    row('Fee Structure', fd.feeType || '—') +
-    row2('Fixed Fee', fd.feeAmount ? currencySymbol(fd.currency || 'USD') + Number(fd.feeAmount).toLocaleString('en-US') : '—',
-         'Success Fee (%)', fd.successFee ? fd.successFee + '%' : '—') +
-    row2('Retainer (/month)', fd.retainer ? currencySymbol(fd.currency || 'USD') + Number(fd.retainer).toLocaleString('en-US') : '—',
-         'Payment Terms', fd.payTerms || '—')
-  ) +
-
-  // ── SECTION 4: CLIENT CLASSIFICATION SUMMARY (from 3.1) ─────
-  section('🏷️', '4', 'CLIENT CLASSIFICATION SUMMARY') +
-  '<div class="sum-grid">' +
-    '<div class="sum-box"><div class="sb-label">Classification</div>' +
-    '<div class="sb-val">' + esc(fd31.proposedClass || fd31.f_proposedClass || '—') + '</div>' +
-    '<div class="sb-sub">CO Decision: ' + esc(fd31.coDecision || fd31.f_coDecision || '—') + '</div></div>' +
-    '<div class="sum-box"><div class="sb-label">Classification Date</div>' +
-    '<div class="sb-val">' + esc(fd31.classDate || fd31.f_classDate || '—') + '</div>' +
-    '<div class="sb-sub">Client Notified: ' + esc(fd31.clientNotified || '—') + '</div></div>' +
-  '</div>' +
-  tbl(
-    (client.type === 'Individual'
-      ? row('① Net Assets ≥ $1,000,000', fd31.indAssets1m || '—') +
-        row('② Annual Income ≥ $100,000 (2 yrs)', fd31.indIncome100k || '—') +
-        row('③ Professional Qualification ≥ 3 yrs', fd31.indExperience3y || '—')
-      : row('① Annual Turnover ≥ $2,000,000', fd31.corpTurnover2m || '—') +
-        row('② Balance Sheet ≥ $1,000,000', fd31.corpBalance1m || '—') +
-        row('③ Regulated Financial Institution', fd31.corpRegulated || '—') +
-        row('④ Large Corp (2-of-3 sub-criteria)', [fd31.corpLargeTurnover, fd31.corpLargeBalance, fd31.corpEmployees50].filter(function(v){return v==='Да';}).length + '/3 met')
-    ) +
-    row2('Opt-Up Request', fd31.optUpRequest || '—', 'Opt-Down Request', fd31.optDownRequest || '—')
-  ) +
-
-  // ── SECTION 5: SUITABILITY / APPROPRIATENESS SUMMARY (from 3.2) ──
-  section('📊', '5', isAdv ? 'SUITABILITY ASSESSMENT SUMMARY' : 'APPROPRIATENESS ASSESSMENT SUMMARY') +
-  '<div class="sum-grid">' +
-    '<div class="sum-box"><div class="sb-label">Conclusion</div>' +
-    '<div class="sb-val">' + esc(fd32.suitMatch || '—') + '</div></div>' +
-    '<div class="sum-box"><div class="sb-label">Overall Result</div>' +
-    '<div class="sb-val">' + esc(fd32.overallResult || '—') + '</div>' +
-    '<div class="sb-sub">Assessment Date: ' + esc(fd32.suitDate || '—') + '</div></div>' +
-  '</div>' +
-  (isAdv
-    ? tbl(
-        row('Investment Objectives', objStr) +
-        row2('Risk Tolerance', fd32.riskTolerance || '—', 'Investment Horizon', fd32.horizon || '—') +
-        row2('Liquidity Requirements', fd32.liquidityNeeds || '—', 'Annual Income', fd32.annualIncome || '—') +
-        row('Recommended Investment / Mandate', fd32.recProduct || '—') +
-        row('Justification / Notes', fd32.suitJustify || fd32.rmComment || '—') +
-        row2('Level 1 — Investment Adviser (RM)', fd32.adviserName || '—', 'Adviser Date', fd32.adviserDate || '—') +
-        row2('Level 2 — Compliance Officer', fd32.coName || '—', 'CO Review Date', fd32.coReviewDate || '—') +
-        row('Client Acknowledgment of Assessment', fd32.clientAck || '—')
-      )
-    : tbl(
-        row2('Instrument Type', fd32.instrType || '—', 'Instrument Experience', fd32.instrExp || '—') +
-        row2('Understands Instrument Risks', fd32.understandRisk || '—', 'Risk Warning Issued', fd32.riskWarning || '—') +
-        row2('Prior Transaction Experience', fd32.txnPriorExp || '—', 'DD Process Knowledge', fd32.txnDDUnderstand || '—') +
-        row('Mandate Description', fd32.recProduct || '—') +
-        row2('Appropriateness Conclusion', fd32.suitMatch || '—', 'CO Decision', fd32.coDecision || '—')
-      )
-  ) +
-
-  // ── SECTION 6: CONDITIONS PRECEDENT ─────────────────────────
-  section('✅', '6', 'CONDITIONS PRECEDENT') +
-  tbl(
-    row('KYC / AML Status', fd22.conclusion || fd22.f_conclusion || '—') +
-    row('AML Risk Rating', fd22.riskTotal || fd22.f_riskTotal || client.riskRating || '—') +
-    row('Documents Received', t21 && t21.status === 'completed' ? 'All required documents received ✓' : 'Pending / In progress') +
-    row('NDA Status', fd.ndaSigned || '—') +
-    row('Additional Conditions Precedent', fd.conditionsPrecedent || 'None specified')
-  ) +
-
-  // ── SECTION 7: RM NOTES FOR LEGAL COUNSEL ───────────────────
-  section('⚖️', '7', 'RM NOTES FOR LEGAL COUNSEL') +
-  '<table><tr><td style="padding:10pt 12pt;border:1px solid #e2e8f0;font-size:9.5pt;background:#fffbeb;color:#1a1a2e;white-space:pre-wrap">' +
-    esc(fd.legalNotes || '—') +
-  '</td></tr></table>' +
-  (fd.rmComment ? '<table><tr><td class="lbl" style="width:20%">General RM Comment</td><td class="val">' + esc(fd.rmComment) + '</td></tr></table>' : '') +
-
-  // ── SECTION 8: SIGNATURES ────────────────────────────────────
-  section('✍️', '8', 'SIGNATURES — EXECUTION PAGE') +
-  '<div class="notice">⚖️ This Term Sheet constitutes a legally binding agreement between the Parties on the terms set forth herein. ' +
-  'By signing below, each Party agrees to be bound by the terms of this Term Sheet pending execution of the full Engagement Letter. ' +
-  'Governing Law: <strong>' + esc(fd.governingLaw || 'AIFC Law') + '</strong>.</div>' +
-  '<table class="sig-table">' +
-    '<thead><tr>' +
-      '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Role</th>' +
-      '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Name (Print)</th>' +
-      '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Signature</th>' +
-      '<th style="background:#0f172a;color:#fff;padding:5pt 8pt;font-size:8.5pt;text-align:left;border:1px solid #1e293b">Date</th>' +
-    '</tr></thead><tbody>' +
-    sigLine('For and on behalf of<br>' + companyName(), 'Authorised Signatory') +
-    sigLine('For and on behalf of<br>the Client', esc(client.name)) +
-    sigLine('Witnessed by<br>(if applicable)', '') +
-    '</tbody></table>' +
-
-  // ── FOOTER ───────────────────────────────────────────────────
-  '<div class="doc-footer">' +
-    '<span>' + tsNum + ' · Generated ' + new Date().toLocaleDateString('en-GB') + ' by ' + companyName() + ' CRM</span>' +
-    '<span>Page 1 of 1 · ' + FUND_PARAMS.license + '</span>' +
-  '</div>' +
-
-  '</div>'; // body-wrap
-
-  var w = openPrintableDocument(body, {
-    title: 'Term Sheet — ' + esc(client.name) + ' — ' + tsNum,
-    features: 'width=900,height=700',
-    extraStyle: docStyle,
-  });
-  if (w) showToast('✅ Term Sheet готов к печати/PDF: ' + tsNum, 'green');
-}
 
 /**
  * obGenerateDDReport(taskId)

@@ -59,6 +59,8 @@ const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE
 const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { workflowVisible, workflowTarget } = require('./workflowAccess');
+const { conflictVisible, conflictLinks } = require('./conflictAccess');
+const { checkTaskTransition, checkClientActivation } = require('./onboardingRules');
 const { notifyCapitalCallCreated, notifyWorkflowStepAssigned, notifyHfNavPublished, notifyHfRedemptionProcessed } = require('./notifications/triggers');
 const notificationsScheduler = require('./notifications/scheduler');
 const { computeDistributionSplit } = require('./waterfallEngine');
@@ -5450,6 +5452,7 @@ app.post('/api/ob-clients', requireAuth, requireInternal, validateObDataRoom, (r
   const b = req.body || {};
   if (!b.name) return res.status(400).json({ error: 'name is required' });
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction clients' });
+  if (b.activated) return res.status(400).json({ error: 'Новый клиент создаётся неактивированным: активация — этап 5.1 онбординга после проверок' });
   const countRow = db.prepare('SELECT COUNT(*) AS c FROM ob_clients WHERE tenant_id = ?').get(req.tenantId);
   const clientId = b.clientId || `CL-${new Date().getFullYear()}-${String(countRow.c + 1).padStart(3, '0')}`;
   const params = obClientToParams({ phase: 1, onboardingStatus: 'On Track', ...b, clientId });
@@ -5466,6 +5469,10 @@ app.put('/api/ob-clients/:id', requireAuth, requireInternal, validateObDataRoom,
   if (chineseWallBlocks(req.user.permissions, merged.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
   if (merged.direction !== existing.direction && db.prepare('SELECT id FROM engagements WHERE tenant_id = ? AND client_id = ? LIMIT 1').get(req.tenantId, existing.id)) {
     return res.status(409).json({ error: 'У клиента есть связанные договоры. Направление нельзя менять отдельно от договорного процесса.' });
+  }
+  if (!existing.activated && merged.activated) {
+    const blocked = checkClientActivation(req.tenantId, { ...existing, direction: merged.direction });
+    if (blocked) return res.status(blocked.status).json({ error: blocked.message });
   }
   const params = obClientToParams(merged);
   db.prepare(OB_CLIENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
@@ -5572,6 +5579,9 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   if (existing.status === 'completed' && merged.status !== 'completed' && req.user.role === 'RELATIONSHIP_MANAGER') {
     return res.status(403).json({ error: 'Forbidden: RM cannot reopen a completed onboarding task' });
   }
+  // Stage order, stopped onboarding and activation readiness (server/onboardingRules.js).
+  const blocked = checkTaskTransition(req.tenantId, existing, merged, req.user.role);
+  if (blocked) return res.status(blocked.status).json({ error: blocked.message });
   // clientId/taskNum are immutable after creation — OB_TASK_UPDATE_SQL has
   // no @clientId/@taskNum placeholders, so both must be dropped before
   // binding (node:sqlite throws "Unknown named parameter" on any extra key
@@ -5727,6 +5737,10 @@ app.post('/api/ob-tasks', requireAuth, requireInternal, (req, res) => {
   if (!client) return res.status(404).json({ error: 'Onboarding client not found in this tenant' });
   if (chineseWallBlocks(req.user.permissions, client.direction)) {
     return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction clients' });
+  }
+  // Decisions are recorded on an existing stage (PUT), never by creating it decided.
+  if (tasks.some(t => t.status != null && !['locked', 'open', 'in_progress'].includes(t.status))) {
+    return res.status(400).json({ error: 'Новый этап создаётся закрытым или в работе; решение по этапу сохраняется отдельно' });
   }
 
   db.exec('BEGIN');
@@ -5917,7 +5931,7 @@ app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
    history. ===== */
 app.get('/api/conflict-approvals', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM conflict_approvals WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
-  res.json({ tenant: req.tenantSlug, conflictApprovals: rows.map(rowToConflictApproval) });
+  res.json({ tenant: req.tenantSlug, conflictApprovals: rows.filter(row => conflictVisible(req, row)).map(rowToConflictApproval) });
 });
 
 // High/Critical risk conflicts escalate automatically — 'Escalated' instead
@@ -5930,10 +5944,13 @@ const ESCALATING_RISK_LEVELS = new Set(['High', 'Critical']);
 app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const b = req.body || {};
   if (!b.decisionType) return res.status(400).json({ error: 'decisionType is required' });
+  let links;
+  try { links = conflictLinks(req, b); }
+  catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
   const riskLevel = b.riskLevel || 'Low';
   const escalates = ESCALATING_RISK_LEVELS.has(riskLevel);
   const params = conflictApprovalToParams({
-    ...b, riskLevel, currency: b.currency || 'USD',
+    ...b, ...links, riskLevel, currency: b.currency || 'USD',
     status: escalates ? 'Escalated' : 'Pending',
     escalatedTo: escalates ? 'CEO' : (b.escalatedTo || null),
   });
@@ -5945,8 +5962,10 @@ app.post('/api/conflict-approvals', requireAuth, requirePermission('decideConfli
 
 app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideConflicts'), (req, res) => {
   const existing = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
-  if (!existing) return res.status(404).json({ error: 'Conflict approval not found in this tenant' });
+  if (!existing || !conflictVisible(req, existing)) return res.status(404).json({ error: 'Conflict approval not found in this tenant' });
   const b = req.body || {};
+  try { Object.assign(b, conflictLinks(req, b, existing)); }
+  catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
   const DECIDED_STATUSES = new Set(['Approved', 'Approved with conditions', 'Rejected']);
   // An Escalated (High/Critical risk) conflict can only be resolved by the
   // CEO specifically — decideConflicts alone (which Compliance Officer and

@@ -8,6 +8,7 @@
     "start": "node index.js",
     "seed": "node seed.js",
     "backup": "node backup.js",
+    "inventory": "node dataInventory.js",
     "test": "node --test"
   },
   "engines": {

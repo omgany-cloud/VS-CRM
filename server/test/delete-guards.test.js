@@ -5,7 +5,10 @@
 // by hand via one-off CDP scripts.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { DatabaseSync } = require('node:sqlite');
 const { createTestServer } = require('./helpers');
+// Activation happens through stage 5.1 (server/onboardingRules.js); tests about other rules mark it directly.
+function markActivated(id) { const db = new DatabaseSync(server.dbPath); try { db.prepare('UPDATE ob_clients SET activated = 1 WHERE id = ?').run(id); } finally { db.close(); } }
 
 let server;
 let fundId;
@@ -209,8 +212,9 @@ test('Onboarding client: clean (unactivated) delete succeeds; activated is block
   assert.equal((await server.apiFetch(`/api/ob-clients/${clean.id}`, { method: 'DELETE' })).status, 200);
 
   const activated = await (await server.apiFetch('/api/ob-clients', {
-    method: 'POST', body: JSON.stringify({ name: 'TEST_OBCLIENT_ACTIVATED', direction: 'FM', activated: true }),
+    method: 'POST', body: JSON.stringify({ name: 'TEST_OBCLIENT_ACTIVATED', direction: 'FM' }),
   })).json();
+  markActivated(activated.id);
   const del = await server.apiFetch(`/api/ob-clients/${activated.id}`, { method: 'DELETE' });
   assert.equal(del.status, 409);
 });

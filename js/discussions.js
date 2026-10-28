@@ -50,8 +50,8 @@ async function refreshDiscussionList() {
 function resetDiscussions() {
   stopContractConversation(); clearTimeout(discussionListTimer); ++discussionListRequest; ++discussionViewRequest;
   discussionDrafts.clear(); discussionItems = []; discussionSources = []; discussionCategories = []; discussionCreateKey = null; contractApprovalUI = null;
-  discussionTaskFilter = 'open'; discussionDueFilter = ''; updateTaskBadge(0);
-  discussionTaskSelection.clear(); discussionBulkKeys.clear(); discussionBulk = { confirm: false, busy: false, status: '', error: false };
+  discussionTaskFilter = 'open'; discussionQuickFilter = ''; updateTaskBadge(0);
+  discussionTaskSelection.clear(); discussionBulkKeys.clear(); resetTaskBulk();
   const list = document.getElementById('discussionList'), main = document.getElementById('discussionMain');
   if (list) list.innerHTML = ''; if (main) main.innerHTML = '<div id="discussionWelcome"></div>';
 }
@@ -59,9 +59,9 @@ function renderDiscussionList() {
   const q = document.getElementById('discussionSearch').value.trim().toLocaleLowerCase();
   const state = contractApprovalUI;
   const category = document.getElementById('discussionChatFilter')?.value || '';
-  const today = taskToday(); renderTaskDueFilter(today);
+  const today = taskToday(); renderTaskQuickFilters(today); updateTaskPeopleFilters();
   const items = sortTaskItems(discussionItems.filter(i => (i.task?.status || 'open') === discussionTaskFilter && `${i.title} ${i.label} ${i.preview} ${(i.sources || []).map(s => s.label + ' ' + s.title).join(' ')}`.toLocaleLowerCase().includes(q)
-    && (!category || (category === 'free' ? !i.sources?.length : i.sources?.some(s => s.kind === category))) && taskDueMatches(i.task, today)), document.getElementById('discussionTaskSort')?.value);
+    && (!category || (category === 'free' ? !i.sources?.length : i.sources?.some(s => s.kind === category))) && taskQuickMatches(i.task, today) && taskPeopleMatch(i)), document.getElementById('discussionTaskSort')?.value);
   const selecting = syncTaskSelection(items);
   document.getElementById('discussionList').innerHTML = items.length ? items.map(item => `<div class="discussion-list-row">${selecting ? taskSelectBox(item) : ''}<button type="button" class="discussion-list-item${state?.engagementId === item.id && (state.kind || 'contract') === item.kind ? ' selected' : ''}" onclick="openDiscussion('${item.kind}',${item.id})">
     <span class="discussion-avatar"><i class="fas ${item.kind === 'contract' ? 'fa-file-signature' : 'fa-comments'}" aria-hidden="true"></i></span>

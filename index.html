@@ -641,9 +641,10 @@
           <div class="discussion-sidebar-heading"><h2>Мои задачи</h2><button id="discussionNew" type="button" class="discussion-icon-button contract-primary" title="Новая задача" aria-label="Новая задача" onclick="newDiscussion()"><i class="fas fa-plus" aria-hidden="true"></i></button></div>
           <input id="discussionSearch" type="search" placeholder="Найти задачу…" aria-label="Найти задачу" oninput="renderDiscussionList()" />
           <div class="task-list-tabs" role="group" aria-label="Состояние задач"><button type="button" data-task-filter="open" class="selected" aria-pressed="true" onclick="setTaskFilter('open')">В работе</button><button type="button" data-task-filter="completed" aria-pressed="false" onclick="setTaskFilter('completed')">Завершённые</button><button type="button" data-task-filter="trashed" aria-pressed="false" title="Корзина" aria-label="Корзина" onclick="setTaskFilter('trashed')">Корзина</button></div>
-          <div id="discussionDueFilter" class="task-due-filter" role="group" aria-label="Задачи по сроку" hidden></div>
+          <div id="discussionQuickFilter" class="task-due-filter" role="group" aria-label="Быстрые фильтры задач" hidden></div>
           <label class="task-sort-label" for="discussionTaskSort">Порядок <select id="discussionTaskSort" onchange="renderDiscussionList()"><option value="activity">По активности</option><option value="due">По сроку</option><option value="created">Сначала новые</option><option value="title">По названию</option></select></label>
           <select id="discussionChatFilter" aria-label="Задачи по разделу CRM" onchange="renderDiscussionList()"><option value="">Все мои задачи</option><option value="free">Без процесса CRM</option></select>
+          <div class="task-filter-row"><select id="discussionAssigneeFilter" aria-label="Ответственный" onchange="renderDiscussionList()"><option value="">Любой ответственный</option></select><select id="discussionClientFilter" aria-label="Клиент" onchange="renderDiscussionList()"><option value="">Все клиенты</option></select></div>
           <div id="discussionBulk" class="task-bulk" role="group" aria-label="Действия с выбранными задачами" hidden></div>
           <div id="discussionList"><p class="discussion-empty">Загрузка…</p></div>
         </aside>

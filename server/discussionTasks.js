@@ -22,7 +22,8 @@ function taskState(tenantId, kind, id) {
   const row = db.prepare(`SELECT * FROM discussion_task_state WHERE tenant_id = ? AND ${taskColumn(kind)} = ?`).get(tenantId,id);
   const assignee=row?.assignee_id?db.prepare('SELECT id,name,active FROM users WHERE tenant_id=? AND id=?').get(tenantId,row.assignee_id):null;
   return { status: row?.status || 'open', purgedAt:row?.purged_at||null, title: row?.title || null, dueDate: row?.due_date || null, version: row?.version || 0, assignee:assignee||null,
-    updatedAt: row?.updated_at || null, completedAt: row?.completed_at || null, deletedAt: row?.deleted_at || null, previousStatus: row?.previous_status || null };
+    updatedAt: row?.updated_at || null, completedAt: row?.completed_at || null, deletedAt: row?.deleted_at || null, previousStatus: row?.previous_status || null,
+    result: row?.completion_result || null };
 }
 function taskView(req,kind,id,row) {
   const state = taskState(req.tenantId,kind,id);
@@ -62,6 +63,10 @@ function changeTask(req,kind,id,body) {
   if (!body || !['rename','due','assign','complete','reopen','trash','restore'].includes(body.action) || !Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 0 || typeof body.requestKey !== 'string' || !/^[a-zA-Z0-9-]{16,64}$/.test(body.requestKey)) fail('Обновите задачу и повторите действие');
   const input = {kind,id:Number(id),action:body.action,version:body.expectedVersion};
   if (body.action === 'due') input.dueDate = dueDate(body.dueDate);
+  if(body.action==='complete'){
+    if(typeof body.result!=='string'||!body.result.trim()||body.result.trim().length>2000)fail('Опишите результат задачи: до 2000 символов');
+    input.result=body.result.trim();
+  }
   if(body.action==='rename'){
     if(typeof body.title!=='string'||!body.title.trim()||body.title.trim().length>160)fail('Укажите название задачи: до 160 символов');
     input.title=body.title.trim();
@@ -91,8 +96,8 @@ function changeTask(req,kind,id,body) {
       }
     }
     if (body.action === 'due') { if (current.status === 'trashed') fail('Сначала восстановите задачу',409); next.dueDate = input.dueDate; }
-    if (body.action === 'complete') { if (current.status !== 'open') fail('Задача уже не в работе',409); next.status='completed'; next.completedAt=now; }
-    if (body.action === 'reopen') { if (current.status !== 'completed') fail('Вернуть в работу можно завершённую задачу',409); next.status='open'; next.completedAt=null; }
+    if (body.action === 'complete') { if (current.status !== 'open') fail('Задача уже не в работе',409); next.status='completed'; next.completedAt=now; next.result=input.result; }
+    if (body.action === 'reopen') { if (current.status !== 'completed') fail('Вернуть в работу можно завершённую задачу',409); next.status='open'; next.completedAt=null; next.result=null; }
     if (body.action === 'trash') { if (current.status === 'trashed') fail('Задача уже в корзине',409); next.previousStatus=current.status; next.status='trashed'; next.deletedAt=now; }
     if (body.action === 'restore') { if (current.status !== 'trashed') fail('Задача не находится в корзине',409); next.status=current.previousStatus || 'open'; next.deletedAt=null; next.previousStatus=null; }
     db.prepare(`INSERT INTO discussion_task_state (tenant_id,${taskColumn(kind)},status,previous_status,due_date,version,updated_at,updated_by,completed_at,deleted_at)
@@ -100,6 +105,7 @@ function changeTask(req,kind,id,body) {
       version=excluded.version,updated_at=excluded.updated_at,updated_by=excluded.updated_by,completed_at=excluded.completed_at,deleted_at=excluded.deleted_at`)
       .run(req.tenantId,id,next.status,next.previousStatus,next.dueDate,current.version+1,now,req.user.id,next.completedAt,next.deletedAt);
     if(body.action==='assign')db.prepare(`UPDATE discussion_task_state SET assignee_id=? WHERE tenant_id=? AND ${taskColumn(kind)}=?`).run(next.assignee?.id||null,req.tenantId,id);
+    if(['complete','reopen'].includes(body.action))db.prepare(`UPDATE discussion_task_state SET completion_result=? WHERE tenant_id=? AND ${taskColumn(kind)}=?`).run(next.result,req.tenantId,id);
     if(body.action==='rename'){
       if(kind==='room'){
         db.prepare('UPDATE discussion_rooms SET title=? WHERE tenant_id=? AND id=?').run(input.title,req.tenantId,id);
@@ -107,7 +113,7 @@ function changeTask(req,kind,id,body) {
       }else db.prepare('UPDATE discussion_task_state SET title=? WHERE tenant_id=? AND engagement_id=?').run(input.title,req.tenantId,id);
     }
     const labels={due:'Изменён срок задачи',complete:'Задача завершена',reopen:'Задача возвращена в работу',trash:'Задача перемещена в корзину; связанные записи сохранены',restore:'Задача восстановлена из корзины'};
-    recordAudit(db,{tenantId:req.tenantId,entityType:kind === 'room' ? 'discussion_rooms':'engagements',entityId:Number(id),action:'discussion',actorEmail:req.user.email,summary:body.action==='rename'?`Задача переименована: «${current.title}» → «${input.title}»`:body.action==='assign'?'Ответственный: '+(next.assignee?.name||'не назначен'):labels[body.action]+(body.action === 'due' ? ': '+(next.dueDate || 'без срока'):'')});
+    recordAudit(db,{tenantId:req.tenantId,entityType:kind === 'room' ? 'discussion_rooms':'engagements',entityId:Number(id),action:'discussion',actorEmail:req.user.email,summary:body.action==='rename'?`Задача переименована: «${current.title}» → «${input.title}»`:body.action==='assign'?'Ответственный: '+(next.assignee?.name||'не назначен'):labels[body.action]+(body.action === 'due' ? ': '+(next.dueDate || 'без срока'):body.action==='complete'?'. Результат: '+input.result:'')});
     const result={task:taskView(req,kind,id,currentRow)};
     db.prepare('INSERT INTO discussion_task_commands (tenant_id,request_key,actor_id,payload_hash,result_json) VALUES (?,?,?,?,?)').run(req.tenantId,body.requestKey,req.user.id,hash,JSON.stringify(result));
     return result;

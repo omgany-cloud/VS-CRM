@@ -1848,6 +1848,12 @@ CREATE TABLE IF NOT EXISTS discussion_task_reads (
 if (!columnExists('discussion_task_state', 'assignee_id')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN assignee_id INTEGER REFERENCES users(id)');
 if (!columnExists('discussion_task_state', 'title')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN title TEXT');
 if (!columnExists('discussion_task_state', 'purged_at')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN purged_at TEXT');
+// What was done, stated when the task is completed (TZ M3); cleared when it is reopened.
+if (!columnExists('discussion_task_state', 'completion_result')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN completion_result TEXT');
+// Owner's decisions 28.10.2026: the client check (2.2) is the MLRO's stage, and
+// CF&A stage 4.1 is the client contract itself, not an Engagement Letter / Term Sheet pair.
+db.exec("UPDATE ob_tasks SET role = 'MLRO' WHERE form_key = 'dd_outcome' AND role = 'CO'");
+db.exec("UPDATE ob_tasks SET title = 'Client Contract' WHERE form_key = 'engagement_letter' AND title = 'Draft & Sign Engagement Letter'");
 
 // M2.2: manual registration of a both-party signed PDF for the exact approved
 // revision, and the server-checked start of work. A voided registration stays

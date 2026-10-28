@@ -7,6 +7,7 @@ const { handle } = require('./contractDocuments');
 const { getSource } = require('./discussionSources');
 const { contractMetadata, latestCycle, approvalSummary } = require('./contractApprovalState');
 const { readiness, activeSignature } = require('./contractSigning');
+const { HALTS } = require('./onboardingRules');
 
 // [CF&A, FM] labels; the stored task titles are the onboarding module's English names.
 const STEP_LABELS = {
@@ -15,16 +16,8 @@ const STEP_LABELS = {
   '2.2': ['Проверка клиента (Due Diligence)', 'Проверка AML / KYC'],
   '3.1': ['Классификация клиента', 'Квалификация LP'],
   '3.2': ['Suitability / Appropriateness', 'Инвестиционный профиль LP'],
-  '4.1': ['Engagement Letter', 'Subscription Agreement'],
+  '4.1': ['Договор с клиентом', 'Subscription Agreement'],
   '5.1': ['Активация клиента', 'Активация LP'],
-};
-// The same outcomes that stop onboarding in the onboarding form (js/onboarding.js submitObTask).
-const HALTS = {
-  conflict_precheck: d => /No-Go/.test(d.f_decision || d.decision || '') && 'решение No-Go',
-  dd_outcome: d => /Отказать/.test(d.f_conclusion || d.conclusion || '') && 'заключение «Отказать»',
-  suitability: d => (d.f_overallResult || d.overallResult) === 'Не подходит — отказ' && 'клиент не подходит',
-  lp_qualification: d => /Не квалифицирован/.test(d.f_lpQualResult || d.lpQualResult || '') && 'LP не квалифицирован',
-  lp_investment_profile: d => (d.f_fundSuitResult || d.fundSuitResult) === 'Нет — отказ' && 'LP не соответствует стратегии фонда',
 };
 
 function stepLabel(number, fm, fallback) {

@@ -2,6 +2,46 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.61.0] - 2026-10-28
+
+### Added
+- "My work" in Tasks (TZ M3): quick filters "Awaiting my decision" (contracts
+  with my pending vote) and "In rework" (contracts I submitted that came back,
+  were rejected, withdrawn or need a new revision), plus filters by
+  responsible person and by client. The Tasks menu counter now adds waiting
+  decisions to overdue tasks.
+- Completing a task requires a result (up to 2000 characters), shown on the
+  completed task and recorded in the audit log; bulk completion asks for one
+  result for all selected tasks. Reopening clears it.
+- A returned or rejected contract goes back to its author: an email with the
+  reviewer's remark, and the author becomes responsible for the contract task
+  if nobody was.
+- `npm run inventory` (`server/dataInventory.js`): a read-only report of
+  legacy records the newer server rules would refuse. The live database
+  currently shows none.
+
+### Security
+- Conflict decisions link only clients and contracts of the company that the
+  user can open, a contract must belong to the linked client, FM decisions are
+  hidden behind the FM wall, and a decided conflict can no longer be moved to
+  another contract (it counts for that contract's start of work).
+- Onboarding stage order is enforced by the server: a locked stage opens only
+  after its predecessor (an escalated 1.1 still lets documents start), a
+  stopped onboarding cannot move on, stage 5.1 completes only when every other
+  stage is completed (escalation is not completion) and work under the chosen
+  contract has started, and a client is activated only through stage 5.1 (no
+  longer at creation). The browser now saves stages one by one and shows what
+  the server refused.
+- Only the MLRO records, changes or reopens the client check conclusion
+  (onboarding stage 2.2, KYC); the stage's role is now MLRO in templates and
+  existing stages.
+
+### Changed
+- CF&A onboarding stage 4.1 is the client contract itself ("Client Contract"):
+  the Term Sheet wording, the "Term Sheet PDF" generator and the
+  "signed by client" field are gone; signing is registered only in the
+  contract card. FM stage 4.1 stays the Subscription Agreement.
+
 ## [1.60.0] - 2026-10-28
 
 ### Added

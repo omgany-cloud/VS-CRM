@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 const { createTestServer } = require('./helpers');
 
-let server, rm, co, cfo, auditor, other;
+let server, rm, co, cfo, auditor, other, mlro;
 const key = () => crypto.randomUUID();
 const PDF = text => Buffer.from('%PDF-1.4\n' + text);
 async function json(res, status = 200) { const body = await res.json(); assert.equal(res.status, status, JSON.stringify(body)); return body; }
@@ -24,14 +24,18 @@ function multipart(url, fields, file, token) {
   return fetch(server.baseUrl + url, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form });
 }
 async function onboarding(client, { conflict = 'Go', conflictStatus = 'completed', kyc = 'Одобрить — Approve', kycStatus = 'completed' } = {}) {
-  await json(await api('/api/ob-tasks', { clientId: client.id, tasks: [
-    { taskNum: '1.1', title: 'Conflict Pre-Check', phase: 1, role: 'RM', formKey: 'conflict_precheck', status: conflictStatus, formData: { f_decision: conflict, decision: conflict } },
-    { taskNum: '2.2', title: 'DD Outcome', phase: 2, role: 'CO', formKey: 'dd_outcome', status: kycStatus, formData: { f_conclusion: kyc, conclusion: kyc } },
+  // Stages are created open; decisions are then recorded on them, as the onboarding form does.
+  const { obTasks } = await json(await api('/api/ob-tasks', { clientId: client.id, tasks: [
+    { taskNum: '1.1', title: 'Conflict Pre-Check', phase: 1, role: 'RM', formKey: 'conflict_precheck', status: 'open' },
+    { taskNum: '2.2', title: 'DD Outcome', phase: 2, role: 'CO', formKey: 'dd_outcome', status: 'open' },
   ] }), 201);
+  await json(await api(`/api/ob-tasks/${obTasks[0].id}`, { status: conflictStatus, formData: { f_decision: conflict, decision: conflict } }, server.token, 'PUT'));
+  // The client check conclusion (2.2) is recorded by the MLRO (server/onboardingRules.js).
+  await json(await api(`/api/ob-tasks/${obTasks[1].id}`, { status: kycStatus, formData: { f_conclusion: kyc, conclusion: kyc } }, mlro.token, 'PUT'));
 }
 async function setTask(client, number, status, formData) {
   const task = (await json(await api('/api/onboarding'))).obTasks.find(t => t.clientId === client.id && t.taskNum === number);
-  await json(await api(`/api/ob-tasks/${task.id}`, { status, formData }, server.token, 'PUT'));
+  await json(await api(`/api/ob-tasks/${task.id}`, { status, formData }, number === '2.2' ? mlro.token : server.token, 'PUT'));
 }
 // Draft contract with an uploaded revision, approved by two colleagues.
 async function approvedContract({ direction = 'CF&A', checks = {}, approve = true } = {}) {
@@ -64,7 +68,7 @@ function engagementRow(id) {
 
 before(async () => {
   server = await createTestServer({ port: 4210, extraEnv: { SMTP_HOST: '', AI_PROVIDER: '' } });
-  rm = await user('RELATIONSHIP_MANAGER'); co = await user('COMPLIANCE_OFFICER'); cfo = await user('CFO'); auditor = await user('AUDITOR');
+  rm = await user('RELATIONSHIP_MANAGER'); co = await user('COMPLIANCE_OFFICER'); cfo = await user('CFO'); auditor = await user('AUDITOR'); mlro = await user('MLRO');
   other = await json(await api('/api/auth/signup', { companyName: 'Other signing company', name: 'Other owner', email: 'signing-other@test.example', password: 'SigningTest123!' }), 201);
 });
 after(async () => { if (server) await server.stop(); });
@@ -149,8 +153,8 @@ test('KYC and conflict decisions gate the start of work; escalation and EDD do n
   await setTask(client, '2.2', 'completed', { f_conclusion: 'Одобрить — Approve' });
   await setTask(client, '1.1', 'completed', { f_decision: 'Go' });
   // A pending decision for this client blocks; one for another contract does not.
-  const elsewhere = await approvedContract();
-  await json(await api('/api/conflict-approvals', { decisionType: 'Routine Conflict', riskLevel: 'Low', clientId: client.id, engagementId: elsewhere.e.id, status: 'Pending' }), 201);
+  const elsewhere = await json(await api('/api/engagements', { clientId: client.id, clientName: client.name, contractNum: 'SIGN-OTHER', direction: 'CF&A', serviceType: 'Advising', status: 'Draft', feeAmount: 1 }), 201);
+  await json(await api('/api/conflict-approvals', { decisionType: 'Routine Conflict', riskLevel: 'Low', clientId: client.id, engagementId: elsewhere.id, status: 'Pending' }), 201);
   const pending = await json(await api('/api/conflict-approvals', { decisionType: 'Dual-Mandate', riskLevel: 'Low', clientId: client.id }), 201);
   state = await json(await signing(e));
   assert.equal(state.readiness.conditions[2].state, 'pending'); assert.match(state.readiness.conditions[2].detail, /Dual-Mandate/);

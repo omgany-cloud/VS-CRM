@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 const { createTestServer } = require('./helpers');
 
-let server, rm, co, cfo, other;
+let server, rm, co, cfo, other, mlro;
 const key = () => crypto.randomUUID();
 async function json(res, status = 200) { const body = await res.json(); assert.equal(res.status, status, JSON.stringify(body)); return body; }
 function api(url, body, token = server.token, method = body === undefined ? 'GET' : 'POST') {
@@ -25,7 +25,8 @@ async function client(direction = 'CF&A') {
     ({ taskNum, formKey, role, title: 'Task ' + taskNum, status: i ? 'locked' : 'open', dueDate: '2026-11-0' + (i + 1) })) }), 201);
   return { c, tasks: Object.fromEntries(obTasks.map(t => [t.taskNum, t])) };
 }
-async function setTask(task, status, formData = {}) { return json(await api(`/api/ob-tasks/${task.id}`, { status, formData }, server.token, 'PUT')); }
+// The client check conclusion (2.2) is recorded by the MLRO.
+async function setTask(task, status, formData = {}) { return json(await api(`/api/ob-tasks/${task.id}`, { status, formData }, task.taskNum === '2.2' ? mlro.token : server.token, 'PUT')); }
 function upload(e, expected, text, token = rm.token) {
   const form = new FormData(); form.append('expectedVersion', String(expected)); form.append('changeNote', text);
   form.append('file', new Blob([Buffer.from('%PDF-1.4\n' + text)]), 'contract.pdf');
@@ -34,7 +35,7 @@ function upload(e, expected, text, token = rm.token) {
 
 before(async () => {
   server = await createTestServer({ port: 4211, extraEnv: { SMTP_HOST: '', AI_PROVIDER: '' } });
-  rm = await user('RELATIONSHIP_MANAGER'); co = await user('COMPLIANCE_OFFICER'); cfo = await user('CFO');
+  rm = await user('RELATIONSHIP_MANAGER'); co = await user('COMPLIANCE_OFFICER'); cfo = await user('CFO'); mlro = await user('MLRO');
   other = await json(await api('/api/auth/signup', { companyName: 'Other next company', name: 'Other', email: 'next-other@test.example', password: 'NextStep123!' }), 201);
 });
 after(async () => { if (server) await server.stop(); });
@@ -106,6 +107,7 @@ test('a contract walks from file to approval, signing and start of work', async 
   assert.equal(s.title, 'Для начала работы не хватает проверок клиента'); assert.match(s.text, /KYC/); assert.equal(s.action.clientId, c.id);
 
   await setTask(tasks['1.1'], 'completed', { f_decision: 'Go' });
+  await setTask(tasks['2.1'], 'completed');
   await setTask(tasks['2.2'], 'completed', { f_conclusion: 'Одобрить — Approve' });
   s = await json(await step('contract', e.id, rm.token));
   assert.equal(s.title, 'Начните работу по договору'); assert.equal(s.done, 3);

@@ -6,6 +6,8 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 const AdmZip = require('adm-zip');
 const { createTestServer } = require('./helpers');
+// Activation happens through stage 5.1 (server/onboardingRules.js); tests about other rules mark it directly.
+function markActivated(id) { const db = new DatabaseSync(server.dbPath); try { db.prepare('UPDATE ob_clients SET activated = 1 WHERE id = ?').run(id); } finally { db.close(); } }
 
 let server, rm, auditor, external, other, client, roles;
 function word(text) {
@@ -52,7 +54,7 @@ before(async () => {
   server = await createTestServer({ port: 4204, extraEnv: { SMTP_HOST: '', AI_PROVIDER: '' } });
   rm = await user('RELATIONSHIP_MANAGER'); auditor = await user('AUDITOR'); external = await user('IC_INDEPENDENT');
   other = await json(await api('/api/auth/signup', { companyName: 'Template other company', name: 'Other owner', email: 'templates-other@test.example', password: 'TemplatesOther123!' }), 201);
-  client = await json(await api('/api/ob-clients', { name: 'Клиент шаблонов', direction: 'CF&A', activated: true }), 201);
+  client = await json(await api('/api/ob-clients', { name: 'Клиент шаблонов', direction: 'CF&A' }), 201); markActivated(client.id);
   roles = (await json(await api('/api/roles'))).roles;
 });
 after(async () => { if (server) await server.stop(); });
@@ -212,7 +214,7 @@ test('invalid contract inputs leave no partially created engagement', async () =
     const response = await api(createPath(t), creation(patch));
     assert.ok([400, 404].includes(response.status));
   }
-  const fmClient = await json(await api('/api/ob-clients', { name: 'FM creation blocked', direction: 'FM', activated: true }), 201);
+  const fmClient = await json(await api('/api/ob-clients', { name: 'FM creation blocked', direction: 'FM' }), 201); markActivated(fmClient.id);
   assert.equal((await api(createPath(t), creation({ clientId: fmClient.id }), rm.token)).status, 403);
   assert.equal((await json(await api('/api/onboarding'))).engagements.length, before);
 });
@@ -240,7 +242,8 @@ test('early drafts preserve onboarding progress and protect the client relations
   assert.equal(process.tasks[0].status, 'escalated');
   assert.equal(process.client.activated, false);
   assert.equal(process.approval.status, 'draft', 'escalation does not approve the contract');
-  await json(await api(`/api/ob-clients/${prospect.id}`, { activated: true }, server.token, 'PUT'));
+  assert.match((await json(await api(`/api/ob-clients/${prospect.id}`, { activated: true }, server.token, 'PUT'), 409)).error, /этапа 5\.1/);
+  markActivated(prospect.id);
   process = await json(await api(`/api/engagements/${result.contract.id}/process`));
   assert.equal(process.client.activated, true);
   assert.equal(process.approval.status, 'draft', 'client activation does not approve the text');

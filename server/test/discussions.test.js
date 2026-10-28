@@ -6,7 +6,9 @@ const { createTestServer } = require('./helpers');
 let server, rm, co, auditor, external, outsider, other;
 const key = () => crypto.randomUUID();
 async function taskAction(id, action, version, extra = {}, token = server.token, status = 200) {
-  return json(await api(`/api/discussions/room/${id}/state`, { action, expectedVersion: version, requestKey: key(), ...extra }, token), status);
+  // Completion needs a result (TZ M3); tests that are not about it get a default one.
+  const result = action === 'complete' && !('result' in extra) ? { result: 'Готово' } : {};
+  return json(await api(`/api/discussions/room/${id}/state`, { action, expectedVersion: version, requestKey: key(), ...result, ...extra }, token), status);
 }
 async function json(res, status = 200) { const body = await res.json(); assert.equal(res.status, status, JSON.stringify(body)); return body; }
 function api(url, body, token = server.token, method = body === undefined ? 'GET' : 'POST') {
@@ -474,4 +476,19 @@ test('chat pagination catches up and history remains bound to the selected room'
   const first = await json(await api(`/api/discussions/${r.id}?after=0`)); assert.equal(first.messages.length, 100); assert.equal(first.hasMore, true);
   const rest = await json(await api(`/api/discussions/${r.id}?after=${first.nextAfter}`)); assert.equal(rest.messages.length, 3);
   await json(await api(`/api/discussions/${r.id}?before=1&after=2`), 400);
+});
+
+test('completing a task needs a result, which is kept, listed with the task clients and cleared on reopen', async () => {
+  const r = await room(), c = await client();
+  await json(await api(`/api/discussions/${r.id}/links`, { kind: 'client', id: c.id }));
+  for (const result of [undefined, '   ', 123, 'x'.repeat(2001)]) {
+    await json(await api(`/api/discussions/room/${r.id}/state`, { action: 'complete', expectedVersion: 0, requestKey: key(), ...(result === undefined ? {} : { result }) }), 400);
+  }
+  const done = await taskAction(r.id, 'complete', 0, { result: '  Договорились о встрече  ' });
+  assert.equal(done.task.result, 'Договорились о встрече');
+  const listed = (await json(await api('/api/discussions'))).items.find(i => i.kind === 'room' && i.id === r.id);
+  assert.equal(listed.task.result, 'Договорились о встрече'); assert.deepEqual(listed.clients, [{ id: c.id, name: c.name }]);
+  const audit = await json(await api(`/api/audit-log?entityType=discussion_rooms&entityId=${r.id}`));
+  assert.ok(audit.entries.some(entry => entry.summary.includes('Результат: Договорились о встрече')));
+  assert.equal((await taskAction(r.id, 'reopen', 1)).task.result, null);
 });

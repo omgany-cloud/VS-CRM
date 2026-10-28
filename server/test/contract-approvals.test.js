@@ -112,11 +112,11 @@ test('contract task lifecycle cannot hide active approval; closed tasks preserve
   const e=await contract();const cycle=await submitDirect(e);
   const url=`/api/discussions/contract/${e.id}/state`;
   const action=(action,expectedVersion,extra={})=>api(url,{action,expectedVersion,requestKey:key(),...extra},rm.token);
-  await json(await action('complete',0),409);await json(await action('trash',0),409);
+  await json(await action('complete',0,{result:'Done'}),409);await json(await action('trash',0),409);
   await json(await action('due',0,{dueDate:'2026-11-01'}));
   assert.deepEqual((await history(e)).cycles[0].steps.map(s=>s.dueAt),cycle.steps.map(s=>s.dueAt));
   await control(e,cycle,'withdraw');
-  await json(await action('complete',1));
+  await json(await action('complete',1,{result:'Done'}));
   assert.equal((await chat(e)).canPost,false);
   await json(await api(`/api/engagements/${e.id}/approvals`,await directSubmission(e),rm.token),409);
   await json(await postMessage(e,await messageBody(e)),409);
@@ -648,4 +648,28 @@ test('the current file author can discuss remarks even when excluded from approv
   assert.equal((await history(e, co.token)).cycles[0].canDecide, false);
   assert.equal((await chat(e, co.token)).canPost, true);
   await json(await postMessage(e, await messageBody(e, 'Author clarification'), co.token), 201);
+});
+
+test('Tasks flag my pending decision and my returned contract; a return makes the author responsible and emails them', async () => {
+  const e = await contract();
+  let cycle = await submitDirect(e);
+  const item = async token => (await json(await api('/api/discussions', undefined, token))).items.find(i => i.kind === 'contract' && i.id === e.id);
+  assert.equal((await item(co.token)).task.review, 'decide'); assert.equal((await item(rm.token)).task.review, null);
+  assert.deepEqual((await item(rm.token)).clients.map(c => c.name), ['Approval client']);
+
+  const from = server.output().length;
+  await json(await directDecision(e, cycle, co, 'returned', 'Исправьте сумму'));
+  const mine = await item(rm.token);
+  assert.equal(mine.task.review, 'rework'); assert.equal(mine.task.assignee.id, rm.id);
+  assert.equal((await item(co.token)).task.review, null);
+  for (let i = 0; i < 40 && !server.output().slice(from).includes('Subject: Договор возвращён на доработку'); i++) await new Promise(r => setTimeout(r, 50));
+  assert.match(server.output().slice(from), /To: approval-RELATIONSHIP_MANAGER@test\.example \| Subject: Договор возвращён на доработку/);
+
+  // Someone already responsible stays responsible after the next return.
+  await json(await upload(e, 1, 'second'), 201);
+  cycle = await submitDirect(e);
+  await json(await api(`/api/discussions/contract/${e.id}/state`, { action: 'assign', assigneeId: co.id, expectedVersion: (await item(rm.token)).task.version, requestKey: key() }, rm.token));
+  await json(await directDecision(e, cycle, cfo, 'rejected', 'Не подходит'));
+  const again = await item(rm.token);
+  assert.equal(again.task.assignee.id, co.id); assert.equal(again.task.review, 'rework');
 });

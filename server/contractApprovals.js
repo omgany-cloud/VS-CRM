@@ -6,6 +6,8 @@ const { recordAudit } = require('./auditLog');
 const { assertContractAccess, handle, transaction } = require('./contractDocuments');
 const { ContractError, contractMetadata, latestCycle, approvalMatches, documentFrozen, approvalSummary } = require('./contractApprovalState');
 const {assertTaskOpen} = require('./discussionTasks');
+const { rowToPermissions } = require('./rolesMapping');
+const { notifyContractReturned } = require('./notifications/triggers');
 
 const router = express.Router();
 // Mounted at /api: protect only this module's paths, leaving external/API-key
@@ -68,6 +70,25 @@ function routeInput(req, allowUnavailable = false) {
 }
 function audit(req, engagementId, action, summary) {
   recordAudit(db, { tenantId: req.tenantId, entityType: 'engagements', entityId: engagementId, action, actorEmail: req.user.email, summary });
+}
+// A returned or rejected contract goes back to its author (TZ M3): if the
+// contract's open task has nobody responsible, the author becomes responsible,
+// so it lands in their "На доработке" list and deadline reminders.
+function assignAuthor(req, contract, cycle, now) {
+  const state = db.prepare('SELECT * FROM discussion_task_state WHERE tenant_id = ? AND engagement_id = ?').get(req.tenantId, contract.id);
+  if (state && (state.assignee_id || state.status !== 'open' || state.purged_at)) return;
+  const author = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ? AND active = 1').get(req.tenantId, cycle.initiator_id);
+  const role = author && db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(req.tenantId, author.role);
+  if (!role) return;
+  const permissions = rowToPermissions(role);
+  if (!permissions.internal || permissions.readOnly) return;
+  try { assertContractAccess({ tenantId: req.tenantId, user: { ...author, permissions } }, contract); }
+  catch (err) { if (err instanceof ContractError) return; throw err; }
+  if (state) db.prepare('UPDATE discussion_task_state SET assignee_id = ?, version = version + 1, updated_at = ?, updated_by = ? WHERE id = ?').run(author.id, now, req.user.id, state.id);
+  else db.prepare("INSERT INTO discussion_task_state (tenant_id, engagement_id, status, version, updated_at, updated_by, assignee_id) VALUES (?, ?, 'open', 1, ?, ?, ?)")
+    .run(req.tenantId, contract.id, now, req.user.id, author.id);
+  db.prepare('INSERT OR IGNORE INTO contract_discussion_members (tenant_id, engagement_id, user_id, added_by, created_at) VALUES (?, ?, ?, ?, ?)').run(req.tenantId, contract.id, author.id, req.user.id, now);
+  audit(req, contract.id, 'discussion', `Ответственный: ${author.name || author.email} — договор возвращён автору на доработку`);
 }
 function canControl(req, cycle) {
   return !req.user.permissions.readOnly && (req.user.permissions.manageContractRoutes || (cycle.initiator_id === req.user.id && req.user.permissions.manageContracts));
@@ -282,9 +303,13 @@ router.post('/engagements/:id/approvals/:cycleId/decision', handle((req, res) =>
     db.prepare('UPDATE contract_approval_cycles SET status = ?, current_step = ?, revision = revision + 1, resolved_at = ? WHERE tenant_id = ? AND id = ?')
       .run(status, status === 'active' ? next.position : assigned.position + (input.decision === 'approved' ? 1 : 0), status === 'active' ? null : now, req.tenantId, cycle.id);
     audit(req, contract.id, 'contract_decided', `Цикл ${cycle.cycle_number}, шаг ${assigned.position + 1}: ${input.decision}${input.comment ? ' — ' + input.comment : ''}`);
+    if (['returned', 'rejected'].includes(status)) assignAuthor(req, contract, current, now);
     return cycle.id;
   });
   res.json(result);
+  if (['returned', 'rejected'].includes(input.decision)) {
+    notifyContractReturned(req.tenantId, cycle.id).catch(err => console.error('[notify] contract_returned failed:', err.message));
+  }
 }));
 
 for (const action of ['withdraw', 'rework']) router.post(`/engagements/:id/approvals/:cycleId/${action}`, handle((req, res) => {

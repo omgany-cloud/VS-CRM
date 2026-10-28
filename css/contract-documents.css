@@ -166,6 +166,12 @@
 .discussion-list-item .task-list-meta small { margin: 0; max-width: 100%; }
 .task-list-meta time { font-size: 10px; color: #9ab1a6; white-space: nowrap; }
 .task-list-meta time.due-today { color: #9fd6c4; }
+.task-filter-row { display: flex; gap: 6px; margin-top: 6px; }
+.task-filter-row select { flex: 1; min-width: 0; background: #102421; color: #c5dfd4; border: 1px solid #31534f; border-radius: 8px; padding: 7px; font-size: 11px; }
+.discussion-workspace .task-due-chip.task-due-decide { border-color: #3f7f72; color: #9fe0cf; }
+.discussion-workspace .task-due-chip.task-due-rework { border-color: #6d5a86; color: #cdb8ec; }
+.task-result-input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #3c5148; border-radius: 7px; background: #142722; color: #e0e9e4; font: inherit; font-size: 12px; resize: vertical; }
+.task-result { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: #c9d8d1; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-due-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .task-due-filter[hidden] { display: none; }
 .discussion-workspace .task-due-chip { padding: 5px 10px; border: 1px solid #3c5148; border-radius: 14px; background: transparent; color: #c2d1ca; font-size: 11px; cursor: pointer; }

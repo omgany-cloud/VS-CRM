@@ -12,6 +12,8 @@ const { notifyOnce } = require('./notify');
 const { usersByRoleCode, usersByPermissionFlag } = require('./recipients');
 const { WF_DEFINITIONS } = require('../wfDefinitions');
 const { workflowVisibleToUser } = require('../workflowAccess');
+const { assertContractAccess, ContractError } = require('../contractDocuments');
+const { rowToPermissions } = require('../rolesMapping');
 
 // Every value passed into an email's html is either a fixed label (safe)
 // or free-text the tenant's own staff/LP entered (company name, LP name,
@@ -130,7 +132,31 @@ async function notifyHfRedemptionProcessed(tenantId, redemption) {
   });
 }
 
+// Fired after a contract review is returned or rejected (TZ M3): the author of
+// the submission learns it came back and why — only while they can still open
+// the contract, since its number and client may sit behind the FM wall.
+async function notifyContractReturned(tenantId, cycleId) {
+  const cycle = db.prepare('SELECT * FROM contract_approval_cycles WHERE tenant_id = ? AND id = ?').get(tenantId, cycleId);
+  if (!cycle || !['returned', 'rejected'].includes(cycle.status)) return;
+  const contract = db.prepare('SELECT * FROM engagements WHERE tenant_id = ? AND id = ?').get(tenantId, cycle.engagement_id);
+  const author = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ? AND active = 1').get(tenantId, cycle.initiator_id);
+  const role = author && db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(tenantId, author.role);
+  if (!contract || !author?.email || !role) return;
+  try { assertContractAccess({ tenantId, user: { ...author, permissions: rowToPermissions(role) } }, contract); }
+  catch (err) { if (err instanceof ContractError) return; throw err; }
+  const remark = db.prepare("SELECT assignee_name, comment FROM contract_approval_steps WHERE tenant_id = ? AND cycle_id = ? AND status IN ('returned','rejected') ORDER BY decided_at DESC LIMIT 1").get(tenantId, cycle.id);
+  const returned = cycle.status === 'returned', name = `${contract.contract_num || 'без номера'} · ${contract.client_name || ''}`;
+  await notifyOnce({
+    tenantId, eventType: 'contract_returned', entityType: 'contract_approval_cycles', entityId: cycle.id,
+    to: author.email,
+    subject: `${returned ? 'Договор возвращён на доработку' : 'Договор отклонён'}: ${contract.contract_num || 'без номера'}`,
+    html: `<p>${esc(author.name || author.email)},</p>
+      <p>Договор «${esc(name)}» ${returned ? 'возвращён на доработку' : 'отклонён'}${remark ? ` — ${esc(remark.assignee_name)}: «${esc(remark.comment)}»` : ''}.</p>
+      <p>Он в разделе CRM «Задачи» → «На доработке».</p>`,
+  });
+}
+
 module.exports = {
   notifyCapitalCallCreated, notifyWorkflowStepAssigned,
-  notifyHfNavPublished, notifyHfRedemptionProcessed,
+  notifyHfNavPublished, notifyHfRedemptionProcessed, notifyContractReturned,
 };

@@ -6,7 +6,10 @@
 // at all (tests, external API/MCP, manual ops entry) are unaffected.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { DatabaseSync } = require('node:sqlite');
 const { createTestServer } = require('./helpers');
+// Activation happens through stage 5.1 (server/onboardingRules.js); tests about other rules mark it directly.
+function markActivated(id) { const db = new DatabaseSync(server.dbPath); try { db.prepare('UPDATE ob_clients SET activated = 1 WHERE id = ?').run(id); } finally { db.close(); } }
 
 let server;
 let fundId;
@@ -50,8 +53,9 @@ test('creating an LP referencing a NOT-activated onboarding client is rejected (
 
 test('creating an LP referencing an activated onboarding client succeeds', async () => {
   const client = await (await server.apiFetch('/api/ob-clients', {
-    method: 'POST', body: JSON.stringify({ name: 'TEST_ACTIVATED_CLIENT', direction: 'FM', activated: true }),
+    method: 'POST', body: JSON.stringify({ name: 'TEST_ACTIVATED_CLIENT', direction: 'FM' }),
   })).json();
+  markActivated(client.id);
   const res = await server.apiFetch('/api/lp', {
     method: 'POST',
     body: JSON.stringify({ fundId, name: 'Activated Client LP', type: 'Юридическое лицо', lpType: 'Institution', country: 'Test', commitment: 1, status: 'Active', registerId: 'OBG-4', obClientId: client.id }),
