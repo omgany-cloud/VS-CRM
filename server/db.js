@@ -1805,7 +1805,45 @@ CREATE TABLE IF NOT EXISTS discussion_relations (
 `);
 for (const table of ['discussion_messages', 'contract_discussion_messages']) {
   if (!columnExists(table, 'mentions_json')) db.exec(`ALTER TABLE ${table} ADD COLUMN mentions_json TEXT NOT NULL DEFAULT '[]'`);
+  if (!columnExists(table, 'reply_to_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN reply_to_id INTEGER REFERENCES ${table}(id)`);
 }
+
+// Task lifecycle is independent of the underlying CRM record and approval cycle.
+db.exec(`
+CREATE TABLE IF NOT EXISTS discussion_task_state (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  room_id INTEGER REFERENCES discussion_rooms(id),
+  engagement_id INTEGER REFERENCES engagements(id),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','completed','trashed')),
+  previous_status TEXT CHECK (previous_status IN ('open','completed')),
+  due_date TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  updated_by INTEGER NOT NULL REFERENCES users(id),
+  completed_at TEXT,
+  deleted_at TEXT,
+  CHECK ((room_id IS NULL) != (engagement_id IS NULL)),
+  UNIQUE(tenant_id, room_id), UNIQUE(tenant_id, engagement_id)
+);
+CREATE TABLE IF NOT EXISTS discussion_task_commands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  request_key TEXT NOT NULL, actor_id INTEGER NOT NULL REFERENCES users(id),
+  payload_hash TEXT NOT NULL, result_json TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+CREATE TABLE IF NOT EXISTS discussion_task_reads (
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('room','contract')),
+  entity_id INTEGER NOT NULL, last_message_id INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(tenant_id, user_id, kind, entity_id)
+);
+`);
+if (!columnExists('discussion_task_state', 'assignee_id')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN assignee_id INTEGER REFERENCES users(id)');
+if (!columnExists('discussion_task_state', 'title')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN title TEXT');
+if (!columnExists('discussion_task_state', 'purged_at')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN purged_at TEXT');
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

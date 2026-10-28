@@ -1,5 +1,5 @@
-// One immutable conversation per contract, spanning file revisions and review
-// cycles. Mounted below the approvals router's live auth/internal middleware.
+// One conversation per contract spanning revisions and review cycles, until
+// explicitly purged. Mounted below the approvals router's live auth middleware.
 const express = require('express');
 const crypto = require('crypto');
 const { db } = require('./db');
@@ -8,12 +8,15 @@ const { ContractError, latestCycle } = require('./contractApprovalState');
 const { recordAudit } = require('./auditLog');
 const { mentionRefs, resolveMentions, mentionPeople } = require('./discussionMentions');
 const { relatedDiscussions } = require('./discussionRelations');
-const { messageUpload, validatedAttachments, attachmentFingerprint, saveAttachments, messageAttachments, sendAttachment } = require('./discussionFiles');
+const {replyId,replyTarget}=require('./discussionReplies');
+const {taskView,taskState,assertTaskOpen} = require('./discussionTasks');
+const { messageUpload, validatedAttachments, attachmentFingerprint, saveAttachments, messageAttachments, conversationAttachments, sendAttachment } = require('./discussionFiles');
 const router = express.Router({ mergeParams: true });
 const PAGE_SIZE = 100;
 
 function fail(message, status = 400) { throw new ContractError(status, message); }
 function contractFor(req) {
+  if(taskState(req.tenantId,'contract',Number(req.params.id)).purgedAt)fail('Задача удалена навсегда',404);
   return assertContractAccess(req, db.prepare('SELECT * FROM engagements WHERE tenant_id = ? AND id = ?').get(req.tenantId, req.params.id));
 }
 function canPost(req, cycle, contract) {
@@ -29,7 +32,7 @@ function canPost(req, cycle, contract) {
 function messageView(row) {
   return { id: row.id, authorId: row.author_id, author: row.author_name, text: row.body, createdAt: row.created_at,
     cycleId: row.cycle_id, versionId: row.document_version_id, version: row.document_version,
-    mentions: JSON.parse(row.mentions_json),
+    mentions: JSON.parse(row.mentions_json), replyTo: replyTarget(row.tenant_id,row.engagement_id,row.reply_to_id,true),
     attachments: messageAttachments(row.tenant_id, row.id, true) };
 }
 function cursor(value) {
@@ -57,14 +60,19 @@ router.get('/', handle((req, res) => {
     FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? ORDER BY version_number`).all(req.tenantId, contract.id)
     .map(v => ({ id: v.id, version: v.version_number, filename: v.original_name, authorId: v.created_by,
       author: v.author_name, createdAt: v.created_at, note: v.change_note }));
-  res.json({ messages: rows.map(messageView), hasMore, nextBefore: !ascending && hasMore ? rows[0].id : null,
-    nextAfter: rows.at(-1)?.id || after || 0, documents, canPost: canPost(req, cycle, contract),
+  const task = taskView(req,'contract',contract.id,contract);
+  res.json({ task, messages: rows.map(messageView), hasMore, nextBefore: !ascending && hasMore ? rows[0].id : null,
+    nextAfter: rows.at(-1)?.id || after || 0, documents, canPost: canPost(req, cycle, contract) && task.status === 'open',
     related: relatedDiscussions(req, { engagementId: contract.id }),
     participants: db.prepare(`SELECT u.id, u.name FROM contract_discussion_members m JOIN users u ON u.id = m.user_id AND u.tenant_id = m.tenant_id
       WHERE m.tenant_id = ? AND m.engagement_id = ? AND u.active = 1 ORDER BY u.name`).all(req.tenantId, contract.id),
     context: { cycleId: cycle?.id || null, version: contract.document_version } });
 }));
 
+router.get('/files', handle((req,res)=>{
+  const contract=contractFor(req);
+  res.json({files:conversationAttachments(req.tenantId,contract.id,true)});
+}));
 router.get('/files/:fileId', handle((req, res) => {
   const contract = contractFor(req);
   const file = db.prepare(`SELECT f.* FROM discussion_files f JOIN contract_discussion_messages m ON m.id = f.contract_message_id AND m.tenant_id = f.tenant_id
@@ -85,6 +93,8 @@ router.post('/', handle((req, res, next) => {
   const input = { engagementId: contract.id, text: b.text.trim(), expectedVersion: b.expectedVersion, expectedCycleId: b.expectedCycleId ?? null };
   if (files.length) input.attachments = attachmentFingerprint(files);
   const refs = mentionRefs(b.mentions, b.text);
+  const replyToId=replyId(b.replyToId);
+  if(replyToId)input.replyToId=replyToId;
   if (refs.length) input.mentions = refs;
   const hash = crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex');
   const result = transaction(() => {
@@ -95,6 +105,8 @@ router.post('/', handle((req, res, next) => {
       if (old.author_id !== req.user.id || old.payload_hash !== hash) fail('Ключ сообщения уже использован. Обновите карточку.', 409);
       return { message: messageView(old), reused: true };
     }
+    assertTaskOpen(req.tenantId,'contract',current.id);
+    replyTarget(req.tenantId,current.id,replyToId,true);
     if (current.document_version !== input.expectedVersion || (cycle?.id || null) !== input.expectedCycleId) {
       fail('Редакция или согласование изменились. Сообщение не отправлено; проверьте новое состояние и отправьте снова.', 409);
     }
@@ -106,9 +118,9 @@ router.post('/', handle((req, res, next) => {
     const version = db.prepare('SELECT id FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? AND version_number = ?')
       .get(req.tenantId, current.id, current.document_version);
     const created = db.prepare(`INSERT INTO contract_discussion_messages
-      (tenant_id, engagement_id, cycle_id, document_version_id, document_version, author_id, author_name, body, created_at, request_key, payload_hash, mentions_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(req.tenantId, current.id, cycle?.id || null, version?.id || null,
-        current.document_version, req.user.id, req.user.name || req.user.email, input.text, new Date().toISOString(), b.requestKey, hash, JSON.stringify(mentions));
+      (tenant_id, engagement_id, cycle_id, document_version_id, document_version, author_id, author_name, body, created_at, request_key, payload_hash, mentions_json, reply_to_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(req.tenantId, current.id, cycle?.id || null, version?.id || null,
+        current.document_version, req.user.id, req.user.name || req.user.email, input.text, new Date().toISOString(), b.requestKey, hash, JSON.stringify(mentions),replyToId);
     saveAttachments(req.tenantId, created.lastInsertRowid, files, true);
     recordAudit(db, { tenantId: req.tenantId, entityType: 'engagements', entityId: current.id, action: 'contract_message',
       actorEmail: req.user.email, summary: `Сообщение в задаче по договору «${current.contract_num || current.client_name}»` });

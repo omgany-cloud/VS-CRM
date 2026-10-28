@@ -4,8 +4,9 @@ function contractDiscussionPanel(kind = 'contract') {
   return `<section class="contract-chat" aria-label="Переписка">
     <div class="contract-version-top discussion-connection"><span id="contractChatConnection" class="contract-version-meta">Подключение…</span></div>
     <button id="contractChatOlder" class="contract-secondary" type="button" hidden onclick="loadOlderContractMessages()">Показать ранние сообщения</button>
-    <div id="contractChatFeed" class="contract-chat-feed" role="log" aria-label="Сообщения и решения" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
+    <div id="contractChatFeed" class="contract-chat-feed" role="log" aria-label="Сообщения и решения" aria-live="polite" aria-relevant="additions" tabindex="0" onscroll="markDiscussionRead()"></div>
     <div id="discussionAttachments" class="discussion-attachments"></div>
+    <div id="discussionReplyPreview" class="discussion-reply-preview" hidden></div>
     <div class="discussion-compose-area">
     <div id="discussionMentionList" class="discussion-mention-list" role="listbox" aria-label="Сотрудники" hidden></div>
     <div class="discussion-composer">
@@ -56,6 +57,7 @@ function mergeContractMessages(chat, page, mode) {
   chat.documents = page.documents; chat.canPost = page.canPost; chat.context = page.context;
   chat.participants = page.participants || [];
   chat.related = page.related || [];
+  chat.task = page.task;
   chat.loaded = true;
 }
 async function loadContractConversation(engagementId) {
@@ -90,7 +92,7 @@ async function loadContractConversation(engagementId) {
           apiFetch(`/api/engagements/${engagementId}/approvals/chat${mode === 'after' ? '?after=' + state.chat.after : ''}`),
         ]);
       if (!contractConversationOpen(state) || request !== state.request || state.busy) return;
-      const changed = JSON.stringify(state.data) !== JSON.stringify(data) || JSON.stringify(state.chat.participants) !== JSON.stringify(page.participants || []) || JSON.stringify(state.chat.related) !== JSON.stringify(page.related || []);
+      const changed = JSON.stringify(state.data) !== JSON.stringify(data) || JSON.stringify(state.chat.task) !== JSON.stringify(page.task) || JSON.stringify(state.chat.participants) !== JSON.stringify(page.participants || []) || JSON.stringify(state.chat.related) !== JSON.stringify(page.related || []);
       state.data = data; mergeContractMessages(state.chat, page, mode);
       if (changed) {
         if (state.kind !== 'room') renderContractApproval();
@@ -99,6 +101,11 @@ async function loadContractConversation(engagementId) {
           'Переписка и согласование не заменяют подписание договора и проверки клиента.');
       }
       renderContractDiscussion(state);
+      if(typeof loadDiscussionFiles==='function') {
+        if(!state.fileCatalogLoaded || page.messages.some(m=>m.attachments?.length)) await loadDiscussionFiles(state);
+        else renderDiscussionFiles(state);
+      }
+      if(!contractConversationOpen(state)||request!==state.request)return;
       document.getElementById('contractChatConnection').textContent = 'Обновляется автоматически';
       if (mode === 'after' && page.hasMore) nextDelay = 50;
     } catch (err) {
@@ -112,6 +119,9 @@ async function loadContractConversation(engagementId) {
           const attach = document.getElementById('discussionAttach'); if (attach) attach.disabled = true;
           document.getElementById('contractChatDecisions').innerHTML = '';
           const context = document.getElementById('discussionContext'); if (context) context.textContent = 'Задача недоступна';
+          const properties=document.getElementById('discussionProperties');if(properties)properties.innerHTML='';
+          const actions=document.getElementById('discussionTaskActions');if(actions)actions.innerHTML='';
+          state.replyTo=null;renderDiscussionReply(state);
           stopContractConversation();
           contractDiscussionStatus(err.message, true); return;
         }
@@ -130,7 +140,7 @@ async function loadContractConversation(engagementId) {
 }
 function contractDiscussionEntries(data, chat) {
   const entries = [...chat.messages.values()].map(m => ({ key: 'message-' + m.id, at: m.createdAt, authorId: m.authorId,
-    author: m.author, text: m.text, mentions: m.mentions || [], attachments: m.attachments || [], version: m.version, label: '', kind: 'message' }));
+    author: m.author, text: m.text, mentions: m.mentions || [], attachments: m.attachments || [], replyTo: m.replyTo, version: m.version, label: '', kind: 'message' }));
   for (const file of chat.documents) entries.push({ key: 'file-' + file.id, at: file.createdAt, author: file.author,
     label: 'Сохранена редакция ' + file.version, text: file.note, version: file.version, fileId: file.id, filename: file.filename, kind: 'event' });
   for (const cycle of data.cycles) {
@@ -152,18 +162,12 @@ function renderContractDiscussion(state, prepend = false) {
   if (!contractConversationOpen(state) || !state.data) return;
   const feed = document.getElementById('contractChatFeed');
   const entries = contractDiscussionEntries(state.data, state.chat);
-  const signature = JSON.stringify(entries);
+  const signature = JSON.stringify([entries,state.chat.canPost,state.data.userId]);
   let followLatest = false;
   if (signature !== state.feedSignature) {
     const oldHeight = feed.scrollHeight, oldTop = feed.scrollTop;
     const follow = !state.feedSignature || state.scrollToLatest || oldHeight - oldTop - feed.clientHeight < 60;
-    feed.innerHTML = entries.length ? entries.map(entry => `<article class="contract-chat-entry${entry.kind === 'message' ? (entry.authorId === state.data.userId ? ' contract-chat-own' : '') : ' contract-chat-event'}">
-      <div class="contract-chat-meta"><strong>${escapeHtml(entry.author || 'Договор')}</strong><time>${escapeHtml(contractVersionDate(entry.at))}</time>${state.kind === 'room' ? '' : `<span>${entry.version ? 'Редакция ' + entry.version : 'Черновик'}</span>`}</div>
-      ${entry.label ? `<strong class="contract-chat-event-title">${escapeHtml(entry.label)}</strong>` : ''}
-      ${entry.text ? `<p>${renderMentionedText(entry.text, entry.mentions)}</p>` : ''}
-      ${entry.fileId ? `<button type="button" class="contract-secondary" onclick="downloadContractVersion(${state.engagementId},${entry.fileId},this)">${escapeHtml(entry.filename)} ↓</button>` : ''}
-      ${(entry.attachments || []).map(file => `<button type="button" class="contract-secondary discussion-file" onclick="downloadDiscussionAttachment(${file.id},this)"><i class="fas fa-file-alt" aria-hidden="true"></i> ${escapeHtml(file.name)} <small>${Math.ceil(file.size / 1024)} КБ</small> <i class="fas fa-download" aria-hidden="true"></i></button>`).join('')}
-    </article>`).join('') : `<p class="contract-empty">${state.kind === 'room' ? 'Напишите сообщение по задаче или приложите файл.' : 'Здесь можно обсудить договор с участниками согласования.'}</p>`;
+    feed.innerHTML = entries.length ? renderDiscussionTimeline(entries,state): `<p class="contract-empty">${state.kind === 'room' ? 'Напишите сообщение по задаче или приложите файл.' : 'Здесь можно обсудить договор с участниками согласования.'}</p>`;
     feed.scrollTop = prepend ? oldTop + feed.scrollHeight - oldHeight : follow ? feed.scrollHeight : oldTop;
     state.feedSignature = signature; state.scrollToLatest = false;
     followLatest = !prepend && follow;
@@ -176,20 +180,21 @@ function renderContractDiscussion(state, prepend = false) {
   document.getElementById('contractChatAccess').textContent = state.chat.canPost ? 'Enter — отправить · Shift+Enter — новая строка' : 'Задача доступна для просмотра';
   renderDiscussionMentionHint(state);
   const cycle = state.data.cycles[0];
-  document.getElementById('contractChatDecisions').innerHTML = cycle && (cycle.canDecide || cycle.canWithdraw || cycle.canRework)
+  document.getElementById('contractChatDecisions').innerHTML = (!state.chat.task || state.chat.task.status === 'open') && cycle && (cycle.canDecide || cycle.canWithdraw || cycle.canRework)
     ? `<p class="contract-empty">Чтобы зафиксировать решение, нажмите кнопку ниже. Для возврата, отклонения или отзыва напишите причину в поле сообщения.</p><div class="contract-versions-actions">
       ${cycle.canDecide ? `<button class="contract-primary" onclick="actContractApproval('approved')">Согласовать</button><button class="contract-secondary" onclick="actContractApproval('returned')">Вернуть с замечанием</button><button class="contract-secondary" onclick="actContractApproval('rejected')">Отклонить</button>` : ''}
       ${cycle.canWithdraw ? '<button class="contract-secondary" onclick="actContractApproval(\'withdraw\')">Отозвать согласование</button>' : cycle.canRework ? '<button class="contract-secondary" onclick="actContractApproval(\'rework\')">Вернуть в доработку</button>' : ''}
     </div>` : '';
   if (followLatest && typeof requestAnimationFrame === 'function') requestAnimationFrame(() => {
-    if (contractConversationOpen(state) && state.feedSignature === signature) feed.scrollTop = feed.scrollHeight;
+    if (contractConversationOpen(state) && state.feedSignature === signature) { feed.scrollTop = feed.scrollHeight; if (typeof markDiscussionRead === 'function') markDiscussionRead(); }
   });
+  if (typeof markDiscussionRead === 'function') markDiscussionRead();
 }
 function sendContractDiscussion() {
   const state = contractApprovalUI;
   if (!contractConversationOpen(state) || !state.chat.canPost || state.busy) return;
   const raw = document.getElementById('contractChatText').value, text = raw.trim();
-  const mentions = discussionMessageMentions(state, raw), personData = mentions.length ? { mentions } : {};
+  const mentions = discussionMessageMentions(state, raw), personData = {...(mentions.length ? { mentions } : {}),...(state.replyTo ? {replyToId:state.replyTo.id} : {})};
   if ((!text && !state.attachments?.length) || text.length > 4000) return contractDiscussionStatus('Напишите сообщение или приложите файл.', true);
   hideDiscussionMentions(state);
   if (state.kind === 'room') return contractApprovalAction(`/api/discussions/${state.engagementId}/messages`, { text, ...personData });
@@ -234,7 +239,7 @@ function renderDiscussionAttachments(state) {
 async function downloadDiscussionAttachment(id, button) {
   const state = contractApprovalUI;
   if (!contractConversationOpen(state) || button.disabled) return;
-  const file = [...state.chat.messages.values()].flatMap(m => m.attachments || []).find(f => f.id === id);
+  const file = (state.fileCatalog || []).find(f=>f.id===id) || [...state.chat.messages.values()].flatMap(m => m.attachments || []).find(f => f.id === id);
   if (!file) return;
   button.disabled = true;
   try {

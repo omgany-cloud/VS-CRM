@@ -1,5 +1,24 @@
 // Selected people are explicit text ranges. Merely typing a name never shares
 // a chat; selecting a suggestion and sending does, in the message transaction.
+function discussionAvatar(name, id=0) {
+  const parts=String(name||'?').trim().split(/\s+/).filter(Boolean);
+  const initials=(parts.length>1 ? [...parts[0]][0]+[...parts.at(-1)][0] : [...(parts[0]||'?')].slice(0,2).join('')).toLocaleUpperCase();
+  return `<span class="discussion-person-avatar avatar-tone-${Math.abs(Number(id)||0)%5}" aria-hidden="true">${escapeHtml(initials)}</span>`;
+}
+async function mentionDiscussionPerson(id) {
+  const state=contractApprovalUI,input=document.getElementById('contractChatText');
+  if(!contractConversationOpen(state)||!state.chat.canPost||state.busy)return;
+  try {
+    const person=(await discussionMentionPeople(state)).find(p=>p.id===id);
+    if(!contractConversationOpen(state)||!person)return;
+    input.focus();
+    const at=input.value.length,space=at&&!/\s$/.test(input.value)?' ':'';
+    if(input.value.length+space.length+person.name.length+1>4000)return contractDiscussionStatus('Сократите сообщение перед добавлением имени.',true);
+    input.value+=space;reconcileDiscussionMentions(state,input.value);
+    state.mentionOptions=[{...person,start:input.value.length,end:input.value.length,prefix:''}];
+    selectDiscussionMention(0);
+  }catch(err){if(contractConversationOpen(state))contractDiscussionStatus(err.message,true);}
+}
 function reconcileDiscussionMentions(state, value) {
   const old = state.mentionText || '', mentions = state.mentions || [];
   if (old === value) return;
@@ -69,7 +88,7 @@ function renderDiscussionMentions(state) {
   const options = state.mentionOptions || [];
   if (!options.length) return hideDiscussionMentions(state);
   list.hidden = false;
-  list.innerHTML = options.map((p,i) => `<button type="button" role="option" id="discussionMentionOption${i}" aria-selected="${i === state.mentionIndex}" tabindex="-1" class="${i === state.mentionIndex ? 'selected' : ''}" onmousedown="event.preventDefault()" onclick="selectDiscussionMention(${i})"><span><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.role || '')}</small></span><small>${p.member ? 'В задаче' : 'Добавить в задачу'}</small></button>`).join('');
+  list.innerHTML = options.map((p,i) => `<button type="button" role="option" id="discussionMentionOption${i}" aria-selected="${i === state.mentionIndex}" tabindex="-1" class="${i === state.mentionIndex ? 'selected' : ''}" onmousedown="event.preventDefault()" onclick="selectDiscussionMention(${i})">${discussionAvatar(p.name,p.id)}<span class="discussion-person-name"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.role || '')}</small></span><small>${p.member ? 'В задаче' : '+ Добавить'}</small></button>`).join('');
   input.setAttribute('aria-expanded', 'true'); input.setAttribute('aria-activedescendant', 'discussionMentionOption' + state.mentionIndex);
   document.getElementById('discussionMentionOption' + state.mentionIndex)?.scrollIntoView?.({ block: 'nearest' });
 }

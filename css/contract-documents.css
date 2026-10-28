@@ -15,16 +15,15 @@
 .contract-approval-decision { margin-top: 12px; }
 .contract-chat { margin-top: 18px; padding-top: 18px; border-top: 1px solid #37665f; }
 .contract-chat-feed { min-height: 160px; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; padding: 8px 4px; margin: 8px 0 14px; scrollbar-gutter: stable; }
-.contract-chat-entry { padding: 12px; margin: 8px 16px 8px 0; border-radius: 10px; background: #17332f; border: 1px solid #335c54; font-size: 12px; }
-.contract-chat-own { margin-right: 0; margin-left: 16px; background: #18483e; border-color: #368573; }
-.contract-chat-event { margin-right: 0; background: #102329; border-color: #2d4850; }
+.contract-chat-entry { padding: 12px; margin: 8px 0; border-radius: 10px; background: transparent; border: 1px solid transparent; font-size: 12px; }
+.contract-chat-event { margin-right: 0; background: transparent; border-color: #2b403e; }
 .contract-chat-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; color: #a2c4c0; font-size: 10px; }
 .contract-chat-meta strong { color: #d0eee5; font-size: 12px; overflow-wrap: anywhere; }
 .contract-chat-entry p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin: 8px 0 0; }
 .contract-chat-event-title { display: block; color: #92ddcd; margin-top: 8px; }
 .contract-chat-entry button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; margin-top: 8px; text-align: left; }
 .contract-chat-decisions { margin-top: 10px; }
-.discussion-workspace { display: grid; grid-template-columns: 270px minmax(0,1fr); height: calc(100dvh - 235px); min-height: 520px; border: 1px solid #31534f; border-radius: 14px; overflow: hidden; background: #102421; }
+.discussion-workspace { display: grid; grid-template-columns: 300px minmax(0,1fr); height: calc(100dvh - 235px); min-height: 580px; border: 1px solid #31534f; border-radius: 14px; overflow: hidden; background: #102421; }
 .discussion-hub-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .discussion-hub-heading h1 { font-size: 23px; margin: 0 0 6px; color: #e1efe9; }
 .discussion-hub-heading p { margin: 0; color: #a5beb6; font-size: 12px; }
@@ -79,13 +78,13 @@
 #discussionList { overflow-y: auto; margin-top: 12px; min-height: 0; }
 .discussion-list-item { display: flex; gap: 10px; width: 100%; padding: 14px 10px; text-align: left; color: #deeeea; background: transparent; border: 1px solid transparent; border-radius: 9px; cursor: pointer; }
 .discussion-list-item:hover { background: #18322d; }
-.discussion-list-item.selected { border-color: #378574; background: #1b3d34; }
+.discussion-list-item.selected { border-left-color: #7aa89b; background: #253733; }
 .discussion-list-item > span:last-child { min-width: 0; }
 .discussion-list-item strong, .discussion-list-item small, .discussion-list-item p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .discussion-list-item strong { font-size: 13px; }
 .discussion-list-item small { margin-top: 5px; color: #a6c4bb; font-size: 10px; }
 .discussion-list-item p { color: #87a69f; font-size: 12px; margin: 7px 0 0; }
-.discussion-avatar { border-radius: 10px; width: 34px; height: 34px; flex-shrink: 0; display: grid; place-items: center; color: #88d5ba; background: #224438; }
+.discussion-avatar { border-radius: 10px; width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center; color: #9aada7; background: #23332f; }
 .discussion-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .discussion-context { padding: 16px 20px; border-bottom: 1px solid #31534f; }
 .discussion-context h2 { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
@@ -152,21 +151,54 @@
 #discussionSourceList { max-height: 210px; overflow: auto; }
 #discussionSourceList button { display: flex; justify-content: space-between; gap: 10px; text-align: left; width: 100%; margin-bottom: 6px; white-space: normal; }
 #discussionSourceList small { flex-shrink: 0; color: #a2c4c0; }
-.discussion-workspace :is(input,textarea,button,summary):focus-visible { outline: 2px solid #5eead4; outline-offset: 2px; }
+.discussion-workspace :is(input,textarea,button,summary,select):focus-visible { outline: 2px solid #5eead4; outline-offset: 2px; }
+.task-list-tabs { display: flex; gap: 2px; margin-top: 12px; border-bottom: 1px solid #2b403b; }
+.discussion-workspace .task-list-tabs button { flex: 1; padding: 9px 3px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: #a8bbb4; font-size: 11px; }
+.discussion-workspace .task-list-tabs button.selected { border-bottom-color: #9bc2b5; color: #ecf4f0; }
+.task-sort-label { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #a8bbb4; font-size: 11px; }
+.task-sort-label select { flex: 1; min-width: 0; padding: 7px; border: 1px solid #334a43; border-radius: 6px; background: #142722; color: #d6e3dc; font: inherit; }
+.task-list-content { flex: 1; min-width: 0; }
+.task-list-title { display: flex; gap: 8px; align-items: center; }
+.discussion-list-item .task-list-title strong { flex: 1; min-width: 0; font-weight: 500; }
+.discussion-list-item .task-list-title .task-unread-title { font-weight: 700; color: #f2f7f4; }
+.task-unread { flex-shrink: 0; background: #c1dacf; color: #122c22; border-radius: 12px; min-width: 19px; padding: 2px 5px; text-align: center; font-size: 10px; font-weight: 700; }
+.task-list-meta { display: flex; gap: 7px; flex-wrap: wrap; align-items: baseline; margin-top: 5px; }
+.discussion-list-item .task-list-meta small { margin: 0; max-width: 100%; }
+.task-list-meta time { font-size: 10px; color: #9ab1a6; white-space: nowrap; }
+.task-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.task-state { font-size: 11px; color: #b9cac2; margin-right: auto; }
+.task-state-completed::before { content: '✓ '; }
+.task-state-trashed { color: #cdb5a9; }
+.task-deadline, .task-menu-button { background: transparent; color: #c2d1ca; border: 1px solid #3c5148; padding: 7px 9px; border-radius: 7px; font-size: 12px; }
+.discussion-workspace .overdue { color: #edbd79; }
+.task-due-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.task-due-form label { width: 100%; font-size: 13px; color: #d8e5de; }
+.task-due-form input, .discussion-new-form input[type=date] { color-scheme: dark; padding: 8px; border: 1px solid #3c5148; background: #142722; border-radius: 7px; color: #e0e9e4; }
+.task-due-form input { min-width: 160px; }
+.task-action-status { width: 100%; font-size: 12px; color: #f3b5a3; }
+.task-action-status:empty { display: none; }
+.task-delete-confirm { font-size: 12px; line-height: 1.6; }
+.task-delete-confirm p { color: #b3c6bc; }
+.task-delete-confirm ul { padding-left: 18px; overflow-wrap: anywhere; }
+.task-delete-confirm button { margin-right: 8px; }
+.task-delete-button { color: #ffd1c7; background: #51332e; border: 1px solid #8b5c50; }
+.discussion-context { flex-shrink: 0; max-height: 48%; overflow: auto; }
 @media(max-width: 850px) {
-  .discussion-workspace { grid-template-columns: 210px minmax(0,1fr); }
+  .discussion-workspace { grid-template-columns: 250px minmax(0,1fr); }
   .discussion-context-top { flex-wrap: wrap; }
   .discussion-main .discussion-conversation { padding: 10px; }
   .discussion-context { padding: 12px; }
   .discussion-context-actions span { display: none; }
 }
 @media(max-width: 600px) {
-  .discussion-workspace { grid-template-columns: 1fr; height: calc(100dvh - 110px); min-height: 650px; grid-template-rows: 160px minmax(0,1fr); }
+  .discussion-workspace { grid-template-columns: 1fr; height: calc(100dvh - 110px); min-height: 780px; grid-template-rows: 280px minmax(0,1fr); }
   .discussion-sidebar { border-right: 0; border-bottom: 1px solid #31534f; padding: 8px; }
   .discussion-sidebar-heading { padding-bottom: 5px; }
   #discussionList { display: flex; overflow-x: auto; margin-top: 5px; }
   .discussion-list-item { min-width: 190px; max-width: 240px; padding: 7px; }
   .discussion-list-item p, .discussion-list-item small { display: none; }
+  .task-list-tabs { margin-top: 5px; }
+  .task-sort-label { margin-top: 5px; }
   .discussion-composer .discussion-icon-button { width: 42px; }
 }
 #contractChatStatus { min-height: 18px; margin-bottom: 0; }

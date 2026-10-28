@@ -112,7 +112,9 @@ function requireAuth(req, res, next) {
     if (req.user.mustChangePassword && !PASSWORD_GATE_EXEMPT.has(`${req.method} ${req.path}`)) {
       return res.status(403).json({ error: 'Password change required', code: 'MUST_CHANGE_PASSWORD' });
     }
-    if (req.user.permissions.readOnly && MUTATING_METHODS.has(req.method)) {
+    // Read receipts update only the caller's own view position, never task data.
+    const ownTaskRead = req.method === 'POST' && /^\/api\/discussions\/(room|contract)\/[1-9]\d*\/read$/.test((req.originalUrl || '').split('?')[0]);
+    if (req.user.permissions.readOnly && MUTATING_METHODS.has(req.method) && !ownTaskRead) {
       return res.status(403).json({ error: 'Forbidden: read-only role cannot modify data' });
     }
     next();

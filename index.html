@@ -6,6 +6,7 @@
   <title>Turan Capital CRM — Golden Leaves Ltd</title>
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/contract-documents.css" />
+  <link rel="stylesheet" href="css/discussion-workspace.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -639,6 +640,8 @@
         <aside class="discussion-sidebar" aria-label="Список задач">
           <div class="discussion-sidebar-heading"><h2>Мои задачи</h2><button id="discussionNew" type="button" class="discussion-icon-button contract-primary" title="Новая задача" aria-label="Новая задача" onclick="newDiscussion()"><i class="fas fa-plus" aria-hidden="true"></i></button></div>
           <input id="discussionSearch" type="search" placeholder="Найти задачу…" aria-label="Найти задачу" oninput="renderDiscussionList()" />
+          <div class="task-list-tabs" role="group" aria-label="Состояние задач"><button type="button" data-task-filter="open" class="selected" aria-pressed="true" onclick="setTaskFilter('open')">В работе</button><button type="button" data-task-filter="completed" aria-pressed="false" onclick="setTaskFilter('completed')">Завершённые</button><button type="button" data-task-filter="trashed" aria-pressed="false" title="Корзина" aria-label="Корзина" onclick="setTaskFilter('trashed')">Корзина</button></div>
+          <label class="task-sort-label" for="discussionTaskSort">Порядок <select id="discussionTaskSort" onchange="renderDiscussionList()"><option value="activity">По активности</option><option value="due">По сроку</option><option value="created">Сначала новые</option><option value="title">По названию</option></select></label>
           <select id="discussionChatFilter" aria-label="Задачи по разделу CRM" onchange="renderDiscussionList()"><option value="">Все мои задачи</option><option value="free">Без процесса CRM</option></select>
           <div id="discussionList"><p class="discussion-empty">Загрузка…</p></div>
         </aside>
@@ -1444,6 +1447,10 @@
 <script src="js/discussion-mentions.js"></script>
 <script src="js/discussions.js"></script>
 <script src="js/discussion-processes.js"></script>
+<script src="js/discussion-tasks.js"></script>
+  <script src="js/discussion-replies.js"></script>
+  <script src="js/discussion-layout.js"></script>
+  <script src="js/discussion-files.js"></script>
 <script src="js/lp-register.js"></script>
 <script src="js/distributions.js"></script>
 <script src="js/audit-log.js"></script>

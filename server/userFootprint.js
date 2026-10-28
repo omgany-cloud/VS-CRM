@@ -36,6 +36,8 @@ function computeUserFootprint(tenantId, email, name, userId) {
       (SELECT 1 FROM json_each(r.steps_json) s WHERE json_extract(s.value, '$.userId') = ?)`).all(tenantId, userId);
     if (routeAssignments.length) hits.push({ table: 'contract_approval_routes', column: 'steps_json.userId', count: routeAssignments.length, sampleIds: routeAssignments.slice(0, 5).map(r => r.id) });
     for (const [table, columns] of [
+      ['discussion_task_state', ['updated_by','assignee_id']],
+      ['discussion_task_commands', ['actor_id']],
       ['discussion_messages', ['author_id']],
       ['discussion_rooms', ['created_by']],
       ['discussion_relations', ['created_by']],

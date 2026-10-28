@@ -5,6 +5,7 @@ const { requireAuth, requireInternal, requirePermission } = require('./auth');
 const { recordAudit } = require('./auditLog');
 const { assertContractAccess, handle, transaction } = require('./contractDocuments');
 const { ContractError, contractMetadata, latestCycle, approvalMatches, documentFrozen, approvalSummary } = require('./contractApprovalState');
+const {assertTaskOpen} = require('./discussionTasks');
 
 const router = express.Router();
 // Mounted at /api: protect only this module's paths, leaving external/API-key
@@ -192,6 +193,9 @@ router.post('/engagements/:id/approvals', requirePermission('manageContracts'), 
     expectedCycleId: b.expectedCycleId == null ? null : integer(b.expectedCycleId, 'Цикл'), note: text(b.note, 'Комментарий', false) };
   const result = command(req, contract, input, () => {
     if (!contract.client_id) fail('Сначала свяжите договор с клиентом');
+    // A new approval creates an empty task; it never restores purged messages.
+    db.prepare(`UPDATE discussion_task_state SET purged_at=NULL,status='open',completed_at=NULL,deleted_at=NULL,version=version+1 WHERE tenant_id=? AND engagement_id=? AND purged_at IS NOT NULL`).run(req.tenantId,contract.id);
+    assertTaskOpen(req.tenantId,'contract',contract.id);
     if ((latestCycle(req.tenantId, contract.id)?.id || null) !== input.expectedCycleId || documentFrozen(contract)) fail('Состояние согласования изменилось. Обновите карточку.', 409);
     if (contract.document_version !== input.expectedVersion) fail('Редакция документа изменилась', 409);
     const version = db.prepare('SELECT id, metadata_json, created_by FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? AND version_number = ?')

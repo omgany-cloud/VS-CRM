@@ -11,11 +11,13 @@ function contractApprovalPanel(engagementId) {
 }
 function contractConversationPanel(engagementId, kind = 'contract') {
   return `<section id="contractApprovalPanel" class="contract-versions discussion-conversation" data-engagement-id="${engagementId}" data-kind="${kind}" data-surface="hub">
-    ${kind === 'contract' ? '<details class="discussion-approval-details"><summary>Участники и согласование</summary>' : '<div hidden>'}
+    <div class="discussion-task-layout"><div class="discussion-thread"><div id="discussionTools" class="discussion-tools" hidden></div>${contractDiscussionPanel(kind)}<footer id="discussionTaskActions"></footer></div>
+    <aside id="discussionProperties" class="discussion-properties" aria-label="Свойства задачи"><div id="discussionPropertyBody"></div>${discussionFilesPanel()}
+    ${kind === 'contract' ? '<details class="discussion-approval-details"><summary>Настройка и история согласования</summary>' : '<div hidden>'}
     <p id="contractApprovalMessage" class="contract-message" role="status" aria-live="polite">Загрузка согласования…</p>
     <div id="contractApprovalBody"></div>
     ${kind === 'contract' ? '</details>' : '</div>'}
-    ${contractDiscussionPanel(kind)}
+    </aside></div>
   </section>`;
 }
 function contractApprovalMessage(text, error = false) {
@@ -54,7 +56,7 @@ function renderContractApproval() {
     ${cycle ? renderContractApprovalCycle(cycle, true, state) : '<p class="contract-empty">Договор ещё не отправляли на согласование.</p>'}
     ${!data.currentVersion ? '<p class="contract-metadata-warning">Сначала загрузите файл договора в блоке «Версии документа».</p>' : !data.metadataMatches ? '<p class="contract-metadata-warning">Снимок редакции неполон или отличается от текущих реквизитов. Проверьте текст и сохраните новую редакцию перед подачей.</p>' : ''}
     ${!data.hasClient ? '<p class="contract-metadata-warning">Для подачи нужна связь договора с карточкой клиента.</p>' : ''}
-    ${data.canSubmit ? people.length ? `<form id="contractApprovalSelection" onsubmit="event.preventDefault();submitContractApproval()">
+    ${data.canSubmit && (!state.chat?.task || state.chat.task.status === 'open') ? people.length ? `<form id="contractApprovalSelection" onsubmit="event.preventDefault();submitContractApproval()">
       <fieldset class="contract-approval-people"><legend>Кто согласует договор</legend>
         ${people.map(person => `<label class="contract-approval-person"><input type="checkbox" name="contractApprover" value="${person.id}"${selected.has(person.id) ? ' checked' : ''} /><span><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.role)}</small></span></label>`).join('')}
       </fieldset>
@@ -96,6 +98,7 @@ async function contractApprovalAction(path, body, method = 'POST', idempotent = 
       if (composer?.value.trim() === sent) { composer.value = ''; clearDiscussionMentions(state); }
       if (isMessage && state.attachments === fileBatch) { state.attachments = []; state.attachmentKey = null; renderDiscussionAttachments(state); }
       if (isMessage && typeof forgetDiscussionDraft === 'function') forgetDiscussionDraft(state);
+      if (isMessage) {state.replyTo=null;renderDiscussionReply(state);}
       state.scrollToLatest = true;
     }
     await Promise.all([loadContractApprovals(state.engagementId), loadContractDocuments(state.engagementId), loadContractProcess(state.engagementId)]);

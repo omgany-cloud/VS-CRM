@@ -5,6 +5,9 @@ const { DatabaseSync } = require('node:sqlite');
 const { createTestServer } = require('./helpers');
 let server, rm, co, auditor, external, outsider, other;
 const key = () => crypto.randomUUID();
+async function taskAction(id, action, version, extra = {}, token = server.token, status = 200) {
+  return json(await api(`/api/discussions/room/${id}/state`, { action, expectedVersion: version, requestKey: key(), ...extra }, token), status);
+}
 async function json(res, status = 200) { const body = await res.json(); assert.equal(res.status, status, JSON.stringify(body)); return body; }
 function api(url, body, token = server.token, method = body === undefined ? 'GET' : 'POST') {
   return server.apiFetch(url, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }), headers: { Authorization: 'Bearer ' + token } });
@@ -31,6 +34,147 @@ before(async () => {
   other = await json(await api('/api/auth/signup', { companyName: 'Other discussions', name: 'Other', email: 'other-chat@test.example', password: 'Discussion123!' }), 201);
 });
 after(async () => { if (server) await server.stop(); });
+
+test('permanent deletion is trash-only, authorized and idempotent; removes files and both link directions without deleting neighbors',async()=>{
+  const a=await room([co.id,auditor.id]),b=await room(),c=await client();
+  await json(await api(`/api/discussions/${a.id}/links`,{kind:'discussion',id:b.id}));
+  await json(await api(`/api/discussions/${a.id}/links`,{kind:'client',id:c.id}));
+  const message=(await json(await multipart(`/api/discussions/${a.id}/messages`,{text:'Delete me',requestKey:key()},[{name:'delete.txt',bytes:'Delete file'}]),201)).message;
+  await json(await api(`/api/discussions/${a.id}/messages`,{text:'Reply',replyToId:message.id,requestKey:key()}),201);
+  const url=`/api/discussions/room/${a.id}`,payload={expectedVersion:1,requestKey:key()};
+  await json(await api(url,{...payload,expectedVersion:0},server.token,'DELETE'),409);
+  await taskAction(a.id,'trash',0);
+  for(const [token,status] of [[co.token,403],[auditor.token,403],[outsider.token,404],[other.token,404]])await json(await api(url,payload,token,'DELETE'),status);
+  await json(await api(url,{...payload,expectedVersion:0},server.token,'DELETE'),409);
+  assert.deepEqual(await json(await api(url,payload,server.token,'DELETE')),{deleted:true});
+  assert.deepEqual(await json(await api(url,payload,server.token,'DELETE')),{deleted:true});
+  await json(await api(`/api/discussions/${a.id}`),404);
+  await json(await api(`/api/discussions/${a.id}/files/${message.attachments[0].id}`),404);
+  await taskAction(a.id,'restore',1,{},server.token,404);
+  assert.equal((await json(await api(`/api/discussions/${b.id}`))).room.links.length,0);
+  assert.ok((await json(await api(`/api/discussions/source/client/${c.id}`))).source);
+  const db=new DatabaseSync(server.dbPath,{readOnly:true});
+  try{
+    for(const table of ['discussion_messages','discussion_members','discussion_links','discussion_task_state'])assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE room_id=?`).get(a.id).n,0);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM discussion_files WHERE id=?').get(message.attachments[0].id).n,0);
+    assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+  }finally{db.close();}
+});
+
+test('renaming preserves history and links, updates linked titles and enforces access, version and retries',async()=>{
+  const r=await room([co.id,auditor.id]),neighbor=await room();
+  await json(await api(`/api/discussions/${neighbor.id}/links`,{kind:'discussion',id:r.id}));
+  await json(await api(`/api/discussions/${r.id}/messages`,{text:'Keep this message',requestKey:key()}),201);
+  const before=await json(await api(`/api/discussions/${r.id}`));
+  for(const title of ['', '   ', 'x'.repeat(161), null])await taskAction(r.id,'rename',0,{title},server.token,400);
+  for(const [token,status] of [[co.token,403],[auditor.token,403],[outsider.token,404],[other.token,404]])await taskAction(r.id,'rename',0,{title:'Denied'},token,status);
+  const extra={title:'  Новое название  ',requestKey:key()};
+  const result=await taskAction(r.id,'rename',0,extra);
+  assert.equal(result.task.title,'Новое название');assert.equal(result.task.version,1);
+  assert.deepEqual(await taskAction(r.id,'rename',0,extra),result);
+  await taskAction(r.id,'rename',0,{title:'Stale'},server.token,409);
+  const after=await json(await api(`/api/discussions/${r.id}`));
+  assert.equal(after.room.title,'Новое название');assert.deepEqual(after.messages,before.messages);assert.deepEqual(after.room.links,before.room.links);
+  const linked=await json(await api(`/api/discussions/${neighbor.id}`));
+  assert.equal(linked.room.links.find(l=>l.kind==='discussion'&&l.id===r.id).title,'Новое название');
+  await taskAction(r.id,'complete',1);
+  assert.equal((await taskAction(r.id,'rename',2,{title:'Completed title'})).task.status,'completed');
+  await taskAction(r.id,'trash',3);await taskAction(r.id,'rename',4,{title:'Trash title'},server.token,409);
+});
+
+test('replies belong to the same task, are idempotent and preserve a server-owned quote and attachment label',async()=>{
+  const r=await room(),another=await room();
+  const source=(await json(await multipart(`/api/discussions/${r.id}/messages`,{text:'',requestKey:key()},[{name:'source.txt',bytes:'Reference'}]),201)).message;
+  const body={text:'Reply',replyToId:source.id,requestKey:key()};
+  const first=(await json(await api(`/api/discussions/${r.id}/messages`,body,co.token),201)).message;
+  const retry=(await json(await api(`/api/discussions/${r.id}/messages`,body,co.token))).message;
+  assert.equal(retry.id,first.id);assert.equal(first.replyTo.id,source.id);assert.equal(first.replyTo.author,source.author);assert.deepEqual(first.replyTo.files,['source.txt']);
+  await json(await api(`/api/discussions/${r.id}/messages`,{...body,replyToId:null},co.token),409);
+  const invitation=mention(outsider);await json(await api(`/api/discussions/${another.id}/messages`,{...invitation,replyToId:source.id}),404);
+  await json(await api(`/api/discussions/${another.id}`,undefined,outsider.token),404);
+  for(const replyToId of [0,-1,'1',999999]) await json(await api(`/api/discussions/${r.id}/messages`,{text:'Invalid',replyToId,requestKey:key()}),replyToId===999999?404:400);
+  await json(await api(`/api/discussions/${r.id}/messages`,body,other.token),404);
+  await taskAction(r.id,'trash',0);
+  const stored=await json(await api(`/api/discussions/${r.id}`));assert.equal(stored.messages[1].replyTo.id,source.id);
+});
+
+test('task assignee must be an eligible member; owner, version and task state govern changes',async()=>{
+  const r=await room([co.id,auditor.id]);
+  const candidates=await json(await api(`/api/discussions/room/${r.id}/assignees`));
+  assert.ok(candidates.people.some(p=>p.id===co.id));assert.ok(!candidates.people.some(p=>[auditor.id,outsider.id,external.id].includes(p.id)));
+  await json(await api(`/api/discussions/room/${r.id}/assignees`,undefined,co.token),403);
+  await taskAction(r.id,'assign',0,{assigneeId:outsider.id},server.token,403);
+  const extra={assigneeId:co.id,requestKey:key()};const result=await taskAction(r.id,'assign',0,extra);
+  assert.equal(result.task.assignee.id,co.id);assert.deepEqual(await taskAction(r.id,'assign',0,extra),result);
+  assert.equal((await taskAction(r.id,'due',1,{dueDate:'2026-12-01'})).task.assignee.id,co.id);
+  await taskAction(r.id,'assign',0,{assigneeId:null},server.token,409);
+  await taskAction(r.id,'complete',2);
+  await taskAction(r.id,'assign',3,{assigneeId:null},server.token,409);
+  await taskAction(r.id,'reopen',3);assert.equal((await taskAction(r.id,'assign',4,{assigneeId:null})).task.assignee,null);
+});
+
+test('task dates validate calendar days; lifecycle commands enforce owner, version and idempotency', async () => {
+  await json(await api('/api/discussions', {title:'Invalid date',dueDate:'2026-02-30',requestKey:key()}),400);
+  const r=await json(await api('/api/discussions',{title:'Dated task',dueDate:'2028-02-29',participants:[co.id,auditor.id],requestKey:key()}),201);
+  assert.equal((await json(await api(`/api/discussions/${r.id}`))).task.dueDate,'2028-02-29');
+  for (const date of ['2027-02-29','2026-10-28T10:00:00Z','1999-01-01',123]) await taskAction(r.id,'due',0,{dueDate:date},server.token,400);
+  await taskAction(r.id,'complete',0,{},co.token,403);
+  await taskAction(r.id,'complete',0,{},auditor.token,403);
+  await taskAction(r.id,'complete',0,{},outsider.token,404);
+  await taskAction(r.id,'complete',0,{},other.token,404);
+  const requestKey=key(), extra={dueDate:'2026-11-10',requestKey};
+  const first=await taskAction(r.id,'due',0,extra);
+  assert.equal(first.task.version,1); assert.deepEqual(await taskAction(r.id,'due',0,extra),first);
+  await taskAction(r.id,'due',0,{...extra,dueDate:null},server.token,409);
+  await taskAction(r.id,'complete',0,{},server.token,409);
+  assert.equal((await taskAction(r.id,'due',1,{dueDate:null})).task.dueDate,null);
+});
+
+test('complete, trash and restore preserve links, process, files and history without changing a related task',async()=>{
+  const a=await room(),b=await room(),c=await client();
+  await json(await api(`/api/discussions/${a.id}/links`,{kind:'discussion',id:b.id}));
+  await json(await api(`/api/discussions/${a.id}/links`,{kind:'client',id:c.id}));
+  const payload={text:'Retained history',requestKey:key()};
+  const msg=await json(await multipart(`/api/discussions/${a.id}/messages`,payload,[{name:'retained.txt',bytes:'Preserved attachment'}]),201);
+  assert.equal((await taskAction(a.id,'complete',0)).task.status,'completed');
+  await json(await api(`/api/discussions/${a.id}/messages`,{text:'Closed',requestKey:key()}),409);
+  // A retry of an already-saved command is still safe after completion.
+  assert.equal((await json(await multipart(`/api/discussions/${a.id}/messages`,payload,[{name:'retained.txt',bytes:'Preserved attachment'}]))).message.id,msg.message.id);
+  await taskAction(a.id,'trash',1);
+  const trashed=await json(await api(`/api/discussions/${a.id}`));
+  assert.equal(trashed.task.status,'trashed');assert.equal(trashed.canPost,false);assert.equal(trashed.messages.length,1);assert.equal(trashed.room.links.length,2);
+  const neighbor=await json(await api(`/api/discussions/${b.id}`));
+  assert.equal(neighbor.task.status,'open');assert.equal(neighbor.room.links.find(l=>l.id===a.id&&l.kind==='discussion').status,'trashed');
+  const file=await api(`/api/discussions/${a.id}/files/${msg.message.attachments[0].id}`);assert.equal(await file.text(),'Preserved attachment');
+  assert.ok((await json(await api(`/api/discussions/source/client/${c.id}`))).source);
+  await json(await api(`/api/ob-clients/${c.id}`,undefined,server.token,'DELETE'),409);
+  await json(await api(`/api/discussions/${a.id}/members`,{participants:[outsider.id]}),409);
+  await taskAction(a.id,'due',2,{dueDate:'2026-11-10'},server.token,409);
+  assert.equal((await taskAction(a.id,'restore',2)).task.status,'completed');
+  assert.equal((await taskAction(a.id,'reopen',3)).task.status,'open');
+  await json(await api(`/api/discussions/${a.id}/messages`,{text:'Continued',requestKey:key()}),201);
+});
+
+test('unread counts are personal, monotonic, exclude own messages and enforce task access even for read-only users',async()=>{
+  const r=await room([co.id,auditor.id]);
+  const unread=async(token)=> (await json(await api('/api/discussions',undefined,token))).items.find(i=>i.kind==='room'&&i.id===r.id).unread;
+  const m1=(await json(await api(`/api/discussions/${r.id}/messages`,{text:'First',requestKey:key()}),201)).message;
+  assert.equal(await unread(server.token),0);assert.equal(await unread(co.token),1);assert.equal(await unread(auditor.token),1);
+  const path=`/api/discussions/room/${r.id}/read`;
+  await json(await api(path,{lastMessageId:m1.id},outsider.token),404);
+  await json(await api(path,{lastMessageId:m1.id},other.token),404);
+  assert.equal((await json(await api(path,{lastMessageId:m1.id},auditor.token))).unread,0);
+  assert.equal(await unread(co.token),1);
+  const m2=(await json(await api(`/api/discussions/${r.id}/messages`,{text:'Second',requestKey:key()},co.token),201)).message;
+  await json(await api(path,{lastMessageId:m2.id},auditor.token));
+  await json(await api(path,{lastMessageId:m1.id},auditor.token));
+  assert.equal(await unread(auditor.token),0);assert.equal(await unread(server.token),1);
+  const another=await room([auditor.id]);
+  await json(await api(`/api/discussions/room/${another.id}/read`,{lastMessageId:m2.id},auditor.token),404);
+  await json(await api(path,{lastMessageId:999999}),404);
+  await taskAction(r.id,'trash',0);
+  assert.equal((await json(await api(path,{lastMessageId:m2.id},auditor.token))).unread,0);
+});
 
 test('process catalogue keeps empty sections visible and scopes records and counts to tenant and permissions', async () => {
   const admin = await json(await api('/api/discussions/sources'));
@@ -279,10 +423,36 @@ test('contract attachments share the existing conversation and never replace its
   const payload = { text: '', expectedVersion: 0, expectedCycleId: null, requestKey: key() };
   const msg = await json(await multipart(`/api/engagements/${e.id}/approvals/chat`, payload, [{ name: 'notes.txt', bytes: 'Review notes' }]), 201);
   const feed = await json(await api(`/api/engagements/${e.id}/approvals/chat`)); assert.equal(feed.messages.length, 1); assert.equal(feed.documents.length, 0);
+  const catalogue=await json(await api(`/api/engagements/${e.id}/approvals/chat/files`,undefined,auditor.token));
+  assert.equal(catalogue.files.length,1);assert.equal(catalogue.files[0].id,msg.message.attachments[0].id);assert.equal(catalogue.files[0].name,'notes.txt');
+  await json(await api(`/api/engagements/${e.id}/approvals/chat/files`,undefined,other.token),404);
   const download = await api(`/api/engagements/${e.id}/approvals/chat/files/${msg.message.attachments[0].id}`); assert.equal(await download.text(), 'Review notes');
   await json(await api(`/api/engagements/${e.id}/approvals/chat/files/${msg.message.attachments[0].id}`, undefined, other.token), 404);
   assert.equal((await json(await api(`/api/engagements/${e.id}/approvals`))).currentVersion, 0);
   await json(await api(`/api/engagements/${e.id}`, undefined, server.token, 'DELETE'), 409);
+});
+
+test('file catalogue includes attachments outside the message page, preserves duplicate names and checks live access',async()=>{
+  const r=await room([co.id,auditor.id]),separate=await room();
+  const first=await json(await multipart(`/api/discussions/${r.id}/messages`,{text:'Old files',requestKey:key()},[
+    {name:'Archive.txt',bytes:'Old version'},{name:'Archive.txt',bytes:'Other version'}]),201);
+  for(let i=0;i<101;i++)await json(await api(`/api/discussions/${r.id}/messages`,{text:'Later '+i,requestKey:key()}),201);
+  const latest=await json(await multipart(`/api/discussions/${r.id}/messages`,{text:'Latest file',requestKey:key()},[{name:'New.txt',bytes:'Latest'}]),201);
+  const page=await json(await api(`/api/discussions/${r.id}`));assert.ok(!page.messages.some(m=>m.id===first.message.id));
+  const catalogue=await json(await api(`/api/discussions/${r.id}/files`,undefined,auditor.token));
+  assert.equal(catalogue.files.length,3);assert.equal(catalogue.files[0].id,latest.message.attachments[0].id);
+  assert.equal(catalogue.files.filter(f=>f.name==='Archive.txt').length,2);
+  for(const file of catalogue.files){assert.ok(file.createdAt&&file.author&&file.messageId);assert.equal(Object.hasOwn(file,'file_bytes'),false);assert.equal(Object.hasOwn(file,'sha256'),false);}
+  const downloaded=await api(`/api/discussions/${r.id}/files/${first.message.attachments[0].id}`,undefined,auditor.token);assert.equal(await downloaded.text(),'Old version');
+  assert.deepEqual((await json(await api(`/api/discussions/${separate.id}/files`))).files,[]);
+  await json(await api(`/api/discussions/${r.id}/files`,undefined,outsider.token),404);
+  await json(await api(`/api/discussions/${r.id}/files`,undefined,other.token),404);
+  await json(await api(`/api/discussions/${separate.id}/files/${first.message.attachments[0].id}`),404);
+  await taskAction(r.id,'complete',0);await taskAction(r.id,'trash',1);
+  assert.equal((await json(await api(`/api/discussions/${r.id}/files`))).files.length,3);
+  const db=new DatabaseSync(server.dbPath);db.prepare('UPDATE users SET active=0 WHERE id=?').run(co.id);db.close();
+  const denied=await api(`/api/discussions/${r.id}/files`,undefined,co.token);assert.ok([401,403].includes(denied.status));
+  const restore=new DatabaseSync(server.dbPath);restore.prepare('UPDATE users SET active=1 WHERE id=?').run(co.id);restore.close();
 });
 test('chat pagination catches up and history remains bound to the selected room', async () => {
   const r = await room();

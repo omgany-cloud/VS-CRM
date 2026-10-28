@@ -78,6 +78,57 @@ async function postMessage(e, body, token = rm.token) {
   return api(`/api/engagements/${e.id}/approvals/chat`, body, token);
 }
 
+test('contract task rename changes its label during approval without modifying the contract or approval',async()=>{
+  const e=await contract();await submitDirect(e);
+  const before=await history(e);
+  const result=await json(await api(`/api/discussions/contract/${e.id}/state`,{action:'rename',title:'Новая задача согласования',expectedVersion:0,requestKey:key()},rm.token));
+  assert.equal(result.task.title,'Новая задача согласования');assert.equal(result.task.reviewActive,true);
+  assert.deepEqual(await history(e),before);
+  assert.equal((await chat(e)).task.title,'Новая задача согласования');
+  const source=await json(await api(`/api/discussions/source/contract/${e.id}`));
+  assert.equal(source.items[0].title,'Новая задача согласования');
+  const db=new DatabaseSync(server.dbPath,{readOnly:true});
+  try{assert.equal(db.prepare('SELECT contract_num FROM engagements WHERE id=?').get(e.id).contract_num,e.contractNum);}finally{db.close();}
+});
+
+test('contract replies retain their original cycle while the response binds current context; assignment invites without approval vote',async()=>{
+  const e=await contract(),another=await contract();
+  const original=(await json(await postMessage(e,await messageBody(e,'Original question')),201)).message;
+  const reply=await messageBody(e,'Answer',{replyToId:original.id});
+  const first=(await json(await postMessage(e,reply),201)).message;
+  assert.equal(first.replyTo.id,original.id);assert.equal(first.replyTo.text,'Original question');
+  assert.equal((await json(await postMessage(e,reply))).message.id,first.id);
+  await json(await postMessage(another,await messageBody(another,'Wrong task',{replyToId:original.id})),404);
+  const url=`/api/discussions/contract/${e.id}/state`;
+  const assigned=await json(await api(url,{action:'assign',assigneeId:co.id,expectedVersion:0,requestKey:key()},rm.token));
+  assert.equal(assigned.task.assignee.id,co.id);assert.equal((await chat(e,co.token)).canPost,true);assert.equal((await history(e)).cycles.length,0);
+  const cycle=await submitDirect(e);
+  const after=(await json(await postMessage(e,await messageBody(e,'During review',{replyToId:original.id}),co.token),201)).message;
+  assert.equal(after.cycleId,cycle.id);assert.equal(after.replyTo.id,original.id);
+  assert.ok((await history(e)).cycles[0].steps.every(s=>s.status==='pending'));
+});
+
+test('contract task lifecycle cannot hide active approval; closed tasks preserve contract and block new submission',async()=>{
+  const e=await contract();const cycle=await submitDirect(e);
+  const url=`/api/discussions/contract/${e.id}/state`;
+  const action=(action,expectedVersion,extra={})=>api(url,{action,expectedVersion,requestKey:key(),...extra},rm.token);
+  await json(await action('complete',0),409);await json(await action('trash',0),409);
+  await json(await action('due',0,{dueDate:'2026-11-01'}));
+  assert.deepEqual((await history(e)).cycles[0].steps.map(s=>s.dueAt),cycle.steps.map(s=>s.dueAt));
+  await control(e,cycle,'withdraw');
+  await json(await action('complete',1));
+  assert.equal((await chat(e)).canPost,false);
+  await json(await api(`/api/engagements/${e.id}/approvals`,await directSubmission(e),rm.token),409);
+  await json(await postMessage(e,await messageBody(e)),409);
+  await json(await action('trash',2));
+  const source=await json(await api(`/api/discussions/source/contract/${e.id}`));assert.equal(source.items[0].task.status,'trashed');
+  assert.equal((await history(e)).currentVersion,1);assert.equal((await history(e)).cycles.length,1);
+  await json(await api(`/api/engagements/${e.id}`,undefined,server.token,'DELETE'),409);
+  assert.equal((await json(await action('restore',3))).task.status,'completed');
+  await json(await action('reopen',4));
+  const next=await submitDirect(e);assert.equal(next.status,'active');
+});
+
 before(async () => {
   server = await createTestServer({ port: 4205, extraEnv: { SMTP_HOST: '', AI_PROVIDER: '' } });
   rm = await user('RELATIONSHIP_MANAGER'); co = await user('COMPLIANCE_OFFICER'); cfo = await user('CFO');
@@ -86,6 +137,36 @@ before(async () => {
   roles = (await json(await api('/api/roles'))).roles;
 });
 after(async () => { if (server) await server.stop(); });
+
+test('purging a contract task removes conversation but preserves documents and approval, and a new approval starts an empty task',async()=>{
+  const e=await contract(),cycle=await submitDirect(e);
+  const form=new FormData();form.append('payload',JSON.stringify(await messageBody(e,'Remove this chat')));form.append('files',new Blob(['Remove this attachment']),'remove.txt');
+  const message=(await json(await fetch(server.baseUrl+`/api/engagements/${e.id}/approvals/chat`,{method:'POST',headers:{Authorization:'Bearer '+rm.token},body:form}),201)).message;
+  const neighbor=await json(await api('/api/discussions',{title:'Neighbor',requestKey:key()}),201);
+  await json(await api(`/api/discussions/${neighbor.id}/links`,{kind:'contract-chat',id:e.id}));
+  await json(await api(`/api/discussions/${neighbor.id}/links`,{kind:'contract',id:e.id}));
+  await control(e,cycle,'withdraw');const before=await history(e);
+  await json(await api(`/api/discussions/contract/${e.id}/state`,{action:'trash',expectedVersion:0,requestKey:key()},rm.token));
+  const payload={expectedVersion:1,requestKey:key()},url=`/api/discussions/contract/${e.id}`;
+  await json(await api(url,payload,co.token,'DELETE'),403);
+  await json(await api(url,payload,other.token,'DELETE'),404);
+  await json(await api(url,payload,rm.token,'DELETE'));
+  await json(await api(url,payload,rm.token,'DELETE'));
+  assert.deepEqual(await history(e),before);
+  const links=(await json(await api(`/api/discussions/${neighbor.id}`))).room.links;
+  assert.ok(links.some(l=>l.kind==='contract'&&l.id===e.id));assert.ok(!links.some(l=>l.kind==='contract-chat'));
+  const db=new DatabaseSync(server.dbPath,{readOnly:true});
+  try{assert.equal(db.prepare('SELECT COUNT(*) n FROM discussion_files WHERE id=?').get(message.attachments[0].id).n,0);assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);}finally{db.close();}
+  await json(await api(`/api/engagements/${e.id}/approvals/chat`,undefined,rm.token),404);
+  await json(await api(`/api/discussions/contract/${e.id}/state`,{action:'restore',expectedVersion:2,requestKey:key()},rm.token),404);
+  assert.ok(!(await json(await api('/api/discussions'))).items.some(i=>i.kind==='contract'&&i.id===e.id));
+  const remaining=(await json(await api(`/api/discussions/source/contract/${e.id}`))).items;
+  assert.ok(!remaining.some(i=>i.kind==='contract'&&i.id===e.id));assert.ok(remaining.some(i=>i.kind==='room'&&i.id===neighbor.id));
+  const next=await submitDirect(e);assert.equal(next.status,'active');
+  const fresh=await chat(e);assert.equal(fresh.task.status,'open');assert.equal(fresh.messages.length,0);assert.equal(fresh.documents.length,1);
+  // Retrying the old delete cannot delete this new approval's task.
+  await json(await api(url,payload,rm.token,'DELETE'));assert.equal((await chat(e)).task.status,'open');
+});
 
 test('sequential approvals freeze a document, activate deadlines step by step and do not activate the client', async () => {
   const e = await contract(), r = await route();

@@ -5,10 +5,13 @@ const { requireAuth, requireInternal } = require('./auth');
 const { rowToPermissions } = require('./rolesMapping');
 const { handle, transaction, ContractError } = require('./contractDocuments');
 const { getSource, sourceView, listSources, sourceCategories, SOURCES } = require('./discussionSources');
-const { messageUpload, validatedAttachments, attachmentFingerprint, saveAttachments, messageAttachments, sendAttachment } = require('./discussionFiles');
+const { messageUpload, validatedAttachments, attachmentFingerprint, saveAttachments, messageAttachments, conversationAttachments, sendAttachment } = require('./discussionFiles');
 const { recordAudit } = require('./auditLog');
 const { mentionRefs, resolveMentions, mentionPeople } = require('./discussionMentions');
 const { relatedDiscussions, relationSources, addRelation } = require('./discussionRelations');
+const {replyId,replyTarget}=require('./discussionReplies');
+const {purgeTask}=require('./discussionPurge');
+const {taskState,taskView,taskAssignees,assertTaskOpen,dueDate,initializeDueDate,changeTask,taskUnread,markTaskRead} = require('./discussionTasks');
 const router = express.Router();
 router.use(requireAuth, requireInternal, (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 const fail = (text, status = 400) => { throw new ContractError(status, text); };
@@ -58,15 +61,19 @@ function checkSharing(req, ids, linked) {
 }
 function viewMessage(row) {
   return { id: row.id, authorId: row.author_id, author: row.author_name, text: row.body, createdAt: row.created_at,
-    mentions: JSON.parse(row.mentions_json),
+    mentions: JSON.parse(row.mentions_json), replyTo: replyTarget(row.tenant_id,row.room_id,row.reply_to_id),
     attachments: messageAttachments(row.tenant_id, row.id) };
 }
 function audit(req, id, summary) { recordAudit(db, { tenantId: req.tenantId, entityType: 'discussion_rooms', entityId: id, action: 'discussion', actorEmail: req.user.email, summary }); }
 
 router.get('/people', handle((req, res) => res.json({ people: people(req) })));
+router.post('/:kind/:id/state', handle((req,res) => res.json(changeTask(req,req.params.kind,Number(req.params.id),req.body))));
+router.delete('/:kind/:id',handle((req,res)=>res.json(purgeTask(req,req.params.kind,Number(req.params.id),req.body))));
+router.post('/:kind/:id/read', handle((req,res) => res.json(markTaskRead(req,req.params.kind,Number(req.params.id),req.body?.lastMessageId))));
+router.get('/:kind/:id/assignees', handle((req,res)=>res.json({people:taskAssignees(req,req.params.kind,Number(req.params.id))})));
 router.get('/sources', handle((req, res) => {
   const sources = listSources(req);
-  res.json({ categories: sourceCategories(req, sources), items: [...relationSources(req), ...sources.filter(s => s.kind === 'contract').map(s => ({ ...s, kind: 'contract-chat', label: 'Подзадача по договору' })), ...sources] });
+  res.json({ categories: sourceCategories(req, sources), items: [...relationSources(req), ...sources.filter(s => s.kind === 'contract' && taskState(req.tenantId,'contract',s.id).status !== 'trashed').map(s => ({ ...s, title:taskState(req.tenantId,'contract',s.id).title||s.title, kind: 'contract-chat', label: 'Подзадача по договору' })), ...sources] });
 }));
 router.get('/source/:kind/:entityId', handle((req, res) => {
   const source = sourceView(getSource(req, req.params.kind, req.params.entityId));
@@ -75,9 +82,10 @@ router.get('/source/:kind/:entityId', handle((req, res) => {
     JOIN discussion_members m ON m.room_id = r.id AND m.tenant_id = r.tenant_id
     WHERE r.tenant_id = ? AND l.kind = ? AND l.entity_id = ? AND m.user_id = ? ORDER BY r.id DESC`).all(req.tenantId, source.kind, source.id, req.user.id)) {
     try { links(req, row.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
-    items.push({ kind: 'room', id: row.id, title: row.title });
+    const task = taskState(req.tenantId,'room',row.id);
+    if (task.status !== 'trashed') items.push({ kind: 'room', id: row.id, title: row.title, task });
   }
-  if (source.kind === 'contract') items.unshift({ kind: 'contract', id: source.id, title: 'Задача по договору · ' + source.title });
+  if (source.kind === 'contract') {const task=taskState(req.tenantId,'contract',source.id);if(!task.purgedAt)items.unshift({ kind: 'contract', id: source.id, title:task.title||'Задача по договору · '+source.title, task });}
   res.json({ source, items, canCreate: !req.user.permissions.readOnly });
 }));
 router.get('/', handle((req, res) => {
@@ -86,13 +94,15 @@ router.get('/', handle((req, res) => {
   const items = [];
   for (const r of rooms) {
     let sources; try { sources = links(req, r.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
-    const latest = db.prepare('SELECT body, created_at FROM discussion_messages WHERE tenant_id = ? AND room_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, r.id);
-    items.push({ kind: 'room', id: r.id, title: r.title, label: 'Задача', sources, preview: latest?.body || (latest ? 'Вложение' : 'Напишите сообщение по задаче'), updatedAt: latest?.created_at || r.created_at });
+    const latest = db.prepare('SELECT body, created_at, author_name FROM discussion_messages WHERE tenant_id = ? AND room_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, r.id);
+    items.push({ kind: 'room', id: r.id, title: r.title, label: 'Задача', sources, task: taskView(req,'room',r.id,r), unread: taskUnread(req,'room',r.id), lastAuthor: latest?.author_name || '', createdAt: r.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Пока нет сообщений'), updatedAt: latest?.created_at || r.created_at });
   }
   for (const row of db.prepare('SELECT id FROM engagements WHERE tenant_id = ?').all(req.tenantId)) {
+    if(taskState(req.tenantId,'contract',row.id).purgedAt)continue;
     let source; try { source = getSource(req, 'contract', row.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
-    const latest = db.prepare('SELECT body, created_at FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, row.id);
-    items.push({ ...sourceView(source), sources: [sourceView(source)], preview: latest?.body || (latest ? 'Вложение' : 'Задача по договору'), updatedAt: latest?.created_at || source.row.created_at || '' });
+    const latest = db.prepare('SELECT body, created_at, author_name FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, row.id);
+    const task=taskView(req,'contract',row.id,source.row);
+    items.push({ ...sourceView(source), title:task.title, sources: [sourceView(source)], task, unread: taskUnread(req,'contract',row.id), lastAuthor: latest?.author_name || '', createdAt: source.row.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Задача по договору'), updatedAt: latest?.created_at || source.row.created_at || '' });
   }
   items.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt) || b.id-a.id);
   res.json({ items, categories: sourceCategories(req, []).map(({count, ...category}) => category), canCreate: !req.user.permissions.readOnly });
@@ -101,9 +111,11 @@ router.post('/', handle((req, res) => {
   const b = req.body || {}, key = requestKey(b.requestKey);
   if (typeof b.title !== 'string' || !b.title.trim() || b.title.trim().length > 160) fail('Укажите название задачи: до 160 символов');
   const ids = participantIds(req, b.participants ?? []), title = b.title.trim();
+  const deadline = dueDate(b.dueDate);
   const source = b.source == null ? null : getSource(req, b.source.kind, b.source.id);
   if (source) checkSharing(req, ids, [source]);
   const payload = { title, ids }; if (source) payload.source = { kind: source.kind, id: source.id };
+  if (deadline) payload.dueDate = deadline;
   const hash = digest(payload);
   const result = transaction(() => {
     const old = db.prepare('SELECT * FROM discussion_rooms WHERE tenant_id = ? AND request_key = ?').get(req.tenantId, key);
@@ -111,6 +123,7 @@ router.post('/', handle((req, res) => {
     const id = Number(db.prepare('INSERT INTO discussion_rooms (tenant_id, title, created_by, created_at, request_key, payload_hash) VALUES (?, ?, ?, ?, ?, ?)')
       .run(req.tenantId, title, req.user.id, new Date().toISOString(), key, hash).lastInsertRowid);
     for (const uid of ids) db.prepare('INSERT INTO discussion_members (tenant_id, room_id, user_id) VALUES (?, ?, ?)').run(req.tenantId, id, uid);
+    initializeDueDate(req,'room',id,deadline);
     if (source) db.prepare('INSERT INTO discussion_links (tenant_id, room_id, kind, entity_id) VALUES (?, ?, ?, ?)').run(req.tenantId, id, source.kind, source.id);
     audit(req, id, 'Создана задача'); return { id, reused: false };
   });
@@ -133,13 +146,15 @@ router.get('/:id', handle((req, res) => {
     ${after !== null ? 'AND id > ?' : before !== null ? 'AND id < ?' : ''} ORDER BY id ${after !== null ? 'ASC' : 'DESC'} LIMIT 101`)
     .all(req.tenantId, room.id, ...(after !== null ? [after] : before !== null ? [before] : []));
   const hasMore = rows.length > 100; if (hasMore) rows.pop(); if (after === null) rows.reverse();
-  res.json({ room: { id: room.id, title: room.title, members: members(req, room.id), links: [...room.links, ...relatedDiscussions(req, { roomId: room.id })], canManage: room.created_by === req.user.id && !req.user.permissions.readOnly },
+  const task = taskView(req,'room',room.id,room);
+  res.json({ task, room: { id: room.id, title: room.title, createdBy: room.created_by, createdAt: room.created_at, members: members(req, room.id), links: [...room.links, ...relatedDiscussions(req, { roomId: room.id })], canManage: task.canManage && task.status === 'open' },
     messages: rows.map(viewMessage), hasMore, nextAfter: rows.at(-1)?.id || after || 0, nextBefore: after === null && hasMore ? rows[0].id : null,
-    canPost: !req.user.permissions.readOnly, userId: req.user.id, documents: [], context: {} });
+    canPost: !req.user.permissions.readOnly && task.status === 'open', userId: req.user.id, documents: [], context: {} });
 }));
 router.post('/:id/members', handle((req, res) => {
   transaction(() => {
     const room = roomFor(req, true), old = members(req, room.id), ids = participantIds(req, req.body?.participants);
+    assertTaskOpen(req.tenantId,'room',room.id);
     const combined = [...new Set([...old.filter(m => m.active).map(m => m.id), ...ids])];
     if (combined.length > 50) fail('В задаче может быть до 50 участников');
     checkSharing(req, combined, room.links);
@@ -150,6 +165,7 @@ router.post('/:id/members', handle((req, res) => {
 router.post('/:id/links', handle((req, res) => {
   transaction(() => {
     const room = roomFor(req, true);
+    assertTaskOpen(req.tenantId,'room',room.id);
     if (['discussion', 'contract-chat'].includes(req.body?.kind)) {
       addRelation(req, room.id, req.body.kind, req.body.id); audit(req, room.id, 'Добавлена подзадача'); return;
     }
@@ -164,21 +180,29 @@ router.post('/:id/messages', handle((req, res, next) => { roomFor(req); next(); 
   const b = req.body || {}, key = requestKey(b.requestKey), files = validatedAttachments(req);
   if (typeof b.text !== 'string' || b.text.trim().length > 4000 || (!b.text.trim() && !files.length)) fail('Напишите сообщение до 4000 символов или приложите файл');
   const refs = mentionRefs(b.mentions, b.text);
+  const replyToId=replyId(b.replyToId);
   const result = transaction(() => {
     const room = roomFor(req), input = { room: room.id, text: b.text.trim(), files: attachmentFingerprint(files) };
     if (refs.length) input.mentions = refs;
+    if(replyToId)input.replyToId=replyToId;
     const hash = digest(input);
     const old = db.prepare('SELECT * FROM discussion_messages WHERE tenant_id = ? AND request_key = ?').get(req.tenantId, key);
     if (old) { if (old.author_id !== req.user.id || old.payload_hash !== hash) fail('Ключ сообщения уже использован', 409); return { message: viewMessage(old), reused: true }; }
+    assertTaskOpen(req.tenantId,'room',room.id);
+    replyTarget(req.tenantId,room.id,replyToId);
     const mentions = resolveMentions(req, refs, input.text, person => { for (const link of room.links) getSource(person, link.kind, link.id); });
     const combined = new Set([...members(req, room.id).filter(m => m.active).map(m => m.id), ...mentions.map(m => m.userId)]);
     if (combined.size > 50) fail('В задаче может быть до 50 участников');
     for (const uid of new Set(mentions.map(m => m.userId))) db.prepare('INSERT OR IGNORE INTO discussion_members (tenant_id, room_id, user_id) VALUES (?, ?, ?)').run(req.tenantId, room.id, uid);
-    const id = Number(db.prepare(`INSERT INTO discussion_messages (tenant_id, room_id, author_id, author_name, body, created_at, request_key, payload_hash, mentions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(req.tenantId, room.id, req.user.id, req.user.name || req.user.email, input.text, new Date().toISOString(), key, hash, JSON.stringify(mentions)).lastInsertRowid);
+    const id = Number(db.prepare(`INSERT INTO discussion_messages (tenant_id, room_id, author_id, author_name, body, created_at, request_key, payload_hash, mentions_json, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(req.tenantId, room.id, req.user.id, req.user.name || req.user.email, input.text, new Date().toISOString(), key, hash, JSON.stringify(mentions),replyToId).lastInsertRowid);
     saveAttachments(req.tenantId, id, files); audit(req, room.id, 'Сообщение в задаче');
     return { message: viewMessage(db.prepare('SELECT * FROM discussion_messages WHERE tenant_id = ? AND id = ?').get(req.tenantId, id)), reused: false };
   }); res.status(result.reused ? 200 : 201).json(result);
+}));
+router.get('/:id/files', handle((req,res)=>{
+  const room=roomFor(req);
+  res.json({files:conversationAttachments(req.tenantId,room.id)});
 }));
 router.get('/:id/files/:fileId', handle((req, res) => {
   const room = roomFor(req);
@@ -190,6 +214,7 @@ router.get('/:id/files/:fileId', handle((req, res) => {
 const guard = express.Router();
 for (const [kind, def] of Object.entries(SOURCES)) guard.delete('/' + def.path + '/:id', requireAuth, requireInternal, handle((req, res, next) => {
   getSource(req, kind, req.params.id);
+  if (kind === 'contract' && db.prepare('SELECT id FROM discussion_task_state WHERE tenant_id=? AND engagement_id=?').get(req.tenantId,req.params.id)) fail('У задачи договора есть история. Используйте корзину задач, чтобы сохранить договор.',409);
   if (kind === 'contract' && db.prepare('SELECT id FROM discussion_relations WHERE tenant_id = ? AND engagement_id = ? LIMIT 1').get(req.tenantId, req.params.id)) fail('Договор связан с задачей и должен остаться в истории', 409);
   if (db.prepare('SELECT 1 FROM discussion_links WHERE tenant_id = ? AND kind = ? AND entity_id = ? LIMIT 1').get(req.tenantId, kind, req.params.id)) fail('Процесс связан с задачей и должен остаться в истории', 409);
   next();

@@ -10,7 +10,7 @@ function discussionDraftKey(state) {
 function saveDiscussionDraft(state) {
   if (document.getElementById('contractApprovalPanel') !== state.panel) return;
   const text = document.getElementById('contractChatText')?.value || '';
-  if (text || state.attachments?.length) discussionDrafts.set(discussionDraftKey(state), { text, files: state.attachments || [], attachmentKey: state.attachmentKey, keys: state.keys, mentions: state.mentions || [] });
+  if (text || state.attachments?.length || state.replyTo) discussionDrafts.set(discussionDraftKey(state), { text, files: state.attachments || [], attachmentKey: state.attachmentKey, keys: state.keys, mentions: state.mentions || [], replyTo: state.replyTo });
   else discussionDrafts.delete(discussionDraftKey(state));
 }
 function restoreDiscussionDraft(state) {
@@ -18,6 +18,7 @@ function restoreDiscussionDraft(state) {
   document.getElementById('contractChatText').value = draft.text;
   state.attachments = draft.files; state.attachmentKey = draft.attachmentKey; state.keys = draft.keys;
   state.mentions = draft.mentions || []; state.mentionText = draft.text;
+  state.replyTo=draft.replyTo || null;renderDiscussionReply(state);
   renderDiscussionAttachments(state);
 }
 function forgetDiscussionDraft(state) { discussionDrafts.delete(discussionDraftKey(state)); }
@@ -48,6 +49,7 @@ async function refreshDiscussionList() {
 function resetDiscussions() {
   stopContractConversation(); clearTimeout(discussionListTimer); ++discussionListRequest; ++discussionViewRequest;
   discussionDrafts.clear(); discussionItems = []; discussionSources = []; discussionCategories = []; discussionCreateKey = null; contractApprovalUI = null;
+  discussionTaskFilter = 'open';
   const list = document.getElementById('discussionList'), main = document.getElementById('discussionMain');
   if (list) list.innerHTML = ''; if (main) main.innerHTML = '<div id="discussionWelcome"></div>';
 }
@@ -55,12 +57,13 @@ function renderDiscussionList() {
   const q = document.getElementById('discussionSearch').value.trim().toLocaleLowerCase();
   const state = contractApprovalUI;
   const category = document.getElementById('discussionChatFilter')?.value || '';
-  const items = discussionItems.filter(i => `${i.title} ${i.label} ${i.preview} ${(i.sources || []).map(s => s.label + ' ' + s.title).join(' ')}`.toLocaleLowerCase().includes(q)
-    && (!category || (category === 'free' ? !i.sources?.length : i.sources?.some(s => s.kind === category))));
+  const items = sortTaskItems(discussionItems.filter(i => (i.task?.status || 'open') === discussionTaskFilter && `${i.title} ${i.label} ${i.preview} ${(i.sources || []).map(s => s.label + ' ' + s.title).join(' ')}`.toLocaleLowerCase().includes(q)
+    && (!category || (category === 'free' ? !i.sources?.length : i.sources?.some(s => s.kind === category)))), document.getElementById('discussionTaskSort')?.value);
   document.getElementById('discussionList').innerHTML = items.length ? items.map(item => `<button type="button" class="discussion-list-item${state?.engagementId === item.id && (state.kind || 'contract') === item.kind ? ' selected' : ''}" onclick="openDiscussion('${item.kind}',${item.id})">
     <span class="discussion-avatar"><i class="fas ${item.kind === 'contract' ? 'fa-file-signature' : 'fa-comments'}" aria-hidden="true"></i></span>
-    <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.sources?.length ? [...new Set(item.sources.map(s => s.label))].join(' · ') : 'Задача без процесса CRM')}</small><p>${escapeHtml(item.preview || '')}</p></span></button>`).join('') : '<p class="discussion-empty">Здесь пока нет задач.</p>';
+    <span class="task-list-content"><span class="task-list-title"><strong class="${item.unread ? 'task-unread-title' : ''}">${escapeHtml(item.title)}</strong>${item.unread ? `<span class="task-unread" aria-label="Непрочитанных: ${item.unread}">${item.unread > 99 ? '99+' : item.unread}</span>` : ''}</span><p>${escapeHtml((item.preview && item.lastAuthor ? item.lastAuthor + ': ' : '') + (item.preview || 'Нет сообщений'))}</p><span class="task-list-meta"><small>${escapeHtml(item.sources?.length ? [...new Set(item.sources.map(s => s.label))].join(' · ') : 'Без процесса')}</small>${item.task?.dueDate ? `<time class="${taskOverdue(item.task) ? 'overdue' : ''}" datetime="${item.task.dueDate}">${taskOverdue(item.task) ? 'Просрочена · ' : ''}${taskDateLabel(item.task.dueDate)}</time>` : ''}</span></span></button>`).join('') : '<p class="discussion-empty">Задач в этом списке нет.</p>';
   updateDiscussionChatFilter();
+  updateTaskFilterTabs();
 }
 async function openDiscussion(kind, id) {
   if (!['contract', 'room'].includes(kind) || !Number.isSafeInteger(id) || id < 1) return;
@@ -68,8 +71,9 @@ async function openDiscussion(kind, id) {
   stopContractConversation();
   if (!discussionsActive()) navigateTo('discussions');
   const item = discussionItems.find(i => i.id === id && i.kind === kind);
+  if (item?.task) discussionTaskFilter = item.task.status;
   document.getElementById('discussionMain').innerHTML = `<header id="discussionContext" class="discussion-context"><h2>${escapeHtml(item?.title || 'Задача')}</h2></header>
-    <div id="discussionTools" class="discussion-tools" hidden></div>${contractConversationPanel(id, kind)}`;
+    ${contractConversationPanel(id, kind)}`;
   await loadContractConversation(id);
   if (request !== discussionViewRequest) return;
   renderDiscussionList();
@@ -78,24 +82,13 @@ async function openDiscussion(kind, id) {
 }
 function renderDiscussionContext(state) {
   const header = document.getElementById('discussionContext'); if (!header || !contractConversationOpen(state)) return;
-  if (state.kind === 'room') {
-    const room = state.data.room;
-    header.innerHTML = `<div class="discussion-context-top"><div><h2>${escapeHtml(room.title)}</h2><p>${room.members.map(m => escapeHtml(m.name) + (m.active ? '' : ' (неактивен)')).join(' · ')}</p></div>
-      ${room.canManage ? `<div class="discussion-context-actions"><button type="button" class="contract-secondary" onclick="showDiscussionLinks()" title="Добавить подзадачу или связать с процессом"><i class="fas fa-link" aria-hidden="true"></i><span>Связать</span></button></div>` : ''}</div>
-      ${room.links.length ? `<div class="discussion-context-label">В этой задаче</div><div class="discussion-links">${room.links.map(l => `<button type="button" class="contract-secondary" title="${escapeHtml(l.title)}" onclick="openDiscussionSource('${l.kind}',${l.id})"><span><i class="fas ${discussionSourceIcon(l.kind)}" aria-hidden="true"></i> ${escapeHtml(l.label)}</span><strong>${escapeHtml(l.title)}</strong><small>${escapeHtml(discussionStatus(l.status))}${l.fundName ? ' · ' + escapeHtml(l.fundName) : ''} · Открыть ↗</small></button>`).join('')}</div>` : '<p class="discussion-free-hint">Задача без процесса CRM. Через «Связать» можно добавить подзадачу или процесс CRM.</p>'}`;
-  } else {
-    const item = discussionItems.find(i => i.kind === 'contract' && i.id === state.engagementId);
-    const cycle = state.data.cycles[0];
-    const names = [...new Set([...(cycle?.steps.map(s => s.name) || []), ...(state.chat.participants || []).map(p => p.name)])];
-    header.innerHTML = `<div class="discussion-context-top"><div><h2>${escapeHtml(item?.title || cycle?.metadata?.contractNum || 'Договор')}</h2><p>${escapeHtml(contractApprovalLabel(state.data.summary.status))}${names.length ? ' · ' + names.map(escapeHtml).join(' · ') : ''}</p></div>
-      <button type="button" class="contract-secondary" onclick="openContractRecord(${state.engagementId})"><i class="fas fa-file-alt" aria-hidden="true"></i> Карточка договора ↗</button></div>
-      ${(state.chat.related || []).length ? `<div class="discussion-links">${state.chat.related.map(l => `<button type="button" class="contract-secondary" onclick="openDiscussionSource('${l.kind}',${l.id})"><span><i class="fas fa-comments" aria-hidden="true"></i> ${escapeHtml(l.label)}</span><strong>${escapeHtml(l.title)}</strong><small>Открыть ↗</small></button>`).join('')}</div>` : ''}`;
-    // The first submission remains visible; later cycles stay compact until asked for.
-    if (!state.data.cycles.length) state.panel.querySelector('.discussion-approval-details').open = true;
-  }
+  const item=discussionItems.find(i=>i.kind===(state.kind||'contract')&&i.id===state.engagementId);
+  const title=state.chat.task?.title||state.data.room?.title||item?.title||state.data.cycles[0]?.metadata?.contractNum||'';
+  if(!state.titleEdit)header.innerHTML=discussionTitleHeader(title,state);
+  renderDiscussionProperties(state);
 }
 function discussionStatus(value) {
-  return ({ Draft: 'Черновик', Pending: 'Ожидает решения', pending: 'Ожидает решения', active: 'В работе', approved: 'Согласован', rejected: 'Отклонён', Published: 'Опубликован', Escalated: 'На рассмотрении CEO', Active: 'Активен' })[value] || value;
+  return ({ open: 'В работе', completed: 'Завершена', trashed: 'В корзине', Draft: 'Черновик', Pending: 'Ожидает решения', pending: 'Ожидает решения', active: 'В работе', approved: 'Согласован', rejected: 'Отклонён', Published: 'Опубликован', Escalated: 'На рассмотрении CEO', Active: 'Активен' })[value] || value;
 }
 function newDiscussion(source = null) {
   ++discussionViewRequest; stopContractConversation();
@@ -103,6 +96,7 @@ function newDiscussion(source = null) {
       <h2>Новая задача</h2>
       ${source ? `<p class="discussion-seed"><i class="fas ${discussionSourceIcon(source.kind)}" aria-hidden="true"></i> ${escapeHtml(source.label)} · ${escapeHtml(source.title)}</p>` : ''}
       <label for="discussionTitle">Название задачи</label><input id="discussionTitle" maxlength="160" required placeholder="Например: согласовать условия работы с клиентом" value="${source ? escapeHtml(('Задача: ' + source.title).slice(0,160)) : ''}" />
+      <label for="discussionDueDate">Срок <span class="contract-empty">· необязательно</span></label><input id="discussionDueDate" type="date" min="2000-01-01" max="2199-12-31" />
       <p class="contract-empty">Коллег можно добавить прямо в сообщении — начните печатать имя и выберите подсказку.</p>
       <button type="submit" class="contract-primary">Создать задачу</button><p id="discussionFormStatus" role="status"></p></form>`;
   document.querySelector('.discussion-new-form').discussionSource = source ? { kind: source.kind, id: source.id } : null;
@@ -111,11 +105,13 @@ function newDiscussion(source = null) {
 async function createDiscussion(form) {
   const title = form.querySelector('#discussionTitle').value.trim();
   const source = form.discussionSource;
-  const fingerprint = JSON.stringify({ title, source });
+  const dueDate = form.querySelector('#discussionDueDate')?.value || null;
+  const fingerprint = JSON.stringify({ title, source, dueDate });
   if (discussionCreateKey?.fingerprint !== fingerprint) discussionCreateKey = { fingerprint, key: contractTemplateRequestKey() };
   const button = form.querySelector('button[type="submit"]'); button.disabled = true;
   try {
-    const result = await apiFetch('/api/discussions', { method: 'POST', body: JSON.stringify({ title, ...(source ? { source } : {}), requestKey: discussionCreateKey.key }) });
+    const result = await apiFetch('/api/discussions', { method: 'POST', body: JSON.stringify({ title, dueDate, ...(source ? { source } : {}), requestKey: discussionCreateKey.key }) });
+    discussionTaskFilter = 'open';
     discussionCreateKey = null; await refreshDiscussionList();
     if (document.getElementById('discussionMain').contains(form)) await openDiscussion('room', result.id);
   } catch (err) { form.querySelector('#discussionFormStatus').textContent = err.message; }

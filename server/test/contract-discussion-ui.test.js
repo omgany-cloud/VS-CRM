@@ -21,6 +21,7 @@ function ui() {
   });
   vm.runInContext(code, ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../../js/discussion-mentions.js'), 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../js/discussion-replies.js'), 'utf8'), ctx);
   ctx.contractApprovalUI = { panel: elements.get('contractApprovalPanel'), engagementId: 7, request: 0, keys: {}, busy: false,
     data: { userId: 1, cycles: [], summary: { frozen: false } },
     chat: { loaded: true, after: 0, before: null, messages: new Map(), documents: [], canPost: true, context: { cycleId: null, version: 1 } } };
@@ -77,6 +78,20 @@ test('polling fetches new messages automatically and a closed card rejects late 
   for (const release of releases) release();
   await pending;
   assert.equal(state.chat.after, 5); assert.equal(timers.size, 0);
+});
+
+test('completed contract task retains history and draft but hides decision controls until reopened',()=>{
+  const {ctx,state,elements}=ui();
+  elements.get('contractChatText').value='Unsent draft';
+  state.chat.task={status:'completed'};state.chat.canPost=false;
+  state.data.cycles=[{id:3,number:1,steps:[],createdAt:'2026-10-28',canRework:true}];
+  ctx.renderContractDiscussion(state);
+  assert.equal(elements.get('contractChatDecisions').innerHTML,'');
+  assert.equal(elements.get('contractChatText').disabled,true);
+  assert.equal(elements.get('contractChatText').value,'Unsent draft');
+  state.chat.task.status='open';state.chat.canPost=true;ctx.renderContractDiscussion(state);
+  assert.match(elements.get('contractChatDecisions').innerHTML,/Вернуть в доработку/);
+  assert.equal(elements.get('contractChatText').disabled,false);
 });
 
 test('hidden pages pause polling and independent message sends keep the exact review context', async () => {
@@ -136,13 +151,29 @@ test('unsent text and selected files survive chat switching, scoped to account a
   ctx.getAuth = () => ({ user: { id: 1 }, tenant: { id: 1 } });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../../js/discussions.js'), 'utf8'), ctx);
   elements.set('discussionAttachments', { innerHTML: '' });
-  state.kind = 'room'; state.attachments = [{ name: 'notes.txt', size: 4 }];
+  state.kind = 'room'; state.attachments = [{ name: 'notes.txt', size: 4 }];state.replyTo={id:4,author:'Colleague',text:'Original'};
   elements.get('contractChatText').value = 'Pending draft'; ctx.saveDiscussionDraft(state);
-  elements.get('contractChatText').value = ''; state.attachments = [];
+  elements.get('contractChatText').value = ''; state.attachments = [];state.replyTo=null;
   ctx.restoreDiscussionDraft(state);
   assert.equal(elements.get('contractChatText').value, 'Pending draft'); assert.equal(state.attachments[0].name, 'notes.txt');
+  assert.equal(state.replyTo.id,4);
   elements.get('contractChatText').value = ''; state.kind = 'contract'; ctx.restoreDiscussionDraft(state);
   assert.equal(elements.get('contractChatText').value, '');
   state.kind = 'room'; ctx.getAuth = () => ({ user: { id: 2 }, tenant: { id: 1 } }); ctx.restoreDiscussionDraft(state);
   assert.equal(elements.get('contractChatText').value, '');
+});
+
+test('reply selection keeps text, sends source ID, cancels independently and escapes quoted content',()=>{
+  const {ctx,state,elements}=ui();state.kind='room';
+  elements.set('discussionReplyPreview',{innerHTML:'',hidden:true});elements.get('contractChatText').focus=()=>{};
+  elements.get('contractChatText').value='My answer';
+  state.chat.messages.set(6,{id:6,authorId:2,author:'<Colleague>',text:'<original>',createdAt:'2026-10-28T10:00:00Z',attachments:[]});
+  ctx.replyToDiscussionMessage(6);assert.equal(state.replyTo.id,6);assert.equal(elements.get('contractChatText').value,'My answer');
+  assert.match(elements.get('discussionReplyPreview').innerHTML,/&lt;Colleague&gt;/);assert.match(elements.get('discussionReplyPreview').innerHTML,/&lt;original&gt;/);
+  let sent;ctx.contractApprovalAction=(url,body)=>{sent=body;};ctx.sendContractDiscussion();assert.equal(sent.replyToId,6);assert.equal(sent.text,'My answer');
+  ctx.cancelDiscussionReply();assert.equal(state.replyTo,null);assert.equal(elements.get('contractChatText').value,'My answer');
+  state.chat.messages.set(7,{id:7,authorId:1,author:'Me',text:'Answer',createdAt:'2026-10-28T10:01:00Z',replyTo:{id:6,author:'<Colleague>',text:'<original>'}});
+  ctx.renderContractDiscussion(state);const html=elements.get('contractChatFeed').innerHTML;
+  assert.match(html,/jumpToDiscussionMessage\(6\)/);assert.match(html,/&lt;original&gt;/);assert.ok(!html.includes('contract-chat-own'));
+  state.chat.canPost=false;ctx.renderContractDiscussion(state);assert.ok(!elements.get('contractChatFeed').innerHTML.includes('replyToDiscussionMessage('));
 });

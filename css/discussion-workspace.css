@@ -1,0 +1,108 @@
+/* The conversation is the work surface; task properties have their own rail. */
+.discussion-workspace { grid-template-columns: 265px minmax(0,1fr); }
+.discussion-context { padding: 15px 18px; max-height: 130px; }
+.discussion-context h2 { font-size: 16px; line-height: 1.4; flex: 1; }
+.discussion-workspace .discussion-title-edit { color: inherit; font: inherit; text-align: left; background: transparent; border: 0; padding: 0; white-space: normal; overflow-wrap: anywhere; }
+.discussion-title-edit i { margin-left: 7px; color: #8daf9e; font-size: 11px; vertical-align: middle; }
+.discussion-title-edit:hover { text-decoration: underline; text-decoration-color: #789d8a; text-underline-offset: 4px; }
+.discussion-context h2 { min-width: 0; }
+.discussion-workspace .discussion-title-input { width: 100%; box-sizing: border-box; color: inherit; font: inherit; background: transparent; border: 0; border-bottom: 1px solid #789d8a; border-radius: 0; padding: 0; }
+.discussion-title-status { display: block; font-size: 11px; font-weight: 400; color: #bad0c5; margin-top: 4px; }
+.discussion-context-top { flex-wrap: nowrap; align-items: flex-start; }
+.discussion-main .discussion-conversation { padding: 0; overflow: hidden; }
+.discussion-task-layout { display: grid; grid-template-columns: minmax(0,1fr) 230px; flex: 1; min-height: 0; position: relative; }
+.properties-closed .discussion-task-layout { grid-template-columns: minmax(0,1fr); }
+.discussion-thread { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 8px 18px 14px; }
+.discussion-properties { overflow-y: auto; min-height: 0; border-left: 1px solid #2b413b; padding: 14px; background: #10201e; }
+.discussion-properties[hidden] { display: none; }
+.discussion-properties-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.discussion-property { margin: 22px 0; font-size: 12px; }
+.discussion-property h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #91a69b; }
+.discussion-property h3 > span { color: #bad0c5; font-weight: 400; }
+.discussion-property h3 > button { margin-left: auto; }
+.discussion-workspace .discussion-quiet-button { border: 0; background: transparent; color: #a0b7ab; font-size: 15px; padding: 3px 6px; flex-shrink: 0; }
+.discussion-workspace .discussion-quiet-button:hover { color: #e7f1eb; background: #ffffff0a; }
+.discussion-workspace .discussion-text-action { padding: 5px 0; border: 0; background: transparent; color: #90c7b8; font-weight: 400; font-size: 11px; }
+.discussion-person-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; min-width: 0; }
+.discussion-person-avatar { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 5px; background: #3a5b50; color: #f0f4f0; font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; user-select: none; }
+.avatar-tone-1 { background: #465770; }.avatar-tone-2 { background: #655478; }.avatar-tone-3 { background: #716244; }.avatar-tone-4 { background: #76534f; }
+.discussion-properties .discussion-person-avatar { width: 21px; height: 21px; flex-basis: 21px; font-size: 9px; border-radius: 4px; }
+.discussion-person-name { flex: 1; min-width: 0; }
+.discussion-person-name > strong { color: #dce7e0; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.discussion-person-name > small { display: block; font-size: 10px; color: #94aaa0; margin-top: 4px; }
+.discussion-workspace .discussion-person-link { border: 0; padding: 0; background: transparent; color: #dce7e0; font-weight: 400; font-size: 12px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.discussion-person-link:hover { text-decoration: underline; }
+.discussion-property-empty { color: #879e92; font-size: 11px; line-height: 1.6; margin: 6px 0; }
+.discussion-workspace .discussion-property-link { display: block; width: 100%; border: 0; border-bottom: 1px solid #273e34; background: transparent; text-align: left; border-radius: 0; padding: 10px 0; color: #c4d8ce; white-space: normal; overflow-wrap: anywhere; }
+.discussion-property-link small { display: block; font-size: 10px; color: #8ea99c; line-height: 1.6; }
+.discussion-property-link strong { display: block; font-size: 11px; line-height: 1.5; font-weight: 500; }
+.discussion-properties .discussion-approval-details { max-height: none; border: 0; overflow: visible; }
+.discussion-properties .contract-approval-people { grid-template-columns: 1fr; }
+.discussion-properties .contract-approval-person { padding: 8px; }
+.discussion-properties .contract-version-top { flex-wrap: wrap; }
+.discussion-properties .contract-approval-metadata { display: block; }
+.discussion-properties .contract-approval-metadata dt { margin-top: 8px; color: #91aaa0; }
+.discussion-thread .discussion-tools { padding: 10px 0 15px; max-height: 48%; }
+#discussionTaskActions { flex-shrink: 0; border-top: 1px solid #2b413b; margin-top: 12px; }
+#discussionTaskActions .task-controls { margin-top: 12px; }
+#discussionTaskActions .task-lifecycle-note { color: #8da79b; font-size: 10px; line-height: 1.5; margin: 8px 0 0; }
+.discussion-conversation .contract-chat-feed { padding: 0; scrollbar-gutter: stable; }
+.discussion-conversation .contract-chat-entry { display: flex; gap: 11px; padding: 12px 4px; margin: 3px 0; background: transparent; border: 0; border-radius: 0; }
+.discussion-message-content { flex: 1; min-width: 0; }
+.discussion-message-content p { margin-top: 3px; line-height: 1.55; }
+.discussion-conversation .contract-chat-meta { gap: 7px; min-height: 19px; }
+.discussion-conversation .contract-chat-meta strong { color: #e1eae5; font-size: 12px; }
+.discussion-conversation .contract-chat-meta time { color: #89a095; font-size: 10px; }
+.discussion-conversation .contract-chat-meta > span { font-size: 9px; color: #779084; }
+.discussion-workspace .contract-chat-entry .discussion-author { color: #e1eae5; font-size: 12px; font-weight: 600; background: transparent; border: 0; padding: 0; margin: 0; }
+.discussion-author:hover { text-decoration: underline; }
+.discussion-workspace .contract-chat-entry .discussion-reply-button { margin: 0 0 0 auto; padding: 2px 5px; background: transparent; border: 0; color: #9bb7aa; font-size: 13px; opacity: 0; }
+.contract-chat-entry:hover .discussion-reply-button, .contract-chat-entry:focus-within .discussion-reply-button { opacity: 1 !important; }
+.discussion-day { display: flex; align-items: center; gap: 14px; margin: 16px 0 9px; color: #8ca699; font-size: 10px; }
+.discussion-day::before,.discussion-day::after { content: ''; height: 1px; background: #294037; flex: 1; }
+.discussion-event-icon { flex: 0 0 30px; width: 30px; text-align: center; color: #709387; padding-top: 3px; }
+.discussion-message-content .contract-chat-event-title { font-size: 11px; font-weight: 500; margin-top: 4px; color: #9bbcaf; }
+.discussion-mentioned-name { color: #67d5c4; background: transparent; border-radius: 0; }
+.discussion-mention-list { border-color: #3d685a; background: #162b24; left: 50px; right: 0; }
+.discussion-mention-list button { gap: 9px; padding: 10px; }
+.discussion-mention-list strong { color: #e0ece6; font-size: 12px; font-weight: 500; }
+.discussion-mention-list button > small { font-size: 10px; text-align: right; }
+.discussion-text-input textarea,.discussion-text-mirror { font-size: 13px !important; }
+.contract-versions .discussion-composer textarea { min-height: 70px; }
+.discussion-workspace .contract-chat-entry .discussion-message-quote { display: block; width: 100%; text-align: left; border: 0; border-left: 2px solid #668b7d; border-radius: 0; background: transparent; color: #9fb8ac; padding: 6px 10px; margin: 7px 0; font-size: 11px; font-weight: 400; }
+.discussion-message-quote strong { color: #94c6b6; display: block; font-size: 11px; margin-bottom: 3px; }
+.discussion-message-quote span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+.discussion-reply-preview { display: flex; gap: 12px; border-left: 2px solid #7aab98; padding: 6px 10px; margin: 0 0 9px 51px; min-width: 0; }
+.discussion-reply-preview[hidden] { display: none; }
+.discussion-reply-preview > span { min-width: 0; flex: 1; }
+.discussion-reply-preview small { display: block; color: #9dcebb; font-size: 11px; margin-bottom: 4px; }
+.discussion-reply-preview span span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #a1b8ac; font-size: 11px; }
+.discussion-workspace .discussion-reply-cancel { border: 0; background: transparent; color: #9ab3a5; font-size: 20px; padding: 0 3px; }
+.contract-chat-entry:focus { outline: 1px dashed #779b8a; outline-offset: -1px; }
+.task-due-form select { flex: 1; min-width: 170px; }
+.discussion-files-section { border-top: 1px solid #2b413b; padding-top: 18px; }
+.discussion-workspace input.discussion-file-search { font-size: 11px; padding: 7px 8px; background: #10231d; border-color: #314c3e; margin-bottom: 6px; }
+.discussion-workspace .discussion-catalog-file { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 2px 0; padding: 9px 0; border: 0; border-radius: 0; background: transparent; color: #a9c8b9; text-align: left; font-weight: 400; white-space: normal; }
+.discussion-catalog-file > span { min-width: 0; flex: 1; }
+.discussion-catalog-file strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 11px; font-weight: 400; color: #d4e2da; line-height: 1.5; }
+.discussion-catalog-file small { display: block; margin-top: 3px; color: #89a496; font-size: 9px; line-height: 1.5; }
+.discussion-catalog-file > i { flex: 0 0 13px; font-size: 13px; margin-top: 2px; }
+.discussion-catalog-file > i:last-child { font-size: 10px; color: #779c88; }
+.discussion-catalog-file:hover strong { color: #9cdfc8; text-decoration: underline; }
+.discussion-files-status { color: #e8b8a0; font-size: 10px; line-height: 1.5; }
+.discussion-files-status:empty { display: none; }
+@media(max-width:1100px) {
+  .discussion-task-layout { grid-template-columns: minmax(0,1fr); }
+  .discussion-properties { position: absolute; z-index: 4; right: 0; top: 0; bottom: 0; width: min(260px,85%); box-shadow: -12px 0 28px #0005; }
+  .discussion-thread { padding: 8px 13px 12px; }
+}
+@media(max-width:850px) { .discussion-workspace { grid-template-columns: 230px minmax(0,1fr); } }
+@media(max-width:600px) {
+  .discussion-workspace { grid-template-columns: 1fr; }
+  .discussion-context { padding: 10px 12px; }
+  .discussion-context h2 { font-size: 14px; }
+  .discussion-thread { padding: 5px 10px 10px; }
+  .discussion-mention-list { left: 0; }
+  .discussion-workspace .contract-chat-entry .discussion-reply-button { opacity: 1; }
+}
+@media(hover:none) { .discussion-workspace .contract-chat-entry .discussion-reply-button { opacity: 1; } }

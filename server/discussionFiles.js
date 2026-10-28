@@ -44,9 +44,18 @@ function saveAttachments(tenantId, messageId, files, contract = false) {
 function messageAttachments(tenantId, messageId, contract = false) {
   return db.prepare(`SELECT id, original_name AS name, mime_type AS mime, size_bytes AS size FROM discussion_files WHERE tenant_id = ? AND ${contract ? 'contract_message_id' : 'message_id'} = ? ORDER BY id`).all(tenantId, messageId);
 }
+function conversationAttachments(tenantId, parentId, contract = false) {
+  const table=contract?'contract_discussion_messages':'discussion_messages';
+  const parentColumn=contract?'engagement_id':'room_id',messageColumn=contract?'contract_message_id':'message_id';
+  // Metadata only, independently of the message page currently open in the UI.
+  return db.prepare(`SELECT f.id, f.original_name AS name, f.mime_type AS mime, f.size_bytes AS size,
+    m.id AS messageId, m.author_name AS author, m.created_at AS createdAt
+    FROM discussion_files f JOIN ${table} m ON m.id=f.${messageColumn} AND m.tenant_id=f.tenant_id
+    WHERE f.tenant_id=? AND m.${parentColumn}=? ORDER BY m.created_at DESC,f.id DESC`).all(tenantId,parentId);
+}
 function sendAttachment(res, row) {
   if (!row) throw new ContractError(404, 'Вложение не найдено');
   res.set('Cache-Control', 'no-store'); res.set('X-Content-Type-Options', 'nosniff');
   res.attachment(row.original_name); res.type(row.mime_type); res.send(Buffer.from(row.file_bytes));
 }
-module.exports = { messageUpload, validatedAttachments, attachmentFingerprint, saveAttachments, messageAttachments, sendAttachment };
+module.exports = { messageUpload, validatedAttachments, attachmentFingerprint, saveAttachments, messageAttachments, conversationAttachments, sendAttachment };

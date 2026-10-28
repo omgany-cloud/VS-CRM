@@ -2,6 +2,35 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.58.0] - 2026-10-28
+
+### Added
+- Permanent deletion from task trash with one confirmation. Conversation files,
+  messages and task links are removed atomically; linked CRM records, contract
+  versions and approvals remain. Safe retries and stale-version checks apply.
+- Rename existing tasks directly in their heading: Enter or blur saves, Escape
+  cancels. Polling preserves edits; failures retain the draft. Linked titles
+  update without changing contract details or approval history.
+- A searchable Files panel below related tasks, covering attachments from the
+  entire conversation and contract revisions, with scoped download actions.
+- Replies with server-validated quotes, navigation to the original message,
+  and per-task reply drafts. Task assignees respect current access and do not
+  grant formal approval votes.
+- Task deadlines, complete/reopen, and reversible trash/restore. Linked CRM
+  records, related tasks, messages and attachments are preserved. Active
+  contract approvals prevent closing or trashing their task.
+- Work/completed/trash tabs, sorting by activity, due date, creation and title,
+  and personal unread counts. Mutations enforce live access, owner/contract
+  permissions, optimistic versions and idempotent retries.
+
+### Changed
+- Task properties move into a collapsible right panel. Messages show compact
+  avatars, author names, times and date separators; name suggestions show
+  avatars and membership, and selected mentions use text color without a pill.
+- Messages share the chat background without author-specific styling;
+  highlighted mentions remain, while
+  overdue dates and unread counts use compact indicators.
+
 ## [1.57.0] - 2026-10-27
 
 ### Added
