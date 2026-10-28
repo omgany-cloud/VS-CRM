@@ -180,7 +180,7 @@ test('versions prevent deletion and client/direction reassignment, while payment
   for (const patch of [{ direction: 'FM' }, { clientId: 999999 }, { serviceType: 'LP Investment (FM)' }]) {
     assert.equal((await server.apiFetch(`/api/engagements/${contract.id}`, { method: 'PUT', body: JSON.stringify(patch) })).status, 409);
   }
-  await json(await server.apiFetch(`/api/engagements/${contract.id}`, { method: 'PUT', body: JSON.stringify({ paid: 10, invoiced: 20, status: 'Terminated' }) }));
+  await json(await server.apiFetch(`/api/engagements/${contract.id}`, { method: 'PUT', body: JSON.stringify({ notes: 'Закрыт', status: 'Terminated' }) }));
   assert.equal((await history(contract)).metadataChanged, false);
 });
 

@@ -50,6 +50,8 @@ function computeUserFootprint(tenantId, email, name, userId) {
       ['contract_signatures', ['recorded_by', 'voided_by']],
       ['contract_activations', ['activated_by']],
       ['contract_signing_commands', ['actor_id']],
+      ['contract_payments', ['recorded_by', 'voided_by']],
+      ['contract_payment_commands', ['actor_id']],
     ]) {
       const rows = db.prepare(`SELECT id FROM ${table} WHERE tenant_id = ? AND (${columns.map(c => c + ' = ?').join(' OR ')})`).all(tenantId, ...columns.map(() => userId));
       if (rows.length) hits.push({ table, column: columns.join('/'), count: rows.length, sampleIds: rows.slice(0, 5).map(r => r.id) });

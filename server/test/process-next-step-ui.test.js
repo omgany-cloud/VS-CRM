@@ -67,3 +67,48 @@ test('a late answer for a task that was left is ignored', async () => {
   release({ tone: 'action', title: 'Old', process: 'client' }); await pending;
   assert.equal(box.innerHTML, '');
 });
+
+function cardUi(step) {
+  const box = { hidden: true, innerHTML: '', className: '', dataset: { engagementId: '9' }, querySelector: () => null };
+  const calls = [], scrolled = [], focused = [], settings = { open: false, scrollIntoView() {} };
+  const target = id => ({ scrollIntoView: () => scrolled.push(id), focus: () => focused.push(id) });
+  const ctx = vm.createContext({
+    document: { getElementById: id => id === 'contractNextStep' ? box : target(id) },
+    escapeHtml: s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]),
+    taskToday: () => '2026-10-28', contractSigningDay: d => d, showToast() {}, engEditMode: false,
+    apiFetch: async url => { calls.push(url); return step; },
+    closeEngagementModal: () => calls.push('close'), openEngagementModal: id => calls.push(['card', id, ctx.engEditMode]),
+    openDiscussion: async (kind, id) => { calls.push(['task', kind, id]); ctx.contractApprovalUI = { panel: { querySelector: () => settings } }; },
+    contractConversationOpen: s => !!s, applyDiscussionPropertiesVisibility: s => calls.push(['properties', s.propertiesOpen]),
+    loadOnboardingFromApi: async () => calls.push('onboarding'), openObClientModal: id => calls.push(['client', id]),
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../js/process-next-step.js'), 'utf8'), ctx);
+  return { ctx, box, calls, scrolled, focused, settings };
+}
+
+test('the contract card says what to do now and its button goes to the right place', async () => {
+  let ui = cardUi({ process: 'contract', tone: 'action', title: 'Загрузите файл договора', text: 'DOCX или PDF', steps: [], done: 0,
+    action: { kind: 'contract-card', section: 'versions', label: 'Открыть карточку договора' } });
+  await ui.ctx.loadContractCardNextStep(9);
+  assert.equal(ui.box.hidden, false); assert.match(ui.box.className, /contract-card-next-step tone-action/);
+  assert.match(ui.box.innerHTML, /Загрузите файл договора/); assert.match(ui.box.innerHTML, /Перейти к загрузке файла/);
+  assert.ok(!ui.box.innerHTML.includes('Открыть карточку договора'), 'inside the card the button does not offer to open the card');
+  await ui.ctx.runContractCardNextStep(9, { disabled: false });
+  assert.deepEqual(ui.scrolled, ['contractVersionsPanel']); assert.deepEqual(ui.focused, ['contractVersionFile']);
+
+  ui = cardUi({ process: 'contract', tone: 'action', title: 'Отправьте договор на согласование', steps: [], done: 1, action: { kind: 'contract-approval', label: 'Выбрать согласующих' } });
+  await ui.ctx.loadContractCardNextStep(9);
+  assert.match(ui.box.innerHTML, /Открыть задачу и выбрать согласующих/);
+  await ui.ctx.runContractCardNextStep(9, { disabled: false });
+  assert.equal(JSON.stringify(ui.calls.slice(1)), JSON.stringify(['close', ['task', 'contract', 9], ['properties', true]])); assert.equal(ui.settings.open, true);
+
+  ui = cardUi({ process: 'contract', tone: 'action', title: 'Свяжите договор с карточкой клиента', steps: [], done: 0, action: { kind: 'contract-card', section: 'details', label: 'x' } });
+  await ui.ctx.loadContractCardNextStep(9);
+  await ui.ctx.runContractCardNextStep(9, { disabled: false });
+  assert.equal(JSON.stringify(ui.calls.at(-1)), JSON.stringify(['card', 9, true]));
+
+  ui = cardUi({ process: 'contract', tone: 'wait', title: 'Для начала работы не хватает проверок клиента', steps: [], done: 3, action: { kind: 'onboarding-client', clientId: 4, label: 'x' } });
+  await ui.ctx.loadContractCardNextStep(9);
+  await ui.ctx.runContractCardNextStep(9, { disabled: false });
+  assert.equal(JSON.stringify(ui.calls.slice(1)), JSON.stringify(['close', 'onboarding', ['client', 4]]));
+});

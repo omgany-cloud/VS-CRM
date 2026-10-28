@@ -15,7 +15,7 @@ function api(url, body, token = server.token, method = body === undefined ? 'GET
 async function user(role) {
   const email = `approval-${role}@test.example`;
   const u = await json(await api('/api/users', { email, name: role, role, password: 'ApprovalTest123!' }), 201);
-  const db = new DatabaseSync(server.dbPath); db.prepare('UPDATE users SET must_change_password = 0 WHERE id = ?').run(u.id); db.close();
+  const db = new DatabaseSync(server.dbPath); db.exec('PRAGMA busy_timeout = 5000'); db.prepare('UPDATE users SET must_change_password = 0 WHERE id = ?').run(u.id); db.close();
   const login = await json(await api('/api/auth/login', { email, password: 'ApprovalTest123!' }));
   return { ...u, token: login.token };
 }
@@ -195,7 +195,8 @@ test('file and material terms cannot change while frozen; finance bookkeeping re
   for (const patch of [{ feeAmount: 500 }, { currency: 'EUR' }, { contractNum: 'changed' }, { endDate: '2027-01-01' }, { date: '2027-01-01' }, { dealRef: 'new deal' }]) {
     assert.equal((await api(`/api/engagements/${e.id}`, patch, server.token, 'PUT')).status, 409);
   }
-  await json(await api(`/api/engagements/${e.id}`, { paid: 50, invoiced: 100 }, server.token, 'PUT'));
+  // Non-material fields stay editable; payments themselves are payment orders (contract-payments.test.js).
+  await json(await api(`/api/engagements/${e.id}`, { notes: 'Аванс ожидается' }, server.token, 'PUT'));
   assert.equal((await history(e)).summary.status, 'active');
   cycle = await decide(e, cycle, co); cycle = await decide(e, cycle, cfo);
   assert.equal((await upload(e, 1, 'changed')).status, 409);
@@ -357,7 +358,7 @@ test('route validation, stale cycles and tampered version metadata fail closed',
   for (const patch of [{ steps: [] }, { steps: [{ userId: co.id, dueDays: 31 }] }, { steps: [{ userId: auditor.id, dueDays: 1 }] },
     { steps: [{ userId: co.id, dueDays: 1 }, { userId: co.id, dueDays: 1 }] }]) assert.equal((await api('/api/contract-approval-routes', { ...r, ...patch })).status, 400);
   let cycle = await submit(e, r);
-  const db = new DatabaseSync(server.dbPath); db.prepare('UPDATE engagements SET fee_amount = 12345 WHERE id = ?').run(e.id); db.close();
+  const db = new DatabaseSync(server.dbPath); db.exec('PRAGMA busy_timeout = 5000'); db.prepare('UPDATE engagements SET fee_amount = 12345 WHERE id = ?').run(e.id); db.close();
   const h = await history(e); assert.equal(h.summary.status, 'needs_revision'); assert.equal(h.cycles[0].canDecide, false);
   assert.equal((await api(`/api/engagements/${e.id}/approvals/${cycle.id}/decision`, { expectedRevision: 1, stepId: cycle.steps[0].id, decision: 'approved', requestKey: key() }, co.token)).status, 409);
   await control(e, cycle, 'rework');
@@ -372,7 +373,7 @@ test('repeated migrations preserve approvals and revoked route permissions', asy
   const e = await contract(), r = await route(); const cycle = await submit(e, r);
   // Real pre-parallel snapshots have no mode field at all.
   const legacyRoute = { ...cycle.route }; delete legacyRoute.mode;
-  const oldDb = new DatabaseSync(server.dbPath);
+  const oldDb = new DatabaseSync(server.dbPath); oldDb.exec('PRAGMA busy_timeout = 5000');
   oldDb.prepare('UPDATE contract_approval_cycles SET route_json = ? WHERE id = ?').run(JSON.stringify(legacyRoute), cycle.id);
   oldDb.close();
   const ceo = roles.find(x => x.code === 'CEO');
@@ -462,7 +463,7 @@ test('a parallel return or rejection closes outstanding votes and preserves prio
 
 test('direct selection validates people and deadlines atomically and retains access boundaries', async () => {
   const e = await contract(), url = `/api/engagements/${e.id}/approvals`;
-  const db = new DatabaseSync(server.dbPath);
+  const db = new DatabaseSync(server.dbPath); db.exec('PRAGMA busy_timeout = 5000');
   const count = () => db.prepare('SELECT COUNT(*) AS n FROM contract_approval_routes').get().n;
   const before = count();
   for (const patch of [{ participants: [] }, { participants: [co.id, co.id] }, { participants: [String(co.id)] },
@@ -672,4 +673,33 @@ test('Tasks flag my pending decision and my returned contract; a return makes th
   await json(await directDecision(e, cycle, cfo, 'rejected', 'Не подходит'));
   const again = await item(rm.token);
   assert.equal(again.task.assignee.id, co.id); assert.equal(again.task.review, 'rework');
+});
+
+test('reviewers are emailed when their turn comes, and reminded once a day when the deadline has passed', async () => {
+  const mailed = async (from, pattern) => {
+    for (let i = 0; i < 40 && !pattern.test(server.output().slice(from)); i++) await new Promise(r => setTimeout(r, 50));
+    return pattern.test(server.output().slice(from));
+  };
+  const parallel = await contract();
+  let from = server.output().length;
+  await submitDirect(parallel);
+  assert.ok(await mailed(from, new RegExp(`To: approval-COMPLIANCE_OFFICER@test\.example \| Subject: Договор на согласование: ${parallel.contractNum}`)));
+  assert.ok(await mailed(from, new RegExp(`To: approval-CFO@test\.example \| Subject: Договор на согласование: ${parallel.contractNum}`)));
+  assert.ok(!server.output().slice(from).includes(`To: approval-RELATIONSHIP_MANAGER@test.example | Subject: Договор на согласование: ${parallel.contractNum}`), 'the initiator is not asked');
+
+  // In a sequential route the second reviewer is written to only when their turn comes.
+  const sequential = await contract(), r = await route();
+  from = server.output().length;
+  let cycle = await submit(sequential, r);
+  assert.ok(await mailed(from, new RegExp(`To: approval-COMPLIANCE_OFFICER@test\.example \| Subject: Договор на согласование: ${sequential.contractNum}`)));
+  await new Promise(r => setTimeout(r, 200));
+  assert.ok(!server.output().slice(from).includes(`To: approval-CFO@test.example | Subject: Договор на согласование: ${sequential.contractNum}`));
+  cycle = await decide(sequential, cycle, co);
+  assert.ok(await mailed(from, new RegExp(`To: approval-CFO@test\.example \| Subject: Договор на согласование: ${sequential.contractNum}`)));
+
+  const db = new DatabaseSync(server.dbPath); db.exec('PRAGMA busy_timeout = 5000');
+  try { db.prepare("UPDATE contract_approval_steps SET due_at = '2020-01-01T00:00:00.000Z' WHERE cycle_id = ? AND status = 'pending'").run(cycle.id); } finally { db.close(); }
+  from = server.output().length;
+  await json(await api('/api/notifications/run-digest', {}));
+  assert.match(server.output().slice(from), /To: approval-CFO@test\.example \| Subject: Просрочено согласование договоров: 1/);
 });

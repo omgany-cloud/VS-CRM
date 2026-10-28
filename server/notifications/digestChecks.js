@@ -19,6 +19,7 @@ const { usersByPermissionFlag } = require('./recipients');
 const { taskAccess, taskView } = require('../discussionTasks');
 const { ContractError } = require('../contractApprovalState');
 const { rowToPermissions } = require('../rolesMapping');
+const { contractReader, contractTaskLink } = require('./triggers');
 
 const LOOKAHEAD_DAYS = 14;
 
@@ -352,7 +353,40 @@ async function checkTaskDeadlines(tenantId) {
   }
 }
 
+// Contract reviews past their deadline: one daily email per reviewer listing
+// the contracts still waiting for their decision (TZ M3 reminders).
+async function checkContractReviewsOverdue(tenantId) {
+  const late = db.prepare(`
+    SELECT s.assignee_id, s.due_at, e.* FROM contract_approval_steps s
+    JOIN contract_approval_cycles c ON c.tenant_id = s.tenant_id AND c.id = s.cycle_id AND c.status = 'active'
+    JOIN engagements e ON e.tenant_id = c.tenant_id AND e.id = c.engagement_id
+    WHERE s.tenant_id = ? AND s.status = 'pending' AND s.due_at IS NOT NULL AND s.due_at < ?
+    ORDER BY s.due_at
+  `).all(tenantId, new Date().toISOString());
+  const byReviewer = new Map();
+  for (const row of late) byReviewer.set(row.assignee_id, [...(byReviewer.get(row.assignee_id) || []), row]);
+  for (const [reviewerId, rows] of byReviewer) {
+    const lines = [];
+    let reviewer = null;
+    for (const row of rows) {
+      const reader = contractReader(tenantId, reviewerId, row);
+      if (!reader) continue;
+      reviewer = reader;
+      const due = new Date(row.due_at).toLocaleDateString('ru-RU', { timeZone: 'Asia/Qyzylorda' });
+      lines.push(`<li>«${esc(row.contract_num || 'без номера')} · ${esc(row.client_name || '')}» — срок решения был ${esc(due)}</li>`);
+    }
+    if (!reviewer) continue;
+    await notifyOnce({
+      tenantId, eventType: 'contract_reviews_overdue', entityType: 'users', entityId: reviewer.id,
+      to: reviewer.email, scope: 'daily',
+      subject: `Просрочено согласование договоров: ${lines.length}`,
+      html: `<p>${esc(reviewer.name || reviewer.email)}, эти договоры ждут вашего решения, срок прошёл:</p><ul>${lines.join('')}</ul>${contractTaskLink(rows[0].id)}`,
+    });
+  }
+}
+
 module.exports = {
+  checkContractReviewsOverdue,
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
   checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,

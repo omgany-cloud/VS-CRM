@@ -10,6 +10,7 @@ const { requireAuth, requireInternal } = require('./auth');
 const { recordAudit } = require('./auditLog');
 const { assertContractAccess, originalFilename, transaction } = require('./contractDocuments');
 const { ContractError, latestCycle, approvalMatches, approvalSummary } = require('./contractApprovalState');
+const { kycValidUntil } = require('./kycPolicy');
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const SIGNATURE_COLUMNS = `id, engagement_id, cycle_id, document_version_id, signed_date, original_name, size_bytes, sha256,
@@ -57,12 +58,12 @@ function activeSignature(tenantId, engagementId) {
   return db.prepare(`SELECT ${SIGNATURE_COLUMNS} FROM contract_signatures WHERE tenant_id = ? AND engagement_id = ? AND status = 'active'`).get(tenantId, engagementId);
 }
 function onboardingTask(contract, number) {
-  const row = db.prepare('SELECT status, form_data_json FROM ob_tasks WHERE tenant_id = ? AND client_id = ? AND task_num = ?')
+  const row = db.prepare('SELECT status, form_data_json, completed_at FROM ob_tasks WHERE tenant_id = ? AND client_id = ? AND task_num = ?')
     .get(contract.tenant_id, contract.client_id, number);
   if (!row) return null;
   let data = {};
   try { data = JSON.parse(row.form_data_json || '{}'); } catch (_) { /* unreadable form -> nothing confirmed */ }
-  return { status: row.status, data };
+  return { status: row.status, data, completedAt: row.completed_at };
 }
 
 function signatureCondition(contract) {
@@ -70,37 +71,51 @@ function signatureCondition(contract) {
   const cycle = approvedCycle(contract);
   const signature = activeSignature(contract.tenant_id, contract.id);
   if (cycle && signature?.cycle_id === cycle.id) return { ...base, state: 'done', detail: `Подписан ${signature.signed_date}` };
-  if (!cycle) return { ...base, state: 'pending', detail: contract.document_version ? 'Текущая редакция не согласована' : 'Файл договора не загружен' };
-  return { ...base, state: 'pending', detail: 'Подписанный PDF не зарегистрирован' };
+  // Each pending state says what to do next and where (owner's request 28.10.2026).
+  if (cycle) return { ...base, state: 'pending', detail: 'Подписанный PDF не зарегистрирован — загрузите его выше в этом блоке' };
+  if (!contract.document_version) return { ...base, state: 'pending', detail: 'Файл договора не загружен — загрузите его в блоке «Версии документа» внизу карточки' };
+  const last = latestCycle(contract.tenant_id, contract.id), status = approvalSummary(contract).status;
+  const current = db.prepare('SELECT id FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? AND version_number = ?')
+    .get(contract.tenant_id, contract.id, contract.document_version);
+  const detail = status === 'active' ? 'Договор на согласовании — ждём решений согласующих в задаче договора'
+    : ['returned', 'rejected'].includes(status) && last?.document_version_id === current?.id ? 'Договор вернули с замечанием — загрузите исправленную редакцию и отправьте на согласование снова'
+    : 'Текущая редакция не согласована — отправьте её на согласование в задаче договора';
+  return { ...base, state: 'pending', detail };
 }
 // Escalation and EDD mean "waiting for a decision", never permission to proceed.
 function kycCondition(contract) {
-  const base = { key: 'kyc', label: 'KYC / AML одобрен (задача 2.2)' };
-  if (contract.client_id == null) return { ...base, state: 'unknown', detail: 'Договор не связан с карточкой клиента' };
+  const base = { key: 'kyc', label: 'KYC / AML одобрен (этап 2.2 онбординга)' };
+  if (contract.client_id == null) return { ...base, state: 'unknown', detail: 'Договор не связан с карточкой клиента — укажите клиента в реквизитах договора' };
   const task = onboardingTask(contract, '2.2');
-  if (!task) return { ...base, state: 'unknown', detail: 'У клиента нет задачи 2.2' };
+  if (!task) return { ...base, state: 'unknown', detail: 'У клиента нет этапа 2.2 — откройте онбординг клиента' };
   const conclusion = String(task.data.f_conclusion || task.data.conclusion || '');
-  if (task.status === 'completed' && conclusion.startsWith('Одобрить')) return { ...base, state: 'done', detail: 'Заключение: одобрить' };
+  if (task.status === 'completed' && conclusion.startsWith('Одобрить')) {
+    // Valid for two years from the conclusion (server/kycPolicy.js).
+    const decided = task.completedAt || task.data.f_ddDate || null, until = kycValidUntil(decided);
+    const shown = value => value.slice(0, 10).split('-').reverse().join('.');
+    if (until && until < localDate()) return { ...base, state: 'expired', detail: `Заключение от ${shown(decided)} действовало до ${shown(until)} — нужна повторная проверка` };
+    return { ...base, state: 'done', detail: until ? `Заключение: одобрить, действует до ${shown(until)}` : 'Заключение: одобрить' };
+  }
   if (task.status === 'rejected' || (task.status === 'completed' && conclusion.startsWith('Отказать'))) return { ...base, state: 'rejected', detail: 'Заключение: отказать' };
-  if (task.status === 'completed' && conclusion.includes('EDD')) return { ...base, state: 'pending', detail: 'Назначена расширенная проверка (EDD)' };
-  return { ...base, state: 'pending', detail: 'Задача 2.2 не завершена' };
+  if (task.status === 'completed' && conclusion.includes('EDD')) return { ...base, state: 'pending', detail: 'Назначена расширенная проверка (EDD) — после неё сохраните итоговое заключение в этапе 2.2 онбординга' };
+  return { ...base, state: 'pending', detail: 'Этап 2.2 онбординга не завершён — проверку клиента завершают CEO, Compliance Officer или MLRO' };
 }
 // A decision tied to another contract of the same client does not apply here.
 function conflictCondition(contract) {
-  const base = { key: 'conflict', label: 'Проверка конфликта интересов (задача 1.1)' };
-  if (contract.client_id == null) return { ...base, state: 'unknown', detail: 'Договор не связан с карточкой клиента' };
+  const base = { key: 'conflict', label: 'Проверка конфликта интересов (этап 1.1 онбординга)' };
+  if (contract.client_id == null) return { ...base, state: 'unknown', detail: 'Договор не связан с карточкой клиента — укажите клиента в реквизитах договора' };
   const decisions = db.prepare(`SELECT decision_type, status FROM conflict_approvals WHERE tenant_id = ?
     AND (engagement_id = ? OR (engagement_id IS NULL AND client_id = ?)) ORDER BY id`).all(contract.tenant_id, contract.id, contract.client_id);
   const rejected = decisions.find(d => d.status === 'Rejected');
   if (rejected) return { ...base, state: 'rejected', detail: `Отклонено решение по конфликту: ${rejected.decision_type}` };
   const task = onboardingTask(contract, '1.1');
-  if (!task) return { ...base, state: 'unknown', detail: 'У клиента нет задачи 1.1' };
+  if (!task) return { ...base, state: 'unknown', detail: 'У клиента нет этапа 1.1 — откройте онбординг клиента' };
   const decision = String(task.data.f_decision || task.data.decision || '').trim();
   if (task.status === 'rejected' || (task.status === 'completed' && decision === 'No-Go')) return { ...base, state: 'rejected', detail: 'Решение 1.1: No-Go' };
-  if (task.status === 'escalated' || decision === 'Требует эскалации') return { ...base, state: 'pending', detail: 'Эскалация: ожидается решение' };
-  if (task.status !== 'completed' || decision !== 'Go') return { ...base, state: 'pending', detail: 'Задача 1.1 не завершена' };
+  if (task.status === 'escalated' || decision === 'Требует эскалации') return { ...base, state: 'pending', detail: 'Эскалация: ожидается решение CO по этапу 1.1 онбординга' };
+  if (task.status !== 'completed' || decision !== 'Go') return { ...base, state: 'pending', detail: 'Этап 1.1 онбординга (проверка конфликтов) не завершён — откройте онбординг клиента' };
   const open = decisions.find(d => !SETTLED_CONFLICT.includes(d.status));
-  if (open) return { ...base, state: 'pending', detail: `Ожидается решение по конфликту: ${open.decision_type}` };
+  if (open) return { ...base, state: 'pending', detail: `Ожидается решение по конфликту: ${open.decision_type} — раздел «Конфликты / Одобрения»` };
   return { ...base, state: 'done', detail: 'Решение 1.1: Go' };
 }
 function readiness(contract) {

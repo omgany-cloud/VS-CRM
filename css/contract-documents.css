@@ -282,4 +282,17 @@
 .contract-condition-done span:last-child { color: #86efac; }
 .contract-condition-pending span:last-child { color: #fde68a; }
 .contract-condition-rejected span:last-child { color: #fca5a5; }
+.contract-condition-expired span:last-child { color: #fdba74; }
+.contract-payment-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.contract-payment-totals div { background: #0f1f1d; border: 1px solid #2b403b; border-radius: 8px; padding: 9px 10px; min-width: 0; }
+.contract-payment-totals small { display: block; color: #8fb3a8; font-size: 11px; margin-bottom: 3px; }
+.contract-payment-totals strong { display: block; color: #e2ece7; font-size: 14px; overflow-wrap: anywhere; }
+.contract-payment-totals strong.paid { color: #86efac; }
+.contract-payment-totals strong.due { color: #fdba74; }
+.contract-payment-progress { height: 6px; background: #2a4846; border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+.contract-payment-progress span { display: block; height: 100%; background: #22c55e; }
+.contract-payment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.contract-payment-grid input { width: 100%; box-sizing: border-box; }
+.contract-payment-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 600px) { .contract-payment-totals, .contract-payment-grid { grid-template-columns: 1fr; } }
 #contractSigningConditions .contract-primary { margin-top: 12px; }

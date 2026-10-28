@@ -178,9 +178,11 @@ test('decision and rework filters, responsible person and client filters narrow 
   const {ctx,elements}=ui();ctx.getAuth=()=>({user:{id:7}});
   vm.runInContext(`discussionItems=${JSON.stringify([{...bulkTask('contract',1,'Decide me',{review:'decide',assignee:{id:7,name:'Анна'}}),clients:[{id:50,name:'Acme'}]},
     {...bulkTask('contract',2,'Rework me',{review:'rework'}),clients:[{id:51,name:'Beta'}]},{...bulkTask('room',3,'Plain',{assignee:{id:8,name:'Борис'}}),clients:[]}])};`,ctx);
+  const approvals={textContent:'',style:{display:'none'}};elements.set('badge-workflow',approvals);ctx.getActiveWfCount=()=>2;
   ctx.renderDiscussionList();
   const list=()=>elements.get('discussionList').innerHTML,chips=elements.get('discussionQuickFilter'),badge=elements.get('badge-discussions');
   const shown=()=>['Decide me','Rework me','Plain'].filter(t=>list().includes(t));
+  assert.equal(approvals.textContent,3,'"Согласования" adds the waiting contract decision to KYC/NAV steps');assert.equal(ctx.contractDecisionsWaiting(),1);
   assert.match(chips.innerHTML,/Жду моего решения · 1/);assert.match(chips.innerHTML,/На доработке · 1/);
   assert.equal(badge.textContent,1);assert.match(badge.title,/Ждут вашего решения: 1/);
   ctx.setTaskQuickFilter('decide');assert.deepEqual(shown(),['Decide me']);

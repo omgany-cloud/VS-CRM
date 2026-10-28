@@ -2422,8 +2422,8 @@ async function registerLPFromOnboarding(client, saTask, actTask) {
       .find(t => t.clientId === client.id && t.taskNum === '2.2');
     return ddTask?.formData?.f_riskTotal || 'Medium';
   })();
-  const kycNextMap = { Low:24, Medium:12, High:6, Unacceptable:6 };
-  const kycMos     = kycNextMap[riskRating] || 12;
+  // KYC действует 2 года независимо от риска (решение владельца 28.10.2026, js/modules.js).
+  const kycMos     = KYC_RENEWAL_MONTHS;
   const kycNext    = new Date();
   kycNext.setMonth(kycNext.getMonth() + kycMos);
 

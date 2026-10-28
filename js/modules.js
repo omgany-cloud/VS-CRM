@@ -7,10 +7,10 @@
 
 /* ═══════════════════════════════════════════════════════════
    MODULE 1 — KYC RENEWAL TRACKER
-   Регулятор требует ежегодного обновления KYC для всех LP и CF&A
+   KYC действует 2 года (решение владельца 28.10.2026; server/kycPolicy.js)
 ═══════════════════════════════════════════════════════════ */
 
-const KYC_RENEWAL_MONTHS = 12; // обновление каждые 12 месяцев
+const KYC_RENEWAL_MONTHS = 24; // KYC действует 2 года — как на сервере (server/kycPolicy.js)
 const KYC_WARN_DAYS      = 60; // предупреждать за 60 дней
 
 function getKycRenewalStatus(dateStr) {
@@ -25,26 +25,34 @@ function getKycRenewalStatus(dateStr) {
   return { status: 'ok', label: `${daysLeft}д до обновления`, color: '#22c55e', daysLeft, renewDue };
 }
 
-function renderKycRenewalPage() {
-  const el = document.getElementById('kycRenewalContent');
-  if (!el) return;
-
-  // Combine LP + CF&A clients
-  const lpItems = lpRegister.map(lp => ({
+// LP and CF&A clients with their KYC date. A CF&A client's KYC dates from the
+// approved client check conclusion (onboarding stage 2.2), not from the start date.
+function kycRenewalItems() {
+  const lpItems = (typeof lpRegister !== 'undefined' ? lpRegister : []).map(lp => ({
     id: 'lp_' + lp.id, name: lp.name, type: lp.type,
     category: 'LP', kycDate: lp.kycDate || null,
     kycStatus: lp.kycStatus || '—', rm: lp.rm,
     rawId: lp.id,
   }));
-  const cfaItems = (typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'CF&A') : []).map(c => ({
-    id: 'cfa_' + c.id, name: c.name, type: c.type,
-    category: 'CF&A', kycDate: c.startDate || null,
-    kycStatus: c.activated ? 'Одобрен' : 'На проверке', rm: c.rm,
-    rawId: c.id,
-  }));
-  const all = [...lpItems, ...cfaItems].map(item => ({
+  const cfaItems = (typeof obClients !== 'undefined' ? obClients.filter(c => c.direction === 'CF&A') : []).map(c => {
+    const kyc = (typeof obTasks !== 'undefined' ? obTasks : []).find(t => t.clientId === c.id && t.taskNum === '2.2' && t.status === 'completed');
+    const approved = /^Одобрить/.test(kyc?.formData?.f_conclusion || kyc?.formData?.conclusion || '');
+    return {
+      id: 'cfa_' + c.id, name: c.name, type: c.type,
+      category: 'CF&A', kycDate: approved ? (kyc.completedAt || kyc.formData?.f_ddDate || null) : null,
+      kycStatus: approved ? 'Одобрен' : kyc ? 'Не одобрен' : 'На проверке', rm: c.rm,
+      rawId: c.id,
+    };
+  });
+  return [...lpItems, ...cfaItems].map(item => ({
     ...item, renewal: getKycRenewalStatus(item.kycDate)
   })).sort((a,b) => (a.renewal.daysLeft??9999) - (b.renewal.daysLeft??9999));
+}
+
+function renderKycRenewalPage() {
+  const el = document.getElementById('kycRenewalContent');
+  if (!el) return;
+  const all = kycRenewalItems();
 
   const overdue = all.filter(x => x.renewal.status === 'overdue').length;
   const warning = all.filter(x => x.renewal.status === 'warning').length;

@@ -5582,6 +5582,16 @@ app.put('/api/ob-tasks/:id', requireAuth, requireInternal, (req, res) => {
   // Stage order, stopped onboarding and activation readiness (server/onboardingRules.js).
   const blocked = checkTaskTransition(req.tenantId, existing, merged, req.user.role);
   if (blocked) return res.status(blocked.status).json({ error: blocked.message });
+  // Who decided and when is the server's record: KYC validity counts from the 2.2
+  // conclusion date, so a re-save must not move it.
+  if (merged.status === existing.status) {
+    merged.completedAt = existing.completed_at; merged.completedBy = existing.completed_by;
+  } else if (['completed', 'rejected', 'escalated'].includes(merged.status)) {
+    merged.completedAt = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Qyzylorda', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    merged.completedBy = req.user.name || req.user.email;
+  } else {
+    merged.completedAt = null; merged.completedBy = null;
+  }
   // clientId/taskNum are immutable after creation — OB_TASK_UPDATE_SQL has
   // no @clientId/@taskNum placeholders, so both must be dropped before
   // binding (node:sqlite throws "Unknown named parameter" on any extra key
@@ -5812,6 +5822,10 @@ function engagementHasNegativeAmount(b) {
 // commands (server/contractSigning.js); unchanged values may still round-trip.
 const ENGAGEMENT_SIGNING_FIELDS = { signedDate: 'signed_date', lpSignedDate: 'lp_signed_date', activationDate: 'activation_date', activatedBy: 'activated_by' };
 function engagementSigningError(existing, b) {
+  // "Оплачено" is the sum of attached payment orders (server/contractPayments.js).
+  if (Object.prototype.hasOwnProperty.call(b, 'paid') && Number(b.paid || 0) !== Number(existing?.paid || 0)) {
+    return 'Оплаты вносятся платёжками в блоке «Оплаты» карточки договора';
+  }
   if (b.status === 'Active' && existing?.status !== 'Active') {
     return 'Работа по договору начинается кнопкой «Начать работу» в карточке договора — после регистрации подписания и проверок клиента';
   }
@@ -5827,6 +5841,7 @@ function engagementSigningError(existing, b) {
 
 app.use('/api/engagements', contractDocumentsRouter);
 app.use('/api/engagements', contractSigningRouter);
+app.use('/api/engagements', require('./contractPayments').router);
 app.use('/api/process-steps', require('./processNextStep'));
 app.use('/api/contract-templates', contractTemplatesRouter);
 app.use('/api', contractApprovalsRouter);
@@ -5914,6 +5929,8 @@ app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   if (discussionCount) footprint.push({ table: 'contract_discussion_messages', column: 'engagement_id', count: discussionCount });
   if (linked.length) footprint.push({ table: 'conflict_approvals', column: 'engagement_id', count: linked.length });
   if (Number(existing.paid) > 0 || Number(existing.invoiced) > 0) footprint.push({ table: 'engagements', column: 'paid/invoiced', count: 1 });
+  const payments = db.prepare('SELECT COUNT(*) AS n FROM contract_payments WHERE tenant_id = ? AND engagement_id = ?').get(req.tenantId, existing.id).n;
+  if (payments) footprint.push({ table: 'contract_payments', column: 'engagement_id', count: payments });
   if (footprint.length) {
     const summary = footprint.map(f => `${f.table}.${f.column} ×${f.count}`).join(', ');
     return res.status(409).json({ error: `Cannot delete: engagement has real activity (${summary}). Set status to 'Terminated' instead.`, footprint });

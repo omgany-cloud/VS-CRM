@@ -10,6 +10,7 @@
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
+const { KYC_VALIDITY_MONTHS, kycValidUntil } = require('./kycPolicy');
 
 const args = process.argv.slice(2);
 const file = args.find(a => !a.startsWith('--')) || process.env.DB_PATH || path.join(__dirname, 'data', 'crm.sqlite');
@@ -40,7 +41,7 @@ section('Направление договора не совпадает с на
     WHERE e.direction IS NOT NULL AND e.direction != c.direction ORDER BY e.tenant_id, e.id`).map(r => `${contractName(r)}: договор ${r.direction}, клиент ${r.client_direction}`));
 
 // Activated clients
-const tasksOf = (tenantId, clientId) => all('SELECT task_num, status, form_data_json FROM ob_tasks WHERE tenant_id = ? AND client_id = ? ORDER BY task_num', tenantId, clientId);
+const tasksOf = (tenantId, clientId) => all('SELECT task_num, status, form_data_json, completed_at FROM ob_tasks WHERE tenant_id = ? AND client_id = ? ORDER BY task_num', tenantId, clientId);
 const activated = all('SELECT * FROM ob_clients WHERE activated = 1 ORDER BY tenant_id, id');
 const clientName = c => `клиент #${c.id} «${c.name}» (${c.direction})`;
 section('Активированные клиенты с незавершёнными этапами', 'Активация прошла, хотя этапы онбординга открыты, на эскалации или не созданы.',
@@ -56,6 +57,14 @@ section('Активированные клиенты без одобренног
     const kyc = tasksOf(c.tenant_id, c.id).find(t => t.task_num === '2.2'), data = formData(kyc?.form_data_json);
     return !(kyc?.status === 'completed' && /^Одобрить/.test(data.f_conclusion || data.conclusion || ''));
   }).map(clientName));
+const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Qyzylorda', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const shown = day => day.slice(0, 10).split('-').reverse().join('.');
+section('Активированные клиенты с истёкшим KYC', `KYC действует ${KYC_VALIDITY_MONTHS / 12} года от заключения 2.2; нужна повторная проверка клиента.`,
+  activated.flatMap(c => {
+    const kyc = tasksOf(c.tenant_id, c.id).find(t => t.task_num === '2.2' && t.status === 'completed');
+    const decided = kyc && (kyc.completed_at || formData(kyc.form_data_json).f_ddDate), until = decided && kycValidUntil(decided);
+    return until && until < today ? [`${clientName(c)}: заключение от ${shown(decided)}, действовало до ${shown(until)}`] : [];
+  }));
 
 // Conflict decisions
 if (has('conflict_approvals')) {

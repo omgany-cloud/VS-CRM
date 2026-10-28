@@ -47,14 +47,16 @@ function activationProblems(tenantId, client, tasks) {
 }
 
 // Owner's decision 28.10.2026: the client check conclusion (stage 2.2, KYC) is
-// recorded, changed or reopened only by the MLRO; others may still open the form.
+// recorded, changed or reopened by the CEO (SEO), the Compliance Officer or the
+// MLRO; others may still open the form.
+const KYC_DECIDERS = new Set(['CEO', 'SEO', 'COMPLIANCE_OFFICER', 'MLRO']);
 const DECIDED = new Set(['completed', 'rejected']);
 const kycConclusion = data => (data?.f_conclusion || data?.conclusion || '');
 function kycDecisionBlocked(existing, next, role) {
-  if (existing.form_key !== 'dd_outcome' || role === 'MLRO') return null;
+  if (existing.form_key !== 'dd_outcome' || KYC_DECIDERS.has(role)) return null;
   const decides = DECIDED.has(next.status) && next.status !== existing.status;
   const revises = DECIDED.has(existing.status) && (next.status !== existing.status || kycConclusion(next.formData) !== kycConclusion(formData(existing.form_data_json)));
-  return decides || revises ? { status: 403, message: 'Заключение по проверке клиента (этап 2.2) сохраняет и пересматривает MLRO' } : null;
+  return decides || revises ? { status: 403, message: 'Заключение по проверке клиента (этап 2.2) сохраняют и пересматривают CEO, Compliance Officer и MLRO' } : null;
 }
 
 // Returns { status, message } when the stage may not take `next` (status + form data), else null.

@@ -31,24 +31,72 @@ async function refreshDiscussionNextStep(state, force = false) {
   }
 }
 
-function renderDiscussionNextStep(state) {
-  const box = document.getElementById('discussionNextStep'), step = state.nextStep?.data;
-  if (!box || !step) return;
-  const expanded = !!box.querySelector('details')?.open;
+// Shared by the task strip and the contract card; `onclick` runs the step's one action.
+function nextStepHtml(step, onclick, expanded) {
   const overdue = step.dueDate && step.tone === 'action' && step.dueDate < taskToday();
   const details = [step.who && `Выполняет: ${step.who}`, step.dueDate && `срок ${contractSigningDay(step.dueDate)}${overdue ? ' · просрочен' : ''}`, step.text].filter(Boolean).join(' · ');
-  box.className = `discussion-next-step tone-${step.tone}`;
-  box.innerHTML = `<i class="fas ${NEXT_STEP_ICONS[step.tone] || NEXT_STEP_ICONS.wait} discussion-next-step-icon" aria-hidden="true"></i>
+  return `<i class="fas ${NEXT_STEP_ICONS[step.tone] || NEXT_STEP_ICONS.wait} discussion-next-step-icon" aria-hidden="true"></i>
     <div class="discussion-next-step-body">
       <small>${NEXT_STEP_KICKERS[step.tone] || ''} · ${step.process === 'client' ? 'онбординг' : 'договор'}</small>
       <strong>${escapeHtml(step.title)}</strong>
       ${details ? `<span class="${overdue ? 'overdue' : ''}">${escapeHtml(details)}</span>` : ''}
       ${step.note ? `<span>${escapeHtml(step.note)}</span>` : ''}
     </div>
-    ${step.action ? `<button type="button" class="contract-primary" onclick="runDiscussionNextStep(this)">${escapeHtml(step.action.label)}</button>` : ''}
+    ${step.action ? `<button type="button" class="contract-primary" onclick="${onclick}">${escapeHtml(step.action.label)}</button>` : ''}
     ${step.steps?.length ? `<details${expanded ? ' open' : ''}><summary>Этапы: ${step.done} из ${step.steps.length}</summary><ol>${step.steps.map(s =>
       `<li class="step-${s.status}"><span>${escapeHtml(s.number)} ${escapeHtml(s.title)}</span><small>${NEXT_STEP_STATUSES[s.status] || escapeHtml(s.status)}</small></li>`).join('')}</ol></details>` : ''}`;
+}
+
+function renderDiscussionNextStep(state) {
+  const box = document.getElementById('discussionNextStep'), step = state.nextStep?.data;
+  if (!box || !step) return;
+  box.className = `discussion-next-step tone-${step.tone}`;
+  box.innerHTML = nextStepHtml(step, 'runDiscussionNextStep(this)', !!box.querySelector('details')?.open);
   box.hidden = false;
+}
+
+// "Что сделать сейчас" at the top of the contract card: the same server-computed
+// step, with a button that goes to the right place from the card itself.
+const CONTRACT_CARD_STEP_LABELS = { versions: 'Перейти к загрузке файла', signing: 'Перейти к подписанию', details: 'Изменить реквизиты',
+  'contract-approval': 'Открыть задачу и выбрать согласующих', 'contract-decide': 'Открыть задачу договора', 'onboarding-client': 'Открыть онбординг клиента' };
+let contractCardStep = null;
+async function loadContractCardNextStep(engagementId) {
+  const box = document.getElementById('contractNextStep');
+  if (!box || Number(box.dataset.engagementId) !== engagementId) return;
+  try {
+    const step = await apiFetch(`/api/process-steps/contract/${engagementId}`);
+    if (document.getElementById('contractNextStep') !== box) return;
+    const kind = step.action?.kind === 'contract-card' ? step.action.section : step.action?.kind;
+    contractCardStep = { engagementId, step };
+    box.className = `discussion-next-step contract-card-next-step tone-${step.tone}`;
+    box.innerHTML = nextStepHtml({ ...step, action: step.action && { ...step.action, label: CONTRACT_CARD_STEP_LABELS[kind] || step.action.label } },
+      `runContractCardNextStep(${engagementId},this)`, !!box.querySelector('details')?.open);
+    box.hidden = false;
+  } catch { if (document.getElementById('contractNextStep') === box) box.hidden = true; }
+}
+
+async function runContractCardNextStep(engagementId, button) {
+  const action = contractCardStep?.engagementId === engagementId ? contractCardStep.step.action : null;
+  if (!action || button.disabled) return;
+  if (action.kind === 'contract-card') {
+    if (action.section === 'details') { engEditMode = true; openEngagementModal(engagementId); return; }
+    document.getElementById(action.section === 'versions' ? 'contractVersionsPanel' : 'contractSigningPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (action.section === 'versions') document.getElementById('contractVersionFile')?.focus({ preventScroll: true });
+    return;
+  }
+  button.disabled = true;
+  try {
+    closeEngagementModal();
+    if (action.kind === 'onboarding-client') { await loadOnboardingFromApi(); openObClientModal(action.clientId); return; }
+    await openDiscussion('contract', engagementId);
+    const state = contractApprovalUI;
+    if (action.kind === 'contract-approval' && contractConversationOpen(state)) {
+      state.propertiesOpen = true; applyDiscussionPropertiesVisibility(state);
+      const settings = state.panel.querySelector('.discussion-approval-details');
+      if (settings) { settings.open = true; settings.scrollIntoView({ block: 'nearest' }); }
+    }
+  } catch (err) { showToast('Не удалось открыть: ' + err.message, 'red'); }
+  finally { button.disabled = false; }
 }
 
 async function runDiscussionNextStep(button) {
@@ -62,7 +110,7 @@ async function runDiscussionNextStep(button) {
       else openObClientModal(action.clientId || step.processId);
     } else if (action.kind === 'contract-card') {
       await openContractRecord(step.processId);
-      document.getElementById(action.section === 'versions' ? 'contractVersionsPanel' : 'contractSigningPanel')?.scrollIntoView({ block: 'start' });
+      if (action.section !== 'details') document.getElementById(action.section === 'versions' ? 'contractVersionsPanel' : 'contractSigningPanel')?.scrollIntoView({ block: 'start' });
     } else if (action.kind === 'contract-approval') {
       state.propertiesOpen = true; applyDiscussionPropertiesVisibility(state);
       const settings = state.panel.querySelector('.discussion-approval-details');

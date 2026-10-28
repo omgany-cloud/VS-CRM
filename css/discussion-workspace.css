@@ -45,6 +45,7 @@
 .discussion-thread .discussion-tools { padding: 10px 0 15px; max-height: 48%; }
 .discussion-next-step { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 4px 12px; flex-shrink: 0; margin: 4px 0 10px; padding: 11px 14px; border: 1px solid #31534f; border-left-width: 3px; border-radius: 10px; background: #13302b; color: #d6e8e1; }
 .discussion-next-step[hidden] { display: none; }
+.contract-card-next-step { margin: 0 0 14px; }
 .discussion-next-step-icon { font-size: 18px; color: #65edcf; }
 .discussion-next-step-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .discussion-next-step-body small { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: #8bb4a3; }

@@ -125,7 +125,7 @@ test('registration validates approval, PDF, date and rights', async () => {
   const { e: draft } = await approvedContract({ approve: false });
   const draftState = await json(await signing(draft));
   assert.equal(draftState.canRegister, false); assert.equal(draftState.approvedVersion, null);
-  assert.equal(draftState.readiness.conditions[0].detail, 'Текущая редакция не согласована');
+  assert.match(draftState.readiness.conditions[0].detail, /^Текущая редакция не согласована — отправьте её на согласование/);
   await json(await register(draft, draftState), 409);
 
   const { e } = await approvedContract();
@@ -203,4 +203,27 @@ test('FM subscription agreements follow the same rules behind the Chinese wall',
   await json(await register(e, state, { token: rm.token }), 403);
   state = await json(await register(e, state, { token: server.token }), 201);
   assert.equal((await json(await activate(e, state, server.token))).serviceStatus, 'Active');
+});
+
+test('KYC is valid for two years from the 2.2 conclusion, dated by the server and not movable by a re-save', async () => {
+  const { e, client } = await approvedContract();
+  const local = d => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Qyzylorda', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const monthsAgo = n => { const d = new Date(); d.setMonth(d.getMonth() - n); return local(d); };
+  const kycRow = () => { const db = new DatabaseSync(server.dbPath); try { return db.prepare("SELECT id, completed_at FROM ob_tasks WHERE client_id = ? AND task_num = '2.2'").get(client.id); } finally { db.close(); } };
+  const setDate = day => { const db = new DatabaseSync(server.dbPath); try { db.prepare('UPDATE ob_tasks SET completed_at = ? WHERE id = ?').run(day, kycRow().id); } finally { db.close(); } };
+  const kyc = async () => (await json(await signing(e))).readiness.conditions.find(c => c.key === 'kyc');
+
+  assert.equal(kycRow().completed_at, local(new Date()), 'the server dates the conclusion');
+  await json(await api(`/api/ob-tasks/${kycRow().id}`, { status: 'completed', completedAt: '2099-01-01', formData: { f_conclusion: 'Одобрить — Approve', conclusion: 'Одобрить — Approve' } }, mlro.token, 'PUT'));
+  assert.equal(kycRow().completed_at, local(new Date()), 'a re-save keeps the decision date');
+  assert.equal((await kyc()).state, 'done'); assert.match((await kyc()).detail, /действует до/);
+
+  setDate(monthsAgo(23));
+  assert.equal((await kyc()).state, 'done');
+  setDate(monthsAgo(25));
+  const expired = await kyc();
+  assert.equal(expired.state, 'expired'); assert.match(expired.detail, /нужна повторная проверка/);
+  const state = await json(await register(e, await json(await signing(e))), 201);
+  assert.equal(state.readiness.ready, false);
+  assert.match((await json(await activate(e, state), 409)).error, /KYC/);
 });

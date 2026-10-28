@@ -7,7 +7,7 @@ const { assertContractAccess, handle, transaction } = require('./contractDocumen
 const { ContractError, contractMetadata, latestCycle, approvalMatches, documentFrozen, approvalSummary } = require('./contractApprovalState');
 const {assertTaskOpen} = require('./discussionTasks');
 const { rowToPermissions } = require('./rolesMapping');
-const { notifyContractReturned } = require('./notifications/triggers');
+const { notifyContractReturned, notifyContractReview } = require('./notifications/triggers');
 
 const router = express.Router();
 // Mounted at /api: protect only this module's paths, leaving external/API-key
@@ -269,6 +269,8 @@ router.post('/engagements/:id/approvals', requirePermission('manageContracts'), 
     return created.lastInsertRowid;
   });
   res.status(result.reused ? 200 : 201).json(result);
+  // Each reviewer whose turn it is gets an email (one per review step).
+  notifyContractReview(req.tenantId, result.cycle.id).catch(err => console.error('[notify] contract_review_assigned failed:', err.message));
 }));
 
 router.post('/engagements/:id/approvals/:cycleId/decision', handle((req, res) => {
@@ -309,6 +311,9 @@ router.post('/engagements/:id/approvals/:cycleId/decision', handle((req, res) =>
   res.json(result);
   if (['returned', 'rejected'].includes(input.decision)) {
     notifyContractReturned(req.tenantId, cycle.id).catch(err => console.error('[notify] contract_returned failed:', err.message));
+  } else {
+    // In a sequential route the next reviewer's turn starts now.
+    notifyContractReview(req.tenantId, cycle.id).catch(err => console.error('[notify] contract_review_assigned failed:', err.message));
   }
 }));
 

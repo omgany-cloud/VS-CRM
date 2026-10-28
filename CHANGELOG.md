@@ -2,6 +2,46 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.62.0] - 2026-10-28
+
+### Changed
+- KYC is valid for two years from the client check conclusion (stage 2.2),
+  one rule for all clients and LPs: the contract start-of-work check shows an
+  expired KYC and refuses to start work, and the KYC renewal page, its menu
+  counter and the next review dates set at activation use the same period.
+  CF&A clients' KYC now dates from the approved 2.2 conclusion instead of the
+  client start date.
+- The server records who decided an onboarding stage and when; a re-save
+  without a status change no longer moves that date.
+- The client check conclusion (onboarding stage 2.2) is recorded, changed or
+  reopened by the CEO (SEO), the Compliance Officer or the MLRO — not by the
+  MLRO alone; the stage's performer is the CO again.
+
+### Added
+- The data inventory lists activated clients whose KYC has expired.
+- Contract payments (CF&A): attach the payment order (PDF, JPG or PNG) and
+  enter its amount, date and number; "Paid" is the server's sum of active
+  payments and the balance is fee minus paid. Duplicate orders and repeated
+  requests are refused, a mistaken payment is voided with a reason and kept
+  in history, a contract with payments cannot be deleted. Recorded by contract
+  managers (RM, CEO) and payment confirmers (CFO). Amounts typed into "Paid"
+  before are kept as "entered before payment orders". FM contracts point to
+  Capital Calls.
+- "Paid" can no longer be typed in through the contract edit; "Invoiced" is
+  removed from the registry, the card and the registry totals.
+- The contract card opens with "What to do now": the same next step as in the
+  contract task, with one button that goes to the right place from the card
+  (upload the file, choose approvers, register the signature, edit details,
+  open the client's onboarding). Start-of-work conditions now say what to do
+  and where instead of only the state.
+- Contract reviewers get an email when their turn comes (at submission, or
+  after the previous reviewer in a sequential route) and a daily reminder
+  once the decision deadline has passed. With CRM_PUBLIC_URL set, emails link
+  straight to the contract task. The "Approvals" menu counter now includes
+  contracts waiting for your decision.
+- The server waits up to 5 seconds for a busy database instead of failing at
+  once with "database is locked".
+
 ## [1.61.0] - 2026-10-28
 
 ### Added

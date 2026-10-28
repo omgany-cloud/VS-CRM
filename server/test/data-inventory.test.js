@@ -36,6 +36,10 @@ test('legacy records are listed by kind and the database is left as it was', asy
   sql('UPDATE ob_clients SET activated = 1 WHERE id = ?', a.id);
   sql("INSERT INTO conflict_approvals (tenant_id, client_id, engagement_id, decision_type, status) VALUES (?, ?, ?, 'Dual-Mandate', 'Approved')", tenant, b.id, contract.id);
   sql("INSERT INTO workflow_instances (tenant_id, type, entity_id, entity_name, entity_type, created_at, created_by, current_step, status, steps_json) VALUES (?, 'kyc_lp', 999999, 'Ghost LP', 'LP', '2026-01-01', 'x', 0, 'active', '[]')", tenant);
+  const stale = await json(await api('/api/ob-clients', { name: 'Inventory stale KYC', direction: 'CF&A' }), 201);
+  sql('UPDATE ob_clients SET activated = 1 WHERE id = ?', stale.id);
+  sql(`INSERT INTO ob_tasks (tenant_id, client_id, task_num, title, phase, role, form_key, status, form_data_json, completed_at)
+    VALUES (?, ?, '2.2', 'Client Due Diligence Outcome', 2, 'MLRO', 'dd_outcome', 'completed', ?, '2020-01-15')`, tenant, stale.id, JSON.stringify({ f_conclusion: 'Одобрить — Approve' }));
   const before = fingerprint();
 
   const found = inventory();
@@ -45,11 +49,12 @@ test('legacy records are listed by kind and the database is left as it was', asy
   assert.equal(count('Дата подписания из старой формы без подписанного файла'), 1);
   assert.match(found['Направление договора не совпадает с направлением клиента'][0], /договор FM, клиент CF&A/);
   assert.match(found['Активированные клиенты с незавершёнными этапами'][0], /этапы онбординга не созданы/);
-  assert.equal(count('Активированные клиенты без выбранного договора'), 1);
+  assert.equal(count('Активированные клиенты без выбранного договора'), 2, 'both activated clients lack a chosen contract');
   assert.equal(count('Активированные клиенты без одобренного KYC (2.2)'), 1);
   assert.match(found['Решения по конфликтам: договор другого клиента'][0], new RegExp(`клиент #${b.id}, договор #${contract.id} клиента #${a.id}`));
   assert.equal(count('Принятые решения по конфликтам без отметки, кто решил'), 1);
   assert.match(found['Согласования KYC/NAV без существующего объекта'][0], /Ghost LP/);
+  assert.deepEqual(found['Активированные клиенты с истёкшим KYC'], [`клиент #${stale.id} «Inventory stale KYC» (CF&A): заключение от 15.01.2020, действовало до 15.01.2022`]);
   assert.equal(fingerprint(), before, 'the report does not change the schema');
   assert.equal(get('SELECT status FROM engagements WHERE id = ?', contract.id).status, 'Active');
 });

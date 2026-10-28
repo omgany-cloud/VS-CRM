@@ -95,7 +95,7 @@ function contractStep(req, engagementId) {
     return { ...base, tone: 'wait', title: 'Для начала работы не хватает проверок клиента', text: missing,
       ...(contract.client_id ? { action: { kind: 'onboarding-client', clientId: contract.client_id, label: 'Открыть онбординг' } } : {}) };
   }
-  if (!contract.client_id) return { ...base, tone: 'action', title: 'Свяжите договор с карточкой клиента', text: 'Без клиента договор нельзя отправить на согласование', action: card('versions', 'Открыть карточку договора') };
+  if (!contract.client_id) return { ...base, tone: 'action', title: 'Свяжите договор с карточкой клиента', text: 'Без клиента договор нельзя отправить на согласование', action: card('details', 'Открыть карточку договора') };
   const version = db.prepare('SELECT id, metadata_json FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? AND version_number = ?')
     .get(req.tenantId, contract.id, contract.document_version);
   if (summary.status === 'needs_revision' || version?.metadata_json !== JSON.stringify(contractMetadata(contract))) {

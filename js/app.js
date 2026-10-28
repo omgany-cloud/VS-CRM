@@ -237,14 +237,11 @@ function updateBadges() {
   const activeDeals = deals.filter(d => d.stage !== 'Закрыта' && d.stage !== 'Отклонена' && d.stage !== 'Отклонена IC').length;
 
   // Badges
-  const wfPending   = typeof getActiveWfCount === 'function' ? getActiveWfCount() : 0;
+  // KYC/NAV chains on my step plus contracts waiting for my decision (js/discussion-tasks.js).
+  const wfPending   = (typeof getActiveWfCount === 'function' ? getActiveWfCount() : 0) + (typeof contractDecisionsWaiting === 'function' ? contractDecisionsWaiting() : 0);
   const icPending   = typeof icMemos !== 'undefined' ? icMemos.filter(m => m.status === 'pending').length : 0;
-  const kycOverdue  = typeof obClients !== 'undefined' ? obClients.filter(x => {
-    const d = x.kycDate;
-    if (!d) return false;
-    const renew = new Date(d); renew.setMonth(renew.getMonth() + 12);
-    return renew < new Date();
-  }).length : 0;
+  // Same list and 2-year rule as the KYC renewal page (js/modules.js).
+  const kycOverdue  = typeof kycRenewalItems === 'function' ? kycRenewalItems().filter(x => x.renewal.status === 'overdue').length : 0;
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) { el.textContent = val; el.style.display = val ? '' : 'none'; } };
   set('badge-deals', activeDeals);

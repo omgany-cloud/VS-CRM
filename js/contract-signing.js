@@ -5,6 +5,7 @@ let contractSigningUI = null;
 const CONTRACT_CONDITION_STATES = {
   done: ['fa-circle-check', 'Выполнено'], pending: ['fa-hourglass-half', 'Ожидается'],
   rejected: ['fa-circle-xmark', 'Отклонено'], unknown: ['fa-circle-question', 'Нет данных'],
+  expired: ['fa-clock-rotate-left', 'Истекло'],
 };
 
 function contractSigningPanel(engagementId) {

@@ -28,10 +28,12 @@ let obClients = [];  // populated at runtime by js/api-auth.js via GET /api/onbo
 //   Клиент: Limited Partner (LP), инвестирует в фонд
 //   НЕТ Suitability/Appropriateness (регуляторные COBS-правила не применяются к LP onboarding в том же объёме)
 //   Вместо договора с клиентом (4.1) → Subscription Agreement
+// Who may record the client check conclusion (stage 2.2) — mirrors server/onboardingRules.js.
+const OB_KYC_DECIDERS = ['CEO', 'SEO', 'COMPLIANCE_OFFICER', 'MLRO'];
 const OB_TASK_TEMPLATES_CFA = [
   { num: '1.1', title: 'Conflict Pre-Check (Go/No-Go)',  phase: 1, role: 'RM', dayStart: 1,  dayEnd: 2,  formKey: 'conflict_precheck' },
   { num: '2.1', title: 'Documentation Collection',       phase: 2, role: 'RM', dayStart: 3,  dayEnd: 5,  formKey: 'doc_collection' },
-  { num: '2.2', title: 'Client Due Diligence Outcome',   phase: 2, role: 'MLRO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
+  { num: '2.2', title: 'Client Due Diligence Outcome',   phase: 2, role: 'CO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
   { num: '3.1', title: 'Client Classification',          phase: 3, role: 'RM', dayStart: 8,  dayEnd: 9,  formKey: 'classification' },
   { num: '3.2', title: 'Suitability / Appropriateness',  phase: 3, role: 'RM', dayStart: 9,  dayEnd: 10, formKey: 'suitability' },
   { num: '4.1', title: 'Client Contract',                phase: 4, role: 'RM', dayStart: 11, dayEnd: 13, formKey: 'engagement_letter' },
@@ -41,7 +43,7 @@ const OB_TASK_TEMPLATES_CFA = [
 const OB_TASK_TEMPLATES_FM = [
   { num: '1.1', title: 'Conflict Pre-Check (Go/No-Go)',  phase: 1, role: 'RM', dayStart: 1,  dayEnd: 2,  formKey: 'conflict_precheck' },
   { num: '2.1', title: 'Documentation Collection (LP)',  phase: 2, role: 'RM', dayStart: 3,  dayEnd: 5,  formKey: 'doc_collection' },
-  { num: '2.2', title: 'AML / KYC Due Diligence',        phase: 2, role: 'MLRO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
+  { num: '2.2', title: 'AML / KYC Due Diligence',        phase: 2, role: 'CO', dayStart: 5,  dayEnd: 7,  formKey: 'dd_outcome' },
   { num: '3.1', title: 'LP Qualification Check',         phase: 3, role: 'RM', dayStart: 8,  dayEnd: 9,  formKey: 'lp_qualification' },
   { num: '3.2', title: 'Investment Profile & Suitability',phase: 3, role: 'RM', dayStart: 9,  dayEnd: 10, formKey: 'lp_investment_profile' },
   { num: '4.1', title: 'Subscription Agreement',         phase: 4, role: 'RM', dayStart: 11, dayEnd: 13, formKey: 'subscription_agreement' },
@@ -2190,7 +2192,7 @@ function buildTaskForm(task, client) {
       // CF&A signing is registered in the contract card, not in stage 4.1.
       const engSub     = isFmClient ? (engTask?.formData?.f_lpSigned || '') : '';
 
-      const amlMonths   = client.riskRating === 'High' ? 6 : 12;
+      const amlMonths   = KYC_RENEWAL_MONTHS; // KYC действует 2 года (js/modules.js)
       const amlDate     = (() => { const d = new Date(); d.setMonth(d.getMonth()+amlMonths); return d.toISOString().slice(0,10); })();
       const reClassDate = (() => { const d = new Date(); d.setFullYear(d.getFullYear()+1); return d.toISOString().slice(0,10); })();
 
@@ -2649,8 +2651,8 @@ function buildTaskForm(task, client) {
       </div>`;
   } else {
     const wallCheck  = chineseWallCheck(client);
-    // Owner's decision: the client check conclusion (2.2) is saved by the MLRO only (server/onboardingRules.js).
-    const kycLocked  = task.formKey === 'dd_outcome' && currentUserRole() !== 'MLRO';
+    // Owner's decision: the client check conclusion (2.2) is saved by the CEO, CO or MLRO (server/onboardingRules.js).
+    const kycLocked  = task.formKey === 'dd_outcome' && !OB_KYC_DECIDERS.includes(currentUserRole());
     const wallBlocked = !wallCheck.allowed || kycLocked;
     // For doc_collection: compute initial readiness to pre-set button state
     const isDocForm   = task.formKey === 'doc_collection';
@@ -2662,8 +2664,8 @@ function buildTaskForm(task, client) {
     const submitColor  = wallBlocked ? '#4a5568' : '#fff';
     const submitCursor = wallBlocked ? 'not-allowed' : 'pointer';
     const submitIcon   = wallBlocked ? 'lock' : 'check';
-    const submitLabel  = kycLocked ? 'Заключение сохраняет MLRO' : wallBlocked ? 'Заблокировано' : 'Завершить задачу';
-    const submitTitle  = kycLocked ? 'title="Этап 2.2 завершает сотрудник с ролью MLRO"' : wallBlocked ? 'title="Китайская стена: запрещено"' : '';
+    const submitLabel  = kycLocked ? 'Заключение сохраняют CEO, CO, MLRO' : wallBlocked ? 'Заблокировано' : 'Завершить задачу';
+    const submitTitle  = kycLocked ? 'title="Этап 2.2 завершают CEO, Compliance Officer и MLRO"' : wallBlocked ? 'title="Китайская стена: запрещено"' : '';
     html += `
       <div style="padding-top:14px;border-top:1px solid #2a4846;margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
         ${isDocForm ? `<span id="obSubmitDocHint" style="font-size:11px;color:#eab308;flex:1;display:none">
@@ -3140,7 +3142,7 @@ async function submitObTask(taskId) {
       client.phase            = 5;
       client.nextAction       = '—';
       // AML review date
-      const amlMonths = client.riskRating === 'High' ? 6 : 12;
+      const amlMonths = KYC_RENEWAL_MONTHS; // KYC действует 2 года (js/modules.js)
       const amlDateD  = new Date(); amlDateD.setMonth(amlDateD.getMonth() + amlMonths);
       client.amlReviewDate = amlDateD.toISOString().slice(0,10);
       // Re-classification date
@@ -3253,8 +3255,8 @@ async function reopenObTask(taskId) {
 
   const task = obTasks.find(t => t.id === taskId);
   if (!task) return;
-  if (task.formKey === 'dd_outcome' && currentUserRole() !== 'MLRO') {
-    showToast('⛔ Заключение по проверке клиента (2.2) пересматривает MLRO', 'red');
+  if (task.formKey === 'dd_outcome' && !OB_KYC_DECIDERS.includes(currentUserRole())) {
+    showToast('⛔ Заключение по проверке клиента (2.2) пересматривают CEO, Compliance Officer и MLRO', 'red');
     return;
   }
   if (task.status !== 'completed' && task.status !== 'escalated' && task.status !== 'rejected') {
@@ -5389,9 +5391,10 @@ function renderEngagementsPage() {
   // per-engagement currency; flagging rather than silently leaving it
   // looking precise. Individual rows/cards below ARE correctly per-currency.
   const totalFees     = engagements.reduce((s,e) => s + (e.feeAmount||0), 0);
-  const totalInvoiced = engagements.reduce((s,e) => s + (e.invoiced||0), 0);
-  const totalPaid     = engagements.reduce((s,e) => s + (e.paid||0), 0);
-  const totalBalance  = totalInvoiced - totalPaid;
+  // Owner's decision 28.10.2026: no invoiced amount; the balance is fee − paid (CF&A only).
+  const cfaEngagements = engagements.filter(e => e.serviceType !== 'LP Investment (FM)');
+  const totalPaid     = cfaEngagements.reduce((s,e) => s + (e.paid||0), 0);
+  const totalBalance  = cfaEngagements.reduce((s,e) => s + (e.feeAmount||0) - (e.paid||0), 0);
   const cntActive     = engagements.filter(e => e.status === 'Active').length;
   const cntFM         = engagements.filter(e => e.serviceType === 'LP Investment (FM)').length;
   const cntCFA        = engagements.filter(e => e.serviceType !== 'LP Investment (FM)').length;
@@ -5427,9 +5430,9 @@ function renderEngagementsPage() {
       </div>
       <div class="kpi-card">
         <div class="kpi-icon orange"><i class="fas fa-file-invoice"></i></div>
-        <div class="kpi-body"><span class="kpi-label">Инвойсировано</span>
-          <span class="kpi-value">${fmtCompactAmount(totalInvoiced)}</span>
-          <span class="kpi-delta">${totalPaid>0?'Частично оплачено':'Ожидает'}</span></div>
+        <div class="kpi-body"><span class="kpi-label">Оплачено (CF&A)</span>
+          <span class="kpi-value">${fmtCompactAmount(totalPaid)}</span>
+          <span class="kpi-delta">По внесённым платёжкам</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon red"><i class="fas fa-balance-scale"></i></div>
@@ -5476,14 +5479,14 @@ function renderEngagementsPage() {
           <thead>
             <tr>
               <th>ID</th><th>Клиент</th><th>Направление</th><th>Статус</th>
-              <th>Подписан</th><th>Сумма / Fee</th><th>Инвойс.</th><th>Оплачено</th><th>Остаток</th><th>Документ</th>
+              <th>Подписан</th><th>Сумма / Fee</th><th>Оплачено</th><th>Остаток</th><th>Документ</th>
             </tr>
           </thead>
           <tbody>
-            ${filtered.length === 0 ? `<tr><td colspan="10" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Договоры не найдены</td></tr>` :
+            ${filtered.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Договоры не найдены</td></tr>` :
             filtered.map(e => {
-              const balance   = (e.invoiced||0) - (e.paid||0);
               const isFM      = e.serviceType === 'LP Investment (FM)';
+              const balance   = (e.feeAmount||0) - (e.paid||0);
               const statusCfg = {Active:{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},Draft:{c:'#8abfbb',bg:'rgba(100,116,139,0.12)'},Completed:{c:'#14b8a6',bg:'rgba(20,184,166,0.12)'},Terminated:{c:'#ef4444',bg:'rgba(239,68,68,0.12)'}}[e.status]||{c:'#8abfbb',bg:'rgba(100,116,139,0.12)'};
               const dirColor  = isFM ? '#14b8a6' : '#8b5cf6';
               const dirBg     = isFM ? 'rgba(20,184,166,0.12)' : 'rgba(139,92,246,0.12)';
@@ -5511,9 +5514,9 @@ function renderEngagementsPage() {
                     <div style="font-weight:700;color:#22c55e;font-size:13px">${fmtCurrency(e.feeAmount||0, e.currency||'USD')}</div>
                     <div style="font-size:10px;color:#5a8a85">${statusLabel(e.feeType)}</div>
                   </td>
-                  <td style="font-size:12px;color:#f97316">${fmtCurrency(e.invoiced||0, e.currency||'USD')}</td>
+                  ${isFM ? '<td colspan="2" style="font-size:11px;color:#5a8a85" title="Оплаты LP учитываются в Capital Calls">Capital Calls</td>' : `
                   <td style="font-size:12px;color:#22c55e">${fmtCurrency(e.paid||0, e.currency||'USD')}</td>
-                  <td style="font-weight:700;color:${balance>0?'#f97316':'#22c55e'};font-size:12px">${fmtCurrency(balance, e.currency||'USD')}</td>
+                  <td style="font-weight:700;color:${balance>0?'#f97316':'#22c55e'};font-size:12px">${fmtCurrency(balance, e.currency||'USD')}</td>`}
                   <td style="text-align:center">
                     ${e.documentVersion > 0
                       ? `<button onclick="event.stopPropagation();openEngagementModal(${e.id})" title="История версий" style="background:#193735;border:1px solid #37665f;color:#b6efe4;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">Версия ${e.documentVersion}</button>`
@@ -5571,8 +5574,8 @@ function openEngagementModal(engId) {
   if (overlay) overlay.style.display = 'block';
   document.body.style.overflow = 'hidden';
 
-  const balance    = e.invoiced - e.paid;
   const isFM       = e.serviceType === 'LP Investment (FM)';
+  const balance    = (e.feeAmount||0) - (e.paid||0);
   let amendArr = [];
   try { amendArr = e.amendments ? (typeof e.amendments === 'string' ? JSON.parse(e.amendments) : e.amendments) : []; } catch(_) {}
   let paymentHistoryArr = [];
@@ -5679,42 +5682,28 @@ function openEngagementModal(engId) {
     <!-- Financials -->
     <div style="background:#1c3332;border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;margin-bottom:10px">Финансы</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(${isFM ? 1 : 3},1fr);gap:10px">
         ${[
           ['Гонорар', fmtCurrency(e.feeAmount, e.currency||'USD'), '#e2e8f0'],
-          ['Инвойсировано', fmtCurrency(e.invoiced, e.currency||'USD'), '#f97316'],
-          ['Оплачено', fmtCurrency(e.paid, e.currency||'USD'), '#22c55e'],
-          [balance < 0 ? 'Переплата' : 'Остаток', fmtCurrency(Math.abs(balance), e.currency||'USD'), balanceColor],
+          ...(isFM ? [] : [
+            ['Оплачено', fmtCurrency(e.paid, e.currency||'USD'), '#22c55e'],
+            [balance < 0 ? 'Переплата' : 'Остаток', fmtCurrency(Math.abs(balance), e.currency||'USD'), balanceColor],
+          ]),
         ].map(([l,v,c]) => `
           <div style="text-align:center;background:#0f1623;border-radius:8px;padding:10px">
             <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">${l}</div>
             <div style="font-size:15px;font-weight:800;color:${c}">${v}</div>
           </div>`).join('')}
       </div>
-      <div style="margin-top:12px">
-        <div style="font-size:11px;color:#5a8a85;margin-bottom:4px">Прогресс оплаты</div>
-        <div style="height:6px;background:#2a4846;border-radius:3px">
-          <div style="width:${e.invoiced>0?Math.min(100,Math.round(e.paid/e.invoiced*100)):0}%;height:6px;background:#22c55e;border-radius:3px"></div>
-        </div>
-      </div>
-      <!-- Quick update: payment + deal ref -->
+      <div style="font-size:11px;color:#5a8a85;margin-top:10px">${isFM ? 'Оплаты LP учитываются в Capital Calls.' : 'Оплаты вносятся платёжками в блоке «Оплаты» ниже.'}</div>
+      <!-- Deal ref -->
       <div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end;flex-wrap:wrap">
-        <div style="flex:1;min-width:110px">
-          <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">Обновить "Оплачено" (${currencySymbol(e.currency||'USD')})</div>
-          <input type="number" id="engPaidUpdate" value="${e.paid}" min="0"
-            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
-        </div>
-        <div style="flex:1;min-width:110px">
-          <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">Обновить "Инвойсировано" (${currencySymbol(e.currency||'USD')})</div>
-          <input type="number" id="engInvoicedUpdate" value="${e.invoiced}" min="0"
-            style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
-        </div>
         <div style="flex:1;min-width:130px">
           <div style="font-size:10px;color:#5a8a85;margin-bottom:4px">Deal Ref</div>
           <input type="text" id="engDealRefUpdate" value="${e.dealRef ? e.dealRef.replace(/"/g,'&quot;') : ''}" placeholder="DEAL-XXX-2026"
             style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:7px 10px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
         </div>
-        <button onclick="updateEngPayment(${e.id})"
+        <button onclick="updateEngDealRef(${e.id})"
           style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap">
           <i class="fas fa-save"></i> Сохранить
         </button>
@@ -5723,7 +5712,7 @@ function openEngagementModal(engId) {
 
     ${paymentHistoryArr.length > 0 ? `
     <div style="background:#0f1623;border-radius:8px;padding:9px 12px;margin-bottom:12px">
-      <div style="font-size:10px;color:#22c55e;text-transform:uppercase;font-weight:700;margin-bottom:8px"><i class="fas fa-clock-rotate-left" style="margin-right:4px"></i>История изменений оплаты (${paymentHistoryArr.length})</div>
+      <div style="font-size:10px;color:#22c55e;text-transform:uppercase;font-weight:700;margin-bottom:8px"><i class="fas fa-clock-rotate-left" style="margin-right:4px"></i>История ручных изменений оплаты — до платёжек (${paymentHistoryArr.length})</div>
       ${paymentHistoryArr.slice().reverse().map(h => `
         <div style="padding:5px 0;border-bottom:1px solid #1e293b;font-size:11px">
           <span style="color:#94a3b8;min-width:140px;display:inline-block">${h.at||'—'} · ${h.by||'—'}</span>
@@ -5752,7 +5741,7 @@ function openEngagementModal(engId) {
     </div>` : ''}`;
 
   modal.style.display = 'flex';
-  if (!engEditMode) { loadContractDocuments(engId); loadContractProcess(engId); loadContractApprovals(engId); loadContractSigning(engId); }
+  if (!engEditMode) { loadContractDocuments(engId); loadContractProcess(engId); loadContractApprovals(engId); loadContractSigning(engId); loadContractPayments(engId); loadContractCardNextStep(engId); }
 }
 
 function closeEngagementModal() {
@@ -5818,40 +5807,17 @@ async function deleteEngagement(id) {
   }
 }
 
-async function updateEngPayment(engId) {
+// Payments are recorded as payment orders (js/contract-payments.js); only the deal reference is edited here.
+async function updateEngDealRef(engId) {
   const e = engagements.find(x => x.id === engId);
   if (!e) return;
-  const paid     = parseFloat(document.getElementById('engPaidUpdate')?.value) || 0;
-  const invoiced = parseFloat(document.getElementById('engInvoicedUpdate')?.value) || 0;
-  const dealRef  = document.getElementById('engDealRefUpdate')?.value.trim() || null;
-  if (paid < 0 || invoiced < 0) { showToast('⚠️ Суммы не могут быть отрицательными', 'red'); return; }
-
-  const prevPaid = e.paid, prevInvoiced = e.invoiced, prevDealRef = e.dealRef, prevHistory = e.paymentHistory;
-  let historyArr = [];
-  try { historyArr = e.paymentHistory ? (typeof e.paymentHistory === 'string' ? JSON.parse(e.paymentHistory) : e.paymentHistory) : []; } catch(_) {}
-  const changes = [];
-  if (paid !== e.paid)         changes.push(`Оплачено: ${fmtCurrency(e.paid, e.currency||'USD')} → ${fmtCurrency(paid, e.currency||'USD')}`);
-  if (invoiced !== e.invoiced) changes.push(`Инвойсировано: ${fmtCurrency(e.invoiced, e.currency||'USD')} → ${fmtCurrency(invoiced, e.currency||'USD')}`);
-  if (dealRef !== (e.dealRef || null)) changes.push(`Deal Ref: ${e.dealRef || '—'} → ${dealRef || '—'}`);
-  if (changes.length) historyArr = [...historyArr, { at: today(), by: currentUserDisplayName(), note: changes.join('; ') }];
-
-  e.paid     = paid;
-  e.invoiced = invoiced;
-  e.dealRef  = dealRef;
-  e.paymentHistory = historyArr;
+  const dealRef = document.getElementById('engDealRefUpdate')?.value.trim() || null;
+  if (dealRef === (e.dealRef || null)) return;
   try {
-    // Signing and start-of-work fields are server-owned; a stale copy must not be sent back.
-    const { signedDate, lpSignedDate, activationDate, activatedBy, ...body } = e;
-    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(body) });
-    Object.assign(e, updated);
-    const balance = e.invoiced - e.paid;
-    const balanceMsg = balance > 0 ? `Остаток: ${fmtCurrency(balance, e.currency||'USD')}`
-                      : balance < 0 ? `Переплата: ${fmtCurrency(-balance, e.currency||'USD')}`
-                      : 'Оплачено полностью';
-    showToast(`💰 Оплата обновлена. ${balanceMsg}`, balance>0?'orange':balance<0?'blue':'green');
+    Object.assign(e, await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify({ dealRef }) }));
+    showToast('Deal Ref сохранён', 'green');
   } catch (err) {
-    e.paid = prevPaid; e.invoiced = prevInvoiced; e.dealRef = prevDealRef; e.paymentHistory = prevHistory;
-    showToast('⚠️ Не удалось сохранить оплату: ' + err.message, 'red');
+    showToast('⚠️ Не удалось сохранить Deal Ref: ' + err.message, 'red');
   }
   openEngagementModal(engId);   // re-render
   renderEngagementsPage();

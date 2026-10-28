@@ -26,10 +26,16 @@ function renderTaskQuickFilters(today=taskToday()) {
   box.innerHTML=chips.map(([value,label])=>`<button type="button" class="task-due-chip task-due-${value}${discussionQuickFilter===value?' selected':''}" aria-pressed="${discussionQuickFilter===value}" onclick="setTaskQuickFilter('${value}')">${label} · ${counts[value]}</button>`).join('');
 }
 function updateTaskBadge(overdue,decide=0) {
-  const badge=document.getElementById('badge-discussions');if(!badge)return;
-  const count=overdue+decide;badge.textContent=count;badge.style.display=count?'':'none';
-  badge.title=[overdue&&`Просроченных задач: ${overdue}`,decide&&`Ждут вашего решения: ${decide}`].filter(Boolean).join(' · ');
+  const badge=document.getElementById('badge-discussions');
+  if(badge){
+    const count=overdue+decide;badge.textContent=count;badge.style.display=count?'':'none';
+    badge.title=[overdue&&`Просроченных задач: ${overdue}`,decide&&`Ждут вашего решения: ${decide}`].filter(Boolean).join(' · ');
+  }
+  // "Согласования" counts the same waiting contract decisions next to KYC/NAV chains.
+  const approvals=document.getElementById('badge-workflow');
+  if(approvals){const count=(typeof getActiveWfCount==='function'?getActiveWfCount():0)+decide;approvals.textContent=count;approvals.style.display=count?'':'none';}
 }
+function contractDecisionsWaiting() { return discussionItems.filter(i=>(i.task?.status||'open')==='open'&&i.task?.review==='decide').length; }
 // Responsible person and client filters; options come from the tasks in the list.
 function taskPeopleMatch(item) {
   const assignee=document.getElementById('discussionAssigneeFilter')?.value||'',client=document.getElementById('discussionClientFilter')?.value||'';

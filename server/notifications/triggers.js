@@ -132,6 +132,49 @@ async function notifyHfRedemptionProcessed(tenantId, redemption) {
   });
 }
 
+// Optional public address of the CRM (CRM_PUBLIC_URL): emails then link straight
+// to the contract task; without it they say where to find it.
+function contractTaskLink(contractId, where = '«Задачи» → «Жду моего решения»') {
+  const base = (process.env.CRM_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(base)
+    ? `<p><a href="${esc(base)}/index.html?contract=${contractId}">Открыть задачу договора в CRM</a></p>`
+    : `<p>В CRM: ${where}.</p>`;
+}
+function contractReader(tenantId, userId, contract) {
+  const user = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ? AND active = 1').get(tenantId, userId);
+  const role = user && db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(tenantId, user.role);
+  if (!user?.email || !role) return null;
+  try { assertContractAccess({ tenantId, user: { ...user, permissions: rowToPermissions(role) } }, contract); return user; }
+  catch (err) { if (err instanceof ContractError) return null; throw err; }
+}
+
+// Fired after a contract is sent for review and after each decision: every
+// reviewer whose turn it now is learns which contract, from whom and by when.
+// One email per review step, so a later reviewer in a sequential route is
+// written to when their turn comes, not before.
+async function notifyContractReview(tenantId, cycleId) {
+  const cycle = db.prepare('SELECT * FROM contract_approval_cycles WHERE tenant_id = ? AND id = ?').get(tenantId, cycleId);
+  if (cycle?.status !== 'active') return;
+  const contract = db.prepare('SELECT * FROM engagements WHERE tenant_id = ? AND id = ?').get(tenantId, cycle.engagement_id);
+  if (!contract) return;
+  const steps = db.prepare("SELECT * FROM contract_approval_steps WHERE tenant_id = ? AND cycle_id = ? AND status = 'pending'").all(tenantId, cycle.id);
+  const name = `${contract.contract_num || 'без номера'} · ${contract.client_name || ''}`;
+  for (const step of steps) {
+    const reviewer = contractReader(tenantId, step.assignee_id, contract);
+    if (!reviewer) continue;
+    const due = step.due_at ? new Date(step.due_at).toLocaleDateString('ru-RU', { timeZone: 'Asia/Qyzylorda' }) : null;
+    await notifyOnce({
+      tenantId, eventType: 'contract_review_assigned', entityType: 'contract_approval_steps', entityId: step.id,
+      to: reviewer.email,
+      subject: `Договор на согласование: ${contract.contract_num || 'без номера'}`,
+      html: `<p>${esc(reviewer.name || reviewer.email)},</p>
+        <p>${esc(cycle.initiator_name)} отправил(а) вам на согласование договор «${esc(name)}»${due ? `; срок решения — ${esc(due)}` : ''}.</p>
+        <p>Решение («Согласовать», «Вернуть на доработку», «Отклонить») принимается в задаче договора, под полем сообщения.</p>
+        ${contractTaskLink(contract.id)}`,
+    });
+  }
+}
+
 // Fired after a contract review is returned or rejected (TZ M3): the author of
 // the submission learns it came back and why — only while they can still open
 // the contract, since its number and client may sit behind the FM wall.
@@ -152,11 +195,11 @@ async function notifyContractReturned(tenantId, cycleId) {
     subject: `${returned ? 'Договор возвращён на доработку' : 'Договор отклонён'}: ${contract.contract_num || 'без номера'}`,
     html: `<p>${esc(author.name || author.email)},</p>
       <p>Договор «${esc(name)}» ${returned ? 'возвращён на доработку' : 'отклонён'}${remark ? ` — ${esc(remark.assignee_name)}: «${esc(remark.comment)}»` : ''}.</p>
-      <p>Он в разделе CRM «Задачи» → «На доработке».</p>`,
+      ${contractTaskLink(contract.id, '«Задачи» → «На доработке»')}`,
   });
 }
 
 module.exports = {
   notifyCapitalCallCreated, notifyWorkflowStepAssigned,
-  notifyHfNavPublished, notifyHfRedemptionProcessed, notifyContractReturned,
+  notifyHfNavPublished, notifyHfRedemptionProcessed, notifyContractReturned, notifyContractReview, contractTaskLink, contractReader,
 };

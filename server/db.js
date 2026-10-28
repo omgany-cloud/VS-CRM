@@ -30,6 +30,9 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
+// Wait for a moment if another connection (a backup copy, a maintenance script)
+// is writing, instead of failing at once with "database is locked".
+db.exec('PRAGMA busy_timeout = 5000');
 db.exec('PRAGMA foreign_keys = ON');
 
 db.exec(`
@@ -1850,10 +1853,55 @@ if (!columnExists('discussion_task_state', 'title')) db.exec('ALTER TABLE discus
 if (!columnExists('discussion_task_state', 'purged_at')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN purged_at TEXT');
 // What was done, stated when the task is completed (TZ M3); cleared when it is reopened.
 if (!columnExists('discussion_task_state', 'completion_result')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN completion_result TEXT');
-// Owner's decisions 28.10.2026: the client check (2.2) is the MLRO's stage, and
-// CF&A stage 4.1 is the client contract itself, not an Engagement Letter / Term Sheet pair.
-db.exec("UPDATE ob_tasks SET role = 'MLRO' WHERE form_key = 'dd_outcome' AND role = 'CO'");
+// Owner's decisions 28.10.2026: the client check (2.2) is done by the Compliance
+// Officer (the CEO and MLRO may also decide it), and CF&A stage 4.1 is the client
+// contract itself, not an Engagement Letter / Term Sheet pair.
+db.exec("UPDATE ob_tasks SET role = 'CO' WHERE form_key = 'dd_outcome' AND role = 'MLRO'");
 db.exec("UPDATE ob_tasks SET title = 'Client Contract' WHERE form_key = 'engagement_letter' AND title = 'Draft & Sign Engagement Letter'");
+
+// Contract payments (owner's decision 28.10.2026): an employee attaches the
+// payment order and enters its data; "paid" is the server's sum of active ones.
+db.exec(`
+CREATE TABLE IF NOT EXISTS contract_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  amount REAL NOT NULL CHECK (amount > 0),
+  currency TEXT NOT NULL,
+  paid_date TEXT NOT NULL,
+  payment_number TEXT NOT NULL,
+  payer TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  file_bytes BLOB NOT NULL,
+  recorded_by INTEGER NOT NULL REFERENCES users(id),
+  recorded_by_name TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','voided')),
+  voided_at TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_by_name TEXT,
+  void_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_contract_payments_engagement ON contract_payments(tenant_id, engagement_id);
+CREATE TABLE IF NOT EXISTS contract_payment_commands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  request_key TEXT NOT NULL,
+  actor_id INTEGER NOT NULL REFERENCES users(id),
+  payload_hash TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+`);
+// What was typed into "Оплачено" before payment orders is kept, once, and added to them.
+if (!columnExists('engagements', 'paid_before_payments')) {
+  db.exec('ALTER TABLE engagements ADD COLUMN paid_before_payments REAL NOT NULL DEFAULT 0');
+  db.exec('UPDATE engagements SET paid_before_payments = paid WHERE paid > 0');
+}
 
 // M2.2: manual registration of a both-party signed PDF for the exact approved
 // revision, and the server-checked start of work. A voided registration stays

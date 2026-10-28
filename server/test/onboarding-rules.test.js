@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
 const { createTestServer } = require('./helpers');
 
-let server, mlro, co;
+let server, mlro, co, rm, cfo;
 const TEMPLATE = [['1.1', 'conflict_precheck'], ['2.1', 'doc_collection'], ['2.2', 'dd_outcome'], ['3.1', 'classification'],
   ['3.2', 'suitability'], ['4.1', 'engagement_letter'], ['5.1', 'activation']];
 async function json(res, status = 200) { const body = await res.json(); assert.equal(res.status, status, JSON.stringify(body)); return body; }
@@ -33,7 +33,7 @@ async function user(role) {
 
 before(async () => {
   server = await createTestServer({ port: 4216, extraEnv: { SMTP_HOST: '', AI_PROVIDER: '' } });
-  mlro = await user('MLRO'); co = await user('COMPLIANCE_OFFICER');
+  mlro = await user('MLRO'); co = await user('COMPLIANCE_OFFICER'); rm = await user('RELATIONSHIP_MANAGER'); cfo = await user('CFO');
 });
 after(async () => { if (server) await server.stop(); });
 
@@ -82,16 +82,17 @@ test('activation needs every stage completed (not escalated) and started contrac
   assert.equal((await json(await api(`/api/ob-clients/${c.id}`, { activated: true }, 'PUT'))).activated, true);
 });
 
-test('only the MLRO records, changes or reopens the client check conclusion (2.2)', async () => {
+test('the CEO, the Compliance Officer and the MLRO record, change or reopen the client check conclusion (2.2); others cannot', async () => {
   const { t } = await client('KYC client');
   await stage(t['1.1'], 'completed', { f_decision: 'Go' });
   await stage(t['2.1'], 'completed');
-  const approve = { f_conclusion: 'Одобрить — Approve' };
-  for (const token of [server.token, co.token]) assert.match((await stage(t['2.2'], 'completed', approve, 403, token)).error, /MLRO/);
-  await stage(t['2.2'], 'in_progress', { f_conclusion: '' }, 200, co.token);
-  await stage(t['2.2'], 'completed', { f_conclusion: 'Расширенная проверка (EDD)' });
-  await stage(t['2.2'], 'completed', approve, 403, co.token);
-  await stage(t['2.2'], 'completed', { f_conclusion: 'Расширенная проверка (EDD)' }, 200, server.token);
-  await stage(t['2.2'], 'open', {}, 403, server.token);
-  await stage(t['2.2'], 'completed', approve);
+  const approve = { f_conclusion: 'Одобрить — Approve' }, edd = { f_conclusion: 'Расширенная проверка (EDD)' };
+  for (const token of [rm.token, cfo.token]) assert.match((await stage(t['2.2'], 'completed', approve, 403, token)).error, /CEO, Compliance Officer и MLRO/);
+  await stage(t['2.2'], 'in_progress', { f_conclusion: '' }, 200, rm.token);
+  await stage(t['2.2'], 'completed', edd, 200, co.token);
+  await stage(t['2.2'], 'completed', approve, 403, rm.token);
+  await stage(t['2.2'], 'completed', edd, 200, rm.token);
+  await stage(t['2.2'], 'open', {}, 403, cfo.token);
+  await stage(t['2.2'], 'open', {}, 200, server.token);
+  await stage(t['2.2'], 'completed', approve, 200, mlro.token);
 });

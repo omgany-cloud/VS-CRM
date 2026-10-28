@@ -12,6 +12,7 @@ const TENANT_SCOPED_TABLES = [
   'discussion_task_reads', 'discussion_task_commands', 'discussion_task_state',
   'discussion_files', 'discussion_messages', 'discussion_relations', 'discussion_links', 'discussion_members', 'discussion_rooms',
   'contract_discussion_members', 'contract_discussion_messages',
+  'contract_payment_commands', 'contract_payments',
   'contract_signing_commands', 'contract_activations', 'contract_signatures',
   'contract_approval_commands', 'contract_approval_steps', 'contract_approval_cycles', 'contract_approval_routes',
   'contract_template_uses',
