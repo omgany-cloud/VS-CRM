@@ -11,6 +11,7 @@ const { db } = require('../db');
 const { notifyOnce } = require('./notify');
 const { usersByRoleCode, usersByPermissionFlag } = require('./recipients');
 const { WF_DEFINITIONS } = require('../wfDefinitions');
+const { workflowVisibleToUser } = require('../workflowAccess');
 
 // Every value passed into an email's html is either a fixed label (safe)
 // or free-text the tenant's own staff/LP entered (company name, LP name,
@@ -67,8 +68,10 @@ async function notifyWorkflowStepAssigned(tenantId, instance) {
   const chainLabel = (def && def.label) || instance.type;
 
   const recipients = usersByRoleCode(tenantId, step.role);
+  // The chain's name may reveal a closed FM record: only those who can open it hear about it.
+  const row = db.prepare('SELECT * FROM workflow_instances WHERE tenant_id = ? AND id = ?').get(tenantId, instance.id);
   for (const user of recipients) {
-    if (!user.email) continue;
+    if (!user.email || !row || !workflowVisibleToUser(tenantId, user, row)) continue;
     await notifyOnce({
       tenantId,
       eventType: `workflow_step_assigned:${instance.currentStep}`,

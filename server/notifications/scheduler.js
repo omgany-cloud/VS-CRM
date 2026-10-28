@@ -2,7 +2,7 @@
 //
 // Drives Stage 2 (digest) triggers — KYC renewal, overdue Capital Call
 // payments, ID document expiry, regulator deadlines, pending conflict
-// decisions (server/notifications/digestChecks.js). Stage 1's two instant
+// decisions, task deadlines (server/notifications/digestChecks.js). Stage 1's two instant
 // triggers still fire directly from their own route handlers in
 // server/index.js, not from here.
 //
@@ -20,7 +20,7 @@ const {
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
   checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
-  checkPortfolioOverdue,
+  checkPortfolioOverdue, checkTaskDeadlines,
 } = require('./digestChecks');
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR) || 8; // 24h, local server time
@@ -30,7 +30,7 @@ const DIGEST_CHECKS = [
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
   checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
-  checkPortfolioOverdue,
+  checkPortfolioOverdue, checkTaskDeadlines,
 ];
 
 // Shared by the hourly tick below and the manual POST

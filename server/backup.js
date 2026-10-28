@@ -11,7 +11,9 @@ const path = require('path');
 const fs = require('fs');
 const { db } = require('./db');
 
-const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
+// BACKUP_DIR lets test servers keep copies of their throwaway databases out of
+// the real backup folder (deploy/backup-sync.sh ships that folder offsite).
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, 'data', 'backups');
 const RETENTION_DAYS = 30;
 
 function runBackup() {

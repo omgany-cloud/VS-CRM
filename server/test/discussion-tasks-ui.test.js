@@ -4,11 +4,11 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 function ui(){
-  const elements=new Map(Object.entries({discussionList:{innerHTML:''},discussionSearch:{value:''},discussionChatFilter:{value:''},discussionTaskSort:{value:'activity'},contractChatFeed:{scrollHeight:800,scrollTop:600,clientHeight:200}}));
+  const elements=new Map(Object.entries({discussionList:{innerHTML:''},discussionBulk:{innerHTML:'',hidden:true},discussionDueFilter:{innerHTML:'',hidden:true},'badge-discussions':{textContent:'',title:'',style:{display:'none'}},discussionSearch:{value:''},discussionChatFilter:{value:''},discussionTaskSort:{value:'activity'},contractChatFeed:{scrollHeight:800,scrollTop:600,clientHeight:200}}));
   const tabs=['open','completed','trashed'].map(status=>({dataset:{taskFilter:status},classList:{toggle(){}},setAttribute(){}}));
   const ctx=vm.createContext({Intl,Date,document:{visibilityState:'visible',getElementById:id=>elements.get(id),querySelectorAll:()=>tabs},contractApprovalUI:null,
     escapeHtml:s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]),
-    contractConversationOpen:state=>state===ctx.contractApprovalUI&&!state?.closed,apiFetch:async()=>({unread:0})});
+    contractConversationOpen:state=>!!state&&state===ctx.contractApprovalUI&&!state.closed,apiFetch:async()=>({unread:0})});
   for(const file of ['discussions.js','discussion-tasks.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../../js',file),'utf8'),ctx);
   ctx.updateDiscussionChatFilter=()=>{};
   return{ctx,elements};
@@ -97,6 +97,67 @@ test('list filters lifecycle, process and text together and escapes author/messa
   elements.get('discussionChatFilter').value='';ctx.setTaskFilter('completed');assert.match(elements.get('discussionList').innerHTML,/Completed/);
   ctx.setTaskFilter('trashed');assert.match(elements.get('discussionList').innerHTML,/Trashed/);
   elements.get('discussionSearch').value='unknown';ctx.renderDiscussionList();assert.ok(!elements.get('discussionList').innerHTML.includes('Trashed'));
+});
+function bulkUi(items){
+  const {ctx,elements}=ui();let keys=0;ctx.contractTemplateRequestKey=()=>'bulk-key-'+(++keys);
+  ctx.refreshDiscussionList=async()=>ctx.renderDiscussionList();
+  vm.runInContext(`discussionItems=${JSON.stringify(items)};`,ctx);ctx.renderDiscussionList();
+  const row=(kind,id)=>elements.get('discussionList').innerHTML.split('<div class="discussion-list-row">').find(r=>r.includes(`openDiscussion('${kind}',${id})`));
+  return {ctx,bar:elements.get('discussionBulk'),row};
+}
+const bulkTask=(kind,id,title,task)=>({kind,id,title,preview:'',sources:[],task:{status:'open',version:1,canManage:true,...task}});
+test('bulk selection offers checkboxes only for tasks the user may change, none in the trash; a tab switch clears it',()=>{
+  const {ctx,bar,row}=bulkUi([bulkTask('room',1,'Mine'),bulkTask('room',2,'Theirs',{canManage:false}),bulkTask('contract',3,'Under review',{reviewActive:true,closeBlockedReason:'Сначала завершите согласование'}),
+    bulkTask('room',4,'Done',{status:'completed'}),bulkTask('room',5,'Bin',{status:'trashed'})]);
+  assert.match(row('room',1),/class="task-select"/);assert.ok(!row('room',1).includes('disabled'));
+  assert.match(row('room',2),/disabled title="Изменять задачу может её создатель/);assert.match(row('contract',3),/disabled title="Сначала завершите согласование"/);
+  assert.equal(bar.hidden,false);assert.match(bar.innerHTML,/Выбрать все/);assert.ok(!bar.innerHTML.includes('runTaskBulk'));
+  ctx.toggleTaskSelection('room',2,true);ctx.toggleTaskSelection('contract',3,true);assert.ok(!bar.innerHTML.includes('Выбрано'));
+  ctx.selectAllTasks(true);assert.match(bar.innerHTML,/Выбрано: 1/);assert.match(row('room',1),/ checked/);
+  assert.match(bar.innerHTML,/runTaskBulk\('complete'\)/);assert.match(bar.innerHTML,/runTaskBulk\('trash'\)/);
+  ctx.setTaskFilter('completed');assert.ok(!row('room',4).includes(' checked'));
+  ctx.toggleTaskSelection('room',4,true);assert.match(bar.innerHTML,/Выбрано: 1/);assert.ok(!bar.innerHTML.includes("'complete'"));
+  ctx.setTaskFilter('trashed');assert.ok(!row('room',5).includes('task-select'));assert.equal(bar.hidden,true);
+});
+test('bulk complete sends each task its own lifecycle command, reloads the open task and keeps failures selected for retry',async()=>{
+  const {ctx,bar,row}=bulkUi([{...bulkTask('room',1,'One'),updatedAt:'2026-10-28'},bulkTask('contract',2,'<Two>',{version:5})]);
+  const state={kind:'room',engagementId:1},reloaded=[],calls=[];ctx.contractApprovalUI=state;ctx.loadContractConversation=async id=>{reloaded.push(id);};
+  let release;ctx.apiFetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});
+    if(url.includes('contract'))throw Object.assign(new Error('Задача изменилась'),{status:409});await new Promise(r=>release=r);return {task:{}};};
+  ctx.selectAllTasks(true);const pending=ctx.runTaskBulk('complete');
+  assert.match(row('room',1),/disabled/);await ctx.runTaskBulk('complete');ctx.toggleTaskSelection('room',1,false);assert.equal(calls.length,1,'busy run ignores repeats and selection changes');
+  release();await pending;
+  assert.equal(JSON.stringify(calls),JSON.stringify([{url:'/api/discussions/room/1/state',body:{action:'complete',expectedVersion:1,requestKey:'bulk-key-1'}},
+    {url:'/api/discussions/contract/2/state',body:{action:'complete',expectedVersion:5,requestKey:'bulk-key-2'}}]));
+  assert.deepEqual(reloaded,[1]);assert.match(bar.innerHTML,/Завершено задач: 1\./);assert.match(bar.innerHTML,/task-bulk-status error/);
+  assert.match(bar.innerHTML,/«&lt;Two&gt;» — Задача изменилась/);assert.match(bar.innerHTML,/Выбрано: 1/);assert.match(row('contract',2),/ checked/);assert.ok(!row('room',1).includes(' checked'));
+  await ctx.runTaskBulk('complete');assert.equal(calls[2].body.requestKey,'bulk-key-2','the unanswered command keeps its key');
+});
+test('bulk trash asks once before any request; cancel keeps the selection',async()=>{
+  const {ctx,bar}=bulkUi([bulkTask('room',1,'One'),bulkTask('contract',2,'Two')]);
+  let calls=0;ctx.apiFetch=async()=>{calls++;return {task:{}};};
+  ctx.selectAllTasks(true);await ctx.runTaskBulk('trash');assert.equal(calls,0);
+  assert.match(bar.innerHTML,/Переместить в корзину выбранные задачи \(2\)/);assert.match(bar.innerHTML,/Договоры и история согласований не меняются/);assert.match(bar.innerHTML,/runTaskBulk\('trash',true\)/);
+  ctx.cancelTaskBulk();assert.ok(!bar.innerHTML.includes('Переместить'));assert.match(bar.innerHTML,/Выбрано: 2/);
+  await ctx.runTaskBulk('trash');await ctx.runTaskBulk('trash',true);assert.equal(calls,2);assert.match(bar.innerHTML,/В корзину перемещено задач: 2\./);assert.ok(!bar.innerHTML.includes('error'));
+});
+test('deadline chips filter the open list, today is labelled and the overdue count drives the menu badge',()=>{
+  const {ctx,elements}=ui();
+  const day=o=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+o*86400000));
+  vm.runInContext(`discussionItems=${JSON.stringify([bulkTask('room',1,'Late',{dueDate:day(-1)}),bulkTask('room',2,'Now',{dueDate:day(0)}),
+    bulkTask('room',3,'Upcoming',{dueDate:day(3)}),bulkTask('room',4,'Old done',{status:'completed',dueDate:day(-5)})])};`,ctx);
+  ctx.renderDiscussionList();
+  const list=()=>elements.get('discussionList').innerHTML,chips=elements.get('discussionDueFilter'),badge=elements.get('badge-discussions');
+  assert.equal(chips.hidden,false);assert.match(chips.innerHTML,/Просрочено · 1/);assert.match(chips.innerHTML,/Срок сегодня · 1/);
+  assert.equal(badge.textContent,1);assert.equal(badge.style.display,'');assert.match(badge.title,/Просроченных задач: 1/);
+  assert.match(list(),/class="overdue"[^>]*>Просрочена · /);assert.match(list(),/class="due-today"[^>]*>Срок сегодня</);
+  ctx.setTaskDueFilter('overdue');assert.match(list(),/Late/);assert.ok(!list().includes('Now')&&!list().includes('Upcoming'));assert.match(chips.innerHTML,/selected" aria-pressed="true"/);
+  ctx.setTaskDueFilter('today');assert.match(list(),/Now/);assert.ok(!list().includes('Late'));
+  ctx.setTaskDueFilter('today');assert.match(list(),/Upcoming/,'a second press shows the whole list again');
+  ctx.setTaskDueFilter('overdue');ctx.setTaskFilter('completed');assert.equal(chips.hidden,true);assert.match(list(),/Old done/);
+  ctx.setTaskFilter('open');assert.match(list(),/Upcoming/,'switching tabs clears the deadline filter');
+  ctx.setTaskDueFilter('overdue');vm.runInContext(`discussionItems[0].task.status='completed';`,ctx);ctx.renderDiscussionList();
+  assert.match(list(),/Upcoming/,'the filter lets go once nothing is overdue');assert.equal(badge.style.display,'none');assert.ok(!chips.innerHTML.includes('Просрочено'));
 });
 test('read receipts wait for visible latest messages; repeat render and scrolling history do not mark newer messages read',async()=>{
   const{ctx,elements}=ui();const calls=[];ctx.renderDiscussionList=()=>{};

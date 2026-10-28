@@ -41,11 +41,15 @@ async function cleanupDbFilesRetrying(dbPath) {
 async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv = {} } = {}) {
   if (!port) throw new Error('createTestServer requires a distinct port per test file');
   const dbPath = path.join(SERVER_DIR, 'data', `test-${port}.sqlite`);
+  // The startup backup of a test database must never land among the real backups.
+  const backupDir = path.join(SERVER_DIR, 'data', `test-${port}-backups`);
   await cleanupDbFilesRetrying(dbPath);
+  fs.rmSync(backupDir, { recursive: true, force: true, maxRetries: 5 });
 
   const env = {
     ...process.env,
     DB_PATH: dbPath,
+    BACKUP_DIR: backupDir,
     PORT: String(port),
     AUTH_RATE_LIMIT_WINDOW_MS: String(authRateLimitWindowMs),
     JWT_SECRET: 'test-only-secret-not-for-real-use',
@@ -76,7 +80,8 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
   const child = spawn('node', ['index.js'], { cwd: SERVER_DIR, env });
   const baseUrl = `http://localhost:${port}`;
   let startupLog = '';
-  const recordStartup = chunk => { startupLog = (startupLog + chunk.toString()).slice(-6000); };
+  // Kept for the server's whole life: tests read console-mode emails from it via output().
+  const recordStartup = chunk => { startupLog = (startupLog + chunk.toString()).slice(-20000); };
   child.stdout.on('data', recordStartup);
   child.stderr.on('data', recordStartup);
 
@@ -121,6 +126,7 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
     // process dies — retry the cleanup a few times rather than failing
     // the whole test file over what's ultimately a harmless leftover
     // temp file.
+    fs.rmSync(backupDir, { recursive: true, force: true, maxRetries: 5 });
     for (let attempt = 0; attempt < 5; attempt++) {
       try { cleanupDbFiles(dbPath); return; } catch (err) {
         if (attempt === 4) { console.warn(`[test] could not remove ${dbPath}:`, err.message); return; }
@@ -129,7 +135,7 @@ async function createTestServer({ port, authRateLimitWindowMs = 2000, extraEnv =
     }
   }
 
-  return { baseUrl, token, apiFetch, stop, dbPath };
+  return { baseUrl, token, apiFetch, stop, dbPath, output: () => startupLog };
 }
 
 module.exports = { createTestServer, SEED_EMAIL, SEED_PASSWORD };

@@ -165,6 +165,24 @@
 .task-list-meta { display: flex; gap: 7px; flex-wrap: wrap; align-items: baseline; margin-top: 5px; }
 .discussion-list-item .task-list-meta small { margin: 0; max-width: 100%; }
 .task-list-meta time { font-size: 10px; color: #9ab1a6; white-space: nowrap; }
+.task-list-meta time.due-today { color: #9fd6c4; }
+.task-due-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.task-due-filter[hidden] { display: none; }
+.discussion-workspace .task-due-chip { padding: 5px 10px; border: 1px solid #3c5148; border-radius: 14px; background: transparent; color: #c2d1ca; font-size: 11px; cursor: pointer; }
+.discussion-workspace .task-due-chip.task-due-overdue { border-color: #7c6036; color: #edbd79; }
+.discussion-workspace .task-due-chip.selected { background: #263c35; border-color: #9bc2b5; color: #f2f7f4; }
+.discussion-workspace .task-due-chip.task-due-overdue.selected { background: #45351f; border-color: #edbd79; color: #fbe3bd; }
+.discussion-list-row { display: flex; align-items: center; gap: 2px; }
+.discussion-sidebar input.task-select, .discussion-sidebar .task-bulk-all input { flex-shrink: 0; width: 16px; height: 16px; margin: 0 2px 0 6px; padding: 0; accent-color: #27a58f; cursor: pointer; }
+.discussion-sidebar input.task-select:disabled { opacity: .35; cursor: not-allowed; }
+.discussion-list-row:has(.task-select:checked) .discussion-list-item { background: #1b302b; }
+.task-bulk { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; padding: 6px 6px 6px 0; border-bottom: 1px solid #2b403b; font-size: 11px; color: #a8bbb4; }
+.task-bulk[hidden] { display: none; }
+.task-bulk-all { display: flex; align-items: center; gap: 8px; margin-right: auto; cursor: pointer; }
+.task-bulk button { padding: 6px 9px; border-radius: 7px; font-size: 11px; cursor: pointer; }
+.task-bulk-confirm { width: 100%; margin: 0; color: #d8e5de; line-height: 1.5; }
+.task-bulk-status { width: 100%; margin: 0; color: #a6d4c4; line-height: 1.5; overflow-wrap: anywhere; }
+.task-bulk-status.error { color: #f3b5a3; }
 .task-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .task-state { font-size: 11px; color: #b9cac2; margin-right: auto; }
 .task-state-completed::before { content: '✓ '; }
@@ -195,6 +213,7 @@
   .discussion-sidebar { border-right: 0; border-bottom: 1px solid #31534f; padding: 8px; }
   .discussion-sidebar-heading { padding-bottom: 5px; }
   #discussionList { display: flex; overflow-x: auto; margin-top: 5px; }
+  .discussion-list-row { flex-shrink: 0; }
   .discussion-list-item { min-width: 190px; max-width: 240px; padding: 7px; }
   .discussion-list-item p, .discussion-list-item small { display: none; }
   .task-list-tabs { margin-top: 5px; }

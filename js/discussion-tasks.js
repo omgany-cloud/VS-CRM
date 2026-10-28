@@ -2,6 +2,25 @@ let discussionTaskFilter = 'open';
 function taskStatusLabel(status) { return ({open:'В работе',completed:'Завершена',trashed:'В корзине'})[status] || 'В работе'; }
 function taskToday() { return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
 function taskOverdue(task, today=taskToday()) { return task?.status === 'open' && !!task.dueDate && task.dueDate < today; }
+function taskDueToday(task, today=taskToday()) { return task?.status === 'open' && task.dueDate === today; }
+// "Просрочено" / "Срок сегодня" narrow the open list; the overdue count also shows on the menu item.
+let discussionDueFilter='';
+function taskDueMatches(task,today) { return !discussionDueFilter||(discussionDueFilter==='overdue'?taskOverdue(task,today):taskDueToday(task,today)); }
+function setTaskDueFilter(value) { if(['overdue','today'].includes(value)){discussionDueFilter=discussionDueFilter===value?'':value;renderDiscussionList();} }
+function renderTaskDueFilter(today=taskToday()) {
+  const open=discussionItems.filter(i=>(i.task?.status||'open')==='open');
+  const overdue=open.filter(i=>taskOverdue(i.task,today)).length,due=open.filter(i=>taskDueToday(i.task,today)).length;
+  if(discussionTaskFilter!=='open'||discussionDueFilter==='overdue'&&!overdue||discussionDueFilter==='today'&&!due)discussionDueFilter='';
+  updateTaskBadge(overdue);
+  const box=document.getElementById('discussionDueFilter');if(!box)return;
+  const chips=discussionTaskFilter==='open'?[['overdue','Просрочено',overdue],['today','Срок сегодня',due]].filter(c=>c[2]):[];
+  box.hidden=!chips.length;
+  box.innerHTML=chips.map(([value,label,count])=>`<button type="button" class="task-due-chip task-due-${value}${discussionDueFilter===value?' selected':''}" aria-pressed="${discussionDueFilter===value}" onclick="setTaskDueFilter('${value}')">${label} · ${count}</button>`).join('');
+}
+function updateTaskBadge(count) {
+  const badge=document.getElementById('badge-discussions');if(!badge)return;
+  badge.textContent=count;badge.style.display=count?'':'none';badge.title=count?`Просроченных задач: ${count}`:'';
+}
 function taskDateLabel(value) { return value ? value.split('-').reverse().join('.') : 'Без срока'; }
 function sortTaskItems(items,sort='activity') {
   const activity=i=>i.task?.updatedAt && i.task.updatedAt > (i.updatedAt || '') ? i.task.updatedAt : i.updatedAt || '';
@@ -15,10 +34,72 @@ function sortTaskItems(items,sort='activity') {
 }
 function setTaskFilter(status) {
   if(!['open','completed','trashed'].includes(status)) return;
+  if(status!==discussionTaskFilter&&!discussionBulk.busy){discussionTaskSelection.clear();discussionBulk={confirm:false,busy:false,status:'',error:false};discussionDueFilter='';}
   discussionTaskFilter=status; renderDiscussionList();
 }
 function updateTaskFilterTabs() {
   document.querySelectorAll('[data-task-filter]').forEach(b=>{const active=b.dataset.taskFilter===discussionTaskFilter;b.classList.toggle('selected',active);b.setAttribute('aria-pressed',String(active));});
+}
+// Bulk complete / trash: ticked tasks go one by one through the same lifecycle command as a single task.
+const discussionTaskSelection=new Set(),discussionBulkKeys=new Map();
+let discussionBulk={confirm:false,busy:false,status:'',error:false},discussionShownTasks=[],discussionBulkHtml=null;
+const taskKey=item=>`${item.kind}:${item.id}`;
+function taskBulkActions() { return ({open:['complete','trash'],completed:['trash']})[discussionTaskFilter] || []; }
+function taskSelectable(item) { return !!item.task?.canManage&&!item.task.reviewActive; }
+// Keeps only visible tasks the user may change; returns whether the list shows checkboxes.
+function syncTaskSelection(items) {
+  discussionShownTasks=taskBulkActions().length?items.filter(taskSelectable):[];
+  const keys=new Set(discussionShownTasks.map(taskKey));
+  for(const key of discussionTaskSelection)if(!keys.has(key))discussionTaskSelection.delete(key);
+  return discussionShownTasks.length>0;
+}
+function taskSelectBox(item) {
+  const reason=!item.task?.canManage?'Изменять задачу может её создатель, а задачу договора — сотрудник с правом вести договоры.':item.task.reviewActive?item.task.closeBlockedReason:'';
+  return `<input type="checkbox" class="task-select" aria-label="Выбрать задачу «${escapeHtml(item.title)}»"${discussionTaskSelection.has(taskKey(item))?' checked':''}${reason||discussionBulk.busy?' disabled':''}${reason?` title="${escapeHtml(reason)}"`:''} onchange="toggleTaskSelection('${item.kind}',${item.id},this.checked)" />`;
+}
+function renderTaskBulk() {
+  const bar=document.getElementById('discussionBulk');if(!bar)return;
+  const count=discussionTaskSelection.size,all=count>0&&count===discussionShownTasks.length,busy=discussionBulk.busy?' disabled':'';
+  const contracts=discussionShownTasks.some(i=>i.kind==='contract'&&discussionTaskSelection.has(taskKey(i)));
+  const status=discussionBulk.status?`<p class="task-bulk-status${discussionBulk.error?' error':''}" role="status">${escapeHtml(discussionBulk.status)}</p>`:'';
+  bar.hidden=!discussionShownTasks.length&&!status;
+  // The list polls every 10 s; rewriting identical markup would drop keyboard focus from these buttons.
+  const html=!discussionShownTasks.length?status:`<label class="task-bulk-all"><input type="checkbox" aria-label="Выбрать все задачи в списке"${all?' checked':''}${busy} onchange="selectAllTasks(this.checked)" /><span>${count?`Выбрано: ${count}`:'Выбрать все'}</span></label>
+    ${count&&discussionBulk.confirm?`<p class="task-bulk-confirm">Переместить в корзину выбранные задачи (${count})? Переписка, файлы и связи сохранятся, задачи можно будет восстановить.${contracts?' Договоры и история согласований не меняются.':''}</p><button type="button" class="task-delete-button" onclick="runTaskBulk('trash',true)"${busy}>В корзину</button><button type="button" class="contract-secondary" onclick="cancelTaskBulk()"${busy}>Отмена</button>`
+    :count?`${taskBulkActions().includes('complete')?`<button type="button" class="contract-secondary" onclick="runTaskBulk('complete')"${busy}><i class="fas fa-check" aria-hidden="true"></i> Завершить</button>`:''}<button type="button" class="task-menu-button" onclick="runTaskBulk('trash')"${busy}><i class="far fa-trash-can" aria-hidden="true"></i> В корзину</button><button type="button" class="task-menu-button" onclick="selectAllTasks(false)" aria-label="Снять выбор" title="Снять выбор"${busy}><i class="fas fa-xmark" aria-hidden="true"></i></button>`:''}${status}`;
+  if(html!==discussionBulkHtml){bar.innerHTML=html;discussionBulkHtml=html;}
+  const box=bar.querySelector?.('.task-bulk-all input');if(box)box.indeterminate=count>0&&!all;
+}
+function toggleTaskSelection(kind,id,checked) {
+  const key=`${kind}:${id}`;if(discussionBulk.busy)return;
+  if(checked&&discussionShownTasks.some(i=>taskKey(i)===key))discussionTaskSelection.add(key);else discussionTaskSelection.delete(key);
+  discussionBulk={confirm:false,busy:false,status:'',error:false};renderTaskBulk();
+}
+function selectAllTasks(checked) {
+  if(discussionBulk.busy)return;
+  discussionTaskSelection.clear();if(checked)discussionShownTasks.forEach(i=>discussionTaskSelection.add(taskKey(i)));
+  discussionBulk={confirm:false,busy:false,status:'',error:false};renderDiscussionList();
+}
+function cancelTaskBulk() { if(!discussionBulk.busy){discussionBulk.confirm=false;renderTaskBulk();} }
+async function runTaskBulk(action,confirmed=false) {
+  if(discussionBulk.busy||!taskBulkActions().includes(action))return;
+  const items=discussionShownTasks.filter(i=>discussionTaskSelection.has(taskKey(i)));if(!items.length)return;
+  if(action==='trash'&&!confirmed){discussionBulk={confirm:true,busy:false,status:'',error:false};renderTaskBulk();return;}
+  const verb=action==='trash'?'Перемещение в корзину':'Завершение',failed=[];let done=0;
+  discussionBulk={confirm:false,busy:true,status:`${verb}: 0 из ${items.length}…`,error:false};renderDiscussionList();
+  for(const item of items){
+    const payload={action,expectedVersion:item.task.version},fingerprint=`${taskKey(item)}:${JSON.stringify(payload)}`;
+    if(!discussionBulkKeys.has(fingerprint))discussionBulkKeys.set(fingerprint,contractTemplateRequestKey());
+    try{
+      await apiFetch(`/api/discussions/${item.kind}/${item.id}/state`,{method:'POST',body:JSON.stringify({...payload,requestKey:discussionBulkKeys.get(fingerprint)})});
+      discussionBulkKeys.delete(fingerprint);discussionTaskSelection.delete(taskKey(item));done++;
+    }catch(err){failed.push(`«${item.title}» — ${err.message}`);}
+    discussionBulk.status=`${verb}: ${done+failed.length} из ${items.length}…`;renderTaskBulk();
+  }
+  discussionBulk={confirm:false,busy:false,error:failed.length>0,status:[done?`${action==='trash'?'В корзину перемещено':'Завершено'} задач: ${done}.`:'',failed.length?`Не удалось (${failed.length}): ${failed.join('; ')}. Отметки с этих задач не сняты.`:''].filter(Boolean).join(' ')};
+  const state=contractApprovalUI;
+  if(contractConversationOpen(state)&&items.some(i=>i.kind===(state.kind||'contract')&&i.id===state.engagementId))await loadContractConversation(state.engagementId);
+  await refreshDiscussionList();
 }
 function taskControls(state) {
   const task=state.chat.task; if(!task) return '';

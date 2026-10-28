@@ -63,9 +63,16 @@ test('GET /api/uploads/meta: a role WITH accessFM (CFO) succeeds', async () => {
 });
 
 test('workflow withdraw: only the creator can withdraw their own request', async () => {
-  const created = await (await server.apiFetch('/api/workflow', {
-    method: 'POST', body: JSON.stringify({ type: 'kyc_lp', entityId: 1, entityName: 'RBACGAP kyc', entityType: 'test' }),
+  // A chain needs a real record of this company behind it (server/workflowAccess.js).
+  const fund = await (await server.apiFetch('/api/funds', { method: 'POST', body: JSON.stringify({ name: 'RBACGAP fund' }) })).json();
+  const lp = await (await server.apiFetch('/api/lp', {
+    method: 'POST', body: JSON.stringify({ fundId: fund.id, name: 'RBACGAP LP', type: 'x', lpType: 'Institution', country: 'x', commitment: 1000, status: 'Active', registerId: 'RBACGAP-1' }),
   })).json();
+  const createdRes = await server.apiFetch('/api/workflow', {
+    method: 'POST', body: JSON.stringify({ type: 'kyc_lp', entityId: lp.id, entityName: 'RBACGAP kyc', entityType: 'test' }),
+  });
+  assert.equal(createdRes.status, 201);
+  const created = await createdRes.json();
 
   const otherFetch = await loginAsRole('CFO', 'rbacgap-withdraw-other@example.com', 'TempPass123!', 'OtherOwnPassword456!');
   const blocked = await otherFetch(`/api/workflow/${created.id}/withdraw`, { method: 'POST' });

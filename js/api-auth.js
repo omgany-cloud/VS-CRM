@@ -860,6 +860,8 @@ async function loadAllApiData() {
   loadHfRedemptionsFromApi();
   loadHfNavFromApi();
   loadSpvsFromApi();
+  // Tasks feed the overdue badge in the menu before the Tasks page is opened.
+  if (currentUserPermission('internal') && typeof refreshDiscussionList === 'function') refreshDiscussionList();
 }
 
 /* ===== Login gate ===== */

@@ -2,6 +2,35 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.60.0] - 2026-10-28
+
+### Added
+- Bulk actions in Tasks: tick tasks in "In progress" or "Completed" and complete
+  them or move them to the trash at once. Checkboxes appear only on tasks the
+  user may change; "Select all" respects search and filters; trash asks once.
+  Each task goes through the existing lifecycle command (rights, version,
+  approval lock, audit), and failed ones stay ticked with the reason.
+- Task deadlines: "Overdue" and "Due today" filters above the open task list,
+  a "Due today" label on tasks, an overdue counter on the Tasks menu item
+  (refreshed at login and every 5 minutes away from Tasks), and a daily
+  digest email per employee listing open tasks due tomorrow, today or
+  overdue. It goes to the assignee or the free task's author; each task is
+  re-checked against the recipient's current access.
+
+### Security
+- KYC and NAV approval chains (`/api/workflow`) now follow the record they
+  approve: FM chains are hidden from employees without FM access in the
+  list, decisions, withdrawal and "your step" emails; a CF&A KYC follows its
+  client card. Starting a chain requires an existing record of the company
+  that the requester can open; its name and type come from that record.
+
+### Fixed
+- Test servers no longer write backups of their throwaway databases into the
+  real `server/data/backups` folder (new `BACKUP_DIR` override; production
+  default unchanged). The 1462 earlier test copies (seed-only snapshots) were moved out to the
+  local `server/data/backups-test-copies/` folder with a manifest.
+- The login rate limiter test no longer fails under parallel test load.
+
 ## [1.59.0] - 2026-10-28
 
 ### Added

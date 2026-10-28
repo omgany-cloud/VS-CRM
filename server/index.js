@@ -58,6 +58,7 @@ const { icMemoToParams, rowToIcMemo, INSERT_SQL: IC_MEMO_INSERT_SQL, UPDATE_SQL:
 const { documentToParams, rowToDocument, INSERT_SQL: DOCUMENT_INSERT_SQL, UPDATE_SQL: DOCUMENT_UPDATE_SQL } = require('./documentMapping');
 const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } = require('./workflowMapping');
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
+const { workflowVisible, workflowTarget } = require('./workflowAccess');
 const { notifyCapitalCallCreated, notifyWorkflowStepAssigned, notifyHfNavPublished, notifyHfRedemptionProcessed } = require('./notifications/triggers');
 const notificationsScheduler = require('./notifications/scheduler');
 const { computeDistributionSplit } = require('./waterfallEngine');
@@ -6261,7 +6262,7 @@ app.put('/api/documents/:id', requireAuth, requireInternal, (req, res) => {
    No external IC seat has a role in any of these approval chains. */
 app.get('/api/workflow', requireAuth, requireInternal, (req, res) => {
   const rows = db.prepare('SELECT * FROM workflow_instances WHERE tenant_id = ? ORDER BY id DESC').all(req.tenantId);
-  res.json({ tenant: req.tenantSlug, workflowInstances: rows.map(rowToWfInstance) });
+  res.json({ tenant: req.tenantSlug, workflowInstances: rows.filter(row => workflowVisible(req, row)).map(rowToWfInstance) });
 });
 
 // deal_ic is excluded here even though it's still a real key in
@@ -6275,10 +6276,15 @@ app.post('/api/workflow', requireAuth, requireInternal, (req, res) => {
   if (!b.type || !CREATABLE_WF_TYPES.includes(b.type)) {
     return res.status(400).json({ error: 'type must be one of: ' + CREATABLE_WF_TYPES.join(', ') });
   }
+  // The approved record must exist in this company and be open to the requester;
+  // its own name and type are stored, not the ones sent by the browser.
+  let target;
+  try { target = workflowTarget(req, b.type, b.entityId); }
+  catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
   // Dedup: an active instance for the same type+entity already exists — hand it back instead of creating a duplicate.
   const existing = db.prepare(`
     SELECT * FROM workflow_instances WHERE tenant_id = ? AND type = ? AND entity_id = ? AND status = 'active'
-  `).get(req.tenantId, b.type, b.entityId != null ? b.entityId : null);
+  `).get(req.tenantId, b.type, target.id);
   if (existing) return res.status(200).json(rowToWfInstance(existing));
 
   // steps are ALWAYS derived from the server-side template, never from the
@@ -6288,9 +6294,9 @@ app.post('/api/workflow', requireAuth, requireInternal, (req, res) => {
   const info = db.prepare(WF_INSERT_SQL).run(at({
     tenantId: req.tenantId,
     type: b.type,
-    entityId: b.entityId != null ? b.entityId : null,
-    entityName: b.entityName || '',
-    entityType: b.entityType || '',
+    entityId: target.id,
+    entityName: target.entityName,
+    entityType: target.entityType,
     createdAt: new Date().toISOString(),
     createdBy: req.user.name || req.user.email,
     currentStep: 0,
@@ -6313,7 +6319,7 @@ app.post('/api/workflow', requireAuth, requireInternal, (req, res) => {
 // from the client, same lesson as PUT /api/ic-memos/:id.
 app.put('/api/workflow/:id', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
-  if (!existing) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
+  if (!existing || !workflowVisible(req, existing)) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
   if (existing.status !== 'active') return res.status(409).json({ error: 'This workflow is already resolved' });
 
   const b = req.body || {};
@@ -6375,7 +6381,7 @@ app.put('/api/workflow/:id', requireAuth, requireInternal, (req, res) => {
 // identity stored in created_by at POST /api/workflow time.
 app.post('/api/workflow/:id/withdraw', requireAuth, requireInternal, (req, res) => {
   const existing = db.prepare('SELECT * FROM workflow_instances WHERE id = ? AND tenant_id = ?').get(req.params.id, req.tenantId);
-  if (!existing) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
+  if (!existing || !workflowVisible(req, existing)) return res.status(404).json({ error: 'Workflow instance not found in this tenant' });
   if (existing.status !== 'active') return res.status(409).json({ error: 'This workflow is already resolved' });
   const requester = req.user.name || req.user.email;
   if (existing.created_by !== requester && existing.created_by !== req.user.email) {

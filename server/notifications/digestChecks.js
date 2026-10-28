@@ -16,6 +16,9 @@
 const { db } = require('../db');
 const { notifyOnce } = require('./notify');
 const { usersByPermissionFlag } = require('./recipients');
+const { taskAccess, taskView } = require('../discussionTasks');
+const { ContractError } = require('../contractApprovalState');
+const { rowToPermissions } = require('../rolesMapping');
 
 const LOOKAHEAD_DAYS = 14;
 
@@ -300,9 +303,58 @@ async function checkPortfolioOverdue(tenantId) {
   }
 }
 
+// Open tasks due tomorrow, today or already overdue (TZ M3): one daily email
+// per employee listing them. It goes to the task's assignee, or to the author
+// of a free task without one; a contract task without an assignee has nobody
+// to remind. Each task is re-checked against that employee's current access,
+// so a closed FM process never leaks through a task title. Days follow the
+// same Asia/Qyzylorda calendar as the task list.
+function taskDay(offsetDays = 0) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Qyzylorda', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(Date.now() + offsetDays * 86400000));
+}
+async function checkTaskDeadlines(tenantId) {
+  const today = taskDay(), tomorrow = taskDay(1);
+  const due = db.prepare(`
+    SELECT s.room_id, s.engagement_id, s.due_date, s.assignee_id, r.created_by
+    FROM discussion_task_state s LEFT JOIN discussion_rooms r ON r.tenant_id = s.tenant_id AND r.id = s.room_id
+    WHERE s.tenant_id = ? AND s.status = 'open' AND s.purged_at IS NULL AND s.due_date IS NOT NULL AND s.due_date <= ?
+    ORDER BY s.due_date, s.id
+  `).all(tenantId, tomorrow);
+  const byUser = new Map();
+  for (const task of due) {
+    const userId = task.assignee_id || task.created_by;
+    if (userId) byUser.set(userId, [...(byUser.get(userId) || []), task]);
+  }
+  for (const [userId, tasks] of byUser) {
+    const user = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ? AND active = 1').get(tenantId, userId);
+    const role = user && db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(tenantId, user.role);
+    if (!user?.email || !role) continue;
+    const req = { tenantId, user: { ...user, permissions: rowToPermissions(role) } };
+    if (!req.user.permissions.internal) continue;
+    const lines = [];
+    for (const task of tasks) {
+      const kind = task.room_id ? 'room' : 'contract', id = task.room_id || task.engagement_id;
+      let title;
+      try { title = taskView(req, kind, id, taskAccess(req, kind, id)).title; }
+      catch (err) { if (err instanceof ContractError) continue; throw err; }
+      const when = task.due_date < today ? `просрочена, срок был ${task.due_date.split('-').reverse().join('.')}`
+        : task.due_date === today ? 'срок сегодня' : 'срок завтра';
+      lines.push(`<li>«${esc(title)}» — ${when}</li>`);
+    }
+    if (!lines.length) continue;
+    await notifyOnce({
+      tenantId, eventType: 'task_deadlines', entityType: 'users', entityId: user.id,
+      to: user.email, scope: 'daily',
+      subject: `Сроки задач: ${lines.length}`,
+      html: `<p>${esc(user.name || user.email)}, по этим задачам подходит или прошёл срок:</p><ul>${lines.join('')}</ul><p>Они собраны в разделе CRM «Задачи» → «Просрочено» / «Сегодня».</p>`,
+    });
+  }
+}
+
 module.exports = {
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
   checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,
-  checkPortfolioOverdue,
+  checkPortfolioOverdue, checkTaskDeadlines,
 };

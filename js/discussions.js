@@ -41,15 +41,17 @@ async function refreshDiscussionList() {
     renderDiscussionList();
   } catch (err) { if (request === discussionListRequest) list.textContent = 'Не удалось загрузить задачи: ' + err.message; }
   finally {
-    if (discussionsActive() && getAuth()) discussionListTimer = setTimeout(() => {
-      if (discussionsActive()) refreshDiscussionList();
-    }, 10000);
+    // Away from Tasks the list still refreshes every 5 minutes for the overdue badge in the menu.
+    if (getAuth()) discussionListTimer = setTimeout(() => {
+      if (getAuth()) refreshDiscussionList();
+    }, discussionsActive() ? 10000 : 300000);
   }
 }
 function resetDiscussions() {
   stopContractConversation(); clearTimeout(discussionListTimer); ++discussionListRequest; ++discussionViewRequest;
   discussionDrafts.clear(); discussionItems = []; discussionSources = []; discussionCategories = []; discussionCreateKey = null; contractApprovalUI = null;
-  discussionTaskFilter = 'open';
+  discussionTaskFilter = 'open'; discussionDueFilter = ''; updateTaskBadge(0);
+  discussionTaskSelection.clear(); discussionBulkKeys.clear(); discussionBulk = { confirm: false, busy: false, status: '', error: false };
   const list = document.getElementById('discussionList'), main = document.getElementById('discussionMain');
   if (list) list.innerHTML = ''; if (main) main.innerHTML = '<div id="discussionWelcome"></div>';
 }
@@ -57,11 +59,14 @@ function renderDiscussionList() {
   const q = document.getElementById('discussionSearch').value.trim().toLocaleLowerCase();
   const state = contractApprovalUI;
   const category = document.getElementById('discussionChatFilter')?.value || '';
+  const today = taskToday(); renderTaskDueFilter(today);
   const items = sortTaskItems(discussionItems.filter(i => (i.task?.status || 'open') === discussionTaskFilter && `${i.title} ${i.label} ${i.preview} ${(i.sources || []).map(s => s.label + ' ' + s.title).join(' ')}`.toLocaleLowerCase().includes(q)
-    && (!category || (category === 'free' ? !i.sources?.length : i.sources?.some(s => s.kind === category)))), document.getElementById('discussionTaskSort')?.value);
-  document.getElementById('discussionList').innerHTML = items.length ? items.map(item => `<button type="button" class="discussion-list-item${state?.engagementId === item.id && (state.kind || 'contract') === item.kind ? ' selected' : ''}" onclick="openDiscussion('${item.kind}',${item.id})">
+    && (!category || (category === 'free' ? !i.sources?.length : i.sources?.some(s => s.kind === category))) && taskDueMatches(i.task, today)), document.getElementById('discussionTaskSort')?.value);
+  const selecting = syncTaskSelection(items);
+  document.getElementById('discussionList').innerHTML = items.length ? items.map(item => `<div class="discussion-list-row">${selecting ? taskSelectBox(item) : ''}<button type="button" class="discussion-list-item${state?.engagementId === item.id && (state.kind || 'contract') === item.kind ? ' selected' : ''}" onclick="openDiscussion('${item.kind}',${item.id})">
     <span class="discussion-avatar"><i class="fas ${item.kind === 'contract' ? 'fa-file-signature' : 'fa-comments'}" aria-hidden="true"></i></span>
-    <span class="task-list-content"><span class="task-list-title"><strong class="${item.unread ? 'task-unread-title' : ''}">${escapeHtml(item.title)}</strong>${item.unread ? `<span class="task-unread" aria-label="Непрочитанных: ${item.unread}">${item.unread > 99 ? '99+' : item.unread}</span>` : ''}</span><p>${escapeHtml((item.preview && item.lastAuthor ? item.lastAuthor + ': ' : '') + (item.preview || 'Нет сообщений'))}</p><span class="task-list-meta"><small>${escapeHtml(item.sources?.length ? [...new Set(item.sources.map(s => s.label))].join(' · ') : 'Без процесса')}</small>${item.task?.dueDate ? `<time class="${taskOverdue(item.task) ? 'overdue' : ''}" datetime="${item.task.dueDate}">${taskOverdue(item.task) ? 'Просрочена · ' : ''}${taskDateLabel(item.task.dueDate)}</time>` : ''}</span></span></button>`).join('') : '<p class="discussion-empty">Задач в этом списке нет.</p>';
+    <span class="task-list-content"><span class="task-list-title"><strong class="${item.unread ? 'task-unread-title' : ''}">${escapeHtml(item.title)}</strong>${item.unread ? `<span class="task-unread" aria-label="Непрочитанных: ${item.unread}">${item.unread > 99 ? '99+' : item.unread}</span>` : ''}</span><p>${escapeHtml((item.preview && item.lastAuthor ? item.lastAuthor + ': ' : '') + (item.preview || 'Нет сообщений'))}</p><span class="task-list-meta"><small>${escapeHtml(item.sources?.length ? [...new Set(item.sources.map(s => s.label))].join(' · ') : 'Без процесса')}</small>${item.task?.dueDate ? `<time class="${taskOverdue(item.task, today) ? 'overdue' : taskDueToday(item.task, today) ? 'due-today' : ''}" datetime="${item.task.dueDate}">${taskOverdue(item.task, today) ? 'Просрочена · ' + taskDateLabel(item.task.dueDate) : taskDueToday(item.task, today) ? 'Срок сегодня' : taskDateLabel(item.task.dueDate)}</time>` : ''}</span></span></button></div>`).join('') : '<p class="discussion-empty">Задач в этом списке нет.</p>';
+  renderTaskBulk();
   updateDiscussionChatFilter();
   updateTaskFilterTabs();
 }

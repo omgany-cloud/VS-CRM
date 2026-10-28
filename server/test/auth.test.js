@@ -42,19 +42,21 @@ test('rate limiter trips after 10 failed attempts, then resets after the window'
   // attempts against.
   const rl = await createTestServer({ port: 4094, authRateLimitWindowMs: 1500 });
   try {
+    // An unknown email is still counted by the IP-keyed limiter but skips the
+    // synchronous password hash, so all eleven requests fit well inside the
+    // short window even when the whole suite runs in parallel. Hashing ten
+    // real passwords under that load used to outlast the window and reset it.
     const attempt = () => fetch(rl.baseUrl + '/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: SEED_EMAIL, password: 'wrong' }),
+      body: JSON.stringify({ email: 'nobody@ratelimit.test', password: 'wrong' }),
     });
-    // createTestServer() already made one successful login as part of its
-    // own setup — express-rate-limit counts every request against the
-    // limited route by default, success or failure, so that's 1 of the
-    // 10-request budget already spent before this test's own attempts.
+    // createTestServer()'s own login opened a window; start from a fresh one.
+    await new Promise(r => setTimeout(r, 1700));
     let last;
-    for (let i = 0; i < 9; i++) last = await attempt();
-    assert.equal(last.status, 401, 'remaining budget (9, after setup\'s own login used 1 of 10) should still be normal auth failures');
+    for (let i = 0; i < 10; i++) last = await attempt();
+    assert.equal(last.status, 401, 'the 10-request budget should still be normal auth failures');
     const eleventh = await attempt();
-    assert.equal(eleventh.status, 429, 'the 11th request overall within the window must be rate-limited');
+    assert.equal(eleventh.status, 429, 'the 11th request within the window must be rate-limited');
 
     await new Promise(r => setTimeout(r, 1700)); // window is 1500ms for this test server
     const afterWindow = await attempt();
