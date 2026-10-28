@@ -2,6 +2,44 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.59.0] - 2026-10-28
+
+### Added
+- Contract signing (M2.2): register the both-party signed PDF and signing date
+  for the approved revision in the contract card. A manual record, not an
+  e-signature. Mistaken registrations can be voided with a reason before work
+  starts; voided files stay in history.
+- "Start work" command: a draft becomes Active only when the signature, KYC
+  (task 2.2 approved) and conflict check (task 1.1 Go, no open or rejected
+  conflict decisions) are confirmed by the server. Same rules for CF&A and FM.
+- New role permission "Регистрация подписания договоров" (CEO and RM by default).
+- "Next step" strip above the chat of process tasks: onboarding tasks show the
+  current stage (1.1–5.1) with its performer, deadline and an "Open step"
+  button; contract tasks guide from file upload through approval, signing and
+  start of work. Escalations, stopped onboarding and completion are stated
+  plainly; the stage list expands in place. Computed by the server.
+- "New contract" in Tasks → process catalogue → Contracts: the registry's form
+  opens there and the new contract's task opens right after saving.
+- "+" in a contract task's Related block creates a subtask linked to the contract.
+- "New client" in Tasks → process catalogue → Onboarding: the onboarding form
+  opens there; saving also creates and opens an "Онбординг: <client>" task
+  linked to the client and due on the onboarding target date.
+
+### Changed
+- Ordinary contract create/edit can no longer set Active, the signing date or
+  the start-of-work date/author. Task 4.1 creates drafts only.
+- Onboarding 5.1 starts work on an explicitly chosen contract through the same
+  server check instead of setting Active in the browser; contract terms and
+  signing dates are no longer re-entered there.
+- A signed approved revision cannot be returned to rework until the signature
+  registration is voided.
+- Choosing a contract in the process catalogue opens its main task directly.
+  Its Related block also lists subtasks previously started from the contract
+  (members only).
+
+### Fixed
+- The contract edit field labelled "Дата договора" wrote the signing date.
+
 ## [1.58.0] - 2026-10-28
 
 ### Added

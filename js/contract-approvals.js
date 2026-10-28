@@ -11,7 +11,7 @@ function contractApprovalPanel(engagementId) {
 }
 function contractConversationPanel(engagementId, kind = 'contract') {
   return `<section id="contractApprovalPanel" class="contract-versions discussion-conversation" data-engagement-id="${engagementId}" data-kind="${kind}" data-surface="hub">
-    <div class="discussion-task-layout"><div class="discussion-thread"><div id="discussionTools" class="discussion-tools" hidden></div>${contractDiscussionPanel(kind)}<footer id="discussionTaskActions"></footer></div>
+    <div class="discussion-task-layout"><div class="discussion-thread"><div id="discussionNextStep" class="discussion-next-step" hidden></div><div id="discussionTools" class="discussion-tools" hidden></div>${contractDiscussionPanel(kind)}<footer id="discussionTaskActions"></footer></div>
     <aside id="discussionProperties" class="discussion-properties" aria-label="Свойства задачи"><div id="discussionPropertyBody"></div>${discussionFilesPanel()}
     ${kind === 'contract' ? '<details class="discussion-approval-details"><summary>Настройка и история согласования</summary>' : '<div hidden>'}
     <p id="contractApprovalMessage" class="contract-message" role="status" aria-live="polite">Загрузка согласования…</p>
@@ -155,7 +155,8 @@ async function openContractRecord(id) {
     const old = engagements.find(e => e.id === id);
     if (old) Object.assign(old, contract); else engagements.push(contract);
     engEditMode = false; openEngagementModal(id);
-    document.getElementById('contractApprovalPanel')?.scrollIntoView({ block: 'start' });
+    // From a task the next step after approval is signing, shown in the card.
+    document.getElementById('contractSigningPanel')?.scrollIntoView({ block: 'start' });
   } catch (err) { showToast(err.message, 'red'); }
 }
 function openContractApprovalItem(id) { return openDiscussion('contract', id); }

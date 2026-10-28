@@ -115,7 +115,8 @@ test('Engagements: create/status-change/delete each log distinctly', async () =>
   const eng = await (await server.apiFetch('/api/engagements', {
     method: 'POST', body: JSON.stringify({ clientName: 'TEST_AUDIT_ENG', serviceType: 'Advisory', direction: 'CFA', status: 'Draft' }),
   })).json();
-  await server.apiFetch(`/api/engagements/${eng.id}`, { method: 'PUT', body: JSON.stringify({ status: 'Active' }) });
+  // Active is reachable only through the signing command; any other status change still logs.
+  await server.apiFetch(`/api/engagements/${eng.id}`, { method: 'PUT', body: JSON.stringify({ status: 'Completed' }) });
   await server.apiFetch(`/api/engagements/${eng.id}`, { method: 'DELETE' });
 
   const { entries } = await (await server.apiFetch(`/api/audit-log?entityType=engagements&entityId=${eng.id}`)).json();

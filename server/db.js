@@ -1397,6 +1397,10 @@ if (!columnExists('roles', 'manage_contract_routes')) {
   db.exec('ALTER TABLE roles ADD COLUMN manage_contract_routes INTEGER NOT NULL DEFAULT 0');
   db.exec("UPDATE roles SET manage_contract_routes = 1 WHERE is_system = 1 AND code = 'CEO'");
 }
+if (!columnExists('roles', 'record_contract_signature')) {
+  db.exec('ALTER TABLE roles ADD COLUMN record_contract_signature INTEGER NOT NULL DEFAULT 0');
+  db.exec("UPDATE roles SET record_contract_signature = 1 WHERE is_system = 1 AND code IN ('CEO', 'RELATIONSHIP_MANAGER')");
+}
 if (!columnExists('documents', 'document_url')) db.exec("ALTER TABLE documents ADD COLUMN document_url TEXT");
 if (!columnExists('documents', 'archived')) db.exec("ALTER TABLE documents ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
 if (!columnExists('documents', 'archived_at')) db.exec("ALTER TABLE documents ADD COLUMN archived_at TEXT");
@@ -1844,6 +1848,54 @@ CREATE TABLE IF NOT EXISTS discussion_task_reads (
 if (!columnExists('discussion_task_state', 'assignee_id')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN assignee_id INTEGER REFERENCES users(id)');
 if (!columnExists('discussion_task_state', 'title')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN title TEXT');
 if (!columnExists('discussion_task_state', 'purged_at')) db.exec('ALTER TABLE discussion_task_state ADD COLUMN purged_at TEXT');
+
+// M2.2: manual registration of a both-party signed PDF for the exact approved
+// revision, and the server-checked start of work. A voided registration stays
+// in history; a signature referenced by an activation can no longer be voided.
+db.exec(`
+CREATE TABLE IF NOT EXISTS contract_signatures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  cycle_id INTEGER NOT NULL REFERENCES contract_approval_cycles(id),
+  document_version_id INTEGER NOT NULL REFERENCES engagement_document_versions(id),
+  signed_date TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+  sha256 TEXT NOT NULL,
+  file_bytes BLOB NOT NULL,
+  recorded_by INTEGER NOT NULL REFERENCES users(id),
+  recorded_by_name TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','voided')),
+  voided_at TEXT,
+  voided_by INTEGER REFERENCES users(id),
+  voided_by_name TEXT,
+  void_reason TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contract_signature_active ON contract_signatures(tenant_id, engagement_id) WHERE status = 'active';
+CREATE TABLE IF NOT EXISTS contract_activations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  signature_id INTEGER NOT NULL REFERENCES contract_signatures(id),
+  conditions_json TEXT NOT NULL,
+  activation_date TEXT NOT NULL,
+  activated_by INTEGER NOT NULL REFERENCES users(id),
+  activated_by_name TEXT NOT NULL,
+  activated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contract_activations ON contract_activations(tenant_id, engagement_id);
+CREATE TABLE IF NOT EXISTS contract_signing_commands (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  request_key TEXT NOT NULL,
+  actor_id INTEGER NOT NULL REFERENCES users(id),
+  payload_hash TEXT NOT NULL,
+  result_json TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+`);
 
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").

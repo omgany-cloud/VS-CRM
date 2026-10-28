@@ -83,7 +83,7 @@ async function loadContractProcess(engagementId) {
 }
 
 function contractDocumentsPanel(engagementId) {
-  return `${contractApprovalPanel(engagementId)}${contractProcessPanel(engagementId)}<section id="contractVersionsPanel" class="contract-versions" data-engagement-id="${engagementId}">
+  return `${contractApprovalPanel(engagementId)}${contractSigningPanel(engagementId)}${contractProcessPanel(engagementId)}<section id="contractVersionsPanel" class="contract-versions" data-engagement-id="${engagementId}">
     <div class="contract-versions-heading">
       <div><h3>Версии документа</h3><p>Исходный файл и сохранённые редакции договора.</p></div>
       <button type="button" class="contract-secondary" onclick="loadContractDocuments(${engagementId})">Обновить</button>

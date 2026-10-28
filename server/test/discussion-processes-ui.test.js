@@ -69,3 +69,53 @@ test('a linked LP opens its actual fund and detail card; major module entry poin
   let catalogueOpened=false;ctx.showDiscussionProcesses=async()=>{catalogueOpened=true;};
   await ctx.openContractApprovalLink();assert.equal(catalogueOpened,true);
 });
+test('contracts: writers can start a new contract here, a contract opens its main task, and without it a subtask is offered',async()=>{
+  const {ctx,elements}=ui();
+  vm.runInContext(`discussionCategories.push({kind:'contract',title:'Договоры',icon:'fa-file-signature',page:'engagements',group:'Клиенты',count:1});
+    discussionSources.push({kind:'contract',id:5,label:'Договор',title:'GL-1 · Client'});`,ctx);
+  let readOnly=false;ctx.currentUserPermission=key=>key==='readOnly'&&readOnly;
+  ctx.selectDiscussionProcessCategory('start','contract');
+  assert.match(elements.get('discussionSourceList').innerHTML,/newContractFromTasks\(this\)/);
+  readOnly=true;ctx.selectDiscussionProcessCategory('start','contract');
+  assert.ok(!elements.get('discussionSourceList').innerHTML.includes('newContractFromTasks'));
+  ctx.renderDiscussionProcessPicker('link','','contract');
+  assert.ok(!elements.get('discussionSourceList').innerHTML.includes('newContractFromTasks'));
+
+  const opened=[];ctx.openDiscussion=(kind,id)=>opened.push([kind,id]);
+  ctx.apiFetch=async()=>({source:{kind:'contract',id:5,label:'Договор',title:'GL-1 · Client'},items:[{kind:'contract',id:5,title:'Задача по договору'},{kind:'room',id:9,title:'Sub'}],canCreate:true});
+  await ctx.chooseDiscussionProcess(2,{disabled:false});
+  assert.deepEqual(opened,[['contract',5]]);
+  ctx.apiFetch=async()=>({source:{kind:'contract',id:5,label:'Договор',title:'GL-1 · Client'},items:[{kind:'room',id:9,title:'Sub'}],canCreate:true});
+  await ctx.chooseDiscussionProcess(2,{disabled:false});
+  assert.equal(opened.length,1);assert.match(elements.get('discussionMain').innerHTML,/Новая подзадача по договору/);
+});
+test('new contract from tasks reloads onboarding data and asks the form to open the task after saving',async()=>{
+  const {ctx}=ui();let modal;
+  vm.runInContext('var obClients=[{id:1}], obTasks=[], engagements=[{id:3}];',ctx);
+  ctx.openNewEngagementModal=(...args)=>{modal=args;};
+  ctx.apiFetch=async url=>{assert.equal(url,'/api/onboarding');return {obClients:[{id:2,name:'Fresh'}],obTasks:[],engagements:[]};};
+  const button={disabled:false};await ctx.newContractFromTasks(button);
+  assert.deepEqual(modal,[null,null,true]);assert.equal(button.disabled,false);
+  assert.equal(vm.runInContext('obClients.map(c=>c.id).join()',ctx),'2');assert.equal(vm.runInContext('engagements.length',ctx),0);
+});
+test('onboarding: a new client can be started here and gets a linked onboarding task due on its target date',async()=>{
+  const {ctx,elements}=ui();
+  vm.runInContext(`discussionCategories.push({kind:'client',title:'Онбординг',icon:'fa-user-plus',page:'ob-clients',group:'Клиенты',count:0});`,ctx);
+  ctx.currentUserPermission=()=>false;
+  ctx.selectDiscussionProcessCategory('start','client');
+  assert.match(elements.get('discussionSourceList').innerHTML,/newClientFromTasks\(this\)/);
+  assert.ok(!elements.get('discussionSourceList').innerHTML.includes('newContractFromTasks'));
+
+  let form;ctx.openNewObClientModal=(...args)=>{form=args;};
+  vm.runInContext('var obClients=[], obTasks=[], engagements=[];',ctx);
+  ctx.apiFetch=async()=>({obClients:[],obTasks:[],engagements:[]});
+  await ctx.newClientFromTasks({disabled:false});assert.deepEqual(form,[null,true]);
+
+  const posted=[],opened=[];ctx.contractTemplateRequestKey=()=>'k'.repeat(32);
+  ctx.apiFetch=async(url,options)=>{posted.push([url,JSON.parse(options.body)]);return {id:44};};
+  ctx.refreshDiscussionList=async()=>{};ctx.openDiscussion=(kind,id)=>opened.push([kind,id]);
+  await ctx.startClientOnboardingTask({id:3,name:'<ACME>',targetDate:'2026-11-18'});
+  assert.equal(posted[0][0],'/api/discussions');
+  assert.equal(JSON.stringify(posted[0][1]),JSON.stringify({title:'Онбординг: <ACME>',participants:[],dueDate:'2026-11-18',source:{kind:'client',id:3},requestKey:'k'.repeat(32)}));
+  assert.deepEqual(opened,[['room',44]]);
+});

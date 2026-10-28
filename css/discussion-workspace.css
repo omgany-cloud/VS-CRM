@@ -43,6 +43,35 @@
 .discussion-properties .contract-approval-metadata { display: block; }
 .discussion-properties .contract-approval-metadata dt { margin-top: 8px; color: #91aaa0; }
 .discussion-thread .discussion-tools { padding: 10px 0 15px; max-height: 48%; }
+.discussion-next-step { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 4px 12px; flex-shrink: 0; margin: 4px 0 10px; padding: 11px 14px; border: 1px solid #31534f; border-left-width: 3px; border-radius: 10px; background: #13302b; color: #d6e8e1; }
+.discussion-next-step[hidden] { display: none; }
+.discussion-next-step-icon { font-size: 18px; color: #65edcf; }
+.discussion-next-step-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.discussion-next-step-body small { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: #8bb4a3; }
+.discussion-next-step-body strong { font-size: 13px; color: #eef8f4; overflow-wrap: anywhere; }
+.discussion-next-step-body span { font-size: 11px; color: #a5beb6; line-height: 1.5; overflow-wrap: anywhere; }
+.discussion-next-step > button { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.discussion-next-step details { grid-column: 2 / -1; font-size: 11px; color: #a5beb6; }
+.discussion-next-step summary { cursor: pointer; width: max-content; }
+.discussion-next-step ol { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.discussion-next-step li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid #23423a; }
+.discussion-next-step li.step-completed small { color: #86efac; }
+.discussion-next-step li.step-open small, .discussion-next-step li.step-in_progress small { color: #65edcf; font-weight: 600; }
+.discussion-next-step li.step-escalated small, .discussion-next-step li.step-rejected small { color: #edbd79; }
+.discussion-next-step li.step-locked { color: #6f8c82; }
+.discussion-next-step.tone-action { border-left-color: #65edcf; }
+.discussion-next-step.tone-wait { border-left-color: #edbd79; }
+.discussion-next-step.tone-wait .discussion-next-step-icon { color: #edbd79; }
+.discussion-next-step.tone-done { border-left-color: #4ade80; background: #112a24; }
+.discussion-next-step.tone-done .discussion-next-step-icon { color: #4ade80; }
+.discussion-next-step.tone-stop { border-left-color: #f87171; }
+.discussion-next-step.tone-stop .discussion-next-step-icon { color: #f87171; }
+.discussion-next-step .overdue { color: #edbd79; }
+@media (max-width: 640px) {
+  .discussion-next-step { grid-template-columns: auto minmax(0,1fr); }
+  .discussion-next-step > button { grid-column: 1 / -1; width: 100%; }
+  .discussion-next-step details { grid-column: 1 / -1; }
+}
 #discussionTaskActions { flex-shrink: 0; border-top: 1px solid #2b413b; margin-top: 12px; }
 #discussionTaskActions .task-controls { margin-top: 12px; }
 #discussionTaskActions .task-lifecycle-note { color: #8da79b; font-size: 10px; line-height: 1.5; margin: 8px 0 0; }

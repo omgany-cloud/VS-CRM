@@ -101,6 +101,7 @@ async function loadContractConversation(engagementId) {
           'Переписка и согласование не заменяют подписание договора и проверки клиента.');
       }
       renderContractDiscussion(state);
+      if (typeof refreshDiscussionNextStep === 'function') refreshDiscussionNextStep(state);
       if(typeof loadDiscussionFiles==='function') {
         if(!state.fileCatalogLoaded || page.messages.some(m=>m.attachments?.length)) await loadDiscussionFiles(state);
         else renderDiscussionFiles(state);

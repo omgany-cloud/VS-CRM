@@ -72,6 +72,10 @@ function audit(req, engagementId, action, summary) {
 function canControl(req, cycle) {
   return !req.user.permissions.readOnly && (req.user.permissions.manageContractRoutes || (cycle.initiator_id === req.user.id && req.user.permissions.manageContracts));
 }
+// A registered signature pins the approved revision until it is voided.
+function signed(tenantId, engagementId) {
+  return !!db.prepare("SELECT 1 FROM contract_signatures WHERE tenant_id = ? AND engagement_id = ? AND status = 'active'").get(tenantId, engagementId);
+}
 function cycleView(req, cycle, contract) {
   const rawSteps = db.prepare('SELECT * FROM contract_approval_steps WHERE tenant_id = ? AND cycle_id = ? ORDER BY position').all(req.tenantId, cycle.id);
   const matches = approvalMatches(cycle, contract);
@@ -89,7 +93,7 @@ function cycleView(req, cycle, contract) {
     canDecide: actionable && !req.user.permissions.readOnly && !!ownStep,
     decisionStepId: actionable && !req.user.permissions.readOnly ? ownStep?.id || null : null,
     canWithdraw: latest && cycle.status === 'active' && canControl(req, cycle),
-    canRework: latest && !cycle.invalidated_at && ['active', 'approved'].includes(cycle.status) && canControl(req, cycle),
+    canRework: latest && !cycle.invalidated_at && ['active', 'approved'].includes(cycle.status) && canControl(req, cycle) && !signed(req.tenantId, contract.id),
     steps: rawSteps.map(s => ({ id: s.id, position: s.position, userId: s.assignee_id, name: s.assignee_name,
       available: eligible(staff(req.tenantId, s.assignee_id), directionFor(contract)), dueDays: s.due_days, dueAt: s.due_at,
       status: s.status, comment: s.comment, decidedAt: s.decided_at })) };
@@ -290,6 +294,7 @@ for (const action of ['withdraw', 'rework']) router.post(`/engagements/:id/appro
   const result = command(req, contract, input, () => {
     checkRevision(cycle, input.expectedRevision);
     if (latestCycle(req.tenantId, contract.id)?.id !== cycle.id || cycle.invalidated_at || (action === 'withdraw' ? cycle.status !== 'active' : !['active', 'approved'].includes(cycle.status))) fail('Этот цикл уже закрыт или заменён новым', 409);
+    if (action === 'rework' && signed(req.tenantId, contract.id)) fail('Договор подписан. Сначала аннулируйте регистрацию подписания или оформите изменения дополнительным соглашением.', 409);
     const now = new Date().toISOString();
     db.prepare(`UPDATE contract_approval_cycles SET status = ?, resolved_at = COALESCE(resolved_at, ?), invalidated_at = ?, invalidated_by = ?,
       close_reason = ?, closed_by = ?, closed_by_name = ?, revision = revision + 1 WHERE tenant_id = ? AND id = ?`)

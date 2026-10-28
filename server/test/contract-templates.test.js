@@ -129,8 +129,15 @@ test('applying to a blank draft is atomic and never overwrites a file or signed 
   const result = await json(await api(url, { engagementId: contract.id, expectedVersion: 0 }, rm.token), 201);
   assert.equal(result.currentVersion, 1);
   assert.equal((await api(url, { engagementId: contract.id, expectedVersion: 0 })).status, 409);
-  for (const patch of [{ contractUrl: 'https://example.com/current.docx' }, { status: 'Active' }, { signedDate: '2026-10-01' }]) {
-    const blocked = await emptyContract(patch);
+  // Active status and signature dates come only from signing commands now, so
+  // pre-existing records of that shape are written directly as legacy data.
+  for (const patch of [{ contractUrl: 'https://example.com/current.docx' }, { status: 'Active' }, { signed_date: '2026-10-01' }]) {
+    const blocked = await emptyContract(patch.contractUrl ? patch : {});
+    if (!patch.contractUrl) {
+      const db = new DatabaseSync(server.dbPath);
+      const [column, value] = Object.entries(patch)[0];
+      db.prepare(`UPDATE engagements SET ${column} = ? WHERE id = ?`).run(value, blocked.id); db.close();
+    }
     assert.equal((await api(url, { engagementId: blocked.id, expectedVersion: 0 })).status, 409);
   }
 });

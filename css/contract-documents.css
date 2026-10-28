@@ -253,3 +253,8 @@
 @media (max-width: 800px) {
   .contract-template-layout, .contract-template-fields { grid-template-columns: 1fr; }
 }
+.contract-subheading { margin: 16px 0 4px; font-size: 13px; color: #c3f3e9; }
+.contract-condition-done span:last-child { color: #86efac; }
+.contract-condition-pending span:last-child { color: #fde68a; }
+.contract-condition-rejected span:last-child { color: #fca5a5; }
+#contractSigningConditions .contract-primary { margin-top: 12px; }

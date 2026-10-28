@@ -600,6 +600,7 @@ function closeObClientModal() {
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
   activeObClientId = null;
+  if (typeof refreshDiscussionNextStep === 'function') refreshDiscussionNextStep(contractApprovalUI, true);
 }
 
 function kycChecklistItems(c) {
@@ -981,6 +982,7 @@ function openObTaskForm(taskId) {
       if (window._obAmendments.length > 0) {
         _obRenderAmendments(task.id);
       }
+      obLoadActivationContract();
     }
     // 3. Auto-save: attach change listeners to all form fields
     if (task.status !== 'completed' && task.status !== 'rejected') {
@@ -2247,28 +2249,16 @@ function buildTaskForm(task, client) {
           </div>
         </div>
 
+        ${_obActivationContractBlock(client, fd, isFmClient, disabledAttr, labelStyle, selectStyle)}
+
         ${isFmClient ? _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendments, formGroupStyle, labelStyle, inputStyle, selectStyle, disabledAttr) : `
 
         <!-- ══ CF&A 5.1: Contract Upload + Key Terms + Amendments ══ -->
 
-        <!-- Section 1: Contract Key Terms -->
+        <!-- Section 1: Activation notes (terms come from the signed contract) -->
         <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-            <i class="fas fa-file-signature"></i> Секция 1 — Реквизиты подписанного договора
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Номер договора *</label>
-              <input type="text" id="f_contractNum" value="${fd.contractNum||''}" ${disabledAttr} style="${inputStyle}" placeholder="ENG-2025-001" /></div>
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Дата подписания *</label>
-              <input type="date" id="f_contractDate" value="${fd.contractDate||''}" ${disabledAttr} style="${inputStyle}" /></div>
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Дата истечения договора</label>
-              <input type="date" id="f_contractExpiry" value="${fd.contractExpiry||''}" ${disabledAttr} style="${inputStyle}" /></div>
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Сумма / объём сделки ($)</label>
-              <input type="number" id="f_contractValue" value="${fd.contractValue||''}" ${disabledAttr} style="${inputStyle}" placeholder="0" min="0" /></div>
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Ставка комиссии (%)</label>
-              <input type="number" id="f_feeRate" value="${fd.feeRate||''}" ${disabledAttr} style="${inputStyle}" placeholder="0.00" step="0.01" min="0" /></div>
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Success Fee (%)</label>
-              <input type="number" id="f_successFeeRate" value="${fd.successFeeRate||''}" ${disabledAttr} style="${inputStyle}" placeholder="0.00" step="0.01" min="0" /></div>
+            <i class="fas fa-file-signature"></i> Секция 1 — Особые условия
           </div>
           <div style="${formGroupStyle}"><label style="${labelStyle}">Особые условия</label>
             <textarea id="f_specialConditions" rows="2" ${disabledAttr} style="${inputStyle};resize:vertical" placeholder="Специфические условия договора, ограничения, оговорки...">${fd.specialConditions||''}</textarea></div>
@@ -2277,13 +2267,13 @@ function buildTaskForm(task, client) {
         <!-- Section 2: Signed Contract Document -->
         <div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
           <div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-            <i class="fas fa-link"></i> Секция 2 — Подписанный договор (ссылка)
+            <i class="fas fa-link"></i> Секция 2 — Ссылка на договор (необязательно)
           </div>
           <div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd">
             <i class="fas fa-info-circle" style="margin-right:5px"></i>
-            Укажите ссылку на подписанный обеими сторонами PDF договор (Google Drive, SharePoint, OneDrive, корпоративный сервер и т.д.)
+            Подписанный PDF хранится в карточке договора. Здесь можно сохранить дополнительную ссылку на внешнее хранилище (Google Drive, SharePoint, OneDrive и т.д.)
           </div>
-          <div style="${formGroupStyle}"><label style="${labelStyle}">🔗 Ссылка на подписанный договор (PDF) *</label>
+          <div style="${formGroupStyle}"><label style="${labelStyle}">🔗 Ссылка на договор во внешнем хранилище</label>
             <div style="display:flex;gap:6px">
               <input type="url" id="f_contractUrl" value="${fd.contractUrl||''}" ${disabledAttr} style="${inputStyle}" placeholder="https://drive.google.com/file/d/... или загрузите файл" />
               ${!isCompleted ? docUploadBtn('f_contractUrl') : ''}
@@ -2334,12 +2324,7 @@ function buildTaskForm(task, client) {
           <div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
             <i class="fas fa-user-check"></i> Секция 4 — Активация клиента
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Дата активации *</label>
-              <input type="date" id="f_activationDate" value="${fd.activationDate||today()}" ${disabledAttr} style="${inputStyle}" /></div>
-            <div style="${formGroupStyle}"><label style="${labelStyle}">Активировал (ФИО юриста / RM) *</label>
-              <input type="text" id="f_activatedBy" value="${fd.activatedBy||''}" ${disabledAttr} style="${inputStyle}" placeholder="Введите ФИО..." /></div>
-          </div>
+          <div style="font-size:11px;color:#93c5fd;margin-bottom:10px">Дата начала работы и сотрудник фиксируются сервером при активации.</div>
           ${buildSelect('f_docsVerified','Документы верифицированы?',['Нет','Да'],fd.docsVerified,disabledAttr,selectStyle,labelStyle)}
           <div style="${formGroupStyle};margin-top:10px"><label style="${labelStyle}">Примечания к активации</label>
             <textarea id="f_activationNotes" rows="2" ${disabledAttr} style="${inputStyle};resize:vertical" placeholder="Дополнительные примечания...">${fd.activationNotes||''}</textarea></div>
@@ -3033,7 +3018,7 @@ async function submitObTask(taskId) {
         direction:   'FM',
         contractNum: subNum,
         date:        fd.f_subDate || today(),
-        status:      (fd.f_lpSigned || '').startsWith('Да') && (fd.f_gpSigned||'') === 'Да' ? 'Active' : 'Draft',
+        status:      'Draft', // work starts only after signing, from the contract card or 5.1
         feeType:     'Management Fee + Carry',
         feeAmount:   commitment,
         currency:    currencyForFundId(activeFundId),
@@ -3071,7 +3056,7 @@ async function submitObTask(taskId) {
         direction:   'CF&A',
         contractNum: engNum,
         date:        fd.f_engDate || today(),
-        status:      fd.f_clientSigned === 'Да' ? 'Active' : 'Draft',
+        status:      'Draft', // work starts only after signing, from the contract card or 5.1
         feeType:     fd.f_feeType || 'Fixed Fee',
         feeAmount:   parseFloat(fd.f_feeAmount) || 0,
         currency:    fd.f_currency || 'USD',
@@ -3113,163 +3098,56 @@ async function submitObTask(taskId) {
       return;  // exit — do not proceed
     }
     if (!rejected) {
-      // ── CF&A: persist contractUrl + amendments to engagement record ──
-      if (client.direction !== 'FM') {
-        const contractUrl  = fd.f_contractUrl  || fd.contractUrl  || '';
-        const amendments   = fd.f_amendments   || fd.amendments   || '[]';
-        const contractNum  = fd.f_contractNum  || fd.contractNum  || '';
-        const contractDate = fd.f_contractDate || fd.contractDate || '';
-        const contractExpiry = fd.f_contractExpiry || fd.contractExpiry || '';
-        const contractValue  = fd.f_contractValue  || fd.contractValue  || '';
-        const feeRate        = fd.f_feeRate        || fd.feeRate        || '';
-        const successFeeRate = fd.f_successFeeRate || fd.successFeeRate || '';
-        const specialCond    = fd.f_specialConditions || fd.specialConditions || '';
-        const activationDate = fd.f_activationDate   || fd.activationDate   || today();
-        const activatedBy    = fd.f_activatedBy      || fd.activatedBy      || '';
-        // Update matching engagement record (created at 4.1 step)
-        let engRecord = engagements.find(e => e.clientId === client.id && e.serviceType !== 'LP Investment (FM)');
-        const engRecordIsNew = !engRecord;
-        if (!engRecord) {
-          // 4.1 was skipped — create record now from 5.1 data
-          const seq2 = String(engIdCounter++).padStart(3,'0');
-          engRecord = {
-            engId:       `ENG-${new Date().getFullYear()}-${seq2}`,
-            clientId:    client.id,
-            clientName:  client.name,
-            serviceType: client.serviceType || 'Advising',
-            direction:   'CF&A',
-            contractNum: contractNum || `GL-${new Date().getFullYear()}-${seq2}`,
-            date:        contractDate || today(),
-            status:      'Active',
-            feeType:     'Fixed Fee',
-            feeAmount:   parseFloat(contractValue) || 0,
-            // No currency field on the 5.1 form itself (only 4.1 has one) —
-            // this branch only fires when 4.1 was skipped entirely, so
-            // there's nothing to read; defaults to USD like everywhere else
-            // absent an explicit choice.
-            currency:    'USD',
-            successFee:  parseFloat(successFeeRate) || null,
-            retainer:    null,
-            payTerms:    'При подписании',
-            invoiced:    0, paid: 0,
-            startDate:   contractDate || today(),
-            endDate:     contractExpiry || '',
-            rm:          currentUserDisplayName(),
-            notes:       specialCond || '',
-          };
-        } else {
-          if (contractUrl)    engRecord.contractUrl  = contractUrl;
-          if (amendments)     engRecord.amendments   = amendments;
-          if (contractNum)    engRecord.contractNum  = contractNum;
-          if (contractDate)   engRecord.signedDate   = contractDate;
-          if (contractExpiry) engRecord.endDate      = contractExpiry;
-          if (contractValue)  engRecord.dealValue    = parseFloat(contractValue) || engRecord.feeAmount;
-          if (feeRate)        engRecord.feeRate      = parseFloat(feeRate);
-          if (successFeeRate) engRecord.successFee   = parseFloat(successFeeRate);
-          if (specialCond)    engRecord.notes        = (engRecord.notes||'') + ' | ' + specialCond;
-        }
-        engRecord.status         = 'Active';
-        engRecord.direction      = engRecord.direction || 'CF&A';
-        engRecord.activationDate = activationDate;
-        engRecord.activatedBy    = activatedBy;
-        engRecord.contractUrl    = engRecord.contractUrl || contractUrl;
-        try {
-          if (engRecordIsNew) {
-            const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(engRecord) });
-            Object.assign(engRecord, created);
-            engagements.push(engRecord);
-            showToast(`📄 Договор ${engRecord.engId} создан и активирован в Реестре`, 'green');
-          } else {
-            const updated = await apiFetch(`/api/engagements/${engRecord.id}`, { method: 'PUT', body: JSON.stringify(engRecord) });
-            Object.assign(engRecord, updated);
-            showToast(`📄 Договор ${contractNum||engRecord.contractNum} обновлён в Реестре → Active`, 'green');
-          }
-        } catch (err) {
-          showToast('⚠️ Не удалось сохранить договор: ' + err.message, 'red');
-        }
-        // Store on client for quick access
-        client.contractUrl = contractUrl;
-        client.activatedBy = activatedBy;
-        // Reset runtime amendments array
-        window._obAmendments = [];
+      // ── Start work on the one contract chosen in this form. The server checks
+      //    the signed PDF, KYC (2.2) and conflict check (1.1); the browser never
+      //    sets Active, signature dates or contract terms itself. ──
+      const blockActivation = message => {
+        task.status = 'open'; task.completedAt = null; task.completedBy = null;
+        obDraftSave(task.id, task.formKey); // keep what was typed for the next attempt
+        showToast('⛔ Активация заблокирована: ' + message, 'red');
+        closeObTaskForm();
+        renderObContent();
+      };
+      const isFmClient = client.direction === 'FM';
+      const contract = engagements.find(e => e.id === Number(fd.f_engagementId) && e.clientId === client.id &&
+        (e.serviceType === 'LP Investment (FM)') === isFmClient);
+      if (!contract) {
+        blockActivation('выберите договор, по которому начинается работа');
+        return;
       }
-
-      // ── FM: persist lpaUrl + amendments + key LPA params to engagement record ──
-      if (client.direction === 'FM') {
-        const lpaUrl             = fd.f_lpaUrl             || fd.lpaUrl             || '';
-        const amendments         = fd.f_amendments         || fd.amendments         || '[]';
-        const contractNum        = fd.f_contractNum        || fd.contractNum        || '';
-        const contractDate       = fd.f_contractDate       || fd.contractDate       || '';
-        const contractExpiry     = fd.f_contractExpiry     || fd.contractExpiry     || '';
-        const commitmentConfirmed= fd.f_commitmentConfirmed|| fd.commitmentConfirmed|| '';
-        const lpSignedDate       = fd.f_lpSignedDate       || fd.lpSignedDate       || '';
-        const capitalCallDate    = fd.f_capitalCallDate    || fd.capitalCallDate    || '';
-        const capitalCallSchedule= fd.f_capitalCallSchedule|| fd.capitalCallSchedule|| '';
-        const activationDate     = fd.f_activationDate     || fd.activationDate     || today();
-        const activatedBy        = fd.f_activatedBy        || fd.activatedBy        || '';
-        // Find or create SA engagement record
-        let saRecord = engagements.find(e => e.clientId === client.id && e.serviceType === 'LP Investment (FM)');
-        const saRecordIsNew = !saRecord;
-        if (!saRecord) {
-          // 4.1 was skipped — create record now
-          const seq2 = String(engIdCounter++).padStart(3,'0');
-          const cmt  = parseFloat(commitmentConfirmed) || client.commitment || 0;
-          saRecord = {
-            engId:       `SA-${new Date().getFullYear()}-${seq2}`,
-            clientId:    client.id,
-            clientName:  client.name,
-            serviceType: 'LP Investment (FM)',
-            direction:   'FM',
-            contractNum: contractNum || `SA-${new Date().getFullYear()}-${seq2}`,
-            date:        contractDate || today(),
-            status:      'Active',
-            feeType:     'Management Fee + Carry',
-            feeAmount:   cmt,
-            currency:    currencyForFundId(activeFundId),
-            successFee:  20,
-            retainer:    null,
-            payTerms:    'По Capital Call',
-            invoiced:    0, paid: 0,
-            startDate:   contractDate || today(),
-            endDate:     contractExpiry || '',
-            rm:          currentUserDisplayName(),
-            notes:       `FM LP Subscription. Commitment: ${fmtCurrency(cmt, currencyForFundId(activeFundId))}.`,
-          };
-        }
-        // Enrich record with 5.1 form data
-        saRecord.status          = 'Active';
-        saRecord.direction       = 'FM';
-        saRecord.lpaUrl          = lpaUrl          || saRecord.lpaUrl || '';
-        saRecord.amendments      = amendments      || saRecord.amendments || '[]';
-        if (contractNum)         saRecord.contractNum      = contractNum;
-        if (contractDate)        saRecord.signedDate       = contractDate;
-        if (contractExpiry)      saRecord.endDate          = contractExpiry;
-        if (commitmentConfirmed) saRecord.feeAmount        = parseFloat(commitmentConfirmed) || saRecord.feeAmount;
-        if (lpSignedDate)        saRecord.lpSignedDate     = lpSignedDate;
-        if (capitalCallDate)     saRecord.capitalCallDate  = capitalCallDate;
-        if (capitalCallSchedule) saRecord.notes            = (saRecord.notes||'') + ' | CC: ' + capitalCallSchedule;
-        saRecord.activationDate  = activationDate;
-        saRecord.activatedBy     = activatedBy;
+      if (contract.status !== 'Active') {
         try {
-          if (saRecordIsNew) {
-            const created = await apiFetch('/api/engagements', { method: 'POST', body: JSON.stringify(saRecord) });
-            Object.assign(saRecord, created);
-            engagements.push(saRecord);
-            showToast(`📄 LP Agreement ${saRecord.engId} создан и активирован в Реестре`, 'green');
-          } else {
-            const updated = await apiFetch(`/api/engagements/${saRecord.id}`, { method: 'PUT', body: JSON.stringify(saRecord) });
-            Object.assign(saRecord, updated);
-            showToast(`📄 LP Agreement ${contractNum||saRecord.contractNum} обновлён в Реестре → Active`, 'green');
-          }
+          const signing = await apiFetch(`/api/engagements/${contract.id}/signing`);
+          if (!signing.signature) throw new Error('подписанный PDF не зарегистрирован в карточке договора');
+          const started = await apiFetch(`/api/engagements/${contract.id}/activation`, {
+            method: 'POST', body: JSON.stringify({ expectedSignatureId: signing.signature.id, requestKey: contractTemplateRequestKey() }),
+          });
+          syncContractSigningRecord(started);
         } catch (err) {
-          showToast('⚠️ Не удалось сохранить LP Agreement: ' + err.message, 'red');
+          blockActivation(err.message);
+          return;
         }
-        // Store on client for quick access
-        client.lpaUrl      = lpaUrl;
-        client.activatedBy = activatedBy;
-        // Reset runtime amendments array
-        window._obAmendments = [];
       }
+      // LP registration reads the contract number from this task.
+      fd.f_contractNum = fd.contractNum = contract.contractNum || '';
+      task.formData = fd;
+      // Only details outside the approved terms are saved on the contract.
+      const amendments = fd.f_amendments || fd.amendments || '[]';
+      const link = isFmClient ? (fd.f_lpaUrl || '') : (fd.f_contractUrl || '');
+      const details = { amendments };
+      if (link) details[isFmClient ? 'lpaUrl' : 'contractUrl'] = link;
+      if (isFmClient && fd.f_capitalCallDate) details.capitalCallDate = fd.f_capitalCallDate;
+      const extraNote = isFmClient ? (fd.f_capitalCallSchedule ? 'CC: ' + fd.f_capitalCallSchedule : '') : (fd.f_specialConditions || '');
+      if (extraNote) details.notes = [contract.notes, extraNote].filter(Boolean).join(' | ');
+      try {
+        Object.assign(contract, await apiFetch(`/api/engagements/${contract.id}`, { method: 'PUT', body: JSON.stringify(details) }));
+        showToast(`📄 Работа по договору ${contract.contractNum || contract.engId} начата`, 'green');
+      } catch (err) {
+        showToast('⚠️ Работа начата, но дополнительные сведения договора не сохранены: ' + err.message, 'red');
+      }
+      if (isFmClient) client.lpaUrl = link || client.lpaUrl; else client.contractUrl = link || client.contractUrl;
+      client.activatedBy = currentUserDisplayName();
+      window._obAmendments = [];
 
       client.activated        = true;
       client.onboardingStatus = 'Completed';
@@ -3477,11 +3355,57 @@ function _obRenderSavedAmendments(arr, isCompleted) {
   }).join('');
 }
 
+// 5.1 starts work on one explicitly chosen contract — never "the first
+// contract of the client". Signing and the readiness checks live in the
+// contract card and on the server (server/contractSigning.js).
+function _obActivationContractBlock(client, fd, isFmClient, disabledAttr, labelStyle, selectStyle) {
+  const options = engagements.filter(e => e.clientId === client.id && (e.serviceType === 'LP Investment (FM)') === isFmClient);
+  const selected = Number(fd.engagementId) || (options.length === 1 ? options[0].id : 0);
+  const kind = isFmClient ? 'Subscription Agreement / LPA' : 'Договор';
+  return `<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+      <i class="fas fa-file-signature"></i> ${kind} для начала работы</div>
+    <div style="font-size:11px;color:#93c5fd;margin-bottom:10px;line-height:1.5">Активация начинает работу по выбранному договору. Сервер проверяет подписанный PDF согласованной редакции, одобренный KYC (2.2) и проверку конфликта интересов (1.1). Подписание регистрируется в карточке договора.</div>
+    ${options.length ? `<label style="${labelStyle}" for="f_engagementId">${kind} *</label>
+      <select id="f_engagementId" ${disabledAttr} style="${selectStyle}" onchange="obLoadActivationContract()">
+        <option value="">— выберите договор —</option>
+        ${options.map(e => `<option value="${e.id}"${e.id === selected ? ' selected' : ''}>${escapeHtml(e.contractNum || e.engId || 'Договор ' + e.id)} · ${escapeHtml(statusLabel(e.status))}</option>`).join('')}
+      </select>
+      <div id="obActivationContract" style="margin-top:10px;font-size:12px;color:#a2c4c0;line-height:1.6" aria-live="polite"></div>`
+    : `<div style="font-size:12px;color:#fde68a">У клиента пока нет договора этого направления. Создайте его в блоке «Договоры клиента», согласуйте и зарегистрируйте подписание.</div>`}
+  </div>`;
+}
+
+async function obLoadActivationContract() {
+  const select = document.getElementById('f_engagementId');
+  const box = document.getElementById('obActivationContract');
+  if (!select || !box) return;
+  const id = Number(select.value);
+  const request = box._request = (box._request || 0) + 1;
+  if (!id) { box.textContent = 'Выберите договор, по которому начинается работа.'; return; }
+  box.textContent = 'Проверяем договор…';
+  try {
+    const data = await apiFetch(`/api/engagements/${id}/signing`);
+    if (box._request !== request || !box.isConnected) return;
+    const colors = { done: '#86efac', pending: '#fde68a', rejected: '#fca5a5', unknown: '#a2c4c0' };
+    const rows = data.readiness.conditions.map(c => {
+      const [icon, label] = CONTRACT_CONDITION_STATES[c.state] || CONTRACT_CONDITION_STATES.unknown;
+      return `<div style="color:${colors[c.state] || colors.unknown}"><i class="fas ${icon}" aria-hidden="true"></i> ${escapeHtml(c.label)} — ${label}: ${escapeHtml(c.detail)}</div>`;
+    }).join('');
+    const summary = data.serviceStatus === 'Active'
+      ? `Работа по договору уже начата${data.activation ? ' ' + contractSigningDay(data.activation.date) : ''}.`
+      : data.readiness.ready ? 'Все условия выполнены — работа начнётся при активации клиента.'
+      : 'Активация будет заблокирована, пока условия не выполнены.';
+    box.innerHTML = `${rows}<div style="margin-top:6px;font-weight:700;color:#e2e8f0">${escapeHtml(summary)}</div>
+      <button type="button" onclick="closeObTaskForm();openContractFromClient(${id})" style="margin-top:8px;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.35);color:#5eead4;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600"><i class="fas fa-file-signature"></i> Открыть договор</button>`;
+  } catch (err) {
+    if (box._request === request) box.textContent = 'Не удалось проверить договор: ' + err.message;
+  }
+}
+
 // Build FM 5.1 activation form sections as plain string (avoids nested template literal depth issues)
 function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendments, formGroupStyle, labelStyle, inputStyle, selectStyle, disabledAttr) {
   var engTask = obTasks.find(function(t){ return t.clientId === client.id && t.taskNum === '4.1'; });
-  var saNum  = fd.contractNum || (engTask && engTask.formData && engTask.formData.f_subNum) || '';
-  var cmt    = fd.commitmentConfirmed || (engTask && engTask.formData && engTask.formData.f_subCommitment) || client.commitment || '';
   var ccDate = fd.capitalCallDate || (engTask && engTask.formData && engTask.formData.f_firstCallDate) || '';
   var dis    = disabledAttr || '';
   var previewBtnLabel = isCompleted ? 'Открыть LPA' : 'Предпросмотр LPA';
@@ -3500,9 +3424,9 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
   return ''
     // Section 1: LPA URL
     + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
-    + '<div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-link"></i> Секция 1 — Соглашение с LP (ссылка на LPA)</div>'
-    + '<div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd"><i class="fas fa-info-circle" style="margin-right:5px"></i>Вставьте ссылку на подписанный LP Agreement (LPA), подготовленный юристами на основе Subscription Agreement.</div>'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">🔗 Ссылка на подписанный LP Agreement (LPA) *</label>'
+    + '<div style="font-size:11px;font-weight:800;color:#14b8a6;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-link"></i> Секция 1 — Ссылка на LPA (необязательно)</div>'
+    + '<div style="background:rgba(20,184,166,0.07);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:11px;color:#93c5fd"><i class="fas fa-info-circle" style="margin-right:5px"></i>Подписанный Subscription Agreement / LPA хранится в карточке договора. Здесь можно сохранить дополнительную ссылку на внешнее хранилище.</div>'
+    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">🔗 Ссылка на LPA во внешнем хранилище</label>'
     + '<div style="display:flex;gap:6px">'
     + '<input type="url" id="f_lpaUrl" value="' + (fd.lpaUrl || '') + '" ' + dis + ' style="' + inputStyle + '" placeholder="https://drive.google.com/file/d/... или загрузите файл" />'
     + (dis ? '' : docUploadBtn('f_lpaUrl'))
@@ -3512,13 +3436,8 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
 
     // Section 2: Key LPA Parameters
     + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
-    + '<div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-file-signature"></i> Секция 2 — Ключевые параметры LPA</div>'
+    + '<div style="font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-file-signature"></i> Секция 2 — Capital Calls</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Номер SA / LPA *</label><input type="text" id="f_contractNum" value="' + saNum + '" ' + dis + ' style="' + inputStyle + '" placeholder="SA-2025-001" /></div>'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Дата подписания LPA *</label><input type="date" id="f_contractDate" value="' + (fd.contractDate || '') + '" ' + dis + ' style="' + inputStyle + '" /></div>'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Дата истечения / Срок фонда</label><input type="date" id="f_contractExpiry" value="' + (fd.contractExpiry || '') + '" ' + dis + ' style="' + inputStyle + '" /></div>'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Подтверждённый Commitment ($)</label><input type="number" id="f_commitmentConfirmed" value="' + cmt + '" ' + dis + ' style="' + inputStyle + '" placeholder="0" min="0" /></div>'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Дата подписания LP</label><input type="date" id="f_lpSignedDate" value="' + (fd.lpSignedDate || '') + '" ' + dis + ' style="' + inputStyle + '" /></div>'
     + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Первый Capital Call</label><input type="date" id="f_capitalCallDate" value="' + ccDate + '" ' + dis + ' style="' + inputStyle + '" /></div>'
     + '</div>'
     + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">График Capital Calls / Особые условия LPA</label>'
@@ -3537,10 +3456,7 @@ function _obBuildFmActivationSections(task, client, fd, isCompleted, savedAmendm
     // Section 4: Activation
     + '<div style="background:#0f1623;border:1px solid #2a4846;border-radius:10px;padding:14px;margin-bottom:14px">'
     + '<div style="font-size:11px;font-weight:800;color:#f97316;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="fas fa-user-check"></i> Секция 4 — Активация LP</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Дата активации *</label><input type="date" id="f_activationDate" value="' + (fd.activationDate || today()) + '" ' + dis + ' style="' + inputStyle + '" /></div>'
-    + '<div style="' + formGroupStyle + '"><label style="' + labelStyle + '">Активировал (ФИО юриста / RM) *</label><input type="text" id="f_activatedBy" value="' + (fd.activatedBy || '') + '" ' + dis + ' style="' + inputStyle + '" placeholder="Введите ФИО..." /></div>'
-    + '</div>'
+    + '<div style="font-size:11px;color:#93c5fd;margin-bottom:10px">Дата начала работы и сотрудник фиксируются сервером при активации.</div>'
     + buildSelect('f_docsVerified', 'Документы верифицированы?', ['Нет', 'Да'], fd.docsVerified, disabledAttr, selectStyle, labelStyle)
     + '<div style="' + formGroupStyle + ';margin-top:10px"><label style="' + labelStyle + '">Примечания к активации</label>'
     + '<textarea id="f_activationNotes" rows="2" ' + dis + ' style="' + inputStyle + ';resize:vertical" placeholder="Дополнительные примечания...">' + (fd.activationNotes || '') + '</textarea></div>'
@@ -5127,9 +5043,12 @@ function obGenerateDDReport(taskId) {
    NEW CLIENT MODAL
 ═══════════════════════════════════════════════════ */
 
-function openNewObClientModal(editId) {
+// Set when the form is opened from Tasks: the client's onboarding task opens after saving.
+let newClientOpensTask = false;
+function openNewObClientModal(editId, openTask = false) {
   const modal = document.getElementById('modal-ob-new');
   if (!modal) return;
+  newClientOpensTask = !editId && openTask;
   document.body.style.overflow = 'hidden';
 
   const client = editId ? obClients.find(function(c){ return c.id === editId; }) : null;
@@ -5351,8 +5270,12 @@ async function saveNewObClient() {
   });
   if (!client) return; // error toast already shown inside createObClient
   closeObNewModalSilent();
-  renderObContent();
   showToast('✅ Клиент "' + client.name + '" создан (' + direction + '). 7 задач сгенерированы.', 'green');
+  if (newClientOpensTask) {
+    newClientOpensTask = false;
+    return startClientOnboardingTask(client);
+  }
+  renderObContent();
   setTimeout(function(){ openObClientModal(client.id); }, 300);
 }
 
@@ -5957,14 +5880,14 @@ function openEngagementModal(engId) {
         <input type="text" id="engEdit_contractNum" value="${escapeAttr(e.contractNum||'')}"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
-        <input type="date" id="engEdit_signedDate" value="${escapeAttr(e.signedDate || e.date || '')}"
+        <input type="date" id="engEdit_date" value="${escapeAttr(e.date || '')}"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       ${isFM
         ? `<div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Тип услуги</label>
              <div style="padding:9px 12px;color:#8abfbb;font-size:13px">${escapeHtml(e.serviceType)} <span style="font-size:10px">(FM — не редактируется)</span></div></div>`
         : obNewSelect('engEdit_serviceType','Тип услуги',['Advising','Arranging','Both'], e.serviceType)}
       ${obNewSelect('engEdit_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'], e.feeType)}
-      ${obNewSelect('engEdit_status','Статус',['Draft','Active','Completed','Terminated'], e.status)}
+      ${obNewSelect('engEdit_status','Статус', e.status === 'Active' ? ['Active','Completed','Terminated'] : [...new Set([e.status || 'Draft', 'Draft', 'Completed', 'Terminated'])], e.status)}
       <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Сумма гонорара</label>
         <input type="number" id="engEdit_feeAmount" value="${e.feeAmount||0}" min="0"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
@@ -6104,7 +6027,7 @@ function openEngagementModal(engId) {
     </div>` : ''}`;
 
   modal.style.display = 'flex';
-  if (!engEditMode) { loadContractDocuments(engId); loadContractProcess(engId); loadContractApprovals(engId); }
+  if (!engEditMode) { loadContractDocuments(engId); loadContractProcess(engId); loadContractApprovals(engId); loadContractSigning(engId); }
 }
 
 function closeEngagementModal() {
@@ -6115,6 +6038,7 @@ function closeEngagementModal() {
   document.body.style.overflow = '';
   activeEngId = null;
   engEditMode = false;
+  if (typeof refreshDiscussionNextStep === 'function') refreshDiscussionNextStep(contractApprovalUI, true);
 }
 
 async function saveEngagementEdit(engId) {
@@ -6127,7 +6051,7 @@ async function saveEngagementEdit(engId) {
 
   const prev = { ...e };
   e.contractNum  = document.getElementById('engEdit_contractNum')?.value.trim() || e.contractNum;
-  e.signedDate   = document.getElementById('engEdit_signedDate')?.value || null;
+  e.date         = document.getElementById('engEdit_date')?.value || null;
   e.serviceType  = isFM ? e.serviceType : (document.getElementById('engEdit_serviceType')?.value || e.serviceType);
   e.feeType      = document.getElementById('engEdit_feeType')?.value || e.feeType;
   e.status       = document.getElementById('engEdit_status')?.value || e.status;
@@ -6140,7 +6064,9 @@ async function saveEngagementEdit(engId) {
   if (isFM) e.lpaUrl = docUrl; else e.contractUrl = docUrl;
 
   try {
-    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(e) });
+    // Signing and start-of-work fields are server-owned; a stale copy must not be sent back.
+    const { signedDate, lpSignedDate, activationDate, activatedBy, ...body } = e;
+    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(body) });
     Object.assign(e, updated);
     engEditMode = false;
     openEngagementModal(engId);
@@ -6189,7 +6115,9 @@ async function updateEngPayment(engId) {
   e.dealRef  = dealRef;
   e.paymentHistory = historyArr;
   try {
-    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(e) });
+    // Signing and start-of-work fields are server-owned; a stale copy must not be sent back.
+    const { signedDate, lpSignedDate, activationDate, activatedBy, ...body } = e;
+    const updated = await apiFetch(`/api/engagements/${engId}`, { method: 'PUT', body: JSON.stringify(body) });
     Object.assign(e, updated);
     const balance = e.invoiced - e.paid;
     const balanceMsg = balance > 0 ? `Остаток: ${fmtCurrency(balance, e.currency||'USD')}`
@@ -6204,9 +6132,12 @@ async function updateEngPayment(engId) {
   renderEngagementsPage();
 }
 
-function openNewEngagementModal(template = null, selectedClientId = null) {
+// Set when the form is opened from Tasks: the new contract's task opens after saving.
+let newContractOpensTask = false;
+function openNewEngagementModal(template = null, selectedClientId = null, openTask = false) {
   const modal   = document.getElementById('modal-ob-new');
   if (!modal) return;
+  newContractOpensTask = openTask;
   document.body.style.overflow = 'hidden';
 
   const seq = String(engIdCounter).padStart(3,'0');
@@ -6323,9 +6254,14 @@ async function saveNewEngagement() {
     const known = engagements.find(e => e.id === created.id);
     if (known) Object.assign(known, created); else engagements.push(created);
     closeObNewModalSilent();
+    showToast(`✅ Договор ${created.engId} создан`, 'green');
+    if (newContractOpensTask) {
+      newContractOpensTask = false;
+      await refreshDiscussionList();
+      return openDiscussion('contract', created.id);
+    }
     navigateTo('engagements');
     if (templateId) openEngagementModal(created.id);
-    showToast(`✅ Договор ${created.engId} создан`, 'green');
   } catch (err) {
     showToast('⚠️ Не удалось сохранить договор: ' + err.message, 'red');
   }

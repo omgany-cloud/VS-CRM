@@ -16,7 +16,7 @@ function roomLink(req, id) {
 function relatedDiscussions(req, { roomId, engagementId }) {
   const rows = roomId ? db.prepare('SELECT * FROM discussion_relations WHERE tenant_id = ? AND (room_id = ? OR other_room_id = ?) ORDER BY id').all(req.tenantId, roomId, roomId)
     : db.prepare('SELECT * FROM discussion_relations WHERE tenant_id = ? AND engagement_id = ? ORDER BY id').all(req.tenantId, engagementId);
-  return rows.flatMap(row => {
+  const related = rows.flatMap(row => {
     try {
       if (roomId && row.engagement_id) {
         const source = getSource(req, 'contract', row.engagement_id);
@@ -26,6 +26,15 @@ function relatedDiscussions(req, { roomId, engagementId }) {
       return [roomLink(req, row.room_id === roomId ? row.other_room_id : row.room_id)];
     } catch (err) { if (err instanceof ContractError) return []; throw err; }
   });
+  if (!engagementId) return related;
+  // Subtasks started from the contract are linked to it as a process; the
+  // contract task is their only entry point, so list the caller's ones too.
+  const seen = new Set(related.map(l => l.id));
+  for (const { room_id: id } of db.prepare("SELECT room_id FROM discussion_links WHERE tenant_id = ? AND kind = 'contract' AND entity_id = ? ORDER BY room_id").all(req.tenantId, engagementId)) {
+    if (seen.has(id)) continue;
+    try { related.push(roomLink(req, id)); seen.add(id); } catch (err) { if (!(err instanceof ContractError)) throw err; }
+  }
+  return related;
 }
 function relationSources(req) {
   return db.prepare('SELECT room_id FROM discussion_members WHERE tenant_id = ? AND user_id = ?').all(req.tenantId, req.user.id).flatMap(row => {

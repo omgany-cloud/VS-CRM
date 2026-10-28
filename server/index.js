@@ -67,6 +67,7 @@ const { recordAudit } = require('./auditLog');
 const { router: contractDocumentsRouter, assertContractAccess, ContractError } = require('./contractDocuments');
 const contractTemplatesRouter = require('./contractTemplates');
 const contractApprovalsRouter = require('./contractApprovals');
+const { router: contractSigningRouter } = require('./contractSigning');
 const { contractMetadata, assertApprovalEditable } = require('./contractApprovalState');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL, operatingModelForAssetClass } = require('./fundMapping');
@@ -5792,7 +5793,26 @@ function engagementHasNegativeAmount(b) {
   return ['invoiced', 'paid', 'feeAmount', 'successFee', 'retainer'].some(f => b[f] != null && Number(b[f]) < 0);
 }
 
+// Signature evidence and the start of work come only from the signing
+// commands (server/contractSigning.js); unchanged values may still round-trip.
+const ENGAGEMENT_SIGNING_FIELDS = { signedDate: 'signed_date', lpSignedDate: 'lp_signed_date', activationDate: 'activation_date', activatedBy: 'activated_by' };
+function engagementSigningError(existing, b) {
+  if (b.status === 'Active' && existing?.status !== 'Active') {
+    return 'Работа по договору начинается кнопкой «Начать работу» в карточке договора — после регистрации подписания и проверок клиента';
+  }
+  for (const [field, column] of Object.entries(ENGAGEMENT_SIGNING_FIELDS)) {
+    if (Object.prototype.hasOwnProperty.call(b, field) && (b[field] || null) !== (existing?.[column] || null)) {
+      return field.startsWith('activat')
+        ? 'Дата и автор начала работы фиксируются сервером командой «Начать работу»'
+        : 'Дата подписания фиксируется вместе с подписанным PDF в блоке «Подписание и начало работы»';
+    }
+  }
+  return null;
+}
+
 app.use('/api/engagements', contractDocumentsRouter);
+app.use('/api/engagements', contractSigningRouter);
+app.use('/api/process-steps', require('./processNextStep'));
 app.use('/api/contract-templates', contractTemplatesRouter);
 app.use('/api', contractApprovalsRouter);
 
@@ -5809,6 +5829,8 @@ app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
   const b = req.body || {};
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
   if (engagementHasNegativeAmount(b)) return res.status(400).json({ error: 'amount fields cannot be negative' });
+  const signingError = engagementSigningError(null, b);
+  if (signingError) return res.status(409).json({ error: signingError });
   if (!checkEngagementAccess(req, res, { client_id: b.clientId, direction: b.direction, service_type: b.serviceType })) return;
   if (chineseWallBlocks(req.user.permissions, b.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot create FM-direction engagements' });
   // currency has NOT NULL DEFAULT 'USD' at the schema level, but *ToParams()
@@ -5830,6 +5852,8 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   if (engagementHasNegativeAmount(req.body || {})) return res.status(400).json({ error: 'amount fields cannot be negative' });
   if (!checkEngagementAccess(req, res, existing)) return;
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
+  const signingError = engagementSigningError(existing, req.body || {});
+  if (signingError) return res.status(409).json({ error: signingError });
   const merged = Object.assign(rowToEngagement(existing), req.body || {});
   const hasContractHistory = existing.document_version > 0 || !!db.prepare('SELECT id FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? LIMIT 1').get(req.tenantId, existing.id);
   if (hasContractHistory && (

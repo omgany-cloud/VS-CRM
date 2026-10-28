@@ -333,6 +333,18 @@ test('a chat can link to contract conversation with a visible backlink and no me
   await json(await api(`/api/engagements/${e.id}`, undefined, server.token, 'DELETE'), 409);
 });
 
+test('subtasks started from a contract appear once in its task for their members only', async () => {
+  const c = await client(), e = await json(await api('/api/engagements', { clientId: c.id, clientName: c.name, contractNum: 'SUBTASK', direction: 'CF&A', status: 'Draft', serviceType: 'Advising', feeAmount: 100 }), 201);
+  const sub = await json(await api('/api/discussions', { title: 'Запросить реквизиты', participants: [co.id], source: { kind: 'contract', id: e.id }, requestKey: key() }), 201);
+  const mine = await json(await api(`/api/discussions/${sub.id}/links`, { kind: 'contract-chat', id: e.id }));
+  assert.equal(mine.ok, true);
+  const related = (await json(await api(`/api/engagements/${e.id}/approvals/chat`))).related.filter(l => l.kind === 'discussion' && l.id === sub.id);
+  assert.equal(related.length, 1); assert.equal(related[0].label, 'Подзадача');
+  assert.equal((await json(await api(`/api/engagements/${e.id}/approvals/chat`, undefined, co.token))).related.filter(l => l.id === sub.id).length, 1);
+  const hidden = await json(await api('/api/discussions', { title: 'Чужая подзадача', participants: [], source: { kind: 'contract', id: e.id }, requestKey: key() }, rm.token), 201);
+  assert.ok(!(await json(await api(`/api/engagements/${e.id}/approvals/chat`))).related.some(l => l.id === hidden.id));
+});
+
 test('free topics require no process, keep server authorship and are private even from a nonmember manager', async () => {
   const r = await room([co.id], rm.token);
   const body = { text: 'Просто вопрос коллегам', requestKey: key(), authorId: outsider.id, createdAt: 'fake' };

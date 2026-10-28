@@ -102,6 +102,11 @@ function newDiscussion(source = null) {
   document.querySelector('.discussion-new-form').discussionSource = source ? { kind: source.kind, id: source.id } : null;
   document.getElementById('discussionTitle').focus();
 }
+function newContractSubtask() {
+  const state = contractApprovalUI; if (!contractConversationOpen(state) || state.kind === 'room') return;
+  const contract = discussionItems.find(i => i.kind === 'contract' && i.id === state.engagementId)?.sources?.[0];
+  newDiscussion(contract || { kind: 'contract', id: state.engagementId, label: 'Договор', title: state.chat.task?.title || 'Договор' });
+}
 async function createDiscussion(form) {
   const title = form.querySelector('#discussionTitle').value.trim();
   const source = form.discussionSource;
