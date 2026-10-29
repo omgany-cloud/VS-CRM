@@ -184,7 +184,7 @@ test('decision and rework filters, responsible person and client filters narrow 
   const shown=()=>['Decide me','Rework me','Plain'].filter(t=>list().includes(t));
   assert.equal(approvals.textContent,3,'"Согласования" adds the waiting contract decision to KYC/NAV steps');assert.equal(ctx.contractDecisionsWaiting(),1);
   assert.match(chips.innerHTML,/Жду моего решения · 1/);assert.match(chips.innerHTML,/На доработке · 1/);
-  assert.equal(badge.textContent,1);assert.match(badge.title,/Ждут вашего решения: 1/);
+  assert.equal(badge.textContent,1);assert.match(badge.title,/Ваш ход: 1/);
   ctx.setTaskQuickFilter('decide');assert.deepEqual(shown(),['Decide me']);
   ctx.setTaskQuickFilter('rework');assert.deepEqual(shown(),['Rework me']);
   ctx.setTaskQuickFilter('rework');assert.equal(shown().length,3);
@@ -207,4 +207,36 @@ test('completing a task asks for its result first and shows it on the completed 
   assert.equal(bodies[0].action,'complete');assert.equal(bodies[0].result,'Готово');assert.equal(bodies[0].expectedVersion,2);
   state.chat.task={...state.chat.task,status:'completed',result:'<Готово>'};
   assert.match(ctx.taskControls(state),/Результат:<\/strong> &lt;Готово&gt;/);assert.match(ctx.taskControls(state),/changeDiscussionTask\('reopen',this\)/);
+});
+test('a new task form is cancelled with Esc or «Отмена» and goes back to where the user was',()=>{
+  const {ctx,elements}=ui();
+  const main={innerHTML:''},button={disabled:false},form={querySelector:()=>button};
+  elements.set('discussionMain',main);elements.set('discussionTitle',{focus(){}});
+  ctx.document.querySelector=()=>form;
+  const calls=[];
+  Object.assign(ctx,{stopContractConversation(){if(ctx.contractApprovalUI)ctx.contractApprovalUI.closed=true;},discussionSourceIcon:()=> 'fa-file',
+    openDiscussion:(kind,id)=>calls.push(['open',kind,id]),showDiscussionProcesses:()=>calls.push(['catalogue'])});
+  elements.set('page-discussions',{classList:{contains:c=>c==='active'}});
+  const esc=()=>{const e={key:'Escape',prevented:false,preventDefault(){this.prevented=true;}};ctx.cancelNewDiscussionOnEscape(e);return e.prevented;};
+  ctx.contractApprovalUI={kind:'room',engagementId:9};
+  ctx.newDiscussion();
+  assert.match(main.innerHTML,/onclick="cancelNewDiscussion\(\)">Отмена</);
+  button.disabled=true;ctx.cancelNewDiscussion();assert.deepEqual(calls,[],'a task being created is not abandoned halfway');
+  button.disabled=false;
+  ctx._topmostModalOverlay=()=>({});assert.equal(esc(),false,'Esc meant for a dialog on top leaves the form');assert.deepEqual(calls,[]);
+  ctx._topmostModalOverlay=()=>null;assert.equal(esc(),true);
+  ctx.contractApprovalUI=null;ctx.newDiscussion();ctx.cancelNewDiscussion();
+  assert.equal(JSON.stringify(calls),JSON.stringify([['open','room',9],['catalogue']]));
+});
+test('«Мой ход» marks and filters open tasks whose next process step is theirs; each task counts once on the menu',()=>{
+  const {ctx,elements}=ui();
+  const day=o=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+o*86400000));
+  vm.runInContext(`discussionItems=${JSON.stringify([bulkTask('room',1,'Sandbox turn',{myTurn:true,dueDate:day(-1)}),bulkTask('room',2,'Waiting',{myTurn:false}),
+    bulkTask('room',3,'Late only',{dueDate:day(-2)}),bulkTask('room',4,'Done turn',{status:'completed',myTurn:true})])};`,ctx);
+  ctx.renderDiscussionList();
+  const list=()=>elements.get('discussionList').innerHTML,chips=elements.get('discussionQuickFilter'),badge=elements.get('badge-discussions');
+  assert.match(chips.innerHTML,/task-due-mine[^>]*>Мой ход · 1/);
+  assert.equal((list().match(/task-my-turn/g)||[]).length,1,'the tag shows only on the open task where it is their turn');
+  assert.equal(badge.textContent,2,'an overdue task that is also your turn counts once');assert.equal(badge.title,'Ваш ход: 1 · Просроченных задач: 2');
+  ctx.setTaskQuickFilter('mine');assert.match(list(),/Sandbox turn/);assert.ok(!list().includes('Waiting')&&!list().includes('Late only'));
 });

@@ -13,6 +13,7 @@ const {replyId,replyTarget}=require('./discussionReplies');
 const {purgeTask}=require('./discussionPurge');
 const {taskState,taskView,taskAssignees,assertTaskOpen,dueDate,initializeDueDate,changeTask,taskUnread,markTaskRead} = require('./discussionTasks');
 const { latestCycle, approvalSummary } = require('./contractApprovalState');
+const { processStep, myTurn, STEP_KINDS } = require('./processNextStep');
 const router = express.Router();
 router.use(requireAuth, requireInternal, (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 const fail = (text, status = 400) => { throw new ContractError(status, text); };
@@ -110,6 +111,17 @@ function sourceClients(req, sources) {
   }
   return [...found].map(([id, name]) => ({ id, name }));
 }
+// "Мой ход" for an open task: the next step of the process it follows is the user's.
+// A free task follows the first linked process that has steps, as its chat does.
+function taskTurn(req, task, kind, id) {
+  if (task.status !== 'open' || !kind) return false;
+  try { return myTurn(req, processStep(req, kind, id), task); }
+  catch (err) { if (err instanceof ContractError) return false; throw err; }
+}
+function stepSource(sources) {
+  for (const kind of STEP_KINDS) { const source = sources.find(s => s.kind === kind); if (source) return source; }
+  return null;
+}
 router.get('/', handle((req, res) => {
   const rooms = db.prepare(`SELECT r.* FROM discussion_rooms r JOIN discussion_members m ON m.room_id = r.id AND m.tenant_id = r.tenant_id
     WHERE r.tenant_id = ? AND m.user_id = ?`).all(req.tenantId, req.user.id);
@@ -117,13 +129,16 @@ router.get('/', handle((req, res) => {
   for (const r of rooms) {
     let sources; try { sources = links(req, r.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
     const latest = db.prepare('SELECT body, created_at, author_name FROM discussion_messages WHERE tenant_id = ? AND room_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, r.id);
-    items.push({ kind: 'room', id: r.id, title: r.title, label: 'Задача', sources, clients: sourceClients(req, sources), task: taskView(req,'room',r.id,r), unread: taskUnread(req,'room',r.id), lastAuthor: latest?.author_name || '', createdAt: r.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Пока нет сообщений'), updatedAt: latest?.created_at || r.created_at });
+    const task = taskView(req,'room',r.id,r), followed = stepSource(sources);
+    task.myTurn = taskTurn(req, task, followed?.kind, followed?.id);
+    items.push({ kind: 'room', id: r.id, title: r.title, label: 'Задача', sources, clients: sourceClients(req, sources), task, unread: taskUnread(req,'room',r.id), lastAuthor: latest?.author_name || '', createdAt: r.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Пока нет сообщений'), updatedAt: latest?.created_at || r.created_at });
   }
   for (const row of db.prepare('SELECT id FROM engagements WHERE tenant_id = ?').all(req.tenantId)) {
     if(taskState(req.tenantId,'contract',row.id).purgedAt)continue;
     let source; try { source = getSource(req, 'contract', row.id); } catch (err) { if (err instanceof ContractError) continue; throw err; }
     const latest = db.prepare('SELECT body, created_at, author_name FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? ORDER BY id DESC LIMIT 1').get(req.tenantId, row.id);
     const task={...taskView(req,'contract',row.id,source.row),review:contractReview(req,source.row)};
+    task.myTurn=taskTurn(req,task,'contract',row.id);
     items.push({ ...sourceView(source), title:task.title, sources: [sourceView(source)], clients: sourceClients(req, [source]), task, unread: taskUnread(req,'contract',row.id), lastAuthor: latest?.author_name || '', createdAt: source.row.created_at, preview: latest?.body || (latest ? 'Вложение' : 'Задача по договору'), updatedAt: latest?.created_at || source.row.created_at || '' });
   }
   items.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt) || b.id-a.id);

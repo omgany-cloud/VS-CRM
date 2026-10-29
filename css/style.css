@@ -326,6 +326,13 @@ body {
   gap: 16px;
   margin-bottom: 24px;
 }
+/* Section KPI rows hold 2–5 cards: as many columns as fit, cards wrap on narrow screens. */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
 
 .kpi-card {
   background: var(--bg-card);

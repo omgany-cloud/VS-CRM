@@ -14,6 +14,7 @@ const { WF_DEFINITIONS } = require('../wfDefinitions');
 const { workflowVisibleToUser } = require('../workflowAccess');
 const { assertContractAccess, ContractError } = require('../contractDocuments');
 const { rowToPermissions } = require('../rolesMapping');
+const { conflictVisible } = require('../conflictAccess');
 
 // Every value passed into an email's html is either a fixed label (safe)
 // or free-text the tenant's own staff/LP entered (company name, LP name,
@@ -199,7 +200,43 @@ async function notifyContractReturned(tenantId, cycleId) {
   });
 }
 
+// A condition of a conflict decision gets its executor (TZ 13.1): what to do,
+// by when and where to confirm it — only while they can still open the
+// decision, since its client may sit behind the FM wall.
+function conflictReader(tenantId, userId, approval) {
+  const user = db.prepare('SELECT * FROM users WHERE tenant_id = ? AND id = ? AND active = 1').get(tenantId, userId);
+  const role = user && db.prepare('SELECT * FROM roles WHERE tenant_id = ? AND code = ?').get(tenantId, user.role);
+  if (!user?.email || !role) return null;
+  const permissions = rowToPermissions(role);
+  return permissions.internal && conflictVisible({ tenantId, user: { ...user, permissions } }, approval) ? user : null;
+}
+function crmLink() {
+  const base = (process.env.CRM_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(base) ? `<p><a href="${esc(base)}/index.html">Открыть CRM</a></p>` : '';
+}
+async function notifyConflictCondition(tenantId, conditionId, actorId) {
+  const condition = db.prepare('SELECT * FROM conflict_conditions WHERE tenant_id = ? AND id = ?').get(tenantId, conditionId);
+  if (condition?.status !== 'open' || condition.assignee_id === actorId) return;
+  const approval = db.prepare('SELECT * FROM conflict_approvals WHERE tenant_id = ? AND id = ?').get(tenantId, condition.approval_id);
+  const assignee = approval && conflictReader(tenantId, condition.assignee_id, approval);
+  if (!assignee) return;
+  const client = approval.client_id ? db.prepare('SELECT name FROM ob_clients WHERE tenant_id = ? AND id = ?').get(tenantId, approval.client_id) : null;
+  const due = condition.due_date.split('-').reverse().join('.');
+  await notifyOnce({
+    tenantId, eventType: 'conflict_condition_assigned', entityType: 'conflict_conditions', entityId: condition.id,
+    to: assignee.email,
+    subject: `Условие по конфликту интересов: срок ${due}`,
+    html: `<p>${esc(assignee.name || assignee.email)},</p>
+      <p>${esc(condition.created_by_name)} поручил(а) вам выполнить условие решения по конфликту интересов «${esc(approval.decision_type)}»${client ? ` (клиент «${esc(client.name)}»)` : ''}:</p>
+      <p>«${esc(condition.text)}»</p>
+      <p>Срок — ${esc(due)}.${condition.before_start ? ' Пока условие не выполнено, работу по договору начать нельзя.' : ''}</p>
+      <p>Когда выполните, отметьте это в CRM: «Конфликты / Одобрения» → это решение → «Отметить выполненным», и опишите, что сделано.</p>
+      ${crmLink()}`,
+  });
+}
+
 module.exports = {
   notifyCapitalCallCreated, notifyWorkflowStepAssigned,
   notifyHfNavPublished, notifyHfRedemptionProcessed, notifyContractReturned, notifyContractReview, contractTaskLink, contractReader,
+  notifyConflictCondition, conflictReader, crmLink,
 };

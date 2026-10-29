@@ -7,7 +7,7 @@ function ui() {
   const elements = new Map();
   for (const id of ['discussionSourceList','discussionSourceSearch','discussionMain','discussionTitle','discussionPageEntry']) elements.set(id, { innerHTML:'', value:'', hidden:false, dataset:{}, classList:{ add(){}, remove(){} }, focus(){} });
   const ctx = vm.createContext({ document:{ getElementById:id=>elements.get(id), querySelector:()=>elements.get('discussionMain') },
-    getAuth:()=>({permissions:{internal:true}}), stopContractConversation(){},
+    getAuth:()=>({permissions:{internal:true}}), stopContractConversation(){}, contractConversationOpen:()=>false,
     contractApprovalUI:{ kind:'room', data:{ room:{ links:[{kind:'lp',id:1}] } } },
     escapeHtml:s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]),
     showToast(){}, apiFetch:async()=>({}), window:{location:{href:'http://localhost/index.html'}}, history:{replaceState(){}}, URL,

@@ -5995,9 +5995,13 @@ function renderConflictApprovalsPage() {
   const cntPending   = list.filter(a => a.status === 'Pending').length;
   const cntEscalated = list.filter(a => a.status === 'Escalated').length;
   const cntDual      = list.filter(a => a.decisionType === 'Dual-Mandate').length;
+  const openConditions = list.flatMap(a => (a.conditions || []).filter(c => c.status === 'open'));
+  const lateConditions = openConditions.filter(conflictConditionOverdue).length;
+  const mineConditions = myOpenConflictConditions(list);
 
   const filtered = list.filter(a => {
-    if (conflictStatusFilter && a.status !== conflictStatusFilter) return false;
+    if (conflictStatusFilter === 'conditions-open') { if (!conflictHasOpenConditions(a)) return false; }
+    else if (conflictStatusFilter && a.status !== conflictStatusFilter) return false;
     if (conflictFilter) {
       const q = conflictFilter.toLowerCase();
       const client = obClients.find(c => c.id === a.clientId);
@@ -6028,6 +6032,12 @@ function renderConflictApprovalsPage() {
           <span class="kpi-value">${cntDual}</span>
           <span class="kpi-delta">Advising + Arranging</span></div>
       </div>
+      <div class="kpi-card" onclick="conflictStatusFilter='conditions-open';renderConflictApprovalsPage()" style="cursor:pointer">
+        <div class="kpi-icon teal"><i class="fas fa-list-check"></i></div>
+        <div class="kpi-body"><span class="kpi-label">Условия в работе</span>
+          <span class="kpi-value">${openConditions.length}</span>
+          <span class="kpi-delta">${mineConditions ? `ваших: ${mineConditions}` : 'ваших нет'}${lateConditions ? ` · просрочено ${lateConditions}` : ''}</span></div>
+      </div>
     </div>
 
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
@@ -6042,6 +6052,7 @@ function renderConflictApprovalsPage() {
         <option value="Approved" ${conflictStatusFilter==='Approved'?'selected':''}>Одобрено</option>
         <option value="Approved with conditions" ${conflictStatusFilter==='Approved with conditions'?'selected':''}>Одобрено с условиями</option>
         <option value="Rejected" ${conflictStatusFilter==='Rejected'?'selected':''}>Отклонено</option>
+        <option value="conditions-open" ${conflictStatusFilter==='conditions-open'?'selected':''}>Условия не выполнены</option>
       </select>
       ${(conflictFilter||conflictStatusFilter) ? `<button onclick="conflictFilter='';conflictStatusFilter='';renderConflictApprovalsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
@@ -6059,11 +6070,11 @@ function renderConflictApprovalsPage() {
           <thead>
             <tr>
               <th>Тип конфликта</th><th>Клиент</th><th>Deal Ref</th><th>Риск</th>
-              <th>Fee</th><th>Кто решает</th><th>Срок</th><th>Статус</th><th>Дата решения</th><th>Кто решил</th>
+              <th>Fee</th><th>Кто решает</th><th>Срок</th><th>Статус</th><th>Условия</th><th>Дата решения</th><th>Кто решил</th>
             </tr>
           </thead>
           <tbody>
-            ${filtered.length === 0 ? `<tr><td colspan="10" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Решений не найдено</td></tr>` :
+            ${filtered.length === 0 ? `<tr><td colspan="11" style="text-align:center;padding:30px;color:#4a5568"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>Решений не найдено</td></tr>` :
             filtered.map(a => {
               const client = obClients.find(c => c.id === a.clientId);
               const risk   = conflictRiskStyle(a.riskLevel);
@@ -6078,6 +6089,7 @@ function renderConflictApprovalsPage() {
                   <td style="font-size:11px;color:#94a3b8">${a.decisionMaker || '—'}</td>
                   <td style="font-size:11px;color:#8abfbb">${a.requiredTimeline || '—'}</td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${stat.bg};color:${stat.c}">${statusLabel(a.status)}</span></td>
+                  <td style="font-size:11px;color:#8abfbb;white-space:nowrap">${conflictConditionsCell(a)}</td>
                   <td style="font-size:11px;color:#5a8a85">${a.decidedAt || '—'}</td>
                   <td style="font-size:11px;color:#5a8a85">${a.decidedBy || '—'}</td>
                 </tr>`;
@@ -6139,7 +6151,7 @@ function openNewConflictApprovalModal() {
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Описание конфликта</label>
         <textarea id="ca_description" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
-      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Rationale / условия одобрения</label>
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Обоснование</label>
         <textarea id="ca_rationale" rows="2" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
@@ -6228,7 +6240,8 @@ function openConflictApprovalDetail(id) {
       <div><b style="color:#8abfbb">Кто решил:</b> ${a.decidedBy || '—'}</div>
     </div>
     ${a.description ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8abfbb;text-transform:uppercase">Описание</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.description)}</p></div>` : ''}
-    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8abfbb;text-transform:uppercase">Rationale</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.rationale)}</p></div>` : ''}
+    ${a.rationale ? `<div style="margin-bottom:10px"><b style="font-size:11px;color:#8abfbb;text-transform:uppercase">Обоснование</b><p style="font-size:13px;color:#e2e8f0;margin:4px 0 0">${escapeHtml(a.rationale)}</p></div>` : ''}
+    ${conflictConditionsPanel(a)}
     ${canDecide ? `
     <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;border-top:1px solid #2a4846;margin-top:16px">
       <button onclick="decideConflictApproval(${a.id},'Rejected')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px"><i class="fas fa-xmark"></i> Отклонить</button>
@@ -6245,9 +6258,11 @@ async function decideConflictApproval(id, status) {
   const a = conflictApprovals.find(x => x.id === id);
   if (!a) return;
   const client = obClients.find(c => c.id === a.clientId);
+  // The conditions (executor, deadline) are recorded together with the decision.
+  if (status === 'Approved with conditions') { showConflictConditionsForm(id, 'decide'); return; }
   // One-shot decision — the Approve/Reject buttons only render while
-  // status === 'Pending' (see openConflictApprovalDetail), so once set
-  // there is no re-decide control in the UI.
+  // status === 'Pending' (see openConflictApprovalDetail); the server refuses
+  // to change a decision once taken.
   if (!confirm(`Решение «${status}» по конфликту (${client ? client.name : 'клиент #' + a.clientId}) будет зафиксировано и не подлежит изменению через интерфейс. Продолжить?`)) return;
   try {
     // decidedAt/decidedBy are server-stamped from the authenticated user

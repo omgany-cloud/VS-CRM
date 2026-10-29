@@ -78,6 +78,14 @@ if (has('conflict_approvals')) {
     conflicts.filter(a => a.c_id != null && a.e_id != null && a.e_client !== a.client_id).map(a => `${conflictName(a)}: клиент #${a.client_id}, договор #${a.engagement_id} клиента #${a.e_client ?? '—'}`));
   section('Принятые решения по конфликтам без отметки, кто решил', 'Решение сохранено до серверной фиксации автора решения.',
     conflicts.filter(a => ['Approved', 'Approved with conditions', 'Rejected'].includes(a.status) && !a.decided_by).map(conflictName));
+  if (has('conflict_conditions')) {
+    section('Решения «Одобрено с условиями» без записанных условий', 'Условия не внесены с исполнителем и сроком; такое решение держит начало работы по договору.',
+      conflicts.filter(a => a.status === 'Approved with conditions' && !db.prepare('SELECT 1 FROM conflict_conditions WHERE tenant_id = ? AND approval_id = ?').get(a.tenant_id, a.id)).map(conflictName));
+    section('Просроченные условия решений по конфликтам', 'Срок прошёл, а выполнение не отмечено.',
+      all(`SELECT c.*, a.decision_type, COALESCE(u.name, u.email) AS assignee FROM conflict_conditions c JOIN conflict_approvals a ON a.tenant_id = c.tenant_id AND a.id = c.approval_id
+        LEFT JOIN users u ON u.tenant_id = c.tenant_id AND u.id = c.assignee_id WHERE c.status = 'open' AND c.due_date < ? ORDER BY c.tenant_id, c.due_date`, today)
+        .map(c => `конфликт #${c.approval_id} «${c.decision_type}»: «${c.text}» — ${c.assignee || '—'}, срок ${shown(c.due_date)}`));
+  }
 }
 
 // Approval chains and task assignees

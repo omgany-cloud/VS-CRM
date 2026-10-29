@@ -1951,6 +1951,30 @@ CREATE TABLE IF NOT EXISTS contract_signing_commands (
 );
 `);
 
+// Conditions of a conflict decision «Approved with conditions» (TZ 13.1): what
+// to do, who does it and by when; the executor's confirmation or a decider's
+// cancellation closes one. Closed conditions stay in history.
+db.exec(`
+CREATE TABLE IF NOT EXISTS conflict_conditions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  approval_id INTEGER NOT NULL REFERENCES conflict_approvals(id),
+  text TEXT NOT NULL,
+  assignee_id INTEGER NOT NULL REFERENCES users(id),
+  due_date TEXT NOT NULL,
+  before_start INTEGER NOT NULL DEFAULT 1 CHECK(before_start IN (0,1)),
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','cancelled')),
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_by_name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  closed_by INTEGER REFERENCES users(id),
+  closed_by_name TEXT,
+  closed_at TEXT,
+  close_note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_conflict_conditions_approval ON conflict_conditions(tenant_id, approval_id);
+`);
+
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
 // This helper lets the rest of the codebase pass plain camelCase keys.

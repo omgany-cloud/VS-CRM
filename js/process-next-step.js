@@ -4,11 +4,15 @@ const NEXT_STEP_ICONS = { action: 'fa-circle-arrow-right', wait: 'fa-hourglass-h
 const NEXT_STEP_KICKERS = { action: 'Следующий шаг', wait: 'Сейчас', done: 'Готово', stop: 'Остановлено' };
 const NEXT_STEP_STATUSES = { completed: 'Выполнен', open: 'Текущий', in_progress: 'В работе', locked: 'Ещё закрыт', escalated: 'На эскалации', rejected: 'Отклонён' };
 
-// A contract task follows its contract; a free task follows the client it is linked to.
+// A contract task follows its contract; a free task follows the first linked
+// process that has steps, in the server's order (processNextStep.js STEP_KINDS).
+const NEXT_STEP_KINDS = ['client', 'contract', 'conflict', 'sandbox'];
+const NEXT_STEP_PROCESS_LABELS = { client: 'онбординг', contract: 'договор', conflict: 'конфликт интересов', sandbox: 'песочница' };
 function discussionNextStepTarget(state) {
   if (state.kind !== 'room') return { kind: 'contract', id: state.engagementId };
-  const client = state.data?.room?.links?.find(l => l.kind === 'client');
-  return client ? { kind: 'client', id: client.id } : null;
+  const links = state.data?.room?.links || [];
+  for (const kind of NEXT_STEP_KINDS) { const link = links.find(l => l.kind === kind); if (link) return { kind, id: link.id }; }
+  return null;
 }
 
 async function refreshDiscussionNextStep(state, force = false) {
@@ -17,7 +21,7 @@ async function refreshDiscussionNextStep(state, force = false) {
   const target = discussionNextStepTarget(state);
   if (!target || state.chat.task?.status === 'trashed') { box.hidden = true; box.innerHTML = ''; state.nextStep = null; return; }
   const key = `${target.kind}:${target.id}`;
-  // Onboarding and contract records change outside the chat, so re-check now and then.
+  // Process records change outside the chat, so re-check now and then.
   if (!force && state.nextStep?.key === key && Date.now() - state.nextStep.at < 10000) return;
   const request = state.nextStepRequest = (state.nextStepRequest || 0) + 1;
   state.nextStep = { ...(state.nextStep?.key === key ? state.nextStep : {}), key, at: Date.now() };
@@ -37,7 +41,7 @@ function nextStepHtml(step, onclick, expanded) {
   const details = [step.who && `Выполняет: ${step.who}`, step.dueDate && `срок ${contractSigningDay(step.dueDate)}${overdue ? ' · просрочен' : ''}`, step.text].filter(Boolean).join(' · ');
   return `<i class="fas ${NEXT_STEP_ICONS[step.tone] || NEXT_STEP_ICONS.wait} discussion-next-step-icon" aria-hidden="true"></i>
     <div class="discussion-next-step-body">
-      <small>${NEXT_STEP_KICKERS[step.tone] || ''} · ${step.process === 'client' ? 'онбординг' : 'договор'}</small>
+      <small>${NEXT_STEP_KICKERS[step.tone] || ''} · ${NEXT_STEP_PROCESS_LABELS[step.process] || ''}${step.mine ? ' · ваш ход' : ''}</small>
       <strong>${escapeHtml(step.title)}</strong>
       ${details ? `<span class="${overdue ? 'overdue' : ''}">${escapeHtml(details)}</span>` : ''}
       ${step.note ? `<span>${escapeHtml(step.note)}</span>` : ''}
@@ -58,7 +62,8 @@ function renderDiscussionNextStep(state) {
 // "Что сделать сейчас" at the top of the contract card: the same server-computed
 // step, with a button that goes to the right place from the card itself.
 const CONTRACT_CARD_STEP_LABELS = { versions: 'Перейти к загрузке файла', signing: 'Перейти к подписанию', details: 'Изменить реквизиты',
-  'contract-approval': 'Открыть задачу и выбрать согласующих', 'contract-decide': 'Открыть задачу договора', 'onboarding-client': 'Открыть онбординг клиента' };
+  'contract-approval': 'Открыть задачу и выбрать согласующих', 'contract-decide': 'Открыть задачу договора', 'onboarding-client': 'Открыть онбординг клиента',
+  'conflict-approval': 'Открыть решение по конфликту' };
 let contractCardStep = null;
 async function loadContractCardNextStep(engagementId) {
   const box = document.getElementById('contractNextStep');
@@ -88,6 +93,7 @@ async function runContractCardNextStep(engagementId, button) {
   try {
     closeEngagementModal();
     if (action.kind === 'onboarding-client') { await loadOnboardingFromApi(); openObClientModal(action.clientId); return; }
+    if (action.kind === 'conflict-approval') { await openConflictApprovalPage(action.approvalId); return; }
     await openDiscussion('contract', engagementId);
     const state = contractApprovalUI;
     if (action.kind === 'contract-approval' && contractConversationOpen(state)) {
@@ -118,6 +124,10 @@ async function runDiscussionNextStep(button) {
     } else if (action.kind === 'contract-decide') {
       document.getElementById('contractChatDecisions')?.scrollIntoView({ block: 'nearest' });
       document.getElementById('contractChatText')?.focus();
+    } else if (action.kind === 'conflict-approval') {
+      await openConflictApprovalPage(action.approvalId);
+    } else if (action.kind === 'open-record') {
+      await openDiscussionSource(action.record, action.id);
     }
   } catch (err) { showToast('Не удалось открыть шаг: ' + err.message, 'red'); }
   finally { button.disabled = false; }

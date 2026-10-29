@@ -2,6 +2,46 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.64.0] - 2026-10-29
+
+### Added
+- Conditions of a conflict decision "Approved with conditions": the decision
+  is recorded together with its conditions — what to do, the executor and
+  the deadline, and whether it must be met before work starts. The executor
+  gets an email and a daily reminder when it is due, and confirms it with
+  what was done; a conflict decider may also confirm it, cancel it with a
+  reason or add conditions later. The registry shows progress and overdue
+  conditions, the menu counter includes conditions assigned to you, and the
+  data inventory lists conditional decisions without recorded conditions and
+  overdue conditions.
+- "Next step" above a task's chat now covers conflict decisions and Sandbox
+  projects too, besides onboarding and contracts: what to do now, who does
+  it, the deadline and one button to the right place. A free task follows
+  the first linked process that has steps. In the Sandbox only the CEO
+  passes a project to screening.
+- "My turn" in Tasks: open tasks whose next step is yours (your decision,
+  condition, Sandbox task, onboarding stage of your role, or an action in a
+  task you are responsible for) are tagged and have their own quick filter.
+  The Tasks menu counter shows tasks where it is your turn or the deadline
+  has passed, each counted once.
+
+### Changed
+- Work on a contract starts only when the before-start conditions of the
+  client's conflict decisions are met or cancelled; a conditional decision
+  with no recorded condition holds it too. When that is all that is left, the
+  contract's "What to do now" opens the conflict decision.
+- A conflict decision, once taken, can no longer be changed through the API;
+  a new decision is recorded instead.
+
+### Fixed
+- Summary cards at the top of nine sections (KYC renewal, compliance
+  calendar, onboarding, contracts, team, file vault, approvals, IC, conflicts)
+  stood one under another at full width; they now share a row and wrap on
+  narrow screens.
+- A new task can be abandoned before it is created: Esc anywhere on the Tasks
+  page or the new "Cancel" button returns to the task that was open, or to
+  the process list. Esc meant for a dialog on top only closes the dialog.
+
 ## [1.63.0] - 2026-10-29
 
 ### Added

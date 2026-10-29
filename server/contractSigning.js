@@ -104,7 +104,7 @@ function kycCondition(contract) {
 function conflictCondition(contract) {
   const base = { key: 'conflict', label: 'Проверка конфликта интересов (этап 1.1 онбординга)' };
   if (contract.client_id == null) return { ...base, state: 'unknown', detail: 'Договор не связан с карточкой клиента — укажите клиента в реквизитах договора' };
-  const decisions = db.prepare(`SELECT decision_type, status FROM conflict_approvals WHERE tenant_id = ?
+  const decisions = db.prepare(`SELECT id, decision_type, status FROM conflict_approvals WHERE tenant_id = ?
     AND (engagement_id = ? OR (engagement_id IS NULL AND client_id = ?)) ORDER BY id`).all(contract.tenant_id, contract.id, contract.client_id);
   const rejected = decisions.find(d => d.status === 'Rejected');
   if (rejected) return { ...base, state: 'rejected', detail: `Отклонено решение по конфликту: ${rejected.decision_type}` };
@@ -115,8 +115,26 @@ function conflictCondition(contract) {
   if (task.status === 'escalated' || decision === 'Требует эскалации') return { ...base, state: 'pending', detail: 'Эскалация: ожидается решение CO по этапу 1.1 онбординга' };
   if (task.status !== 'completed' || decision !== 'Go') return { ...base, state: 'pending', detail: 'Этап 1.1 онбординга (проверка конфликтов) не завершён — откройте онбординг клиента' };
   const open = decisions.find(d => !SETTLED_CONFLICT.includes(d.status));
-  if (open) return { ...base, state: 'pending', detail: `Ожидается решение по конфликту: ${open.decision_type} — раздел «Конфликты / Одобрения»` };
+  // approvalId lets the next step open the decision that holds the start of work.
+  if (open) return { ...base, state: 'pending', approvalId: open.id, detail: `Ожидается решение по конфликту: ${open.decision_type} — раздел «Конфликты / Одобрения»` };
+  const unmet = unmetConflictConditions(contract.tenant_id, decisions.filter(d => d.status === 'Approved with conditions'));
+  if (unmet) return { ...base, state: 'pending', ...unmet };
   return { ...base, state: 'done', detail: 'Решение 1.1: Go' };
+}
+// «Одобрено с условиями» lets work start once its before-start conditions are
+// confirmed or cancelled; a decision with no condition recorded does not.
+function unmetConflictConditions(tenantId, decisions) {
+  for (const d of decisions) {
+    const rows = db.prepare(`SELECT c.text, c.due_date, c.status, c.before_start, COALESCE(u.name, u.email) AS assignee FROM conflict_conditions c
+      LEFT JOIN users u ON u.tenant_id = c.tenant_id AND u.id = c.assignee_id WHERE c.tenant_id = ? AND c.approval_id = ? ORDER BY c.due_date, c.id`).all(tenantId, d.id);
+    if (!rows.length) return { approvalId: d.id, detail: `Решение «Одобрено с условиями» (${d.decision_type}) без записанных условий — внесите условия с исполнителем и сроком в разделе «Конфликты / Одобрения»` };
+    const waiting = rows.filter(r => r.before_start && r.status === 'open');
+    if (waiting.length) {
+      const first = waiting[0], more = waiting.length > 1 ? ` и ещё ${waiting.length - 1}` : '';
+      return { approvalId: d.id, detail: `Не выполнено условие решения по конфликту (${d.decision_type}): «${first.text}» — исполнитель ${first.assignee || '—'}, срок ${first.due_date.split('-').reverse().join('.')}${more}. Отметка о выполнении — в разделе «Конфликты / Одобрения»` };
+    }
+  }
+  return null;
 }
 function readiness(contract) {
   const conditions = [signatureCondition(contract), kycCondition(contract), conflictCondition(contract)];

@@ -21,6 +21,7 @@ const TENANT_SCOPED_TABLES = [
   'users', 'roles',
   'lp_register', 'capital_calls', 'capital_call_line_items',
   'deals', 'portfolio',
+  'conflict_conditions',
   'restricted_list', 'coi_registry', 'ob_clients', 'ob_tasks', 'engagements', 'conflict_approvals',
   'ic_memos', 'documents', 'workflow_instances',
 ];

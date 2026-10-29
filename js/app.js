@@ -263,7 +263,9 @@ function updateBadges() {
   set('badge-coi', coiOpen);
   const engDraft = typeof engagements !== 'undefined' ? engagements.filter(e => e.status === 'Draft').length : 0;
   set('badge-engagements', engDraft);
-  const conflictPending = typeof conflictApprovals !== 'undefined' ? conflictApprovals.filter(a => a.status === 'Pending').length : 0;
+  // Decisions awaiting a decider plus conflict conditions assigned to me.
+  const conflictPending = typeof conflictApprovals !== 'undefined' ? conflictApprovals.filter(a => a.status === 'Pending').length
+    + (typeof myOpenConflictConditions === 'function' ? myOpenConflictConditions(conflictApprovals) : 0) : 0;
   set('badge-conflict-approvals', conflictPending);
   // LP Register badge — active LP count
   const lpRegActive = typeof lpRegister !== 'undefined' ? lpRegister.filter(l => l.status === 'Active').length : 0;

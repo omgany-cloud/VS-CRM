@@ -60,6 +60,7 @@ const { rowToWfInstance, INSERT_SQL: WF_INSERT_SQL, UPDATE_SQL: WF_UPDATE_SQL } 
 const { WF_DEFINITIONS, freshSteps } = require('./wfDefinitions');
 const { workflowVisible, workflowTarget } = require('./workflowAccess');
 const { conflictVisible, conflictLinks } = require('./conflictAccess');
+const conflictConditions = require('./conflictConditions');
 const { checkTaskTransition, checkClientActivation } = require('./onboardingRules');
 const { notifyCapitalCallCreated, notifyWorkflowStepAssigned, notifyHfNavPublished, notifyHfRedemptionProcessed } = require('./notifications/triggers');
 const notificationsScheduler = require('./notifications/scheduler');
@@ -67,7 +68,7 @@ const { computeDistributionSplit } = require('./waterfallEngine');
 const { computeFundMetrics, computeLpMetrics, computeMetrics } = require('./metricsEngine');
 const { computeFeeCrystallization, daysBetween } = require('./performanceFeeEngine');
 const { recordAudit } = require('./auditLog');
-const { router: contractDocumentsRouter, assertContractAccess, ContractError } = require('./contractDocuments');
+const { router: contractDocumentsRouter, assertContractAccess, ContractError, transaction } = require('./contractDocuments');
 const contractTemplatesRouter = require('./contractTemplates');
 const contractApprovalsRouter = require('./contractApprovals');
 const { router: contractSigningRouter } = require('./contractSigning');
@@ -5842,7 +5843,7 @@ function engagementSigningError(existing, b) {
 app.use('/api/engagements', contractDocumentsRouter);
 app.use('/api/engagements', contractSigningRouter);
 app.use('/api/engagements', require('./contractPayments').router);
-app.use('/api/process-steps', require('./processNextStep'));
+app.use('/api/process-steps', require('./processNextStep').router);
 app.use('/api/contract-templates', contractTemplatesRouter);
 app.use('/api', contractApprovalsRouter);
 
@@ -5947,9 +5948,11 @@ app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
    Dual-Mandate approvals can be traced across a client's full contract
    history. ===== */
 app.get('/api/conflict-approvals', requireAuth, requireInternal, (req, res) => {
-  const rows = db.prepare('SELECT * FROM conflict_approvals WHERE tenant_id = ? ORDER BY id').all(req.tenantId);
-  res.json({ tenant: req.tenantSlug, conflictApprovals: rows.filter(row => conflictVisible(req, row)).map(rowToConflictApproval) });
+  const rows = db.prepare('SELECT * FROM conflict_approvals WHERE tenant_id = ? ORDER BY id').all(req.tenantId).filter(row => conflictVisible(req, row));
+  const conditions = conflictConditions.conditionsByApproval(req, rows.map(row => row.id));
+  res.json({ tenant: req.tenantSlug, conflictApprovals: rows.map(row => ({ ...rowToConflictApproval(row), conditions: conditions.get(row.id) })) });
 });
+app.use('/api/conflict-approvals', conflictConditions.router);
 
 // High/Critical risk conflicts escalate automatically — 'Escalated' instead
 // of 'Pending', routed to the CEO specifically rather than any of the three
@@ -5991,6 +5994,16 @@ app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideCon
   if (existing.status === 'Escalated' && DECIDED_STATUSES.has(b.status) && req.user.role !== 'CEO') {
     return res.status(403).json({ error: 'Forbidden: this conflict is escalated — only the CEO may decide it' });
   }
+  // A decision is final: changing it (e.g. dropping the conditions) needs a new decision.
+  if (DECIDED_STATUSES.has(existing.status) && b.status !== undefined && b.status !== existing.status) {
+    return res.status(409).json({ error: 'Решение по конфликту уже принято и не меняется. Заведите новое решение.' });
+  }
+  // «Одобрено с условиями» is recorded together with its conditions (executor, deadline).
+  let conditions = null;
+  if (b.status === conflictConditions.CONDITIONAL && existing.status !== b.status) {
+    try { conditions = conflictConditions.normalizeConditions(req, existing, b.conditions); }
+    catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
+  }
   // decided_by is server-stamped from the authenticated user, not client-
   // trusted — decisionMaker is a free-text/role label the form author
   // picks when the record is created, not proof of who actually decided.
@@ -6000,15 +6013,20 @@ app.put('/api/conflict-approvals/:id', requireAuth, requirePermission('decideCon
   }
   const merged = Object.assign(rowToConflictApproval(existing), b);
   const params = conflictApprovalToParams(merged);
-  db.prepare(CONFLICT_APPROVAL_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
-  const row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
-  const decidedNow = DECIDED_STATUSES.has(row.status) && !DECIDED_STATUSES.has(existing.status);
-  recordAudit(db, {
-    tenantId: req.tenantId, entityType: 'conflict_approvals', entityId: row.id,
-    action: decidedNow ? 'decided' : 'updated', actorEmail: req.user.email,
-    summary: decidedNow ? `Конфликт интересов «${row.decision_type}» решён: ${row.status}` : `Конфликт интересов «${row.decision_type}» изменён`,
+  let row, conditionIds = [];
+  transaction(() => {
+    db.prepare(CONFLICT_APPROVAL_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
+    row = db.prepare('SELECT * FROM conflict_approvals WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
+    const decidedNow = DECIDED_STATUSES.has(row.status) && !DECIDED_STATUSES.has(existing.status);
+    recordAudit(db, {
+      tenantId: req.tenantId, entityType: 'conflict_approvals', entityId: row.id,
+      action: decidedNow ? 'decided' : 'updated', actorEmail: req.user.email,
+      summary: decidedNow ? `Конфликт интересов «${row.decision_type}» решён: ${row.status}` : `Конфликт интересов «${row.decision_type}» изменён`,
+    });
+    if (conditions) conditionIds = conflictConditions.insertConditions(req, row, conditions);
   });
-  res.json(rowToConflictApproval(row));
+  conflictConditions.notifyAssigned(req, conditionIds);
+  res.json({ ...rowToConflictApproval(row), conditions: conflictConditions.conditionsByApproval(req, [row.id]).get(row.id) });
 });
 
 /* ===== IC Memos API — tenant-scoped =====

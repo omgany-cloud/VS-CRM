@@ -134,6 +134,7 @@
 .discussion-welcome p { line-height: 1.8; font-size: 13px; }
 .discussion-empty { color: #a2c4c0; font-size: 13px; padding: 18px; }
 .discussion-new-form { margin: 20px; overflow: auto; }
+.discussion-new-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .discussion-people { border: 0; padding: 0; margin: 18px 0; max-height: 280px; overflow: auto; }
 .discussion-people legend { font-weight: 600; color: #d0e8df; font-size: 13px; padding-bottom: 8px; }
 .discussion-workspace .discussion-people label { display: flex; gap: 10px; align-items: center; padding: 8px; margin: 0; color: #d0e8df; cursor: pointer; }
@@ -178,6 +179,9 @@
 .discussion-workspace .task-due-chip.task-due-overdue { border-color: #7c6036; color: #edbd79; }
 .discussion-workspace .task-due-chip.selected { background: #263c35; border-color: #9bc2b5; color: #f2f7f4; }
 .discussion-workspace .task-due-chip.task-due-overdue.selected { background: #45351f; border-color: #edbd79; color: #fbe3bd; }
+.discussion-workspace .task-due-chip.task-due-mine { border-color: #27a58f; color: #9ff0dc; }
+.discussion-workspace .task-due-chip.task-due-mine.selected { background: #0e4a40; border-color: #65edcf; color: #eafff9; }
+.discussion-list-item .task-list-meta small.task-my-turn { flex: none; padding: 1px 7px; border-radius: 9px; background: #0e4a40; color: #9ff0dc; font-weight: 600; }
 .discussion-list-row { display: flex; align-items: center; gap: 2px; }
 /* Next to the checkbox the task may shrink, so long titles end in "…" instead of scrolling the list sideways. */
 @media(min-width: 601px) { .discussion-list-row .discussion-list-item { flex: 1; min-width: 0; } }
@@ -298,3 +302,33 @@
 .contract-payment-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 600px) { .contract-payment-totals, .contract-payment-grid { grid-template-columns: 1fr; } }
 #contractSigningConditions .contract-primary { margin-top: 12px; }
+/* Conditions of a conflict decision «Одобрено с условиями» (js/conflict-conditions.js). */
+.conflict-conditions { margin-top: 14px; padding-top: 14px; border-top: 1px solid #2a4846; color: #e2e8f0; }
+.conflict-conditions h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #8abfbb; }
+.conflict-cond-hint { margin: 0 0 10px; font-size: 12px; line-height: 1.5; color: #94a3b8; }
+.conflict-cond-alert { margin: 0 0 10px; padding: 9px 12px; border: 1px solid #7c6036; border-radius: 8px; background: #2a2416; color: #edbd79; font-size: 12px; line-height: 1.5; }
+.conflict-condition { margin: 0 0 10px; padding: 10px 12px; border: 1px solid #2a4846; border-left: 3px solid #5eead4; border-radius: 8px; background: #10201f; }
+.conflict-condition.overdue { border-left-color: #edbd79; }
+.conflict-condition-done { border-left-color: #4ade80; }
+.conflict-condition-cancelled { border-left-color: #64748b; opacity: .8; }
+.conflict-cond-text { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.conflict-cond-meta { margin: 5px 0 0; font-size: 11px; color: #8abfbb; line-height: 1.5; }
+.conflict-condition.overdue .conflict-cond-meta, .conflict-cond-warn { color: #edbd79; }
+.conflict-cond-done { color: #4ade80; }
+.conflict-cond-result { margin: 6px 0 0; font-size: 12px; color: #c5dfd4; line-height: 1.5; overflow-wrap: anywhere; }
+.conflict-cond-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.conflict-conditions button, .conflict-cond-form button { padding: 8px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.conflict-conditions button:disabled, .conflict-cond-form button:disabled { opacity: .5; cursor: wait; }
+.conflict-cond-close { margin-top: 8px; }
+.conflict-cond-close label, .conflict-cond-form label { display: block; margin: 8px 0 4px; font-size: 11px; font-weight: 700; color: #8abfbb; text-transform: uppercase; }
+.conflict-cond-close textarea, .conflict-cond-form textarea, .conflict-cond-form select, .conflict-cond-form input[type=date] { width: 100%; box-sizing: border-box; background: #0f1623; border: 1px solid #2a4846; border-radius: 8px; padding: 9px 12px; color: #e2e8f0; font-size: 13px; font-family: inherit; color-scheme: dark; }
+.conflict-cond-close textarea, .conflict-cond-form textarea { resize: vertical; }
+.conflict-cond-status { margin: 6px 0 0; font-size: 12px; color: #fca5a5; }
+.conflict-cond-status:empty { display: none; }
+.conflict-cond-row { margin: 0 0 12px; padding: 10px 12px 12px; border: 1px solid #2a4846; border-radius: 9px; }
+.conflict-cond-row legend { padding: 0 6px; font-size: 12px; font-weight: 700; color: #e2e8f0; }
+.conflict-cond-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.conflict-cond-form .conflict-cond-check { display: flex; align-items: center; gap: 8px; margin: 10px 0; text-transform: none; font-weight: 400; font-size: 12px; color: #c5dfd4; cursor: pointer; }
+.conflict-cond-check input { width: 16px; height: 16px; accent-color: #2dd4bf; }
+.conflict-cond-submit { justify-content: flex-end; padding-top: 12px; border-top: 1px solid #2a4846; }
+@media(max-width: 600px) { .conflict-cond-grid { grid-template-columns: 1fr; } }

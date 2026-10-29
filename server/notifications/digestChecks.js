@@ -19,7 +19,7 @@ const { usersByPermissionFlag } = require('./recipients');
 const { taskAccess, taskView } = require('../discussionTasks');
 const { ContractError } = require('../contractApprovalState');
 const { rowToPermissions } = require('../rolesMapping');
-const { contractReader, contractTaskLink } = require('./triggers');
+const { contractReader, contractTaskLink, conflictReader, crmLink } = require('./triggers');
 
 const LOOKAHEAD_DAYS = 14;
 
@@ -385,8 +385,40 @@ async function checkContractReviewsOverdue(tenantId) {
   }
 }
 
+// Open conditions of conflict decisions due tomorrow, today or already overdue
+// (TZ 13.1): one daily email per executor, re-checked against their access.
+async function checkConflictConditionsDue(tenantId) {
+  const today = taskDay(), tomorrow = taskDay(1);
+  const due = db.prepare(`SELECT c.*, a.decision_type FROM conflict_conditions c
+    JOIN conflict_approvals a ON a.tenant_id = c.tenant_id AND a.id = c.approval_id
+    WHERE c.tenant_id = ? AND c.status = 'open' AND c.due_date <= ? ORDER BY c.due_date, c.id`).all(tenantId, tomorrow);
+  const byUser = new Map();
+  for (const row of due) byUser.set(row.assignee_id, [...(byUser.get(row.assignee_id) || []), row]);
+  for (const [userId, rows] of byUser) {
+    let executor = null;
+    const lines = [];
+    for (const row of rows) {
+      const approval = db.prepare('SELECT * FROM conflict_approvals WHERE tenant_id = ? AND id = ?').get(tenantId, row.approval_id);
+      const reader = conflictReader(tenantId, userId, approval);
+      if (!reader) continue;
+      executor = reader;
+      const when = row.due_date < today ? `просрочено, срок был ${row.due_date.split('-').reverse().join('.')}`
+        : row.due_date === today ? 'срок сегодня' : 'срок завтра';
+      lines.push(`<li>«${esc(row.text)}» — решение «${esc(row.decision_type)}», ${when}${row.before_start ? '; держит начало работы по договору' : ''}</li>`);
+    }
+    if (!executor || !lines.length) continue;
+    await notifyOnce({
+      tenantId, eventType: 'conflict_conditions_due', entityType: 'users', entityId: executor.id,
+      to: executor.email, scope: 'daily',
+      subject: `Условия по конфликтам интересов: ${lines.length}`,
+      html: `<p>${esc(executor.name || executor.email)}, по этим условиям подходит или прошёл срок:</p><ul>${lines.join('')}</ul>
+        <p>Отметить выполнение: «Конфликты / Одобрения» → решение → «Отметить выполненным».</p>${crmLink()}`,
+    });
+  }
+}
+
 module.exports = {
-  checkContractReviewsOverdue,
+  checkContractReviewsOverdue, checkConflictConditionsDue,
   checkKycRenewals, checkCapitalCallOverdue, checkAfsaDeadlines,
   checkConflictDecisionsPending, checkDocumentExpiry,
   checkHfLockupEnding, checkHfRedemptionNoticeExpiring, checkHfFeeCrystallizationDue,

@@ -7,7 +7,10 @@ function taskDueToday(task, today=taskToday()) { return task?.status === 'open' 
 // contract decisions and my contracts sent back for rework. Overdue tasks and
 // waiting decisions also show on the menu item.
 let discussionQuickFilter='';
+// "Мой ход": the server marks open tasks whose next process step is the user's (server/processNextStep.js).
+const taskMyTurn=task=>!!task?.myTurn||task?.review==='decide';
 const TASK_QUICK_FILTERS=[
+  ['mine','Мой ход',taskMyTurn],
   ['decide','Жду моего решения',(task)=>task?.review==='decide'],
   ['rework','На доработке',(task)=>task?.review==='rework'],
   ['overdue','Просрочено',(task,today)=>taskOverdue(task,today)],
@@ -19,17 +22,19 @@ function renderTaskQuickFilters(today=taskToday()) {
   const open=discussionItems.filter(i=>(i.task?.status||'open')==='open');
   const counts=Object.fromEntries(TASK_QUICK_FILTERS.map(([value,,match])=>[value,open.filter(i=>match(i.task,today)).length]));
   if(discussionTaskFilter!=='open'||discussionQuickFilter&&!counts[discussionQuickFilter])discussionQuickFilter='';
-  updateTaskBadge(counts.overdue,counts.decide);
+  // Each task counts once on the menu: it is your turn there, its deadline passed, or both.
+  const attention=open.filter(i=>taskMyTurn(i.task)||taskOverdue(i.task,today)).length;
+  updateTaskBadge(attention,counts.decide,counts.mine,counts.overdue);
   const box=document.getElementById('discussionQuickFilter');if(!box)return;
   const chips=discussionTaskFilter==='open'?TASK_QUICK_FILTERS.filter(([value])=>counts[value]):[];
   box.hidden=!chips.length;
   box.innerHTML=chips.map(([value,label])=>`<button type="button" class="task-due-chip task-due-${value}${discussionQuickFilter===value?' selected':''}" aria-pressed="${discussionQuickFilter===value}" onclick="setTaskQuickFilter('${value}')">${label} · ${counts[value]}</button>`).join('');
 }
-function updateTaskBadge(overdue,decide=0) {
+function updateTaskBadge(count,decide=0,mine=0,overdue=0) {
   const badge=document.getElementById('badge-discussions');
   if(badge){
-    const count=overdue+decide;badge.textContent=count;badge.style.display=count?'':'none';
-    badge.title=[overdue&&`Просроченных задач: ${overdue}`,decide&&`Ждут вашего решения: ${decide}`].filter(Boolean).join(' · ');
+    badge.textContent=count;badge.style.display=count?'':'none';
+    badge.title=[mine&&`Ваш ход: ${mine}`,overdue&&`Просроченных задач: ${overdue}`].filter(Boolean).join(' · ');
   }
   // "Согласования" counts the same waiting contract decisions next to KYC/NAV chains.
   const approvals=document.getElementById('badge-workflow');

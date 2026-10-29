@@ -111,4 +111,27 @@ test('the contract card says what to do now and its button goes to the right pla
   await ui.ctx.loadContractCardNextStep(9);
   await ui.ctx.runContractCardNextStep(9, { disabled: false });
   assert.equal(JSON.stringify(ui.calls.slice(1)), JSON.stringify(['close', 'onboarding', ['client', 4]]));
+
+  // Only a conflict decision or its conditions left: the button opens that decision.
+  ui = cardUi({ process: 'contract', tone: 'wait', title: 'Для начала работы не хватает решения по конфликту интересов', steps: [], done: 3, action: { kind: 'conflict-approval', approvalId: 12, label: 'x' } });
+  ui.ctx.openConflictApprovalPage = async id => ui.calls.push(['conflict', id]);
+  await ui.ctx.loadContractCardNextStep(9);
+  assert.match(ui.box.innerHTML, /Открыть решение по конфликту/);
+  await ui.ctx.runContractCardNextStep(9, { disabled: false });
+  assert.equal(JSON.stringify(ui.calls.slice(1)), JSON.stringify(['close', ['conflict', 12]]));
+});
+
+test('a free task follows its first linked process that has steps; a step can open any linked record', async () => {
+  const { ctx } = cardUi({});
+  const room = links => ({ kind: 'room', data: { room: { links } } });
+  assert.equal(JSON.stringify(ctx.discussionNextStepTarget(room([{ kind: 'deal', id: 1 }, { kind: 'sandbox', id: 5 }, { kind: 'conflict', id: 3 }]))), JSON.stringify({ kind: 'conflict', id: 3 }));
+  assert.equal(JSON.stringify(ctx.discussionNextStepTarget(room([{ kind: 'sandbox', id: 5 }, { kind: 'client', id: 2 }]))), JSON.stringify({ kind: 'client', id: 2 }));
+  assert.equal(ctx.discussionNextStepTarget(room([{ kind: 'deal', id: 1 }])), null, 'no steps for a process without them');
+  const html = ctx.nextStepHtml({ process: 'sandbox', tone: 'action', title: 'Задача проекта', mine: true, action: { kind: 'open-record', record: 'sandbox', id: 5, label: 'Открыть проект' } }, 'run()', false);
+  assert.match(html, /Следующий шаг · песочница · ваш ход/); assert.match(html, /Открыть проект/);
+  const opened = [];
+  ctx.openDiscussionSource = async (kind, id) => opened.push([kind, id]);
+  ctx.contractApprovalUI = { nextStep: { data: { action: { kind: 'open-record', record: 'sandbox', id: 5 } } } };
+  await ctx.runDiscussionNextStep({ disabled: false });
+  assert.equal(JSON.stringify(opened), JSON.stringify([['sandbox', 5]]));
 });

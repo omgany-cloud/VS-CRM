@@ -65,7 +65,7 @@ function renderDiscussionList() {
   const selecting = syncTaskSelection(items);
   document.getElementById('discussionList').innerHTML = items.length ? items.map(item => `<div class="discussion-list-row">${selecting ? taskSelectBox(item) : ''}<button type="button" class="discussion-list-item${state?.engagementId === item.id && (state.kind || 'contract') === item.kind ? ' selected' : ''}" onclick="openDiscussion('${item.kind}',${item.id})">
     <span class="discussion-avatar"><i class="fas ${item.kind === 'contract' ? 'fa-file-signature' : 'fa-comments'}" aria-hidden="true"></i></span>
-    <span class="task-list-content"><span class="task-list-title"><strong class="${item.unread ? 'task-unread-title' : ''}">${escapeHtml(item.title)}</strong>${item.unread ? `<span class="task-unread" aria-label="Непрочитанных: ${item.unread}">${item.unread > 99 ? '99+' : item.unread}</span>` : ''}</span><p>${escapeHtml((item.preview && item.lastAuthor ? item.lastAuthor + ': ' : '') + (item.preview || 'Нет сообщений'))}</p><span class="task-list-meta"><small>${escapeHtml(item.sources?.length ? [...new Set(item.sources.map(s => s.label))].join(' · ') : 'Без процесса')}</small>${item.task?.dueDate ? `<time class="${taskOverdue(item.task, today) ? 'overdue' : taskDueToday(item.task, today) ? 'due-today' : ''}" datetime="${item.task.dueDate}">${taskOverdue(item.task, today) ? 'Просрочена · ' + taskDateLabel(item.task.dueDate) : taskDueToday(item.task, today) ? 'Срок сегодня' : taskDateLabel(item.task.dueDate)}</time>` : ''}</span></span></button></div>`).join('') : '<p class="discussion-empty">Задач в этом списке нет.</p>';
+    <span class="task-list-content"><span class="task-list-title"><strong class="${item.unread ? 'task-unread-title' : ''}">${escapeHtml(item.title)}</strong>${item.unread ? `<span class="task-unread" aria-label="Непрочитанных: ${item.unread}">${item.unread > 99 ? '99+' : item.unread}</span>` : ''}</span><p>${escapeHtml((item.preview && item.lastAuthor ? item.lastAuthor + ': ' : '') + (item.preview || 'Нет сообщений'))}</p><span class="task-list-meta">${(item.task?.status || 'open') === 'open' && taskMyTurn(item.task) ? '<small class="task-my-turn">Ваш ход</small>' : ''}<small>${escapeHtml(item.sources?.length ? [...new Set(item.sources.map(s => s.label))].join(' · ') : 'Без процесса')}</small>${item.task?.dueDate ? `<time class="${taskOverdue(item.task, today) ? 'overdue' : taskDueToday(item.task, today) ? 'due-today' : ''}" datetime="${item.task.dueDate}">${taskOverdue(item.task, today) ? 'Просрочена · ' + taskDateLabel(item.task.dueDate) : taskDueToday(item.task, today) ? 'Срок сегодня' : taskDateLabel(item.task.dueDate)}</time>` : ''}</span></span></button></div>`).join('') : '<p class="discussion-empty">Задач в этом списке нет.</p>';
   renderTaskBulk();
   updateDiscussionChatFilter();
   updateTaskFilterTabs();
@@ -96,6 +96,8 @@ function discussionStatus(value) {
   return ({ open: 'В работе', completed: 'Завершена', trashed: 'В корзине', Draft: 'Черновик', Pending: 'Ожидает решения', pending: 'Ожидает решения', active: 'В работе', approved: 'Согласован', rejected: 'Отклонён', Published: 'Опубликован', Escalated: 'На рассмотрении CEO', Active: 'Активен' })[value] || value;
 }
 function newDiscussion(source = null) {
+  // Esc or «Отмена» goes back to the task that was open, otherwise to the process catalogue.
+  const state = contractApprovalUI, back = contractConversationOpen(state) ? { kind: state.kind, id: state.engagementId } : null;
   ++discussionViewRequest; stopContractConversation();
   document.getElementById('discussionMain').innerHTML = `<form class="discussion-new-form contract-versions" onsubmit="event.preventDefault();createDiscussion(this)">
       <h2>Новая задача</h2>
@@ -103,10 +105,29 @@ function newDiscussion(source = null) {
       <label for="discussionTitle">Название задачи</label><input id="discussionTitle" maxlength="160" required placeholder="Например: согласовать условия работы с клиентом" value="${source ? escapeHtml(('Задача: ' + source.title).slice(0,160)) : ''}" />
       <label for="discussionDueDate">Срок <span class="contract-empty">· необязательно</span></label><input id="discussionDueDate" type="date" min="2000-01-01" max="2199-12-31" />
       <p class="contract-empty">Коллег можно добавить прямо в сообщении — начните печатать имя и выберите подсказку.</p>
-      <button type="submit" class="contract-primary">Создать задачу</button><p id="discussionFormStatus" role="status"></p></form>`;
-  document.querySelector('.discussion-new-form').discussionSource = source ? { kind: source.kind, id: source.id } : null;
+      <div class="discussion-new-actions"><button type="submit" class="contract-primary">Создать задачу</button><button type="button" class="contract-secondary" onclick="cancelNewDiscussion()">Отмена</button><span class="contract-empty">или Esc</span></div><p id="discussionFormStatus" role="status"></p></form>`;
+  const form = document.querySelector('.discussion-new-form');
+  form.discussionSource = source ? { kind: source.kind, id: source.id } : null;
+  form.discussionReturn = back;
   document.getElementById('discussionTitle').focus();
 }
+function cancelNewDiscussion() {
+  const form = document.querySelector('#discussionMain .discussion-new-form');
+  // While the request is on its way the task may already exist; let it finish.
+  if (!form || form.querySelector('button[type="submit"]').disabled) return;
+  discussionCreateKey = null;
+  if (form.discussionReturn) openDiscussion(form.discussionReturn.kind, form.discussionReturn.id);
+  else showDiscussionProcesses();
+}
+// Esc anywhere on Tasks abandons the form, wherever the focus is. It runs in the
+// capture phase, before modal-a11y.js closes a dialog, so Esc meant for a dialog
+// on top of the page leaves the form alone.
+function cancelNewDiscussionOnEscape(event) {
+  if (event.key !== 'Escape' || !discussionsActive() || !document.querySelector('#discussionMain .discussion-new-form')) return;
+  if (typeof _topmostModalOverlay === 'function' && _topmostModalOverlay()) return;
+  event.preventDefault(); cancelNewDiscussion();
+}
+if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('keydown', cancelNewDiscussionOnEscape, true);
 function newContractSubtask() {
   const state = contractApprovalUI; if (!contractConversationOpen(state) || state.kind === 'room') return;
   const contract = discussionItems.find(i => i.kind === 'contract' && i.id === state.engagementId)?.sources?.[0];
