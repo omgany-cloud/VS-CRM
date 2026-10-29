@@ -179,6 +179,8 @@
 .discussion-workspace .task-due-chip.selected { background: #263c35; border-color: #9bc2b5; color: #f2f7f4; }
 .discussion-workspace .task-due-chip.task-due-overdue.selected { background: #45351f; border-color: #edbd79; color: #fbe3bd; }
 .discussion-list-row { display: flex; align-items: center; gap: 2px; }
+/* Next to the checkbox the task may shrink, so long titles end in "…" instead of scrolling the list sideways. */
+@media(min-width: 601px) { .discussion-list-row .discussion-list-item { flex: 1; min-width: 0; } }
 .discussion-sidebar input.task-select, .discussion-sidebar .task-bulk-all input { flex-shrink: 0; width: 16px; height: 16px; margin: 0 2px 0 6px; padding: 0; accent-color: #27a58f; cursor: pointer; }
 .discussion-sidebar input.task-select:disabled { opacity: .35; cursor: not-allowed; }
 .discussion-list-row:has(.task-select:checked) .discussion-list-item { background: #1b302b; }

@@ -2,6 +2,19 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.63.0] - 2026-10-29
+
+### Added
+- Wide mode in Tasks: one button hides the CRM menu (it opens over the page
+  from the top-bar menu button) and shrinks the page heading, so the task
+  takes the whole screen. The task list collapses to a narrow rail with
+  "show list" and "new task", and the task properties rail hides as before.
+  Each choice is remembered in this browser; other pages keep the usual menu.
+
+### Fixed
+- Long task titles next to the selection checkbox no longer make the task
+  list scroll sideways; they end with an ellipsis.
+
 ## [1.62.0] - 2026-10-28
 
 ### Changed

@@ -5,9 +5,11 @@ function discussionTitleHeader(title,state) {
 function toggleDiscussionProperties() {
   const state=contractApprovalUI;if(!contractConversationOpen(state))return;
   state.propertiesOpen=!state.propertiesOpen;applyDiscussionPropertiesVisibility(state);
+  // Below 1100px the rail covers the chat, so only a choice made on a wide screen is remembered.
+  if(window.innerWidth>1100)rememberTasksLayout('propertiesOpen',state.propertiesOpen);
 }
 function applyDiscussionPropertiesVisibility(state) {
-  if(state.propertiesOpen==null)state.propertiesOpen=window.innerWidth>1100;
+  if(state.propertiesOpen==null)state.propertiesOpen=window.innerWidth>1100&&tasksLayoutState().propertiesOpen!==false;
   state.panel.classList.toggle('properties-closed',!state.propertiesOpen);
   const button=document.getElementById('discussionPropertiesToggle');
   if(button)button.setAttribute('aria-expanded',String(state.propertiesOpen));
@@ -63,4 +65,53 @@ async function showTaskAssignee() {
     const tools=document.getElementById('discussionTools');tools.hidden=false;
     tools.innerHTML=`<form class="task-due-form" onsubmit="event.preventDefault();changeDiscussionTask('assign',this.querySelector('button[type=submit]'),{assigneeId:Number(this.querySelector('select').value)||null,expectedVersion:${state.chat.task.version}})"><label for="taskAssignee">Ответственный</label><select id="taskAssignee"><option value="">Не назначен</option>${data.people.map(p=>`<option value="${p.id}"${p.id===state.chat.task.assignee?.id?' selected':''}>${escapeHtml(p.name)}</option>`).join('')}</select><button type="submit" class="contract-primary">Сохранить</button><button type="button" class="contract-secondary" onclick="closeDiscussionTools()">Отмена</button>${state.kind!=='room'?'<p class="discussion-property-empty">Ответственный будет добавлен в участники задачи.</p>':''}<p class="task-action-status" role="status"></p></form>`;
   }catch(err){if(contractConversationOpen(state))contractDiscussionStatus(err.message,true);}
+}
+// Wide mode, a collapsed task list and the properties rail are per-browser conveniences:
+// the choice lives in localStorage and still works for the visit when storage is unavailable.
+const TASKS_LAYOUT_KEY='crm.tasksLayout';
+let tasksLayout=null;
+function tasksLayoutState() {
+  if(tasksLayout)return tasksLayout;
+  try{tasksLayout=JSON.parse(localStorage.getItem(TASKS_LAYOUT_KEY)||'{}');}catch(e){tasksLayout=null;}
+  if(!tasksLayout||typeof tasksLayout!=='object')tasksLayout={};
+  return tasksLayout;
+}
+function rememberTasksLayout(name,value) {
+  tasksLayoutState()[name]=value;
+  try{localStorage.setItem(TASKS_LAYOUT_KEY,JSON.stringify(tasksLayout));}catch(e){/* private window or storage disabled */}
+}
+function applyTasksLayout() {
+  const layout=tasksLayoutState(),wide=!!layout.wide,collapsed=!!layout.listCollapsed;
+  document.body.classList.toggle('tasks-wide',wide);
+  const wideButton=document.getElementById('tasksWideToggle');
+  if(wideButton){
+    wideButton.setAttribute('aria-pressed',String(wide));
+    wideButton.title=wide?'Вернуть меню CRM слева':'Скрыть меню CRM и отдать экран задачам';
+    wideButton.innerHTML=`<i class="fas fa-${wide?'compress':'expand'}" aria-hidden="true"></i> <span>${wide?'Обычный режим':'Широкий режим'}</span>`;
+  }
+  document.getElementById('discussionWorkspace')?.classList.toggle('list-collapsed',collapsed);
+  const listButton=document.getElementById('taskListToggle');
+  if(listButton){
+    const label=collapsed?'Показать список задач':'Свернуть список задач';
+    listButton.setAttribute('aria-expanded',String(!collapsed));listButton.setAttribute('aria-label',label);listButton.title=label;
+    listButton.innerHTML=`<i class="fas fa-angles-${collapsed?'right':'left'}" aria-hidden="true"></i>`;
+  }
+}
+function toggleTasksWide() {
+  rememberTasksLayout('wide',!tasksLayoutState().wide);
+  document.getElementById('sidebar')?.classList.remove('open');
+  applyTasksLayout();
+}
+function toggleTaskList() {
+  rememberTasksLayout('listCollapsed',!tasksLayoutState().listCollapsed);
+  applyTasksLayout();
+}
+// In wide mode the CRM menu opens over the page with ☰; a click anywhere else closes it.
+function closeWideMenu(event) {
+  if(!document.body.classList.contains('tasks-wide')||event.target.closest?.('#menuToggle'))return;
+  document.getElementById('sidebar')?.classList.remove('open');
+}
+if(typeof document!=='undefined'&&document.body){
+  applyTasksLayout();
+  document.getElementById('mainContent')?.addEventListener('click',closeWideMenu);
 }

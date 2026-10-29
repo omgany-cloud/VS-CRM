@@ -136,3 +136,26 @@
   .discussion-workspace .contract-chat-entry .discussion-reply-button { opacity: 1; }
 }
 @media(hover:none) { .discussion-workspace .contract-chat-entry .discussion-reply-button { opacity: 1; } }
+/* Wide mode: only while Tasks is open the CRM menu turns into an overlay behind ☰. */
+.discussion-hub-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+body.tasks-wide:has(#page-discussions.active) .sidebar { transform: translateX(-100%); }
+body.tasks-wide:has(#page-discussions.active) .sidebar.open { transform: translateX(0); box-shadow: 14px 0 34px #0008; }
+body.tasks-wide:has(#page-discussions.active) .main-content { margin-left: 0; }
+body.tasks-wide:has(#page-discussions.active) .menu-toggle { display: flex; }
+body.tasks-wide:has(#page-discussions.active) .page-content { padding: 12px 16px; }
+.tasks-wide .discussion-hub-heading { margin-bottom: 10px; }
+.tasks-wide .discussion-hub-heading h1 { font-size: 16px; margin: 0; }
+.tasks-wide .discussion-hub-heading p { display: none; }
+.tasks-wide .discussion-hub-heading button { padding: 7px 11px; }
+/* A collapsed task list keeps a narrow rail with "show list" and "new task". */
+.discussion-sidebar-tools { display: flex; align-items: center; gap: 4px; }
+@media(min-width:601px) {
+  .tasks-wide .discussion-workspace { height: calc(100dvh - var(--topbar-height) - 72px); min-height: 480px; }
+  .discussion-workspace.list-collapsed { grid-template-columns: 54px minmax(0,1fr); }
+  .list-collapsed .discussion-sidebar { padding: 12px 5px; }
+  .list-collapsed .discussion-sidebar > :not(.discussion-sidebar-heading) { display: none; }
+  .list-collapsed .discussion-sidebar-heading { padding: 0; justify-content: center; }
+  .list-collapsed .discussion-sidebar-heading h2 { display: none; }
+  .list-collapsed .discussion-sidebar-tools { flex-direction: column-reverse; gap: 10px; }
+}
+@media(max-width:600px) { #taskListToggle { display: none; } }

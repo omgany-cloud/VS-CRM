@@ -282,7 +282,7 @@ function initNavigation() {
     item.addEventListener('click', e => {
       e.preventDefault();
       navigateTo(item.dataset.page);
-      if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+      if (window.innerWidth <= 768 || document.body.classList.contains('tasks-wide')) document.getElementById('sidebar').classList.remove('open');
     });
   });
   document.querySelectorAll('[data-page]').forEach(el => {
