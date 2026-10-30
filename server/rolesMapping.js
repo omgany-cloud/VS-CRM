@@ -25,6 +25,8 @@ function rowToRole(row) {
     manageContracts: !!row.manage_contracts,
     manageContractRoutes: !!row.manage_contract_routes,
     recordContractSignature: !!row.record_contract_signature,
+    approveNoOnboarding: !!row.approve_no_onboarding,
+    checkCounterparties: !!row.check_counterparties,
     icSeat: row.ic_seat,
     isSystem: !!row.is_system,
   };
@@ -52,6 +54,8 @@ function rowToPermissions(row) {
     manageContracts: !!row.manage_contracts,
     manageContractRoutes: !!row.manage_contract_routes,
     recordContractSignature: !!row.record_contract_signature,
+    approveNoOnboarding: !!row.approve_no_onboarding,
+    checkCounterparties: !!row.check_counterparties,
     icSeat: row.ic_seat,
   };
 }
@@ -59,16 +63,16 @@ function rowToPermissions(row) {
 const NO_PERMISSIONS = {
   internal: false, manageUsers: false, manageRoles: false, accessFM: false,
   decideConflicts: false, authorICMemo: false, riskVeto: false, readOnly: false,
-  amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: false, screeningAccept: false, manageContractTemplates: false, manageContracts: false, manageContractRoutes: false, recordContractSignature: false, icSeat: null,
+  amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: false, screeningAccept: false, manageContractTemplates: false, manageContracts: false, manageContractRoutes: false, recordContractSignature: false, approveNoOnboarding: false, checkCounterparties: false, icSeat: null,
 };
 
 const INSERT_SQL = `
   INSERT INTO roles
     (tenant_id, code, label, icon, color, internal, manage_users, manage_roles,
-     access_fm, decide_conflicts, author_ic_memo, risk_veto, read_only, aml_clear, cc_approve, payment_confirm, afsa_submit, ai_assist, screening_accept, manage_contract_templates, manage_contracts, manage_contract_routes, record_contract_signature, ic_seat, is_system)
+     access_fm, decide_conflicts, author_ic_memo, risk_veto, read_only, aml_clear, cc_approve, payment_confirm, afsa_submit, ai_assist, screening_accept, manage_contract_templates, manage_contracts, manage_contract_routes, record_contract_signature, approve_no_onboarding, check_counterparties, ic_seat, is_system)
   VALUES
     (@tenantId, @code, @label, @icon, @color, @internal, @manageUsers, @manageRoles,
-     @accessFM, @decideConflicts, @authorICMemo, @riskVeto, @readOnly, @amlClear, @ccApprove, @paymentConfirm, @afsaSubmit, @aiAssist, @screeningAccept, @manageContractTemplates, @manageContracts, @manageContractRoutes, @recordContractSignature, @icSeat, @isSystem)
+     @accessFM, @decideConflicts, @authorICMemo, @riskVeto, @readOnly, @amlClear, @ccApprove, @paymentConfirm, @afsaSubmit, @aiAssist, @screeningAccept, @manageContractTemplates, @manageContracts, @manageContractRoutes, @recordContractSignature, @approveNoOnboarding, @checkCounterparties, @icSeat, @isSystem)
 `;
 
 const UPDATE_SQL = `
@@ -77,7 +81,7 @@ const UPDATE_SQL = `
     manage_users=@manageUsers, manage_roles=@manageRoles, access_fm=@accessFM,
     decide_conflicts=@decideConflicts, author_ic_memo=@authorICMemo,
     risk_veto=@riskVeto, read_only=@readOnly, aml_clear=@amlClear, cc_approve=@ccApprove,
-    payment_confirm=@paymentConfirm, afsa_submit=@afsaSubmit, ai_assist=@aiAssist, screening_accept=@screeningAccept, manage_contract_templates=@manageContractTemplates, manage_contracts=@manageContracts, manage_contract_routes=@manageContractRoutes, record_contract_signature=@recordContractSignature, ic_seat=@icSeat
+    payment_confirm=@paymentConfirm, afsa_submit=@afsaSubmit, ai_assist=@aiAssist, screening_accept=@screeningAccept, manage_contract_templates=@manageContractTemplates, manage_contracts=@manageContracts, manage_contract_routes=@manageContractRoutes, record_contract_signature=@recordContractSignature, approve_no_onboarding=@approveNoOnboarding, check_counterparties=@checkCounterparties, ic_seat=@icSeat
   WHERE id=@id AND tenant_id=@tenantId
 `;
 
@@ -105,6 +109,8 @@ function roleToParams(r) {
     manageContracts: r.manageContracts ? 1 : 0,
     manageContractRoutes: r.manageContractRoutes ? 1 : 0,
     recordContractSignature: r.recordContractSignature ? 1 : 0,
+    approveNoOnboarding: r.approveNoOnboarding ? 1 : 0,
+    checkCounterparties: r.checkCounterparties ? 1 : 0,
     icSeat: r.icSeat || null,
     isSystem: r.isSystem ? 1 : 0,
   };

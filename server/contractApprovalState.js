@@ -11,6 +11,9 @@ function contractMetadata(row) {
     currency: row.currency, successFee: row.success_fee, retainer: row.retainer,
     feeRate: row.fee_rate, dealValue: row.deal_value, payTerms: row.pay_terms,
     startDate: row.start_date, endDate: row.end_date,
+    // Only contracts without a client card name their counterparty, so the
+    // snapshots of client contracts keep their earlier shape.
+    ...(row.contract_kind && row.contract_kind !== 'client' ? { counterpartyBin: row.counterparty_bin, counterpartyCountry: row.counterparty_country } : {}),
   };
 }
 

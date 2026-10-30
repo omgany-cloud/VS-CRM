@@ -7,6 +7,7 @@ const { assertContractAccess, handle, transaction } = require('./contractDocumen
 const { ContractError, contractMetadata, latestCycle, approvalMatches, documentFrozen, approvalSummary } = require('./contractApprovalState');
 const {assertTaskOpen} = require('./discussionTasks');
 const { rowToPermissions } = require('./rolesMapping');
+const { contractKind } = require('./contractKinds');
 const { notifyContractReturned, notifyContractReview } = require('./notifications/triggers');
 
 const router = express.Router();
@@ -29,6 +30,8 @@ function text(value, label, required = true, max = 2000) {
 function contractFor(req) {
   return assertContractAccess(req, db.prepare('SELECT * FROM engagements WHERE tenant_id = ? AND id = ?').get(req.tenantId, req.params.id));
 }
+// Only a client contract needs its client card; the other kinds name the counterparty.
+function hasParty(contract) { return !!contract.client_id || contractKind(contract) !== 'client'; }
 function directionFor(contract) { return contract.direction === 'FM' || contract.service_type === 'LP Investment (FM)' ? 'FM' : 'CF&A'; }
 function checkDirection(req, direction) {
   if (!['CF&A', 'FM'].includes(direction)) fail('Выберите направление');
@@ -192,11 +195,12 @@ router.get('/engagements/:id/approvals', handle((req, res) => {
   const version = db.prepare('SELECT id, metadata_json, created_by FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? AND version_number = ?')
     .get(req.tenantId, contract.id, contract.document_version);
   const metadataMatches = !!version && version.metadata_json === JSON.stringify(contractMetadata(contract));
+  const hasClient = hasParty(contract);
   res.json({ engagementId: contract.id, direction: directionFor(contract), currentVersion: contract.document_version,
     metadataMatches, summary: approvalSummary(contract), cycles: cycles.map(c => cycleView(req, c, contract)),
-    canSubmit: !!req.user.permissions.manageContracts && !req.user.permissions.readOnly && !!contract.client_id && metadataMatches && !documentFrozen(contract),
+    canSubmit: !!req.user.permissions.manageContracts && !req.user.permissions.readOnly && hasClient && metadataMatches && !documentFrozen(contract),
     canManageRoutes: !!req.user.permissions.manageContractRoutes && !req.user.permissions.readOnly,
-    userId: req.user.id, hasClient: !!contract.client_id,
+    userId: req.user.id, hasClient,
     people: req.user.permissions.manageContracts && !req.user.permissions.readOnly
       ? eligiblePeople(req.tenantId, directionFor(contract)).filter(p => p.id !== req.user.id && p.id !== version?.created_by)
         .map(p => ({ id: p.id, name: p.name || p.email, role: p.label })) : [] });
@@ -217,7 +221,7 @@ router.post('/engagements/:id/approvals', requirePermission('manageContracts'), 
     ...selection,
     expectedCycleId: b.expectedCycleId == null ? null : integer(b.expectedCycleId, 'Цикл'), note: text(b.note, 'Комментарий', false) };
   const result = command(req, contract, input, () => {
-    if (!contract.client_id) fail('Сначала свяжите договор с клиентом');
+    if (!hasParty(contract)) fail('Сначала свяжите договор с клиентом');
     // A new approval creates an empty task; it never restores purged messages.
     db.prepare(`UPDATE discussion_task_state SET purged_at=NULL,status='open',completed_at=NULL,deleted_at=NULL,version=version+1 WHERE tenant_id=? AND engagement_id=? AND purged_at IS NOT NULL`).run(req.tenantId,contract.id);
     assertTaskOpen(req.tenantId,'contract',contract.id);

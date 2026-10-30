@@ -162,7 +162,7 @@ const ENGAGEMENT_SCALARS = [
   'engId', 'clientId', 'clientName', 'serviceType', 'contractNum', 'date', 'signedDate', 'status',
   'feeType', 'feeAmount', 'successFee', 'retainer', 'payTerms', 'invoiced', 'paid', 'startDate',
   'endDate', 'rm', 'notes', 'direction', 'activationDate', 'activatedBy', 'lpaUrl', 'lpSignedDate',
-  'capitalCallDate', 'contractUrl', 'dealValue', 'feeRate', 'dealRef', 'currency',
+  'capitalCallDate', 'contractUrl', 'dealValue', 'feeRate', 'dealRef', 'currency', 'counterpartyBin', 'counterpartyCountry',
 ];
 function engagementToParams(e) {
   const out = {};
@@ -172,6 +172,7 @@ function engagementToParams(e) {
   // value work.
   out.amendmentsJson = typeof e.amendments === 'string' ? e.amendments : JSON.stringify(e.amendments || []);
   out.paymentHistoryJson = typeof e.paymentHistory === 'string' ? e.paymentHistory : JSON.stringify(e.paymentHistory || []);
+  out.contractKind = e.contractKind || 'client';
   return out;
 }
 function rowToEngagement(row) {
@@ -186,6 +187,7 @@ function rowToEngagement(row) {
     amendments: row.amendments_json, contractUrl: row.contract_url, dealValue: row.deal_value, feeRate: row.fee_rate,
     dealRef: row.deal_ref, currency: row.currency, paymentHistory: row.payment_history_json,
     documentVersion: row.document_version || 0,
+    contractKind: row.contract_kind || 'client', counterpartyBin: row.counterparty_bin, counterpartyCountry: row.counterparty_country,
   };
 }
 const ENGAGEMENT_INSERT_SQL = `
@@ -193,12 +195,14 @@ const ENGAGEMENT_INSERT_SQL = `
     (tenant_id, eng_id, client_id, client_name, service_type, contract_num, date, signed_date, status,
      fee_type, fee_amount, success_fee, retainer, pay_terms, invoiced, paid, start_date, end_date,
      rm, notes, direction, activation_date, activated_by, lpa_url, lp_signed_date, capital_call_date,
-     amendments_json, contract_url, deal_value, fee_rate, deal_ref, currency, payment_history_json)
+     amendments_json, contract_url, deal_value, fee_rate, deal_ref, currency, payment_history_json,
+     contract_kind, counterparty_bin, counterparty_country)
   VALUES
     (@tenantId, @engId, @clientId, @clientName, @serviceType, @contractNum, @date, @signedDate, @status,
      @feeType, @feeAmount, @successFee, @retainer, @payTerms, @invoiced, @paid, @startDate, @endDate,
      @rm, @notes, @direction, @activationDate, @activatedBy, @lpaUrl, @lpSignedDate, @capitalCallDate,
-     @amendmentsJson, @contractUrl, @dealValue, @feeRate, @dealRef, @currency, @paymentHistoryJson)
+     @amendmentsJson, @contractUrl, @dealValue, @feeRate, @dealRef, @currency, @paymentHistoryJson,
+     @contractKind, @counterpartyBin, @counterpartyCountry)
 `;
 const ENGAGEMENT_UPDATE_SQL = `
   UPDATE engagements SET
@@ -209,7 +213,7 @@ const ENGAGEMENT_UPDATE_SQL = `
     direction=@direction, activation_date=@activationDate, activated_by=@activatedBy, lpa_url=@lpaUrl,
     lp_signed_date=@lpSignedDate, capital_call_date=@capitalCallDate, amendments_json=@amendmentsJson,
     contract_url=@contractUrl, deal_value=@dealValue, fee_rate=@feeRate, deal_ref=@dealRef, currency=@currency,
-    payment_history_json=@paymentHistoryJson
+    payment_history_json=@paymentHistoryJson, counterparty_bin=@counterpartyBin, counterparty_country=@counterpartyCountry
   WHERE id=@id AND tenant_id=@tenantId
 `;
 

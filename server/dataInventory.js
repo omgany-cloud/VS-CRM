@@ -26,6 +26,7 @@ function section(title, why, items) { sections.push({ title, why, items }); }
 
 // Contracts
 const signed = has('contract_signatures') ? 'EXISTS (SELECT 1 FROM contract_signatures s WHERE s.tenant_id = e.tenant_id AND s.engagement_id = e.id AND s.status = \'active\')' : '0';
+const clientKind = db.prepare("SELECT 1 FROM pragma_table_info('engagements') WHERE name = 'contract_kind'").get() ? "e.contract_kind = 'client'" : '1';
 const started = has('contract_activations') ? 'EXISTS (SELECT 1 FROM contract_activations a WHERE a.tenant_id = e.tenant_id AND a.engagement_id = e.id)' : '0';
 section('Договоры «Активен» без зарегистрированной подписи', 'Начаты до M2.2: подписанный PDF и дата подписи не зарегистрированы в карточке.',
   all(`SELECT e.* FROM engagements e WHERE e.status = 'Active' AND NOT ${signed} ORDER BY e.tenant_id, e.id`).map(contractName));
@@ -33,8 +34,8 @@ section('Договоры «Активен» без серверной пров�
   all(`SELECT e.* FROM engagements e WHERE e.status = 'Active' AND NOT ${started} ORDER BY e.tenant_id, e.id`).map(contractName));
 section('Дата подписания из старой формы без подписанного файла', 'Дата есть, но подписанный PDF не зарегистрирован; новая проверка такую дату не учитывает.',
   all(`SELECT e.* FROM engagements e WHERE (e.signed_date IS NOT NULL AND e.signed_date != '' OR e.lp_signed_date IS NOT NULL AND e.lp_signed_date != '') AND NOT ${signed} ORDER BY e.tenant_id, e.id`).map(contractName));
-section('Договоры без карточки клиента', 'Без клиента договор нельзя отправить на согласование и начать по нему работу.',
-  all(`SELECT e.* FROM engagements e LEFT JOIN ob_clients c ON c.tenant_id = e.tenant_id AND c.id = e.client_id WHERE c.id IS NULL ORDER BY e.tenant_id, e.id`)
+section('Клиентские договоры без карточки клиента', 'Без клиента договор нельзя отправить на согласование и начать по нему работу. Договоры с поставщиками и услуги вне лицензии карточки клиента не имеют.',
+  all(`SELECT e.* FROM engagements e LEFT JOIN ob_clients c ON c.tenant_id = e.tenant_id AND c.id = e.client_id WHERE c.id IS NULL AND ${clientKind} ORDER BY e.tenant_id, e.id`)
     .map(r => contractName(r) + (r.client_id ? ` (клиент #${r.client_id} не найден)` : '')));
 section('Направление договора не совпадает с направлением клиента', 'CF&A/FM определяет доступ (стена FM) и набор проверок.',
   all(`SELECT e.*, c.direction AS client_direction FROM engagements e JOIN ob_clients c ON c.tenant_id = e.tenant_id AND c.id = e.client_id

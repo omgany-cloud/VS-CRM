@@ -163,7 +163,7 @@ function renderContractDiscussion(state, prepend = false) {
   if (!contractConversationOpen(state) || !state.data) return;
   const feed = document.getElementById('contractChatFeed');
   const entries = contractDiscussionEntries(state.data, state.chat);
-  const signature = JSON.stringify([entries,state.chat.canPost,state.data.userId]);
+  const signature = JSON.stringify([entries,state.chat.canPost,state.data.userId,!!state.data.summary?.frozen]);
   let followLatest = false;
   if (signature !== state.feedSignature) {
     const oldHeight = feed.scrollHeight, oldTop = feed.scrollTop;
@@ -236,6 +236,35 @@ function removeDiscussionAttachment(index) {
 function renderDiscussionAttachments(state) {
   const el = document.getElementById('discussionAttachments'); if (!el) return;
   el.innerHTML = (state.attachments || []).map((f,i) => `<span><i class="fas fa-paperclip" aria-hidden="true"></i> ${escapeHtml(f.name)} <button type="button" class="discussion-remove" aria-label="Убрать вложение ${escapeHtml(f.name)}" onclick="removeDiscussionAttachment(${i})">×</button></span>`).join('');
+}
+// Owner's request 30.10.2026: a contract file attached in the chat is not a
+// revision; it becomes one only by this action, as an upload in the card would.
+function canMakeContractVersion(state, file) {
+  return state.kind !== 'room' && /\.(docx|pdf)$/i.test(file.name) && !currentUserPermission('readOnly') && !state.data?.summary?.frozen;
+}
+async function saveAttachmentAsContractVersion(fileId, button) {
+  const state = contractApprovalUI;
+  if (!contractConversationOpen(state) || state.kind === 'room' || button.disabled) return;
+  const file = [...state.chat.messages.values()].flatMap(m => m.attachments || []).find(f => f.id === fileId);
+  if (!file) return;
+  const changeNote = (prompt(`Сделать «${file.name}» новой редакцией договора? Укажите причину изменения — она попадёт в историю версий.`) || '').trim();
+  if (!changeNote) return;
+  button.disabled = true;
+  try {
+    const result = await apiFetch(`/api/engagements/${state.engagementId}/versions/from-attachment`, { method: 'POST',
+      body: JSON.stringify({ fileId, changeNote, expectedVersion: state.data.currentVersion || 0 }) });
+    const engagement = typeof engagements !== 'undefined' && engagements.find(e => e.id === state.engagementId);
+    if (engagement) engagement.documentVersion = result.currentVersion;
+    showToast(`Редакция ${result.currentVersion} сохранена в карточке договора`, 'green');
+    await loadContractConversation(state.engagementId);
+    if (typeof refreshDiscussionNextStep === 'function') refreshDiscussionNextStep(state, true);
+    // In the contract card the revision list, signing and next step change too.
+    if (document.getElementById('contractVersionsPanel')) {
+      await Promise.all([loadContractDocuments(state.engagementId), typeof loadContractSigning === 'function' && loadContractSigning(state.engagementId),
+        typeof loadContractCardNextStep === 'function' && loadContractCardNextStep(state.engagementId)]);
+    }
+  } catch (err) { if (contractConversationOpen(state)) contractDiscussionStatus(err.message, true); }
+  finally { button.disabled = false; }
 }
 async function downloadDiscussionAttachment(id, button) {
   const state = contractApprovalUI;

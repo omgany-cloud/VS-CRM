@@ -132,7 +132,7 @@ router.get('/:id/process', handle((req, res) => {
     WHERE tenant_id = ? AND client_id = ? ORDER BY task_num, id`).all(req.tenantId, client.id) : [];
   res.set('Cache-Control', 'no-store');
   res.json({
-    engagementId: contract.id,
+    engagementId: contract.id, contractKind: contract.contract_kind || 'client',
     client: client ? { id: client.id, name: client.name, direction: client.direction, phase: client.phase, activated: !!client.activated } : null,
     tasks: tasks.map(t => ({ id: t.id, number: t.task_num, title: t.title, status: t.status, dueDate: t.due_date })),
     documentVersion: contract.document_version,
@@ -178,6 +178,26 @@ router.post('/:id/versions', handle((req, res, next) => { getContract(req); next
     expected, buffer: req.file.buffer, name, mime, changeNote,
   }));
   res.status(201).json({ version, currentVersion: expected + 1 });
+}));
+
+// Owner's request 30.10.2026: a DOCX or PDF attached in the contract's task
+// becomes a revision only by this explicit command, with its own reason;
+// approval and signing always use the revisions, never chat attachments.
+router.post('/:id/versions/from-attachment', handle((req, res) => {
+  const contract = getContract(req), b = req.body || {};
+  const changeNote = typeof b.changeNote === 'string' ? b.changeNote.trim() : '';
+  if (!changeNote || changeNote.length > 2000) throw new ContractError(400, 'Укажите причину изменения: от 1 до 2000 символов');
+  if (!Number.isSafeInteger(b.expectedVersion) || b.expectedVersion < 0) throw new ContractError(400, 'Обновите историю версий');
+  if (b.expectedVersion !== contract.document_version) throw new ContractError(409, 'У договора уже появилась новая версия. Обновите историю и проверьте документ');
+  const file = Number.isSafeInteger(b.fileId) && db.prepare(`SELECT f.original_name, f.file_bytes FROM discussion_files f
+    JOIN contract_discussion_messages m ON m.id = f.contract_message_id AND m.tenant_id = f.tenant_id
+    WHERE f.tenant_id = ? AND m.engagement_id = ? AND f.id = ?`).get(req.tenantId, contract.id, b.fileId);
+  if (!file) throw new ContractError(404, 'Вложение не найдено в задаче этого договора');
+  const buffer = Buffer.from(file.file_bytes), mime = validateFile({ buffer }, file.original_name);
+  const version = transaction(() => insertContractVersion(req, contract, {
+    expected: b.expectedVersion, buffer, name: file.original_name, mime, changeNote,
+  }));
+  res.status(201).json({ version, currentVersion: b.expectedVersion + 1 });
 }));
 
 router.get('/:id/versions/:versionId/file', handle((req, res) => {

@@ -4,7 +4,8 @@
 let contractDocumentsState = null;
 const CONTRACT_METADATA_LABELS = { contractNum: 'Номер', clientName: 'Клиент', date: 'Дата договора', dealRef: 'Ссылка на сделку',
   serviceType: 'Услуга', feeType: 'Тип вознаграждения', feeAmount: 'Гонорар', currency: 'Валюта', successFee: 'Success fee',
-  retainer: 'Retainer', feeRate: 'Ставка', dealValue: 'Стоимость сделки', payTerms: 'Условия оплаты', startDate: 'Начало срока', endDate: 'Окончание срока' };
+  retainer: 'Retainer', feeRate: 'Ставка', dealValue: 'Стоимость сделки', payTerms: 'Условия оплаты', startDate: 'Начало срока', endDate: 'Окончание срока',
+  counterpartyBin: 'БИН / ИИН', counterpartyCountry: 'Страна' };
 
 function renderClientContracts(client) {
   const linked = engagements.filter(e => e.clientId === client.id);
@@ -63,6 +64,14 @@ async function loadContractProcess(engagementId) {
   try {
     const data = await apiFetch(`/api/engagements/${engagementId}/process`);
     if (document.getElementById('contractProcessPanel') !== panel || panel._processRequest !== request) return;
+    if (data.contractKind && data.contractKind !== 'client') {
+      panel.querySelector('h3').textContent = 'Онбординг';
+      panel.querySelector('.contract-versions-heading p').textContent = 'Для этого вида договора онбординг не проводится.';
+      content.innerHTML = `<p class="contract-message">${data.contractKind === 'supplier'
+        ? 'Договор с поставщиком. Проверку поставщика в ADATA записывают COO или Legal в блоке «Подписание и начало работы».'
+        : 'Услуга вне лицензии, карточки клиента нет. Решение принимают CEO, COO или Legal в блоке «Подписание и начало работы».'}</p>`;
+      return;
+    }
     if (!data.client) { content.innerHTML = '<p class="contract-metadata-warning">У этого договора нет связи с карточкой клиента. Этапы онбординга не определены.</p>'; return; }
     const steps = [['1.1', 'Предварительная проверка конфликтов'], ['2.1', 'Документы клиента'], ['2.2', 'Проверка KYC / AML'],
       ['3.1', 'Классификация / квалификация'], ['3.2', 'Оценка клиента'], ['4.1', 'Условия и документы'], ['5.1', 'Активация клиента']];

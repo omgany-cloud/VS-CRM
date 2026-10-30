@@ -5365,6 +5365,7 @@ let engIdCounter = 6;
 let engFilter = '';
 let engStatusFilter = '';
 let engDirFilter = '';
+let engKindFilter = '';
 
 // No currency symbol — these KPI totals mix engagements in different
 // currencies (see comment below), so a single "$" prefix would be
@@ -5390,20 +5391,24 @@ function renderEngagementsPage() {
   // number — out of scope for the currency-selector work that added
   // per-engagement currency; flagging rather than silently leaving it
   // looking precise. Individual rows/cards below ARE correctly per-currency.
-  const totalFees     = engagements.reduce((s,e) => s + (e.feeAmount||0), 0);
+  // Supplier contracts are money we pay; they stay out of the fee totals.
+  const clientEngagements = engagements.filter(e => e.contractKind !== 'supplier');
+  const totalFees     = clientEngagements.reduce((s,e) => s + (e.feeAmount||0), 0);
   // Owner's decision 28.10.2026: no invoiced amount; the balance is fee − paid (CF&A only).
-  const cfaEngagements = engagements.filter(e => e.serviceType !== 'LP Investment (FM)');
+  const cfaEngagements = clientEngagements.filter(e => e.serviceType !== 'LP Investment (FM)');
   const totalPaid     = cfaEngagements.reduce((s,e) => s + (e.paid||0), 0);
   const totalBalance  = cfaEngagements.reduce((s,e) => s + (e.feeAmount||0) - (e.paid||0), 0);
   const cntActive     = engagements.filter(e => e.status === 'Active').length;
-  const cntFM         = engagements.filter(e => e.serviceType === 'LP Investment (FM)').length;
-  const cntCFA        = engagements.filter(e => e.serviceType !== 'LP Investment (FM)').length;
+  const cntFM         = clientEngagements.filter(e => e.serviceType === 'LP Investment (FM)').length;
+  const cntCFA        = cfaEngagements.length;
+  const cntSuppliers  = engagements.length - clientEngagements.length;
 
   // Apply filters
   const filtered = engagements.filter(e => {
     if (engStatusFilter && e.status !== engStatusFilter) return false;
     if (engDirFilter === 'FM'  && e.serviceType !== 'LP Investment (FM)') return false;
     if (engDirFilter === 'CFA' && e.serviceType === 'LP Investment (FM)') return false;
+    if (engKindFilter && (e.contractKind || 'client') !== engKindFilter) return false;
     if (engFilter) {
       const q = engFilter.toLowerCase();
       if (!e.clientName.toLowerCase().includes(q) &&
@@ -5420,17 +5425,17 @@ function renderEngagementsPage() {
         <div class="kpi-icon blue"><i class="fas fa-file-contract"></i></div>
         <div class="kpi-body"><span class="kpi-label">Договоров</span>
           <span class="kpi-value">${engagements.length}</span>
-          <span class="kpi-delta">${cntActive} активных</span></div>
+          <span class="kpi-delta">${cntActive} активных${cntSuppliers ? ` · поставщики: ${cntSuppliers}` : ''}</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon purple"><i class="fas fa-exchange-alt"></i></div>
         <div class="kpi-body"><span class="kpi-label">CF&A / FM</span>
           <span class="kpi-value">${cntCFA} / ${cntFM}</span>
-          <span class="kpi-delta">По направлениям</span></div>
+          <span class="kpi-delta">Клиентские, по направлениям</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon orange"><i class="fas fa-file-invoice"></i></div>
-        <div class="kpi-body"><span class="kpi-label">Оплачено (CF&A)</span>
+        <div class="kpi-body"><span class="kpi-label">Оплачено клиентами (CF&A)</span>
           <span class="kpi-value">${fmtCompactAmount(totalPaid)}</span>
           <span class="kpi-delta">По внесённым платёжкам</span></div>
       </div>
@@ -5461,7 +5466,12 @@ function renderEngagementsPage() {
         <option value="CFA" ${engDirFilter==='CFA'?'selected':''}>CF&A</option>
         <option value="FM"  ${engDirFilter==='FM'?'selected':''}>FM (LP)</option>
       </select>
-      ${(engFilter||engStatusFilter||engDirFilter) ? `<button onclick="engFilter='';engStatusFilter='';engDirFilter='';renderEngagementsPage()"
+      <select aria-label="Вид договора" onchange="engKindFilter=this.value;renderEngagementsPage()"
+        style="background:#1c3332;border:1px solid #2a4846;border-radius:8px;padding:7px 12px;color:#e2e8f0;font-size:12px">
+        <option value="" ${engKindFilter===''?'selected':''}>Все виды</option>
+        ${Object.entries(CONTRACT_KIND_LABELS).map(([kind, label]) => `<option value="${kind}" ${engKindFilter===kind?'selected':''}>${label}</option>`).join('')}
+      </select>
+      ${(engFilter||engStatusFilter||engDirFilter||engKindFilter) ? `<button onclick="engFilter='';engStatusFilter='';engDirFilter='';engKindFilter='';renderEngagementsPage()"
         style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px"><i class="fas fa-times"></i> Сбросить</button>` : ''}
       <span style="font-size:11px;color:#5a8a85;white-space:nowrap">${filtered.length} из ${engagements.length}</span>
       <button onclick="openContractTemplateLibrary()" style="background:#193735;border:1px solid #37665f;color:#b6efe4;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Шаблоны Word</button>
@@ -5478,7 +5488,7 @@ function renderEngagementsPage() {
         <table class="data-table">
           <thead>
             <tr>
-              <th>ID</th><th>Клиент</th><th>Направление</th><th>Статус</th>
+              <th>ID</th><th>Клиент / поставщик</th><th>Направление</th><th>Статус</th>
               <th>Подписан</th><th>Сумма / Fee</th><th>Оплачено</th><th>Остаток</th><th>Документ</th>
             </tr>
           </thead>
@@ -5488,9 +5498,10 @@ function renderEngagementsPage() {
               const isFM      = e.serviceType === 'LP Investment (FM)';
               const balance   = (e.feeAmount||0) - (e.paid||0);
               const statusCfg = {Active:{c:'#22c55e',bg:'rgba(34,197,94,0.12)'},Draft:{c:'#8abfbb',bg:'rgba(100,116,139,0.12)'},Completed:{c:'#14b8a6',bg:'rgba(20,184,166,0.12)'},Terminated:{c:'#ef4444',bg:'rgba(239,68,68,0.12)'}}[e.status]||{c:'#8abfbb',bg:'rgba(100,116,139,0.12)'};
-              const dirColor  = isFM ? '#14b8a6' : '#8b5cf6';
-              const dirBg     = isFM ? 'rgba(20,184,166,0.12)' : 'rgba(139,92,246,0.12)';
-              const dirLabel  = isFM ? 'FM · LP' : 'CF&A';
+              const kind      = e.contractKind || 'client';
+              const dirColor  = kind === 'supplier' ? '#94a3b8' : kind === 'unlicensed' ? '#f59e0b' : isFM ? '#14b8a6' : '#8b5cf6';
+              const dirBg     = kind === 'supplier' ? 'rgba(148,163,184,0.14)' : kind === 'unlicensed' ? 'rgba(245,158,11,0.12)' : isFM ? 'rgba(20,184,166,0.12)' : 'rgba(139,92,246,0.12)';
+              const dirLabel  = kind === 'supplier' ? 'Поставщик' : kind === 'unlicensed' ? 'Вне лицензии' : isFM ? 'FM · LP' : 'CF&A';
               const docUrl    = isFM ? (e.lpaUrl||'') : (e.contractUrl||'');
               const signed    = e.signedDate || e.date || '—';
               return `
@@ -5504,7 +5515,7 @@ function renderEngagementsPage() {
                     <div style="font-size:10px;color:#8abfbb">${escapeHtml((e.rm || '').split('(')[0].trim())}</div>
                   </td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${dirBg};color:${dirColor}">${dirLabel}</span>
-                    <div style="font-size:10px;color:#5a8a85;margin-top:2px">${e.serviceType}</div>
+                    <div style="font-size:10px;color:#5a8a85;margin-top:2px">${escapeHtml(e.serviceType || '')}</div>
                   </td>
                   <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${statusCfg.bg};color:${statusCfg.c}">${statusLabel(e.status)}</span>
                     ${e.activationDate ? `<div style="font-size:9px;color:#22c55e;margin-top:2px">✓ ${e.activationDate}</div>` : ''}
@@ -5512,7 +5523,7 @@ function renderEngagementsPage() {
                   <td style="font-size:12px;color:#94a3b8">${signed}</td>
                   <td>
                     <div style="font-weight:700;color:#22c55e;font-size:13px">${fmtCurrency(e.feeAmount||0, e.currency||'USD')}</div>
-                    <div style="font-size:10px;color:#5a8a85">${statusLabel(e.feeType)}</div>
+                    <div style="font-size:10px;color:#5a8a85">${e.feeType ? statusLabel(e.feeType) : ''}</div>
                   </td>
                   ${isFM ? '<td colspan="2" style="font-size:11px;color:#5a8a85" title="Оплаты LP учитываются в Capital Calls">Capital Calls</td>' : `
                   <td style="font-size:12px;color:#22c55e">${fmtCurrency(e.paid||0, e.currency||'USD')}</td>
@@ -5575,6 +5586,7 @@ function openEngagementModal(engId) {
   document.body.style.overflow = 'hidden';
 
   const isFM       = e.serviceType === 'LP Investment (FM)';
+  const kind       = e.contractKind || 'client', supplier = kind === 'supplier';
   const balance    = (e.feeAmount||0) - (e.paid||0);
   let amendArr = [];
   try { amendArr = e.amendments ? (typeof e.amendments === 'string' ? JSON.parse(e.amendments) : e.amendments) : []; } catch(_) {}
@@ -5588,9 +5600,12 @@ function openEngagementModal(engId) {
     ['Договор №',         e.contractNum || '—'],
     ['Дата договора',     e.date || '—'],
     ['Дата подписания',   e.signedDate || '—'],
-    ['Клиент',            e.clientName],
-    ['Тип услуги',        e.serviceType],
-    ['Тип fee',           statusLabel(e.feeType)],
+    ['Вид договора',      CONTRACT_KIND_LABELS[kind]],
+    [supplier ? 'Поставщик' : 'Клиент', e.clientName],
+    ...(e.counterpartyBin     ? [['БИН / ИИН', e.counterpartyBin]] : []),
+    ...(e.counterpartyCountry ? [['Страна',    e.counterpartyCountry]] : []),
+    [supplier ? 'Предмет договора' : 'Тип услуги', e.serviceType],
+    ...(e.feeType ? [['Тип fee', statusLabel(e.feeType)]] : []),
     ['Статус',            statusLabel(e.status)],
     ['Срок',              (e.startDate||'—') + ' → ' + (e.endDate||'—')],
     ['RM',                e.rm],
@@ -5610,13 +5625,22 @@ function openEngagementModal(engId) {
       <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
         <input type="date" id="engEdit_date" value="${escapeAttr(e.date || '')}"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      ${isFM
+      ${kind !== 'client' ? `
+      <div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">${supplier ? 'Поставщик' : 'Клиент'}</label>
+        <input type="text" id="engEdit_partyName" maxlength="300" value="${escapeAttr(e.clientName||'')}" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">БИН / ИИН</label>
+        <input type="text" id="engEdit_partyBin" inputmode="numeric" maxlength="12" value="${escapeAttr(e.counterpartyBin||'')}" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Страна</label>
+        <input type="text" id="engEdit_partyCountry" maxlength="100" value="${escapeAttr(e.counterpartyCountry||'')}" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">${supplier ? 'Предмет договора' : 'Услуга'}</label>
+        <input type="text" id="engEdit_subject" maxlength="200" value="${escapeAttr(e.serviceType||'')}" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>`
+      : isFM
         ? `<div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Тип услуги</label>
              <div style="padding:9px 12px;color:#8abfbb;font-size:13px">${escapeHtml(e.serviceType)} <span style="font-size:10px">(FM — не редактируется)</span></div></div>`
         : obNewSelect('engEdit_serviceType','Тип услуги',['Advising','Arranging','Both'], e.serviceType)}
-      ${obNewSelect('engEdit_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'], e.feeType)}
+      ${supplier ? '' : obNewSelect('engEdit_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'], e.feeType)}
       ${obNewSelect('engEdit_status','Статус', e.status === 'Active' ? ['Active','Completed','Terminated'] : [...new Set([e.status || 'Draft', 'Draft', 'Completed', 'Terminated'])], e.status)}
-      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Сумма гонорара</label>
+      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">${supplier ? 'Сумма договора' : 'Сумма гонорара'}</label>
         <input type="number" id="engEdit_feeAmount" value="${e.feeAmount||0}" min="0"
           style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
       <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Валюта</label>
@@ -5684,9 +5708,9 @@ function openEngagementModal(engId) {
       <div style="font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;margin-bottom:10px">Финансы</div>
       <div style="display:grid;grid-template-columns:repeat(${isFM ? 1 : 3},1fr);gap:10px">
         ${[
-          ['Гонорар', fmtCurrency(e.feeAmount, e.currency||'USD'), '#e2e8f0'],
+          [supplier ? 'Сумма договора' : 'Гонорар', fmtCurrency(e.feeAmount, e.currency||'USD'), '#e2e8f0'],
           ...(isFM ? [] : [
-            ['Оплачено', fmtCurrency(e.paid, e.currency||'USD'), '#22c55e'],
+            [supplier ? 'Оплачено поставщику' : 'Оплачено', fmtCurrency(e.paid, e.currency||'USD'), '#22c55e'],
             [balance < 0 ? 'Переплата' : 'Остаток', fmtCurrency(Math.abs(balance), e.currency||'USD'), balanceColor],
           ]),
         ].map(([l,v,c]) => `
@@ -5695,7 +5719,7 @@ function openEngagementModal(engId) {
             <div style="font-size:15px;font-weight:800;color:${c}">${v}</div>
           </div>`).join('')}
       </div>
-      <div style="font-size:11px;color:#5a8a85;margin-top:10px">${isFM ? 'Оплаты LP учитываются в Capital Calls.' : 'Оплаты вносятся платёжками в блоке «Оплаты» ниже.'}</div>
+      <div style="font-size:11px;color:#5a8a85;margin-top:10px">${isFM ? 'Оплаты LP учитываются в Capital Calls.' : supplier ? 'Наши платежи поставщику вносятся платёжками в блоке «Оплаты» ниже.' : 'Оплаты вносятся платёжками в блоке «Оплаты» ниже.'}</div>
       <!-- Deal ref -->
       <div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end;flex-wrap:wrap">
         <div style="flex:1;min-width:130px">
@@ -5759,14 +5783,19 @@ async function saveEngagementEdit(engId) {
   const e = engagements.find(x => x.id === engId);
   if (!e) return;
   const isFM = e.serviceType === 'LP Investment (FM)';
+  const party = (e.contractKind || 'client') !== 'client';
+  const value = id => document.getElementById(id)?.value.trim() || '';
 
   const feeAmount = parseFloat(document.getElementById('engEdit_feeAmount')?.value);
-  if (!Number.isFinite(feeAmount) || feeAmount <= 0) { showToast('⚠️ Сумма гонорара должна быть больше 0', 'red'); return; }
+  if (!Number.isFinite(feeAmount) || feeAmount <= 0) { showToast('⚠️ Сумма договора должна быть больше 0', 'red'); return; }
+  if (party && (!value('engEdit_partyName') || !value('engEdit_subject'))) { showToast('⚠️ Укажите наименование и предмет договора', 'red'); return; }
+  if (party && value('engEdit_partyBin') && !/^\d{12}$/.test(value('engEdit_partyBin'))) { showToast('⚠️ БИН/ИИН — 12 цифр', 'red'); return; }
 
   const prev = { ...e };
   e.contractNum  = document.getElementById('engEdit_contractNum')?.value.trim() || e.contractNum;
   e.date         = document.getElementById('engEdit_date')?.value || null;
-  e.serviceType  = isFM ? e.serviceType : (document.getElementById('engEdit_serviceType')?.value || e.serviceType);
+  e.serviceType  = isFM ? e.serviceType : party ? value('engEdit_subject') : (document.getElementById('engEdit_serviceType')?.value || e.serviceType);
+  if (party) { e.clientName = value('engEdit_partyName'); e.counterpartyBin = value('engEdit_partyBin') || null; e.counterpartyCountry = value('engEdit_partyCountry') || null; }
   e.feeType      = document.getElementById('engEdit_feeType')?.value || e.feeType;
   e.status       = document.getElementById('engEdit_status')?.value || e.status;
   e.feeAmount    = feeAmount;
@@ -5835,44 +5864,53 @@ function openNewEngagementModal(template = null, selectedClientId = null, openTa
   // FM engagements (LP subscriptions) are generated automatically as part
   // of the onboarding wizard's FM task flow (see registerLPFromOnboarding
   // and the activation-task handling below) with their own required fields
-  // (LPA, LP signed date, first capital call date) — this generic form
-  // always creates a CF&A engagement, so only CF&A clients are offered
+  // (LPA, LP signed date, first capital call date) — a client contract from
+  // this generic form is always CF&A, so only CF&A clients are offered
   // here to avoid mislabeling an FM client's contract as CF&A.
   const clientOptions = obClients.filter(c => c.direction !== 'FM').map(c =>
     `<option value="${c.id}"${c.id === selectedClientId ? ' selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.clientId)})${c.activated ? '' : ' · онбординг в процессе'}</option>`).join('');
 
+  const lab = 'font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase';
+  const input = 'width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box';
+  document.getElementById('obNewModalTitle').innerHTML = '<i class="fas fa-file-contract" style="color:#22c55e;margin-right:8px"></i>Новый договор';
   document.getElementById('obNewModalContent').innerHTML = `
-    <div style="font-size:14px;font-weight:800;color:#f1f5f9;margin-bottom:16px">
-      <i class="fas fa-file-contract" style="color:#22c55e;margin-right:8px"></i>Новый договор
-    </div>
     ${template ? `<div class="contract-metadata-warning">Будет создана отдельная копия шаблона «${escapeHtml(template.name)}», редакция ${template.version}. Реквизиты карточки пока не подставляются в текст автоматически.</div>
       <input type="hidden" id="eng_templateId" value="${template.id}" />
       <input type="hidden" id="eng_templateVersionId" value="${template.versionId}" />
       <input type="hidden" id="eng_templateRequestKey" value="${contractTemplateRequestKey()}" />` : ''}
-    <div style="font-size:11px;color:#5a8a85;margin-bottom:12px">Только для клиентов CF&amp;A — договоры FM (LP Investment) создаются автоматически на этапе онбординга LP.</div>
-    <p class="contract-empty">Черновик можно подготовить до завершения онбординга. Создание договора не активирует клиента и не означает согласование или подписание.</p>
+    <fieldset class="contract-kind-choice">
+      <legend>Вид договора</legend>
+      ${Object.entries(CONTRACT_KIND_LABELS).map(([kind, label]) => `<label><input type="radio" name="eng_kind" value="${kind}"${kind === 'client' ? ' checked' : ''} onchange="engKindChanged()" /> ${label}</label>`).join('')}
+    </fieldset>
+    <p id="eng_kindHint" class="contract-empty"></p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div style="grid-column:1/-1">
-        <label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Клиент *</label>
-        <select id="eng_clientId" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+      <div style="grid-column:1/-1" data-eng-kind="client">
+        <label style="${lab}">Клиент *</label>
+        <select id="eng_clientId" style="${input}">
           ${clientOptions || '<option value="">— Сначала создайте карточку клиента CF&A —</option>'}
         </select>
       </div>
-      ${obNewSelect('eng_serviceType','Тип услуги',['Advising','Arranging','Both'],null)}
-      ${obNewSelect('eng_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'],null)}
-      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Сумма *</label>
-        <input type="number" id="eng_feeAmount" placeholder="50000" min="0"
-          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Валюта *</label>
-        <select id="eng_currency" style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box">
+      <div style="grid-column:1/-1" data-eng-kind="unlicensed supplier">
+        <label id="eng_partyLabel" for="eng_partyName" style="${lab}">Клиент *</label>
+        <input type="text" id="eng_partyName" maxlength="300" placeholder="Наименование организации или ФИО" style="${input}" /></div>
+      <div data-eng-kind="unlicensed supplier"><label for="eng_partyBin" style="${lab}">БИН / ИИН</label>
+        <input type="text" id="eng_partyBin" inputmode="numeric" maxlength="12" placeholder="12 цифр" style="${input}" /></div>
+      <div data-eng-kind="unlicensed supplier"><label for="eng_partyCountry" style="${lab}">Страна</label>
+        <input type="text" id="eng_partyCountry" maxlength="100" placeholder="Казахстан" style="${input}" /></div>
+      <div data-eng-kind="client">${obNewSelect('eng_serviceType','Тип услуги',['Advising','Arranging','Both'],null)}</div>
+      <div data-eng-kind="unlicensed supplier"><label id="eng_subjectLabel" for="eng_subject" style="${lab}">Услуга *</label>
+        <input type="text" id="eng_subject" maxlength="200" style="${input}" /></div>
+      <div data-eng-kind="client unlicensed">${obNewSelect('eng_feeType','Тип вознаграждения',['Fixed Fee','Success Fee','Retainer','Комбинированный'],null)}</div>
+      <div><label id="eng_amountLabel" style="${lab}">Сумма *</label>
+        <input type="number" id="eng_feeAmount" placeholder="50000" min="0" style="${input}" /></div>
+      <div><label style="${lab}">Валюта *</label>
+        <select id="eng_currency" style="${input}">
           ${Object.entries(CURRENCIES).map(([code,c]) => `<option value="${code}"${code==='USD'?' selected':''}>${c.label}</option>`).join('')}
         </select></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Дата договора</label>
-        <input type="date" id="eng_date" value="${today()}"
-          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" /></div>
-      <div><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Deal Ref (опционально)</label>
-        <input type="text" id="eng_dealRef" placeholder="DEAL-XXX-2026"
-          style="width:100%;background:#0f1623;border:1px solid #2a4846;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:13px;box-sizing:border-box" />
+      <div><label style="${lab}">Дата договора</label>
+        <input type="date" id="eng_date" value="${today()}" style="${input}" /></div>
+      <div data-eng-kind="client"><label style="${lab}">Deal Ref (опционально)</label>
+        <input type="text" id="eng_dealRef" placeholder="DEAL-XXX-2026" style="${input}" />
         <div style="font-size:10px;color:#5a8a85;margin-top:3px">Если у клиента уже есть договор с тем же Deal Ref, система считает это Dual-Mandate — требует рассмотрения CF Deal Committee.</div></div>
       ${!template ? `<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#8abfbb;display:block;margin-bottom:4px;text-transform:uppercase">Ссылка на договор (опционально)</label>
         <div style="display:flex;gap:6px">
@@ -5891,18 +5929,48 @@ function openNewEngagementModal(template = null, selectedClientId = null, openTa
     </div>`;
 
   modal.style.display = 'flex';
+  engKindChanged();
   _snapshotObNewModal();
+}
+
+// Owner's decision 30.10.2026: besides client contracts, a client ordering a
+// service outside the licence and a supplier — both without onboarding.
+const CONTRACT_KIND_LABELS = { client: 'Клиент с онбордингом', unlicensed: 'Услуга вне лицензии — без онбординга', supplier: 'Поставщик' };
+const CONTRACT_KIND_HINTS = {
+  client: 'Клиент CF&A с карточкой и онбордингом; черновик можно готовить до завершения онбординга. Договоры FM (LP) создаются на этапе онбординга LP.',
+  unlicensed: 'Услуга не подпадает под лицензию: карточка клиента и онбординг не нужны. Для начала работы нужно решение CEO, COO или Legal с обоснованием.',
+  supplier: 'Договор, по которому платим мы. Для начала работы COO или Legal записывают проверку поставщика в ADATA или причину, по которой она не нужна.',
+};
+function engKindChanged() {
+  const kind = document.querySelector('input[name="eng_kind"]:checked')?.value || 'client';
+  document.querySelectorAll('#obNewModalContent [data-eng-kind]').forEach(el => { el.hidden = !el.dataset.engKind.split(' ').includes(kind); });
+  const supplier = kind === 'supplier', set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  set('eng_kindHint', CONTRACT_KIND_HINTS[kind]);
+  set('eng_partyLabel', supplier ? 'Поставщик *' : 'Клиент *');
+  set('eng_subjectLabel', supplier ? 'Предмет договора *' : 'Услуга *');
+  set('eng_amountLabel', supplier ? 'Сумма договора *' : 'Сумма *');
+  const subject = document.getElementById('eng_subject');
+  if (subject) subject.placeholder = supplier ? 'Например: аудит, аренда офиса, IT-сопровождение' : 'Например: консультация по структуре сделки';
 }
 
 async function saveNewEngagement() {
   const templateId = Number(document.getElementById('eng_templateId')?.value) || null;
   const templateVersionId = Number(document.getElementById('eng_templateVersionId')?.value) || null;
+  const kind = document.querySelector('input[name="eng_kind"]:checked')?.value || 'client';
+  const value = id => document.getElementById(id)?.value.trim() || '';
   const clientIdVal = document.getElementById('eng_clientId')?.value;
-  const client = obClients.find(c => String(c.id) === String(clientIdVal));
+  const client = kind === 'client' ? obClients.find(c => String(c.id) === String(clientIdVal)) : null;
   const feeAmount = parseFloat(document.getElementById('eng_feeAmount')?.value);
-  const dealRef = document.getElementById('eng_dealRef')?.value.trim() || null;
-  if (!client) { showToast('⚠️ Выберите клиента', 'red'); return; }
-  if (!Number.isFinite(feeAmount) || (templateId ? feeAmount < 0 : feeAmount <= 0)) { showToast(templateId ? '⚠️ Укажите неотрицательную сумму' : '⚠️ Сумма гонорара должна быть больше 0', 'red'); return; }
+  const dealRef = kind === 'client' ? value('eng_dealRef') || null : null;
+  if (kind === 'client' && !client) { showToast('⚠️ Выберите клиента', 'red'); return; }
+  if (kind !== 'client' && !value('eng_partyName')) { showToast(kind === 'supplier' ? '⚠️ Укажите поставщика' : '⚠️ Укажите клиента', 'red'); return; }
+  if (kind !== 'client' && !value('eng_subject')) { showToast(kind === 'supplier' ? '⚠️ Укажите предмет договора' : '⚠️ Укажите услугу', 'red'); return; }
+  if (kind !== 'client' && value('eng_partyBin') && !/^\d{12}$/.test(value('eng_partyBin'))) { showToast('⚠️ БИН/ИИН — 12 цифр', 'red'); return; }
+  if (!Number.isFinite(feeAmount) || (templateId ? feeAmount < 0 : feeAmount <= 0)) { showToast(templateId ? '⚠️ Укажите неотрицательную сумму' : '⚠️ Сумма договора должна быть больше 0', 'red'); return; }
+  const party = client
+    ? { contractKind: 'client', clientId: client.id, clientName: client.name, serviceType: document.getElementById('eng_serviceType')?.value, direction: 'CF&A' }
+    : { contractKind: kind, clientId: null, clientName: value('eng_partyName'), serviceType: value('eng_subject'), direction: null,
+        counterpartyBin: value('eng_partyBin') || null, counterpartyCountry: value('eng_partyCountry') || null };
 
   // Two engagements for the same client sharing a Deal Ref is exactly the
   // Dual-Mandate scenario (COI Addendum Section D) — flag it up front
@@ -5915,14 +5983,11 @@ async function saveNewEngagement() {
   const seq = String(engIdCounter++).padStart(3,'0');
   const eng = {
     engId:       `ENG-${new Date().getFullYear()}-${seq}`,
-    clientId:    client.id,
-    clientName:  client.name,
-    serviceType: document.getElementById('eng_serviceType')?.value,
-    direction:   'CF&A',
+    ...party,
     contractNum: `GL-${new Date().getFullYear()}-${seq}`,
     date:        document.getElementById('eng_date')?.value || today(),
     status:      'Draft',
-    feeType:     document.getElementById('eng_feeType')?.value,
+    feeType:     kind === 'supplier' ? null : document.getElementById('eng_feeType')?.value,
     feeAmount,
     currency:    document.getElementById('eng_currency')?.value || 'USD',
     successFee:  null,

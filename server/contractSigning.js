@@ -11,6 +11,7 @@ const { recordAudit } = require('./auditLog');
 const { assertContractAccess, originalFilename, transaction } = require('./contractDocuments');
 const { ContractError, latestCycle, approvalMatches, approvalSummary } = require('./contractApprovalState');
 const { kycValidUntil } = require('./kycPolicy');
+const { contractKind, counterpartyCondition, counterpartyState } = require('./contractKinds');
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const SIGNATURE_COLUMNS = `id, engagement_id, cycle_id, document_version_id, signed_date, original_name, size_bytes, sha256,
@@ -136,8 +137,10 @@ function unmetConflictConditions(tenantId, decisions) {
   }
   return null;
 }
+// A contract without a client card has its own decision instead of onboarding checks.
 function readiness(contract) {
-  const conditions = [signatureCondition(contract), kycCondition(contract), conflictCondition(contract)];
+  const checks = contractKind(contract) === 'client' ? [kycCondition(contract), conflictCondition(contract)] : [counterpartyCondition(contract)];
+  const conditions = [signatureCondition(contract), ...checks];
   return { ready: conditions.every(c => c.state === 'done'), conditions };
 }
 
@@ -165,7 +168,7 @@ function signingState(req, contract) {
     signature: signatureView(active), voided: rows.filter(r => r.status === 'voided').map(signatureView),
     activation: activation ? { date: activation.activation_date, by: activation.activated_by_name, at: activation.activated_at,
       conditions: JSON.parse(activation.conditions_json) } : null,
-    readiness: check, today: localDate(),
+    readiness: check, today: localDate(), counterparty: counterpartyState(req, contract),
     canRegister: writer && !!p.recordContractSignature && !!cycle && !active,
     canVoid: writer && !!p.recordContractSignature && !!active && !started && contract.status !== 'Active',
     canActivate: writer && !!p.manageContracts && contract.status === 'Draft' && check.ready,

@@ -6,6 +6,7 @@ const { requireAuth, requireInternal, requirePermission } = require('./auth');
 const { recordAudit } = require('./auditLog');
 const { engagementToParams, rowToEngagement, ENGAGEMENT_INSERT_SQL } = require('./onboardingMapping');
 const { assertContractAccess, ContractError, handle, originalFilename, validateFile, transaction, insertContractVersion } = require('./contractDocuments');
+const { CONTRACT_KINDS, counterpartyFields } = require('./contractKinds');
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const VERSION_META = 'id, version_number, original_name, size_bytes, sha256, change_note, author_name, author_email, created_at';
@@ -170,19 +171,26 @@ router.post('/:id/versions/:versionId/apply', handle((req, res) => {
 router.post('/:id/versions/:versionId/create-contract', handle((req, res) => {
   const template = getTemplate(req), source = getVersion(req, template, true), b = req.body || {};
   if (template.direction !== 'CF&A') throw new ContractError(400, 'Договоры FM создаются в онбординге. Примените шаблон к существующему пустому черновику');
-  const clientId = integer(b.clientId, 'Клиент');
-  const client = db.prepare('SELECT * FROM ob_clients WHERE tenant_id = ? AND id = ?').get(req.tenantId, clientId);
-  if (!client) throw new ContractError(404, 'Клиент не найден');
-  assertContractAccess(req, { client_id: client.id, direction: client.direction });
-  if (client.direction === 'FM') throw new ContractError(400, 'Выберите клиента CF&A');
-  if (!['Advising', 'Arranging', 'Both'].includes(b.serviceType)) throw new ContractError(400, 'Выберите тип услуги');
-  if (!['Fixed Fee', 'Success Fee', 'Retainer', 'Комбинированный'].includes(b.feeType)) throw new ContractError(400, 'Выберите тип вознаграждения');
+  const kind = b.contractKind ?? 'client';
+  if (!CONTRACT_KINDS.includes(kind)) throw new ContractError(400, 'Выберите вид договора');
+  let party;
+  if (kind === 'client') {
+    const clientId = integer(b.clientId, 'Клиент');
+    const client = db.prepare('SELECT * FROM ob_clients WHERE tenant_id = ? AND id = ?').get(req.tenantId, clientId);
+    if (!client) throw new ContractError(404, 'Клиент не найден');
+    assertContractAccess(req, { client_id: client.id, direction: client.direction });
+    if (client.direction === 'FM') throw new ContractError(400, 'Выберите клиента CF&A');
+    if (!['Advising', 'Arranging', 'Both'].includes(b.serviceType)) throw new ContractError(400, 'Выберите тип услуги');
+    party = { contractKind: kind, clientId, clientName: client.name, serviceType: b.serviceType, direction: 'CF&A', counterpartyBin: null, counterpartyCountry: null };
+  } else party = counterpartyFields(b, kind);
+  // A supplier contract has an amount but no fee type.
+  if (!(kind === 'supplier' && b.feeType == null) && !['Fixed Fee', 'Success Fee', 'Retainer', 'Комбинированный'].includes(b.feeType)) throw new ContractError(400, 'Выберите тип вознаграждения');
   if (typeof b.feeAmount !== 'number' || !Number.isFinite(b.feeAmount) || b.feeAmount < 0 || b.feeAmount > 1e12) throw new ContractError(400, 'Сумма должна быть неотрицательным конечным числом');
   if (typeof b.currency !== 'string' || !/^[A-Z]{3}$/.test(b.currency)) throw new ContractError(400, 'Укажите трёхбуквенный код валюты');
   if (typeof b.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.date) || !Number.isFinite(Date.parse(b.date)) || new Date(b.date).toISOString().slice(0, 10) !== b.date) throw new ContractError(400, 'Укажите корректную дату договора');
   const requestKey = field(b.requestKey, 'Ключ запроса', 64);
   if (!/^[a-zA-Z0-9-]{16,64}$/.test(requestKey)) throw new ContractError(400, 'Обновите форму создания договора');
-  const input = { clientId, serviceType: b.serviceType, feeType: b.feeType, feeAmount: b.feeAmount, currency: b.currency,
+  const input = { ...party, feeType: b.feeType ?? null, feeAmount: b.feeAmount, currency: b.currency,
     date: b.date, notes: field(b.notes, 'Примечание', 5000, false), dealRef: field(b.dealRef, 'Deal Ref', 120, false), templateVersionId: source.id };
   const hash = crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex');
   const result = transaction(() => {
@@ -193,7 +201,7 @@ router.post('/:id/versions/:versionId/create-contract', handle((req, res) => {
       return { contract: rowToEngagement(existing), reused: true };
     }
     activeTemplate(template);
-    const params = engagementToParams({ ...input, clientName: client.name, direction: 'CF&A', status: 'Draft',
+    const params = engagementToParams({ ...input, status: 'Draft',
       rm: req.user.name || req.user.email, startDate: input.date, paid: 0, invoiced: 0, payTerms: 'При подписании' });
     const info = db.prepare(ENGAGEMENT_INSERT_SQL).run(at({ tenantId: req.tenantId, ...params }));
     const suffix = String(info.lastInsertRowid).padStart(3, '0');
@@ -205,7 +213,7 @@ router.post('/:id/versions/:versionId/create-contract', handle((req, res) => {
     db.prepare(`INSERT INTO contract_template_uses (tenant_id, request_key, created_by, payload_hash, engagement_id, template_version_id)
       VALUES (?, ?, ?, ?, ?, ?)`).run(req.tenantId, requestKey, req.user.id, hash, contract.id, source.id);
     recordAudit(db, { tenantId: req.tenantId, entityType: 'engagements', entityId: contract.id, action: 'created', actorEmail: req.user.email,
-      summary: `Договор с «${client.name}» создан по шаблону «${template.name}», редакция ${source.version_number}` });
+      summary: `Договор с «${party.clientName}» создан по шаблону «${template.name}», редакция ${source.version_number}` });
     return { contract: rowToEngagement(db.prepare('SELECT * FROM engagements WHERE tenant_id = ? AND id = ?').get(req.tenantId, contract.id)), reused: false };
   });
   res.status(result.reused ? 200 : 201).json(result);

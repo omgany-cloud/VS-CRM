@@ -1975,6 +1975,48 @@ CREATE TABLE IF NOT EXISTS conflict_conditions (
 CREATE INDEX IF NOT EXISTS idx_conflict_conditions_approval ON conflict_conditions(tenant_id, approval_id);
 `);
 
+// Contract kinds (owner's decision 30.10.2026): a client contract follows the
+// client's onboarding; a client ordering a service outside the licence and a
+// supplier have no client card — their counterparty is named on the contract.
+if (!columnExists('engagements', 'contract_kind')) {
+  db.exec("ALTER TABLE engagements ADD COLUMN contract_kind TEXT NOT NULL DEFAULT 'client' CHECK(contract_kind IN ('client','unlicensed','supplier'))");
+}
+if (!columnExists('engagements', 'counterparty_bin')) db.exec('ALTER TABLE engagements ADD COLUMN counterparty_bin TEXT');
+if (!columnExists('engagements', 'counterparty_country')) db.exec('ALTER TABLE engagements ADD COLUMN counterparty_country TEXT');
+// Instead of KYC and the conflict check: the exemption from onboarding (CEO,
+// COO or Legal) or the supplier's ADATA check (COO or Legal). The latest row
+// of a contract is in force; earlier ones stay as history.
+db.exec(`
+CREATE TABLE IF NOT EXISTS contract_counterparty_decisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id),
+  check_kind TEXT NOT NULL CHECK(check_kind IN ('exemption','screening')),
+  result TEXT NOT NULL CHECK(result IN ('approved','not_required','rejected')),
+  note TEXT NOT NULL,
+  decided_by INTEGER NOT NULL REFERENCES users(id),
+  decided_by_name TEXT NOT NULL,
+  decided_at TEXT NOT NULL,
+  request_key TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  UNIQUE(tenant_id, request_key)
+);
+CREATE INDEX IF NOT EXISTS idx_contract_counterparty_decisions ON contract_counterparty_decisions(tenant_id, engagement_id);
+`);
+// Neither COO nor Legal existed as a role; both are added once to every
+// company together with the two permissions, as later admin edits must stick.
+if (!columnExists('roles', 'approve_no_onboarding')) {
+  db.exec('ALTER TABLE roles ADD COLUMN approve_no_onboarding INTEGER NOT NULL DEFAULT 0');
+  db.exec("UPDATE roles SET approve_no_onboarding = 1 WHERE is_system = 1 AND code = 'CEO'");
+}
+if (!columnExists('roles', 'check_counterparties')) {
+  db.exec('ALTER TABLE roles ADD COLUMN check_counterparties INTEGER NOT NULL DEFAULT 0');
+  const addRole = db.prepare(`INSERT INTO roles (tenant_id, code, label, icon, color, internal, access_fm, approve_no_onboarding, check_counterparties, is_system)
+    SELECT t.id, ?, ?, ?, ?, 1, 1, 1, 1, 1 FROM tenants t WHERE NOT EXISTS (SELECT 1 FROM roles r WHERE r.tenant_id = t.id AND r.code = ?)`);
+  addRole.run('COO', 'COO', 'fa-briefcase', '#f97316', 'COO');
+  addRole.run('LEGAL', 'Legal (юрист)', 'fa-scale-balanced', '#a855f7', 'LEGAL');
+}
+
 // node:sqlite's StatementSync binds named params as object keys that
 // INCLUDE the sigil used in the SQL (e.g. SQL "@name" <-> key "@name").
 // This helper lets the rest of the codebase pass plain camelCase keys.

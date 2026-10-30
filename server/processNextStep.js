@@ -7,6 +7,7 @@ const { handle, ContractError } = require('./contractDocuments');
 const { getSource } = require('./discussionSources');
 const { contractMetadata, latestCycle, approvalSummary } = require('./contractApprovalState');
 const { readiness, activeSignature } = require('./contractSigning');
+const { contractKind, counterpartyCondition, canDecide } = require('./contractKinds');
 const { HALTS } = require('./onboardingRules');
 
 // [CF&A, FM] labels; the stored task titles are the onboarding module's English names.
@@ -59,11 +60,14 @@ function contractStep(req, engagementId) {
   const summary = approvalSummary(contract), cycle = latestCycle(contract.tenant_id, contract.id);
   const signature = activeSignature(contract.tenant_id, contract.id);
   const approved = summary.status === 'approved', active = contract.status === 'Active';
+  // Without a client card the exemption or the supplier check runs alongside the approval.
+  const party = contractKind(contract) === 'client' ? null : counterpartyCondition(contract);
   const steps = [
     { number: '1', title: 'Файл договора', status: contract.document_version ? 'completed' : 'open' },
     { number: '2', title: 'Согласование', status: approved || active ? 'completed' : summary.status === 'active' ? 'in_progress' : contract.document_version ? 'open' : 'locked' },
     { number: '3', title: 'Подписание', status: signature || active ? 'completed' : approved ? 'open' : 'locked' },
-    { number: '4', title: 'Начало работы', status: active ? 'completed' : signature ? 'open' : 'locked' },
+    ...(party ? [{ number: '4', title: party.label, status: party.state === 'done' || active ? 'completed' : party.state === 'rejected' ? 'rejected' : 'open' }] : []),
+    { number: party ? '5' : '4', title: 'Начало работы', status: active ? 'completed' : signature ? 'open' : 'locked' },
   ];
   const base = { process: 'contract', processId: contract.id, processTitle: source.title, steps, done: steps.filter(s => s.status === 'completed').length };
   const card = (section, label) => ({ kind: 'contract-card', section, label });
@@ -72,6 +76,15 @@ function contractStep(req, engagementId) {
     return { ...base, tone: 'done', title: started ? `Работа по договору начата ${started.activation_date}` : 'Работа по договору идёт' };
   }
   if (['Completed', 'Terminated'].includes(contract.status)) return { ...base, tone: 'done', title: contract.status === 'Completed' ? 'Договор завершён' : 'Договор прекращён' };
+  if (party?.state === 'pending' && canDecide(req, contract)) {
+    return { ...base, tone: 'action', mine: true, who: party.who, action: card('signing', 'Открыть карточку договора'),
+      title: party.key === 'exemption' ? 'Решите, нужен ли клиенту онбординг' : 'Проверьте поставщика в ADATA',
+      text: party.key === 'exemption' ? 'Услуга вне лицензии: запишите решение с обоснованием' : 'Запишите результат проверки или причину, по которой она не нужна' };
+  }
+  if (party?.state === 'rejected') {
+    return { ...base, tone: 'stop', title: party.key === 'exemption' ? 'Договор без онбординга не разрешён' : 'Отказ по итогам проверки поставщика',
+      text: party.detail, who: party.who, action: card('signing', 'Открыть карточку договора') };
+  }
   if (!contract.document_version) return { ...base, tone: 'action', title: 'Загрузите файл договора', text: 'DOCX или PDF — в блоке «Версии документа»', action: card('versions', 'Открыть карточку договора') };
   if (summary.status === 'active') {
     const decisions = db.prepare('SELECT assignee_id, assignee_name, status FROM contract_approval_steps WHERE tenant_id = ? AND cycle_id = ? ORDER BY position').all(req.tenantId, cycle.id);
@@ -91,10 +104,11 @@ function contractStep(req, engagementId) {
     const check = readiness(contract);
     if (check.ready) {
       return writer && p.manageContracts
-        ? { ...base, tone: 'action', title: 'Начните работу по договору', text: 'Подписание и проверки клиента выполнены', action: card('signing', 'Начать работу') }
+        ? { ...base, tone: 'action', title: 'Начните работу по договору', text: party ? 'Подписание и решение по контрагенту есть' : 'Подписание и проверки клиента выполнены', action: card('signing', 'Начать работу') }
         : { ...base, tone: 'wait', title: 'Договор готов к началу работы', text: 'Начинает работу сотрудник с правом ведения договоров' };
     }
     const unmet = check.conditions.filter(c => c.state !== 'done'), missing = unmet.map(c => `${c.label} — ${c.detail}`).join('; ');
+    if (party) return { ...base, tone: 'wait', title: 'Для начала работы не хватает решения по контрагенту', who: party.who, text: missing, action: card('signing', 'Открыть карточку договора') };
     // Only a conflict decision or its conditions left: that is where to go, not onboarding.
     if (unmet.length === 1 && unmet[0].approvalId) {
       return { ...base, tone: 'wait', title: 'Для начала работы не хватает решения по конфликту интересов', text: missing,
@@ -103,7 +117,7 @@ function contractStep(req, engagementId) {
     return { ...base, tone: 'wait', title: 'Для начала работы не хватает проверок клиента', text: missing,
       ...(contract.client_id ? { action: { kind: 'onboarding-client', clientId: contract.client_id, label: 'Открыть онбординг' } } : {}) };
   }
-  if (!contract.client_id) return { ...base, tone: 'action', title: 'Свяжите договор с карточкой клиента', text: 'Без клиента договор нельзя отправить на согласование', action: card('details', 'Открыть карточку договора') };
+  if (!party && !contract.client_id) return { ...base, tone: 'action', title: 'Свяжите договор с карточкой клиента', text: 'Без клиента договор нельзя отправить на согласование', action: card('details', 'Открыть карточку договора') };
   const version = db.prepare('SELECT id, metadata_json FROM engagement_document_versions WHERE tenant_id = ? AND engagement_id = ? AND version_number = ?')
     .get(req.tenantId, contract.id, contract.document_version);
   if (summary.status === 'needs_revision' || version?.metadata_json !== JSON.stringify(contractMetadata(contract))) {

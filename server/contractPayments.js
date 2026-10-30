@@ -81,7 +81,7 @@ function paymentState(req, contract) {
   const fm = fmContract(contract);
   const rows = db.prepare(`SELECT ${COLUMNS} FROM contract_payments WHERE tenant_id = ? AND engagement_id = ? ORDER BY paid_date DESC, id DESC`).all(req.tenantId, contract.id);
   const paid = round(contract.paid || 0), fee = round(contract.fee_amount || 0);
-  return { engagementId: contract.id, fm, currency: contract.currency || 'USD', feeAmount: fee, paidBefore: round(contract.paid_before_payments || 0),
+  return { engagementId: contract.id, fm, supplier: contract.contract_kind === 'supplier', currency: contract.currency || 'USD', feeAmount: fee, paidBefore: round(contract.paid_before_payments || 0),
     paid, balance: fm ? null : round(fee - paid), payments: rows.map(paymentView), canRecord: !fm && canRecord(req), today: localDate() };
 }
 function command(req, key, input, execute) {

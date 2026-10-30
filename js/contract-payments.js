@@ -61,12 +61,13 @@ function renderContractPayments(state) {
   }
   const money = value => escapeHtml(fmtCurrency(value, data.currency));
   const share = data.feeAmount > 0 ? Math.min(100, Math.round(data.paid / data.feeAmount * 100)) : 0;
+  // A supplier contract: the payment orders are ours.
   panel.querySelector('#contractPaymentsSummary').innerHTML = `<div class="contract-payment-totals">
-      <div><small>Гонорар</small><strong>${money(data.feeAmount)}</strong></div>
-      <div><small>Оплачено</small><strong class="paid">${money(data.paid)}</strong></div>
+      <div><small>${data.supplier ? 'Сумма договора' : 'Гонорар'}</small><strong>${money(data.feeAmount)}</strong></div>
+      <div><small>${data.supplier ? 'Оплачено поставщику' : 'Оплачено'}</small><strong class="paid">${money(data.paid)}</strong></div>
       <div><small>${data.balance < 0 ? 'Переплата' : 'Остаток'}</small><strong class="${data.balance > 0 ? 'due' : 'paid'}">${money(Math.abs(data.balance))}</strong></div>
     </div>
-    <div class="contract-payment-progress" role="img" aria-label="Оплачено ${share}% гонорара"><span style="width:${share}%"></span></div>
+    <div class="contract-payment-progress" role="img" aria-label="Оплачено ${share}% ${data.supplier ? 'суммы договора' : 'гонорара'}"><span style="width:${share}%"></span></div>
     ${data.paidBefore > 0 ? `<p class="contract-empty">Из них внесено вручную до перехода на платёжки: ${money(data.paidBefore)}.</p>` : ''}`;
   panel.querySelector('#contractPaymentsAdd').hidden = !data.canRecord;
   panel.querySelector('#contractPaymentCurrency').textContent = data.currency;

@@ -332,3 +332,13 @@
 .conflict-cond-check input { width: 16px; height: 16px; accent-color: #2dd4bf; }
 .conflict-cond-submit { justify-content: flex-end; padding-top: 12px; border-top: 1px solid #2a4846; }
 @media(max-width: 600px) { .conflict-cond-grid { grid-template-columns: 1fr; } }
+/* Contract kind in the new-contract form (owner's decision 30.10.2026). */
+.contract-kind-choice { border: 1px solid #2a4846; border-radius: 8px; padding: 8px 12px 10px; margin: 0 0 6px; }
+.contract-kind-choice legend { color: #8abfbb; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 0 4px; }
+.contract-kind-choice label { display: flex; align-items: center; gap: 8px; color: #e2e8f0; font-size: 13px; padding: 4px 0; cursor: pointer; }
+.contract-kind-choice input { accent-color: #14b8a6; margin: 0; }
+#obNewModalContent [data-eng-kind][hidden] { display: none; }
+#contractCounterpartyResult { width: 100%; box-sizing: border-box; background: #0f1d24; color: #e2e8f0; border: 1px solid #3b5e5b; border-radius: 7px; padding: 9px; font: inherit; font-size: 12px; }
+/* "Сделать редакцией договора" next to a chat attachment (owner's request 30.10.2026). */
+.discussion-make-version { display: inline-block; margin: 2px 0 0 8px; padding: 4px 0; border: 0; background: transparent; color: #5eead4; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.discussion-make-version:disabled { opacity: .6; cursor: progress; }

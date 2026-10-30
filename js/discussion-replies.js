@@ -56,7 +56,7 @@ function renderDiscussionTimeline(entries,state) {
       ${entry.label?`<strong class="contract-chat-event-title">${escapeHtml(entry.label)}</strong>`:''}
       ${entry.text?`<p>${renderMentionedText(entry.text,entry.mentions)}</p>`:''}
       ${entry.fileId?`<button type="button" class="contract-secondary" onclick="downloadContractVersion(${state.engagementId},${entry.fileId},this)">${escapeHtml(entry.filename)} ↓</button>`:''}
-      ${(entry.attachments||[]).map(file=>`<button type="button" class="contract-secondary discussion-file" onclick="downloadDiscussionAttachment(${file.id},this)"><i class="fas fa-paperclip" aria-hidden="true"></i> ${escapeHtml(file.name)} <small>${Math.ceil(file.size/1024)} КБ</small><i class="fas fa-download" aria-hidden="true"></i></button>`).join('')}
+      ${(entry.attachments||[]).map(file=>`<button type="button" class="contract-secondary discussion-file" onclick="downloadDiscussionAttachment(${file.id},this)"><i class="fas fa-paperclip" aria-hidden="true"></i> ${escapeHtml(file.name)} <small>${Math.ceil(file.size/1024)} КБ</small><i class="fas fa-download" aria-hidden="true"></i></button>${typeof canMakeContractVersion==='function'&&canMakeContractVersion(state,file)?`<button type="button" class="discussion-text-action discussion-make-version" onclick="saveAttachmentAsContractVersion(${file.id},this)" title="Сохранить файл новой редакцией в карточке договора — согласуют только редакции">Сделать редакцией договора</button>`:''}`).join('')}
       </div></article>`;
   }).join('');
 }

@@ -177,3 +177,32 @@ test('reply selection keeps text, sends source ID, cancels independently and esc
   assert.match(html,/jumpToDiscussionMessage\(6\)/);assert.match(html,/&lt;original&gt;/);assert.ok(!html.includes('contract-chat-own'));
   state.chat.canPost=false;ctx.renderContractDiscussion(state);assert.ok(!elements.get('contractChatFeed').innerHTML.includes('replyToDiscussionMessage('));
 });
+
+test('a DOCX or PDF attached in a contract task can be made a revision; never while the revision is under approval', async () => {
+  const { ctx, elements, state } = ui();
+  let readOnly = false, calls = [], toasts = [];
+  Object.assign(ctx, { currentUserPermission: key => key === 'readOnly' && readOnly, prompt: () => 'Правки из переписки',
+    showToast: (m, c) => toasts.push([m, c]), apiFetch: async (url, options) => { calls.push([url, JSON.parse(options.body)]); return { currentVersion: 2 }; },
+    loadContractConversation: async () => {}, contractConversationOpen: () => true });
+  state.data.currentVersion = 1;
+  state.chat.messages.set(3, { id: 3, createdAt: '2026-10-30', authorId: 2, author: 'Юрист', text: 'Новая редакция', version: 1,
+    attachments: [{ id: 21, name: 'Договор v2.docx', size: 2048 }, { id: 22, name: 'скан.png', size: 1024 }] });
+  const feed = () => { state.feedSignature = ''; ctx.renderContractDiscussion(state); return elements.get('contractChatFeed').innerHTML; };
+  let html = feed();
+  assert.match(html, /saveAttachmentAsContractVersion\(21,this\)/);
+  assert.ok(!html.includes('saveAttachmentAsContractVersion(22'), 'only DOCX and PDF can be a revision');
+  state.data.summary.frozen = true;
+  assert.ok(!feed().includes('saveAttachmentAsContractVersion'), 'hidden while the revision is under approval');
+  state.data.summary.frozen = false; readOnly = true;
+  assert.ok(!feed().includes('saveAttachmentAsContractVersion'), 'hidden for view-only roles');
+  readOnly = false; state.kind = 'room';
+  assert.ok(!feed().includes('saveAttachmentAsContractVersion'), 'a free task has no contract revisions');
+
+  state.kind = 'contract';
+  await ctx.saveAttachmentAsContractVersion(21, { disabled: false });
+  assert.deepEqual(calls, [['/api/engagements/7/versions/from-attachment', { fileId: 21, changeNote: 'Правки из переписки', expectedVersion: 1 }]]);
+  assert.deepEqual(toasts[0], ['Редакция 2 сохранена в карточке договора', 'green']);
+  ctx.prompt = () => '  ';
+  await ctx.saveAttachmentAsContractVersion(21, { disabled: false });
+  assert.equal(calls.length, 1, 'no reason — nothing is sent');
+});

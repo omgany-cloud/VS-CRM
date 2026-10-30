@@ -31,6 +31,18 @@ function contractSigningPanel(engagementId) {
       </form>
     </details>
     <div id="contractSigningConditions"></div>
+    <div id="contractCounterparty" hidden>
+      <h4 id="contractCounterpartyTitle" class="contract-subheading"></h4>
+      <div id="contractCounterpartyCurrent"></div>
+      <form id="contractCounterpartyForm" hidden onsubmit="event.preventDefault();recordCounterpartyDecision(${engagementId})">
+        <label for="contractCounterpartyResult">Решение</label>
+        <select id="contractCounterpartyResult" required></select>
+        <label id="contractCounterpartyNoteLabel" for="contractCounterpartyNote">Обоснование</label>
+        <textarea id="contractCounterpartyNote" maxlength="2000" rows="2" required></textarea>
+        <button id="contractCounterpartySubmit" type="submit" class="contract-primary">Записать решение</button>
+      </form>
+      <div id="contractCounterpartyHistory"></div>
+    </div>
     <div id="contractSigningHistory"></div>
   </section>`;
 }
@@ -89,9 +101,51 @@ function renderContractSigning(state) {
     : data.canActivate ? `<button type="button" class="contract-primary" onclick="activateContractWork(${data.engagementId})">Начать работу</button>`
     : canManage ? '<p class="contract-empty">«Начать работу» станет доступно, когда все условия выполнены.</p>' : '';
   panel.querySelector('#contractSigningConditions').innerHTML = `<h4 class="contract-subheading">Условия начала работы</h4>${conditions}${action}`;
+  renderCounterpartyDecision(panel, data.counterparty);
 
   panel.querySelector('#contractSigningHistory').innerHTML = data.voided.length
     ? `<details class="contract-version-history"><summary>Аннулированные регистрации (${data.voided.length})</summary>${data.voided.map(s => renderContractSignature(s, data.engagementId, false)).join('')}</details>` : '';
+}
+
+// A contract without a client card: the exemption from onboarding or the
+// supplier's ADATA check (server/contractKinds.js). The form keeps its input.
+function renderCounterpartyDecision(panel, party) {
+  const box = panel.querySelector('#contractCounterparty');
+  box.hidden = !party;
+  if (!party) return;
+  const exemption = party.check === 'exemption';
+  const decision = (d, current) => `<article class="contract-version${current ? ' contract-version-current' : ''}">
+    <div class="contract-version-top"><strong>${escapeHtml(d.resultLabel)}</strong></div>
+    <p class="contract-version-meta">${escapeHtml(d.decidedBy)} · ${escapeHtml(contractVersionDate(d.decidedAt))}</p>
+    <p class="contract-version-note">${escapeHtml(d.note)}</p></article>`;
+  panel.querySelector('#contractCounterpartyTitle').textContent = party.label;
+  panel.querySelector('#contractCounterpartyCurrent').innerHTML = party.current ? decision(party.current, true)
+    : `<p class="contract-empty">${exemption ? 'Решение ещё не принято' : 'Проверка ещё не записана'}. ${exemption ? 'Принимают' : 'Проверяют'}: ${escapeHtml(party.who)}.</p>`;
+  panel.querySelector('#contractCounterpartyForm').hidden = !party.canDecide;
+  const select = panel.querySelector('#contractCounterpartyResult'), options = party.results.map(r => r.value).join();
+  if (select.dataset.options !== options) {
+    select.innerHTML = '<option value="">— выберите —</option>' + party.results.map(r => `<option value="${escapeHtml(r.value)}">${escapeHtml(r.label)}</option>`).join('');
+    select.dataset.options = options;
+  }
+  panel.querySelector('#contractCounterpartyNoteLabel').textContent = exemption ? 'Обоснование: почему услуга вне лицензии' : 'Результат проверки в ADATA или причина, по которой она не нужна';
+  panel.querySelector('#contractCounterpartySubmit').textContent = party.current ? 'Изменить решение' : 'Записать решение';
+  panel.querySelector('#contractCounterpartyHistory').innerHTML = party.history.length
+    ? `<details class="contract-version-history"><summary>Предыдущие решения (${party.history.length})</summary>${party.history.map(d => decision(d, false)).join('')}</details>` : '';
+}
+
+function recordCounterpartyDecision(engagementId) {
+  const state = contractSigningUI, party = state?.data?.counterparty;
+  if (!party?.canDecide) return;
+  const result = state.panel.querySelector('#contractCounterpartyResult').value;
+  const note = state.panel.querySelector('#contractCounterpartyNote').value.trim();
+  if (!result || !note) return contractSigningMessage(party.check === 'exemption' ? 'Выберите решение и укажите обоснование' : 'Выберите результат и опишите проверку', true);
+  const expectedDecisionId = party.current?.id || 0;
+  const requestKey = contractSigningKey(state, 'counterparty', JSON.stringify([result, note, expectedDecisionId]));
+  return runContractSigningAction(engagementId, 'Сохраняем решение…', async () => {
+    await apiFetch(`/api/engagements/${engagementId}/counterparty-decisions`, { method: 'POST', body: JSON.stringify({ result, note, expectedDecisionId, requestKey }) });
+    showToast('Решение записано', 'green');
+    return apiFetch(`/api/engagements/${engagementId}/signing`);
+  });
 }
 
 // Keep the cached registry row in step with server-owned fields.

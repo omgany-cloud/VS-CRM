@@ -2,6 +2,36 @@
 
 Version and date are updated here on every push to GitHub.
 
+## [1.65.0] - 2026-10-30
+
+### Added
+- Contract kinds. A new contract is a client contract with onboarding (as
+  before), a contract for a service outside the licence (no client card, no
+  onboarding) or a supplier contract. The last two name the counterparty on
+  the contract: name, BIN/IIN and country; a supplier contract has a subject
+  instead of a service type and no fee type. The kind is set once.
+- Instead of KYC and the conflict check, work on such a contract starts after
+  a recorded decision: "onboarding not required" with a reason (CEO, COO or
+  Legal) or the supplier's ADATA check — checked, not required, or refused
+  (COO or Legal). The decision is made in the contract card, can be changed
+  until work starts and keeps its history. "Next step" gives it to the person
+  who can decide, marked as their turn.
+- COO and Legal roles with two new permissions, "Contract without onboarding"
+  and "Supplier check (ADATA)"; the CEO has the first one.
+- Contracts registry: filter by kind and "Outside licence" / "Supplier"
+  badges. Supplier payments are our payments to the supplier and are left out
+  of the client payment totals.
+- "Make it a contract revision" next to a DOCX or PDF attached in a
+  contract's task: with a reason, the file becomes the next revision in the
+  contract card. Until then an attachment is only a chat file — approval and
+  signing always use the card's revisions. Not available while a revision is
+  under approval.
+
+### Changed
+- A contract of the new kinds can be sent for approval without a client card.
+- The data inventory no longer lists them as client contracts without a
+  client card.
+
 ## [1.64.0] - 2026-10-29
 
 ### Added

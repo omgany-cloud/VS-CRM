@@ -5,9 +5,11 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const IDS = ['contractSigningMessage', 'contractSigningStatus', 'contractSigningForm', 'contractSigningFile', 'contractSigningDate',
-  'contractSigningHint', 'contractSigningSubmit', 'contractSigningVoid', 'contractSigningVoidReason', 'contractSigningConditions', 'contractSigningHistory'];
+  'contractSigningHint', 'contractSigningSubmit', 'contractSigningVoid', 'contractSigningVoidReason', 'contractSigningConditions', 'contractSigningHistory',
+  'contractCounterparty', 'contractCounterpartyTitle', 'contractCounterpartyCurrent', 'contractCounterpartyForm', 'contractCounterpartyResult',
+  'contractCounterpartyNoteLabel', 'contractCounterpartyNote', 'contractCounterpartySubmit', 'contractCounterpartyHistory'];
 function ui() {
-  const elements = new Map(IDS.map(id => [id, { innerHTML: '', textContent: '', hidden: false, value: '', disabled: false, files: [] }]));
+  const elements = new Map(IDS.map(id => [id, { innerHTML: '', textContent: '', hidden: false, value: '', disabled: false, files: [], dataset: {} }]));
   const panel = { dataset: { engagementId: '7' }, querySelector: s => elements.get(s.slice(1)),
     querySelectorAll: () => ['contractSigningFile', 'contractSigningDate', 'contractSigningSubmit'].map(id => elements.get(id)) };
   const calls = [], toasts = [];
@@ -44,6 +46,7 @@ test('panel shows the next step, escapes server text and offers only allowed act
   const conditions = elements.get('contractSigningConditions').innerHTML;
   assert.match(conditions, /&lt;No-Go&gt;/); assert.ok(!conditions.includes('<No-Go>'));
   assert.match(conditions, /станет доступно/); assert.ok(!conditions.includes('activateContractWork'));
+  assert.equal(elements.get('contractCounterparty').hidden, true, 'a client contract has no counterparty decision');
 
   const signed = { id: 5, version: 2, signedDate: '2026-10-20', name: '<signed>.pdf', size: 10, recordedBy: 'RM', recordedAt: 'now' };
   ctx.apiFetch = async () => state({ signature: signed, canRegister: false, canVoid: true, canActivate: true,
@@ -88,4 +91,35 @@ test('a late response for a closed panel is ignored', async () => {
   ctx.panel = { dataset: { engagementId: '8' } };
   finish(state()); await pending;
   assert.equal(elements.get('contractSigningStatus').innerHTML, '');
+});
+
+test('a supplier contract shows its ADATA check; the decider records it and a retry reuses the request key', async () => {
+  const { ctx, elements, toasts } = ui();
+  const party = { kind: 'supplier', check: 'screening', label: 'Проверка поставщика (ADATA)', who: 'COO или Legal', current: null, history: [], canDecide: true,
+    results: [{ value: 'approved', label: 'Проверен в ADATA' }, { value: 'not_required', label: 'Проверка не требуется' }, { value: 'rejected', label: 'Отказ' }] };
+  ctx.apiFetch = async () => state({ counterparty: party });
+  await ctx.loadContractSigning(7);
+  assert.equal(elements.get('contractCounterparty').hidden, false);
+  assert.equal(elements.get('contractCounterpartyTitle').textContent, 'Проверка поставщика (ADATA)');
+  assert.match(elements.get('contractCounterpartyCurrent').innerHTML, /Проверка ещё не записана\. Проверяют: COO или Legal/);
+  assert.equal(elements.get('contractCounterpartyForm').hidden, false);
+  assert.match(elements.get('contractCounterpartyResult').innerHTML, /value="not_required"/);
+
+  elements.get('contractCounterpartyResult').value = 'not_required';
+  ctx.recordCounterpartyDecision(7);
+  assert.match(elements.get('contractSigningMessage').textContent, /опишите проверку/);
+  elements.get('contractCounterpartyNote').value = '<Разовая закупка>';
+  const posts = [];
+  const decided = { ...party, current: { id: 3, resultLabel: 'Проверка не требуется', note: '<Разовая закупка>', decidedBy: 'Legal', decidedAt: 'now' } };
+  ctx.apiFetch = async (url, options) => { if (!options) return state({ counterparty: party }); posts.push([url, JSON.parse(options.body)]); throw new Error('Сеть недоступна'); };
+  await ctx.recordCounterpartyDecision(7);
+  assert.equal(elements.get('contractSigningMessage').textContent, 'Сеть недоступна');
+  ctx.apiFetch = async (url, options) => { if (!options) return state({ counterparty: decided }); posts.push([url, JSON.parse(options.body)]); return { created: true }; };
+  await ctx.recordCounterpartyDecision(7);
+  assert.equal(posts[0][0], '/api/engagements/7/counterparty-decisions');
+  assert.deepEqual(posts[0][1], { result: 'not_required', note: '<Разовая закупка>', expectedDecisionId: 0, requestKey: posts[0][1].requestKey });
+  assert.equal(posts[1][1].requestKey, posts[0][1].requestKey);
+  assert.ok(toasts.some(([m]) => m === 'Решение записано'));
+  assert.match(elements.get('contractCounterpartyCurrent').innerHTML, /&lt;Разовая закупка&gt;/);
+  assert.equal(elements.get('contractCounterpartySubmit').textContent, 'Изменить решение');
 });

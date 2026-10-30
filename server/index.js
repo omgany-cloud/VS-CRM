@@ -73,6 +73,7 @@ const contractTemplatesRouter = require('./contractTemplates');
 const contractApprovalsRouter = require('./contractApprovals');
 const { router: contractSigningRouter } = require('./contractSigning');
 const { contractMetadata, assertApprovalEditable } = require('./contractApprovalState');
+const contractKinds = require('./contractKinds');
 const { upsertTenant, upsertUser, seedSystemRoles } = require('./tenantProvisioning');
 const { fundToParams, rowToFund, INSERT_SQL: FUND_INSERT_SQL, UPDATE_SQL: FUND_UPDATE_SQL, operatingModelForAssetClass } = require('./fundMapping');
 const { rowToFirstClosing, firstClosingToParams, INSERT_SQL: FIRST_CLOSING_INSERT_SQL, UPDATE_SQL: FIRST_CLOSING_UPDATE_SQL } = require('./firstClosingMapping');
@@ -5843,9 +5844,17 @@ function engagementSigningError(existing, b) {
 app.use('/api/engagements', contractDocumentsRouter);
 app.use('/api/engagements', contractSigningRouter);
 app.use('/api/engagements', require('./contractPayments').router);
+app.use('/api/engagements', contractKinds.router);
 app.use('/api/process-steps', require('./processNextStep').router);
 app.use('/api/contract-templates', contractTemplatesRouter);
 app.use('/api', contractApprovalsRouter);
+
+// Client contracts keep their client card; the other kinds name the counterparty
+// on the contract itself (server/contractKinds.js). The kind never changes.
+function engagementKindFields(kind, b) {
+  if (!contractKinds.CONTRACT_KINDS.includes(kind)) throw new ContractError(400, 'Выберите вид договора');
+  return kind === 'client' ? { contractKind: 'client', counterpartyBin: null, counterpartyCountry: null } : contractKinds.counterpartyFields(b, kind);
+}
 
 function checkEngagementAccess(req, res, row) {
   try { assertContractAccess(req, row); return true; }
@@ -5857,7 +5866,9 @@ function checkEngagementAccess(req, res, row) {
 }
 
 app.post('/api/engagements', requireAuth, requireInternal, (req, res) => {
-  const b = req.body || {};
+  let b;
+  try { b = { ...(req.body || {}), ...engagementKindFields((req.body || {}).contractKind ?? 'client', req.body || {}) }; }
+  catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
   if (!b.clientName) return res.status(400).json({ error: 'clientName is required' });
   if (engagementHasNegativeAmount(b)) return res.status(400).json({ error: 'amount fields cannot be negative' });
   const signingError = engagementSigningError(null, b);
@@ -5885,7 +5896,11 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   if (chineseWallBlocks(req.user.permissions, existing.direction)) return res.status(403).json({ error: 'Forbidden: RM cannot access FM-direction engagements' });
   const signingError = engagementSigningError(existing, req.body || {});
   if (signingError) return res.status(409).json({ error: signingError });
+  const kind = contractKinds.contractKind(existing);
+  if ((req.body || {}).contractKind !== undefined && req.body.contractKind !== kind) return res.status(409).json({ error: 'Вид договора не меняется — заведите новый договор' });
   const merged = Object.assign(rowToEngagement(existing), req.body || {});
+  try { Object.assign(merged, engagementKindFields(kind, merged)); }
+  catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
   const hasContractHistory = existing.document_version > 0 || !!db.prepare('SELECT id FROM contract_discussion_messages WHERE tenant_id = ? AND engagement_id = ? LIMIT 1').get(req.tenantId, existing.id);
   if (hasContractHistory && (
     merged.clientId !== existing.client_id || merged.direction !== existing.direction ||
@@ -5900,10 +5915,11 @@ app.put('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
       service_type: params.serviceType, fee_type: params.feeType, fee_amount: params.feeAmount,
       currency: params.currency, success_fee: params.successFee, retainer: params.retainer,
       fee_rate: params.feeRate, deal_value: params.dealValue, pay_terms: params.payTerms,
-      start_date: params.startDate, end_date: params.endDate };
+      start_date: params.startDate, end_date: params.endDate, counterparty_bin: params.counterpartyBin, counterparty_country: params.counterpartyCountry };
     if (JSON.stringify(contractMetadata(existing)) !== JSON.stringify(contractMetadata(proposed))) assertApprovalEditable(existing);
   } catch (err) { if (err instanceof ContractError) return res.status(err.status).json({ error: err.message }); throw err; }
-  db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...params, id: existing.id, tenantId: req.tenantId }));
+  const { contractKind: _kindSetOnCreate, ...updates } = params;
+  db.prepare(ENGAGEMENT_UPDATE_SQL).run(at({ ...updates, id: existing.id, tenantId: req.tenantId }));
   const row = db.prepare('SELECT * FROM engagements WHERE id = ? AND tenant_id = ?').get(existing.id, req.tenantId);
   const statusChanged = Object.prototype.hasOwnProperty.call(req.body || {}, 'status') && row.status !== existing.status;
   recordAudit(db, {
@@ -5932,6 +5948,8 @@ app.delete('/api/engagements/:id', requireAuth, requireInternal, (req, res) => {
   if (Number(existing.paid) > 0 || Number(existing.invoiced) > 0) footprint.push({ table: 'engagements', column: 'paid/invoiced', count: 1 });
   const payments = db.prepare('SELECT COUNT(*) AS n FROM contract_payments WHERE tenant_id = ? AND engagement_id = ?').get(req.tenantId, existing.id).n;
   if (payments) footprint.push({ table: 'contract_payments', column: 'engagement_id', count: payments });
+  const decisions = db.prepare('SELECT COUNT(*) AS n FROM contract_counterparty_decisions WHERE tenant_id = ? AND engagement_id = ?').get(req.tenantId, existing.id).n;
+  if (decisions) footprint.push({ table: 'contract_counterparty_decisions', column: 'engagement_id', count: decisions });
   if (footprint.length) {
     const summary = footprint.map(f => `${f.table}.${f.column} ×${f.count}`).join(', ');
     return res.status(409).json({ error: `Cannot delete: engagement has real activity (${summary}). Set status to 'Terminated' instead.`, footprint });

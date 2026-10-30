@@ -15,7 +15,15 @@ const SYSTEM_ROLES = [
   { code: 'CEO', label: 'CEO', icon: 'fa-crown', color: '#eab308',
     manageContractTemplates: true, manageContracts: true, manageContractRoutes: true, recordContractSignature: true,
     internal: true, manageUsers: true, manageRoles: true, accessFM: true,
-    decideConflicts: true, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, screeningAccept: true, icSeat: 'GP Rep 1' },
+    decideConflicts: true, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, screeningAccept: true, approveNoOnboarding: true, icSeat: 'GP Rep 1' },
+  // Owner's decision 30.10.2026: the COO and Legal allow a contract without
+  // onboarding (a service outside the licence) and check suppliers in ADATA.
+  { code: 'COO', label: 'COO', icon: 'fa-briefcase', color: '#f97316',
+    internal: true, manageUsers: false, manageRoles: false, accessFM: true, approveNoOnboarding: true, checkCounterparties: true,
+    decideConflicts: false, authorICMemo: false, riskVeto: false, amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: false, icSeat: null },
+  { code: 'LEGAL', label: 'Legal (юрист)', icon: 'fa-scale-balanced', color: '#a855f7',
+    internal: true, manageUsers: false, manageRoles: false, accessFM: true, approveNoOnboarding: true, checkCounterparties: true,
+    decideConflicts: false, authorICMemo: false, riskVeto: false, amlClear: false, ccApprove: false, paymentConfirm: false, afsaSubmit: false, aiAssist: false, icSeat: null },
   { code: 'CFO', label: 'CFO', icon: 'fa-coins', color: '#f59e0b',
     internal: true, manageUsers: false, manageRoles: false, accessFM: true,
     decideConflicts: false, authorICMemo: true, riskVeto: false, amlClear: false, ccApprove: true, paymentConfirm: true, afsaSubmit: true, aiAssist: false, icSeat: 'GP Rep 2' },
